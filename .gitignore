@@ -1,0 +1,80 @@
+# ---- dependencies ----
+node_modules/
+.pnp
+.pnp.*
+.yarn/*
+!.yarn/patches
+!.yarn/releases
+!.yarn/plugins
+!.yarn/sdks
+!.yarn/versions
+
+# ---- next.js ----
+.next/
+out/
+build/
+dist/
+next-env.d.ts
+
+# ---- testing / coverage ----
+coverage/
+.nyc_output/
+*.lcov
+test-results/
+playwright-report/
+blob-report/
+.vitest-cache/
+
+# ---- environment (NEVER COMMIT SECRETS) ----
+.env
+.env.local
+.env.development.local
+.env.test.local
+.env.production.local
+!.env.example
+!.env.test
+
+# ---- supabase ----
+# Local CLI state / generated branch data. Migrations + config.toml ARE committed.
+supabase/.branches/
+supabase/.temp/
+supabase/logs/
+.supabase/
+
+# ---- typescript / build info ----
+*.tsbuildinfo
+.turbo/
+
+# ---- editors / IDE ----
+.vscode/*
+!.vscode/extensions.json
+!.vscode/settings.json.example
+.idea/
+*.swp
+*.swo
+*~
+
+# ---- os ----
+.DS_Store
+.DS_Store?
+._*
+.Spotlight-V100
+.Trashes
+ehthumbs.db
+Thumbs.db
+desktop.ini
+
+# ---- logs ----
+npm-debug.log*
+yarn-debug.log*
+yarn-error.log*
+pnpm-debug.log*
+lerna-debug.log*
+logs/
+*.log
+
+# ---- misc ----
+.vercel
+*.pem
+.cache/
+tmp/

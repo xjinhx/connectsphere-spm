@@ -1,0 +1,35 @@
+@import "tailwindcss";
+
+/* ---------------------------------------------------------------------------
+   Design tokens. Requirement 7 asks for a desktop- and mobile-friendly system
+   whose status and outstanding actions are easy to read at a glance, so status
+   colour is a first-class token rather than an ad-hoc class per component.
+   --------------------------------------------------------------------------- */
+:root {
+  --background: #f6f7f9;
+  --surface: #ffffff;
+  --border: #e2e5ea;
+  --text: #16191d;
+  --text-muted: #5f6672;
+  --brand: #1f5aa6;
+  --brand-dark: #17457e;
+  --danger: #b3261e;
+  --warning: #9a6700;
+  --success: #1a7f47;
+}
+
+html, body {
+  background: var(--background);
+  color: var(--text);
+}
+
+body {
+  font-family: ui-sans-serif, system-ui, -apple-system, "Segoe UI", Roboto, sans-serif;
+  -webkit-font-smoothing: antialiased;
+}
+
+/* Visible focus everywhere: usability requirement 8c covers keyboard users. */
+:focus-visible {
+  outline: 2px solid var(--brand);
+  outline-offset: 2px;
+}

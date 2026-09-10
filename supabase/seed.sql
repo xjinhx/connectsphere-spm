@@ -1,0 +1,4 @@
+-- =============================================================================
+-- Seed data. Runs automatically on `supabase db reset`.
+-- Empty for now - add demo rows here once the schema exists.
+-- =============================================================================
