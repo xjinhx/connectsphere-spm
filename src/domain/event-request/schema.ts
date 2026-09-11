@@ -23,18 +23,20 @@ export type EventRequestCore = z.infer<typeof eventRequestCoreSchema>;
 // ---------------------------------------------------------------------------
 // SCRUM-76 — Create an event request with basic details
 // ---------------------------------------------------------------------------
-// AC3 draws a line the core schema above does not: a SUBMITTED request must be
-// complete, but a DRAFT may be saved half-finished, including with a proposed
-// date that is still in the past. So the core schema is the submission shape,
-// and this is the save shape - same fields, nearly all of them optional.
+// SCRUM-76's slice of the core schema: the four basic details, all mandatory
+// on save (US-5.1-TC05: a blank purpose blocks the save and is named).
 //
-// Only `name` is held back as required: it is what the organiser's own list of
-// requests is keyed on visually, and a draft with no name cannot be found again.
+// What is NOT checked here is the date's value. AC3's "saving it as a draft
+// remains allowed" means a request with a past date can still be saved - it is
+// only refused at submission, which is SCRUM-82's, using
+// isProposedDateSubmittable() from policy.ts.
 //
-// PROPOSED, not settled - extending this shared file rather than forking it,
-// per the contract-first rule. Flag on the PR for SCRUM-77/78 to review.
-export const eventRequestDraftSchema = eventRequestCoreSchema
-  .partial()
-  .extend({ name: eventRequestCoreSchema.shape.name });
+// timeSlots (77) and expectedAttendance (78) are left to their own tickets.
+export const eventRequestBasicDetailsSchema = eventRequestCoreSchema.pick({
+  name: true,
+  purpose: true,
+  description: true,
+  proposedDate: true,
+});
 
-export type EventRequestDraft = z.infer<typeof eventRequestDraftSchema>;
+export type EventRequestBasicDetails = z.infer<typeof eventRequestBasicDetailsSchema>;

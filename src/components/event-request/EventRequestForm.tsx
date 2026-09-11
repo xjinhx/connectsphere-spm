@@ -2,51 +2,20 @@
 
 import { useState } from 'react';
 import { useRouter } from 'next/navigation';
-import { TimeSlotEnum } from '@/domain/event-request/schema';
 
 /**
  * SCRUM-76 AC1 — the blank request form, with the client organisation already
  * filled in and not editable.
  *
- * Two actions, because the story asks for two: saving keeps whatever has been
- * typed, submitting is the one that has to pass the rules. A refused submission
- * therefore leaves a saved draft behind rather than losing the work (AC3) -
- * which is why the draft's id is remembered here: pressing Submit twice edits
- * one request instead of creating two.
+ * Saving never checks the proposed date (AC3): an organiser may keep a request
+ * with a date they still have to fix. Applying the date rule at submission is
+ * SCRUM-82, which adds the Submit action.
  */
-
-const SLOTS = TimeSlotEnum.options;
-const SLOT_LABELS: Record<string, string> = {
-  AM: 'AM (7am-12pm)',
-  PM: 'PM (1pm-6pm)',
-  NIGHT: 'Night (7pm-12am)',
-};
 
 const labelClass = 'block text-sm font-medium text-[var(--text)]';
 const fieldClass =
   'mt-1 w-full rounded-md border border-[var(--border)] bg-[var(--surface)] px-3 py-2 text-sm ' +
   'focus:border-[var(--brand)] focus:outline-none';
-
-interface ApiErrorBody {
-  message?: string;
-}
-
-async function call(path: string, method: string, body?: unknown): Promise<{ id: string }> {
-  const response = await fetch(path, {
-    method,
-    headers: { 'Content-Type': 'application/json' },
-    body: body === undefined ? undefined : JSON.stringify(body),
-  });
-
-  const payload = (await response.json().catch(() => null)) as
-    | (ApiErrorBody & { id?: string })
-    | null;
-
-  if (!response.ok) {
-    throw new Error(payload?.message ?? 'Something went wrong. Please try again.');
-  }
-  return { id: payload?.id ?? '' };
-}
 
 export function EventRequestForm({
   clientOrganisation,
@@ -62,66 +31,49 @@ export function EventRequestForm({
   const [purpose, setPurpose] = useState('');
   const [description, setDescription] = useState('');
   const [proposedDate, setProposedDate] = useState('');
-  const [timeSlots, setTimeSlots] = useState<string[]>([]);
-  const [expectedAttendance, setExpectedAttendance] = useState('');
 
-  const [draftId, setDraftId] = useState<string | null>(null);
-  const [busy, setBusy] = useState<'DRAFT' | 'SUBMIT' | null>(null);
+  const [saving, setSaving] = useState(false);
   const [error, setError] = useState<string | null>(null);
-  const [notice, setNotice] = useState<string | null>(null);
+  const [fieldErrors, setFieldErrors] = useState<Record<string, string[]>>({});
 
-  function toggleSlot(slot: string) {
-    setTimeSlots((current) =>
-      current.includes(slot) ? current.filter((value) => value !== slot) : [...current, slot],
-    );
-  }
-
-  async function save(): Promise<string> {
-    const body = {
-      name,
-      purpose: purpose || undefined,
-      description: description || undefined,
-      proposedDate: proposedDate || undefined,
-      timeSlots: timeSlots.length > 0 ? timeSlots : undefined,
-      expectedAttendance: expectedAttendance === '' ? undefined : Number(expectedAttendance),
-    };
-
-    const saved = draftId
-      ? await call(`/api/event-requests/${draftId}`, 'PATCH', body)
-      : await call('/api/event-requests', 'POST', body);
-
-    setDraftId(saved.id);
-    return saved.id;
-  }
-
-  async function onSaveDraft() {
-    setBusy('DRAFT');
+  async function onSave() {
+    setSaving(true);
     setError(null);
-    setNotice(null);
+    setFieldErrors({});
     try {
-      router.push(`/events/${await save()}`);
+      // Empty strings are sent as-is, not dropped: the schema's own message for
+      // a blank field ("Purpose is required") is what names the missing field.
+      const response = await fetch('/api/event-requests', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ name, purpose, description, proposedDate }),
+      });
+
+      const payload = (await response.json().catch(() => null)) as {
+        id?: string;
+        message?: string;
+        details?: { fieldErrors?: Record<string, string[]> };
+      } | null;
+
+      if (!response.ok || !payload?.id) {
+        setFieldErrors(payload?.details?.fieldErrors ?? {});
+        throw new Error(payload?.message ?? 'The request could not be saved.');
+      }
+      router.push(`/events/${payload.id}`);
     } catch (caught) {
       setError(caught instanceof Error ? caught.message : 'The request could not be saved.');
-      setBusy(null);
+      setSaving(false);
     }
   }
 
-  async function onSubmit() {
-    setBusy('SUBMIT');
-    setError(null);
-    setNotice(null);
-    try {
-      const id = await save();
-      await call(`/api/event-requests/${id}/submit`, 'POST');
-      router.push(`/events/${id}`);
-    } catch (caught) {
-      setError(
-        caught instanceof Error ? caught.message : 'The request could not be submitted.',
-      );
-      // The draft survives a refused submission - say so, or it looks lost.
-      setNotice('Your work is saved as a draft. Fix the problem above and submit again.');
-      setBusy(null);
-    }
+  function FieldError({ field }: { field: string }) {
+    const messages = fieldErrors[field];
+    if (!messages?.length) return null;
+    return (
+      <p className="mt-1 text-xs text-[var(--danger)]" role="alert">
+        {messages[0]}
+      </p>
+    );
   }
 
   return (
@@ -154,6 +106,7 @@ export function EventRequestForm({
           maxLength={200}
           required
         />
+        <FieldError field="name" />
       </div>
 
       <div>
@@ -167,6 +120,7 @@ export function EventRequestForm({
           value={purpose}
           onChange={(event) => setPurpose(event.target.value)}
         />
+        <FieldError field="purpose" />
       </div>
 
       <div>
@@ -180,6 +134,7 @@ export function EventRequestForm({
           value={description}
           onChange={(event) => setDescription(event.target.value)}
         />
+        <FieldError field="description" />
       </div>
 
       <div>
@@ -196,39 +151,9 @@ export function EventRequestForm({
           aria-describedby="proposedDate-hint"
         />
         <p id="proposedDate-hint" className="mt-1 text-xs text-[var(--text-muted)]">
-          Singapore time. Must be today or later to submit - a draft may hold any date.
+          Singapore time. Must be today or later to submit; any date can be saved.
         </p>
-      </div>
-
-      <fieldset>
-        <legend className={labelClass}>Time slots</legend>
-        <div className="mt-2 flex flex-wrap gap-4">
-          {SLOTS.map((slot) => (
-            <label key={slot} className="flex items-center gap-2 text-sm">
-              <input
-                type="checkbox"
-                checked={timeSlots.includes(slot)}
-                onChange={() => toggleSlot(slot)}
-              />
-              {SLOT_LABELS[slot] ?? slot}
-            </label>
-          ))}
-        </div>
-      </fieldset>
-
-      <div>
-        <label className={labelClass} htmlFor="expectedAttendance">
-          Expected attendance
-        </label>
-        <input
-          id="expectedAttendance"
-          type="number"
-          min={1}
-          step={1}
-          className={fieldClass}
-          value={expectedAttendance}
-          onChange={(event) => setExpectedAttendance(event.target.value)}
-        />
+        <FieldError field="proposedDate" />
       </div>
 
       {error ? (
@@ -237,29 +162,14 @@ export function EventRequestForm({
         </p>
       ) : null}
 
-      {notice ? (
-        <p className="rounded-md bg-amber-50 px-3 py-2 text-sm text-[var(--warning)]">{notice}</p>
-      ) : null}
-
-      <div className="flex flex-wrap gap-3">
-        <button
-          type="button"
-          onClick={onSubmit}
-          disabled={busy !== null}
-          className="rounded-md bg-[var(--brand)] px-4 py-2 text-sm font-medium text-white hover:bg-[var(--brand-dark)] disabled:opacity-60"
-        >
-          {busy === 'SUBMIT' ? 'Submitting...' : 'Submit request'}
-        </button>
-
-        <button
-          type="button"
-          onClick={onSaveDraft}
-          disabled={busy !== null}
-          className="rounded-md border border-[var(--border)] px-4 py-2 text-sm font-medium hover:bg-slate-100 disabled:opacity-60"
-        >
-          {busy === 'DRAFT' ? 'Saving...' : 'Save as draft'}
-        </button>
-      </div>
+      <button
+        type="button"
+        onClick={onSave}
+        disabled={saving}
+        className="rounded-md bg-[var(--brand)] px-4 py-2 text-sm font-medium text-white hover:bg-[var(--brand-dark)] disabled:opacity-60"
+      >
+        {saving ? 'Saving...' : 'Save request'}
+      </button>
     </form>
   );
 }

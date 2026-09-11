@@ -1,5 +1,5 @@
 import { NextRequest, NextResponse } from 'next/server';
-import { getEventRequest, updateEventRequestDraft } from '@/domain/event-request/service';
+import { getEventRequest, updateEventRequestDetails } from '@/domain/event-request/service';
 import { handleApiError } from '@/lib/api/handler';
 
 export async function GET(_req: NextRequest, { params }: { params: Promise<{ id: string }> }) {
@@ -15,7 +15,7 @@ export async function PATCH(req: NextRequest, { params }: { params: Promise<{ id
   try {
     const { id } = await params;
     const body = await req.json();
-    return NextResponse.json(await updateEventRequestDraft(id, body));
+    return NextResponse.json(await updateEventRequestDetails(id, body));
   } catch (error) {
     return handleApiError(error);
   }

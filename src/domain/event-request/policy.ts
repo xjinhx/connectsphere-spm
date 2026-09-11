@@ -1,4 +1,4 @@
-import { eventRequestCoreSchema, type EventRequestDraft } from './schema';
+import { eventRequestCoreSchema } from './schema';
 import {
   isPastDate,
   todayInSingapore,
@@ -42,41 +42,13 @@ export const PAST_PROPOSED_DATE_MESSAGE = 'The proposed date must be today or la
  * "Passed" is judged in Singapore time. Judging it against the server clock
  * would reject a valid date for the eight hours a day that UTC and Singapore
  * disagree about what day it is.
+ *
+ * This is the rule only. Applying it at submission - and the completeness
+ * check that goes with it - is SCRUM-82's, which should call this from there.
  */
 export function isProposedDateSubmittable(
   proposedDate: Date,
   today: ISODate = todayInSingapore(),
 ): boolean {
   return !isPastDate(toSingaporeISODate(proposedDate), today);
-}
-
-/**
- * SCRUM-76 AC3 — everything standing between a draft and submission.
- * Empty means it can be submitted.
- *
- * A draft is never put through this: saving is always allowed, which is what
- * lets an organiser keep a half-finished request with a date they still have
- * to fix.
- */
-export function submissionProblems(
-  draft: EventRequestDraft,
-  today: ISODate = todayInSingapore(),
-): string[] {
-  const parsed = eventRequestCoreSchema.safeParse(draft);
-  const problems = parsed.success ? [] : parsed.error.issues.map((issue) => issue.message);
-
-  // Checked outside the schema because "in the past" depends on today's date in
-  // Singapore - that is a rule, not a shape.
-  if (draft.proposedDate instanceof Date && !isProposedDateSubmittable(draft.proposedDate, today)) {
-    problems.push(PAST_PROPOSED_DATE_MESSAGE);
-  }
-
-  return problems;
-}
-
-export function canSubmit(
-  draft: EventRequestDraft,
-  today: ISODate = todayInSingapore(),
-): boolean {
-  return submissionProblems(draft, today).length === 0;
 }

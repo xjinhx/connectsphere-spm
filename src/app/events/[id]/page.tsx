@@ -25,15 +25,9 @@ export default async function EventRequestPage({
 
   return (
     <main className="mx-auto max-w-2xl px-4 py-8">
-      <div className="flex flex-wrap items-center justify-between gap-3">
-        <div>
-          <h1 className="text-xl font-semibold">{request.name}</h1>
-          <p className="mt-1 font-mono text-sm text-[var(--text-muted)]">{request.reference}</p>
-        </div>
-        <span className="rounded-full bg-slate-100 px-2.5 py-0.5 text-xs font-medium text-slate-700 ring-1 ring-slate-200 ring-inset">
-          {request.status === 'DRAFT' ? 'Draft' : 'Submitted'}
-        </span>
-      </div>
+      <h1 className="text-xl font-semibold">{request.name}</h1>
+      {/* AC2: the unique reference the database assigned on save. */}
+      <p className="mt-1 font-mono text-sm text-[var(--text-muted)]">{request.reference}</p>
 
       {/* AC5: every date and time on this page is rendered in Singapore time. */}
       <dl className="mt-6 rounded-lg border border-[var(--border)] bg-[var(--surface)] px-4">
@@ -44,14 +38,6 @@ export default async function EventRequestPage({
           value={
             request.proposedDate ? formatSingaporeDate(request.proposedDate) : 'Not yet provided'
           }
-        />
-        <Row
-          label="Time slots"
-          value={request.timeSlots?.join(', ') ?? 'Not yet provided'}
-        />
-        <Row
-          label="Expected attendance"
-          value={request.expectedAttendance?.toString() ?? 'Not yet provided'}
         />
         <Row label="Created" value={formatSingaporeDateTime(request.createdAt)} />
         <Row label="Last updated" value={formatSingaporeDateTime(request.updatedAt)} />

@@ -2,26 +2,19 @@ import { createAdminClient } from '@/lib/supabase/admin';
 import {
   fetchEventRequest,
   insertEventRequest,
-  markEventRequestSubmitted,
   updateEventRequest,
   type EventRequestRow,
   type EventRequestWrite,
 } from '@/lib/supabase/eventRequests';
 import { getCurrentActor, type Actor } from '@/lib/auth/currentActor';
 import { hasRole } from '@/domain/identity/policy';
-import {
-  ForbiddenError,
-  InvalidTransitionError,
-  NotFoundError,
-  ValidationError,
-} from '@/domain/shared/errors';
-import { eventRequestDraftSchema, type EventRequestDraft } from './schema';
-import { submissionProblems } from './policy';
+import { ForbiddenError, NotFoundError, ValidationError } from '@/domain/shared/errors';
+import { eventRequestBasicDetailsSchema, type EventRequestBasicDetails } from './schema';
 
 /**
- * SCRUM-76 — orchestration for event requests.
- * Decides who may act, applies the rules from policy.ts, then delegates the
- * actual Supabase calls to src/lib/supabase/eventRequests.ts.
+ * SCRUM-76 — orchestration for creating and reading an event request.
+ * Decides who may act, validates, then delegates the actual Supabase calls to
+ * src/lib/supabase/eventRequests.ts. Submission is SCRUM-82 and lives there.
  */
 
 export interface EventRequest {
@@ -33,9 +26,6 @@ export interface EventRequest {
   purpose: string | null;
   description: string | null;
   proposedDate: string | null;
-  timeSlots: string[] | null;
-  expectedAttendance: number | null;
-  status: 'DRAFT' | 'SUBMITTED';
   createdAt: string;
   updatedAt: string;
 }
@@ -52,23 +42,18 @@ function toEventRequest(row: EventRequestRow): EventRequest {
     purpose: row.purpose,
     description: row.description,
     proposedDate: row.proposed_date,
-    timeSlots: row.time_slots,
-    expectedAttendance: row.expected_attendance,
-    status: row.status,
     createdAt: row.created_at,
     updatedAt: row.updated_at,
   };
 }
 
-function toWrite(draft: EventRequestDraft): EventRequestWrite {
+function toWrite(details: EventRequestBasicDetails): EventRequestWrite {
   return {
-    name: draft.name,
-    purpose: draft.purpose ?? null,
-    description: draft.description ?? null,
-    // Stored as a Singapore calendar date, not an instant.
-    proposed_date: draft.proposedDate ? draft.proposedDate.toISOString().slice(0, 10) : null,
-    time_slots: draft.timeSlots ?? null,
-    expected_attendance: draft.expectedAttendance ?? null,
+    name: details.name,
+    purpose: details.purpose,
+    description: details.description,
+    // Stored as a calendar date, not an instant.
+    proposed_date: details.proposedDate.toISOString().slice(0, 10),
   };
 }
 
@@ -89,12 +74,6 @@ function requireOrganiser(actor: Actor): { id: string; name: string } {
   return actor.clientOrganisation;
 }
 
-function requireOwnership(actor: Actor, request: EventRequest): void {
-  if (request.organiserId !== actor.userId) {
-    throw new ForbiddenError('This event request belongs to another organiser.');
-  }
-}
-
 async function requireOwnRequest(actor: Actor, id: string): Promise<EventRequest> {
   // The id arrives from a URL. Postgres raises 22P02 on a malformed uuid, which
   // would surface as a 500 for what is really just a bad link.
@@ -105,8 +84,18 @@ async function requireOwnRequest(actor: Actor, id: string): Promise<EventRequest
   if (!data) throw new NotFoundError('Event request');
 
   const request = toEventRequest(data as unknown as EventRequestRow);
-  requireOwnership(actor, request);
+  if (request.organiserId !== actor.userId) {
+    throw new ForbiddenError('This event request belongs to another organiser.');
+  }
   return request;
+}
+
+function parseBasicDetails(input: unknown): EventRequestBasicDetails {
+  const parsed = eventRequestBasicDetailsSchema.safeParse(input);
+  if (!parsed.success) {
+    throw new ValidationError('The event request is not valid.', parsed.error.flatten());
+  }
+  return parsed.data;
 }
 
 /** AC1 — the blank form needs the organiser's own organisation to pre-fill. */
@@ -118,18 +107,17 @@ export async function getNewEventRequestContext(): Promise<{
   return { organiserName: actor.fullName, clientOrganisation: requireOrganiser(actor) };
 }
 
-/** AC2 — saving stores the request; the database hands it a unique reference. */
-export async function createEventRequestDraft(input: unknown): Promise<EventRequest> {
+/**
+ * AC2 — saving stores the request; the database hands it a unique reference.
+ * AC3 — all four fields are required, but the date's value is never checked
+ * on save. That is what keeps a request with a date still to be fixed savable.
+ */
+export async function createEventRequest(input: unknown): Promise<EventRequest> {
   const actor = await getCurrentActor();
   const clientOrganisation = requireOrganiser(actor);
 
-  const parsed = eventRequestDraftSchema.safeParse(input);
-  if (!parsed.success) {
-    throw new ValidationError('The event request is not valid.', parsed.error.flatten());
-  }
-
   const { data, error } = await insertEventRequest(createAdminClient(), {
-    ...toWrite(parsed.data),
+    ...toWrite(parseBasicDetails(input)),
     organiser_id: actor.userId,
     client_organisation_id: clientOrganisation.id,
   });
@@ -140,24 +128,16 @@ export async function createEventRequestDraft(input: unknown): Promise<EventRequ
   return toEventRequest(data as unknown as EventRequestRow);
 }
 
-export async function updateEventRequestDraft(
-  id: string,
-  input: unknown,
-): Promise<EventRequest> {
+export async function updateEventRequestDetails(id: string, input: unknown): Promise<EventRequest> {
   const actor = await getCurrentActor();
   requireOrganiser(actor);
+  await requireOwnRequest(actor, id);
 
-  const existing = await requireOwnRequest(actor, id);
-  if (existing.status !== 'DRAFT') {
-    throw new InvalidTransitionError(existing.status, 'DRAFT');
-  }
-
-  const parsed = eventRequestDraftSchema.safeParse(input);
-  if (!parsed.success) {
-    throw new ValidationError('The event request is not valid.', parsed.error.flatten());
-  }
-
-  const { data, error } = await updateEventRequest(createAdminClient(), id, toWrite(parsed.data));
+  const { data, error } = await updateEventRequest(
+    createAdminClient(),
+    id,
+    toWrite(parseBasicDetails(input)),
+  );
   if (error || !data) {
     throw new ValidationError('The event request could not be updated.', error?.message);
   }
@@ -166,41 +146,4 @@ export async function updateEventRequestDraft(
 
 export async function getEventRequest(id: string): Promise<EventRequest> {
   return requireOwnRequest(await getCurrentActor(), id);
-}
-
-/**
- * AC3 and AC4 — submission is refused for a date already past, and accepted for
- * every date from today onwards. A refusal leaves the draft exactly as it was,
- * which is what "saving it as a draft remains allowed" means in practice.
- */
-export async function submitEventRequest(id: string): Promise<EventRequest> {
-  const actor = await getCurrentActor();
-  requireOrganiser(actor);
-
-  const existing = await requireOwnRequest(actor, id);
-  if (existing.status !== 'DRAFT') {
-    throw new InvalidTransitionError(existing.status, 'SUBMITTED');
-  }
-
-  const problems = submissionProblems({
-    name: existing.name,
-    purpose: existing.purpose ?? undefined,
-    description: existing.description ?? undefined,
-    proposedDate: existing.proposedDate ? new Date(existing.proposedDate) : undefined,
-    timeSlots: (existing.timeSlots ?? undefined) as EventRequestDraft['timeSlots'],
-    expectedAttendance: existing.expectedAttendance ?? undefined,
-  });
-
-  if (problems.length > 0) {
-    throw new ValidationError(problems[0] ?? 'This request cannot be submitted yet.', {
-      problems,
-    });
-  }
-
-  const { data, error } = await markEventRequestSubmitted(createAdminClient(), id);
-  if (error) {
-    throw new ValidationError('The event request could not be submitted.', error.message);
-  }
-  if (!data) throw new InvalidTransitionError(existing.status, 'SUBMITTED');
-  return toEventRequest(data as unknown as EventRequestRow);
 }
