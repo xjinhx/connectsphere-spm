@@ -1,33 +1,15 @@
 import { createServerClient } from '@supabase/ssr';
-import { createClient, type SupabaseClient } from '@supabase/supabase-js';
 import { cookies } from 'next/headers';
-import { publicEnv, serverEnv } from '../env';
+import { publicEnv } from '../env';
 
 /**
- * Loosely-typed admin client.
+ * Server-side Supabase client that runs AS THE USER. We use it only to
+ * answer "who is signed in?" - it respects RLS, so it can read the
+ * caller's own profile and nothing else.
  *
- * Until `npm run db:types` has generated src/lib/supabase/database.types.ts,
- * the client has no schema to check against and every table resolves to
- * `never`. Repositories therefore own the row shapes by hand (see
- * repositories/mappers.ts) and this alias keeps that explicit rather than
- * scattering casts. Swap `any` for the generated `Database` type to upgrade
- * every query to compiler-checked columns in one edit.
- */
-// eslint-disable-next-line @typescript-eslint/no-explicit-any
-type AdminClient = SupabaseClient<any, 'public', any>;
-
-/**
- * Two server-side Supabase clients, for two different jobs.
- *
- * createSessionClient() runs AS THE USER. We use it only to answer "who is
- * signed in?" - it respects RLS, so it can read the caller's own profile and
- * nothing else.
- *
- * createAdminClient() runs as the service role and bypasses RLS. Every
- * repository uses it, because authorisation is decided in the policy layer
- * (src/domain/identity/policy.ts) before any query is issued. It must never be
- * imported into a client component - the service key would end up in the
- * browser bundle.
+ * For the admin/service-role client, see admin.ts - it's deliberately
+ * kept in a separate, Next.js-free file so domain/ code can import it
+ * without pulling in next/headers transitively.
  */
 
 export async function createSessionClient() {
@@ -50,21 +32,4 @@ export async function createSessionClient() {
       },
     },
   });
-}
-
-let adminClient: AdminClient | null = null;
-
-export function createAdminClient(): AdminClient {
-  if (typeof window !== 'undefined') {
-    throw new Error('createAdminClient() must never be called from the browser.');
-  }
-  if (!adminClient) {
-    // eslint-disable-next-line @typescript-eslint/no-explicit-any
-    adminClient = createClient<any, 'public', any>(
-      publicEnv.NEXT_PUBLIC_SUPABASE_URL,
-      serverEnv().SUPABASE_SERVICE_ROLE_KEY,
-      { auth: { persistSession: false, autoRefreshToken: false } },
-    );
-  }
-  return adminClient;
 }
