@@ -1,14 +1,11 @@
-import { createAdminClient } from '@/lib/supabase/server';
+import { createAdminClient } from '@/lib/supabase/admin';
+import { fetchProfileRoles, updateProfileRoles } from '@/lib/supabase/profiles';
 import { AccountRolesSchema, Role } from './roles';
 import { ValidationError, NotFoundError } from '@/domain/shared/errors';
 
 export async function getAccountRoles(accountId: string): Promise<Role[]> {
   const supabase = createAdminClient();
-  const { data, error } = await supabase
-    .from('profiles')
-    .select('roles')
-    .eq('id', accountId)
-    .single();
+  const { data, error } = await fetchProfileRoles(supabase, accountId);
 
   if (error || !data) {
     throw new NotFoundError('Account');
@@ -23,10 +20,7 @@ export async function setAccountRoles(accountId: string, roles: Role[]): Promise
   }
 
   const supabase = createAdminClient();
-  const { error } = await supabase
-    .from('profiles')
-    .update({ roles: parsed.data.roles })
-    .eq('id', parsed.data.accountId);
+  const { error } = await updateProfileRoles(supabase, parsed.data.accountId, parsed.data.roles);
 
   if (error) {
     throw new ValidationError('Could not update roles.', error.message);
