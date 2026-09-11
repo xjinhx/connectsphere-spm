@@ -19,3 +19,22 @@ export const eventRequestCoreSchema = z.object({
 });
 
 export type EventRequestCore = z.infer<typeof eventRequestCoreSchema>;
+
+// ---------------------------------------------------------------------------
+// SCRUM-76 — Create an event request with basic details
+// ---------------------------------------------------------------------------
+// AC3 draws a line the core schema above does not: a SUBMITTED request must be
+// complete, but a DRAFT may be saved half-finished, including with a proposed
+// date that is still in the past. So the core schema is the submission shape,
+// and this is the save shape - same fields, nearly all of them optional.
+//
+// Only `name` is held back as required: it is what the organiser's own list of
+// requests is keyed on visually, and a draft with no name cannot be found again.
+//
+// PROPOSED, not settled - extending this shared file rather than forking it,
+// per the contract-first rule. Flag on the PR for SCRUM-77/78 to review.
+export const eventRequestDraftSchema = eventRequestCoreSchema
+  .partial()
+  .extend({ name: eventRequestCoreSchema.shape.name });
+
+export type EventRequestDraft = z.infer<typeof eventRequestDraftSchema>;
