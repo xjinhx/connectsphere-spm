@@ -178,12 +178,47 @@ export function canSubmit(
  * clarification request" is a later story, which will add a status here.
  */
 export function isEditable(status: EventRequestStatus): boolean {
-  return status === 'DRAFT';
+  return status === 'draft';
 }
 
 /** AC1 — the only transition this story knows: a draft becomes submitted. */
 export function canBeSubmitted(status: EventRequestStatus): boolean {
-  return status === 'DRAFT';
+  return status === 'draft';
+}
+
+// ---------------------------------------------------------------------------
+// SCRUM-83 / SCRUM-85 — Save an incomplete request as a draft, and resume it
+// ---------------------------------------------------------------------------
+
+/**
+ * SCRUM-85 AC3 — a saved draft can be reopened and editing continues; a
+ * submitted request cannot (SCRUM-82 AC4 already made it read-only).
+ *
+ * Deliberately the same rule as isEditable(), not a second opinion about it:
+ * "can I resume this draft" and "is this request still editable" are one
+ * question asked by two stories. Named separately so each story's tests point
+ * at their own rule, and so a future status (e.g. Clarification Requested)
+ * that changes one but not the other has an obvious place to diverge.
+ */
+export function isResumable(status: EventRequestStatus): boolean {
+  return isEditable(status);
+}
+
+/**
+ * SCRUM-83 AC3 (Jira) — a draft belongs to the organiser who saved it. A
+ * colleague in the same client organisation may not open it, and it is not
+ * listed for them: sharing is by organisation for *submitted* work, never for
+ * someone else's unfinished draft.
+ *
+ * The "not listed" half is the query itself (listEventRequestsForOrganiser
+ * filters on organiser_id); this is the "access is denied" half, applied by
+ * requireOwnRequest() in service.ts before any draft is handed back.
+ */
+export function isOwnRequest(
+  request: { organiserId: string },
+  actorUserId: string,
+): boolean {
+  return request.organiserId === actorUserId;
 }
 
 /**

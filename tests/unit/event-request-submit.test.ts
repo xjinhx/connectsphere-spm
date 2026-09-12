@@ -48,7 +48,7 @@ const complete: StoredEventRequestFields = {
   purpose: 'Networking',
   description: 'Yearly gathering',
   proposedDate: '2026-11-15',
-  timeSlots: ['PM'],
+  timeSlots: ['pm'],
   expectedAttendance: 80,
 };
 
@@ -61,8 +61,8 @@ describe('SCRUM-82 — Submit a completed event request', () => {
     });
 
     it('lets a draft be submitted, and never a request that already is', () => {
-      expect(canBeSubmitted('DRAFT')).toBe(true);
-      expect(canBeSubmitted('SUBMITTED')).toBe(false);
+      expect(canBeSubmitted('draft')).toBe(true);
+      expect(canBeSubmitted('submitted')).toBe(false);
     });
 
     it('renders the submission time in Singapore time, zone shown', () => {
@@ -145,7 +145,7 @@ describe('SCRUM-82 — Submit a completed event request', () => {
 
     it('keeps a refused draft editable', () => {
       // A refusal changes nothing: the request is still a draft, so still editable.
-      expect(isEditable('DRAFT')).toBe(true);
+      expect(isEditable('draft')).toBe(true);
     });
   });
 
@@ -159,7 +159,7 @@ describe('SCRUM-82 — Submit a completed event request', () => {
       expect(summary).toMatch(/^Submitted /);
       expect(summary).toContain('15 Nov 2026');
       expect(summary).toContain('2:00 am');
-      expect(EVENT_REQUEST_STATUS_LABELS.SUBMITTED).toBe('Submitted');
+      expect(EVENT_REQUEST_STATUS_LABELS.submitted).toBe('Submitted');
     });
 
     it('says so plainly when a request has not been submitted yet', () => {
@@ -170,13 +170,13 @@ describe('SCRUM-82 — Submit a completed event request', () => {
   describe('AC4 — a submitted request is read-only and shows its status', () => {
     // US-5.3-TC01 (second half) — attempting to edit directly is blocked
     it('offers no edit, save or delete once submitted', () => {
-      expect(isEditable('SUBMITTED')).toBe(false);
+      expect(isEditable('submitted')).toBe(false);
     });
 
     // US-5.3-TC03 — status "Submitted" is displayed
     it('labels the status "Submitted" for the organiser', () => {
-      expect(EVENT_REQUEST_STATUS_LABELS.SUBMITTED).toBe('Submitted');
-      expect(EVENT_REQUEST_STATUS_LABELS.DRAFT).toBe('Draft');
+      expect(EVENT_REQUEST_STATUS_LABELS.submitted).toBe('Submitted');
+      expect(EVENT_REQUEST_STATUS_LABELS.draft).toBe('Draft');
     });
   });
 });
