@@ -15,6 +15,10 @@ import { TIME_SLOT_LABELS, TIME_SLOT_ORDER, type TimeSlot } from '@/domain/event
  * SCRUM-77 AC4 — the slot picker is built from TIME_SLOT_ORDER, so the only
  * slots it can offer are the three that exist. Nothing crossing midnight can be
  * chosen because nothing crossing midnight is listed.
+ *
+ * SCRUM-78 — expected attendance, same permissive-save/strict-submit pattern
+ * as the date and slots above: blank is fine to save, and is only enforced as
+ * a mandatory field at submission (SCRUM-82's incompleteFields()).
  */
 
 const labelClass = 'block text-sm font-medium text-[var(--text)]';
@@ -37,6 +41,9 @@ export function EventRequestForm({
   const [description, setDescription] = useState('');
   const [proposedDate, setProposedDate] = useState('');
   const [timeSlots, setTimeSlots] = useState<TimeSlot[]>([]);
+  // Kept as a string, like proposedDate: an empty input is a valid "not yet
+  // entered" save-time state, not a 0. Converted to a number only when sent.
+  const [expectedAttendance, setExpectedAttendance] = useState('');
 
   const [saving, setSaving] = useState(false);
   const [error, setError] = useState<string | null>(null);
@@ -49,10 +56,20 @@ export function EventRequestForm({
     try {
       // Empty strings are sent as-is, not dropped: the schema's own message for
       // a blank field ("Purpose is required") is what names the missing field.
+      // expectedAttendance is the one exception: an empty string is not a valid
+      // number, so it is sent as undefined (JSON.stringify drops the key) and
+      // the mandatory-field check, not a type error, is what names it missing.
       const response = await fetch('/api/event-requests', {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({ name, purpose, description, proposedDate, timeSlots }),
+        body: JSON.stringify({
+          name,
+          purpose,
+          description,
+          proposedDate,
+          timeSlots,
+          expectedAttendance: expectedAttendance === '' ? undefined : Number(expectedAttendance),
+        }),
       });
 
       const payload = (await response.json().catch(() => null)) as {
@@ -187,6 +204,26 @@ export function EventRequestForm({
         </p>
         <FieldError field="timeSlots" />
       </fieldset>
+
+      <div>
+        <label className={labelClass} htmlFor="expectedAttendance">
+          Expected attendance
+        </label>
+        <input
+          id="expectedAttendance"
+          type="number"
+          min={1}
+          step={1}
+          className={fieldClass}
+          value={expectedAttendance}
+          onChange={(event) => setExpectedAttendance(event.target.value)}
+          aria-describedby="expectedAttendance-hint"
+        />
+        <p id="expectedAttendance-hint" className="mt-1 text-xs text-[var(--text-muted)]">
+          A single whole number for the whole event. Must be greater than 0 to submit; any value can be saved.
+        </p>
+        <FieldError field="expectedAttendance" />
+      </div>
 
       {error ? (
         <p role="alert" className="rounded-md bg-red-50 px-3 py-2 text-sm text-[var(--danger)]">
