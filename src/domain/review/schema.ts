@@ -13,3 +13,9 @@ export const ApproveInputSchema = z.object({
   actorId: z.string().uuid(),
 });
 export type ApproveInput = z.infer<typeof ApproveInputSchema>;
+
+// The id arrives from a URL. Postgres raises 22P02 on a malformed uuid, which
+// would surface as a 500 for what is really just a bad link, so it is checked
+// before any query runs. Same reasoning as UUID_PATTERN in
+// domain/event-request/service.ts.
+export const EventRequestIdSchema = z.string().uuid();

@@ -1,12 +1,10 @@
 name: CI
 
-# Deliverable #6 asks for the CI pipeline script, and the "Code quality and CI"
-# rubric row rewards a pipeline that reliably builds AND tests the system.
-#
-# Two jobs for now, matching what actually exists in the repo. Once you commit
-# migrations under supabase/migrations/, add a third job that runs
-# `supabase start` + `supabase db reset` and your integration tests against it -
-# building the schema from scratch in CI is what proves a fresh clone runs.
+# Runs on every push and pull request. Deliverable #6 asks for the CI pipeline
+# script, and the "Code quality and CI" rubric row rewards a pipeline that
+# reliably builds AND tests the system - so this does both, and the integration
+# job stands up a real Postgres from our committed migrations rather than
+# pointing at the shared cloud project (which four developers would trample).
 
 on:
   push:
@@ -23,7 +21,7 @@ env:
 
 jobs:
   quality:
-    name: Lint, typecheck, tests
+    name: Lint, typecheck, unit tests
     runs-on: ubuntu-latest
     steps:
       - uses: actions/checkout@v4
@@ -42,8 +40,20 @@ jobs:
       - name: Typecheck
         run: npm run typecheck
 
-      - name: Tests
-        run: npm test
+      - name: Unit tests
+        run: npm run test:unit
+
+      - name: Coverage
+        run: npm run test:coverage
+        continue-on-error: true
+
+      - name: Upload coverage report
+        uses: actions/upload-artifact@v4
+        if: always()
+        with:
+          name: coverage
+          path: coverage/
+          retention-days: 7
 
   build:
     name: Production build
@@ -58,12 +68,48 @@ jobs:
 
       - run: npm ci
 
-      # Throwaway build-time values. The build must not depend on real
-      # credentials, and no secret belongs in a workflow file - put real values
-      # in GitHub repository secrets if a job ever needs them.
+      # Build-time env only. These are throwaway values: the build must not
+      # depend on real credentials, and no secret belongs in a workflow file.
       - name: Build
         run: npm run build
         env:
           NEXT_PUBLIC_SUPABASE_URL: http://127.0.0.1:54321
           NEXT_PUBLIC_SUPABASE_ANON_KEY: build-placeholder-anon-key
           SUPABASE_SERVICE_ROLE_KEY: build-placeholder-service-key
+          CRON_SECRET: build-placeholder-cron-secret
+
+  database:
+    name: Migrations and integration tests
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+
+      - uses: actions/setup-node@v4
+        with:
+          node-version: '20'
+          cache: npm
+
+      - run: npm ci
+
+      - name: Install Supabase CLI
+        uses: supabase/setup-cli@v1
+        with:
+          version: latest
+
+      # Proves the committed migrations build the schema from nothing - which
+      # is the whole reason they are committed rather than living only in the
+      # cloud project. A fresh clone must be runnable (Deliverable #7).
+      - name: Start local Supabase stack
+        run: supabase start
+
+      - name: Verify migrations apply from scratch
+        run: supabase db reset --no-seed
+
+      - name: Integration tests
+        run: npm run test:integration
+        env:
+          NODE_ENV: test
+
+      - name: Stop stack
+        if: always()
+        run: supabase stop

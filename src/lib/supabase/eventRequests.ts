@@ -1,4 +1,6 @@
 import { SupabaseClient } from '@supabase/supabase-js';
+import type { EventRequestStatus } from '@/domain/event-request/schema';
+import type { Decision } from '@/domain/review/schema';
 
 /**
  * Supabase access for event requests. Thin by design: the query lives here, the
@@ -7,7 +9,9 @@ import { SupabaseClient } from '@supabase/supabase-js';
 
 const COLUMNS =
   'id, reference, organiser_id, client_organisation_id, name, purpose, description, proposed_date, ' +
-  'time_slots, expected_attendance, status, submitted_at, created_at, updated_at';
+  'time_slots, expected_attendance, status, submitted_at, created_at, updated_at, ' +
+  // SCRUM-92
+  'decision, decided_by, decided_at';
 
 export interface EventRequestRow {
   id: string;
@@ -22,11 +26,18 @@ export interface EventRequestRow {
   // completeness once those tickets start filling them in.
   time_slots: string[] | null;
   expected_attendance: number | null;
-  // SCRUM-82
-  status: 'DRAFT' | 'SUBMITTED';
+  // SCRUM-82. Uses the shared type rather than a literal union, so adding a
+  // status in one place cannot leave this row shape claiming the value is
+  // impossible (SCRUM-92 added APPROVED).
+  status: EventRequestStatus;
   submitted_at: string | null;
   created_at: string;
   updated_at: string;
+  // SCRUM-92. All three are null together or set together
+  // (event_request_decision_complete).
+  decision: Decision | null;
+  decided_by: string | null;
+  decided_at: string | null;
 }
 
 export interface EventRequestWrite {
