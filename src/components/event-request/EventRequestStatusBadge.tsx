@@ -11,6 +11,10 @@ import {
 const STATUS_CLASS: Record<EventRequestStatus, string> = {
   DRAFT: 'bg-slate-100 text-[var(--text-muted)]',
   SUBMITTED: 'bg-blue-50 text-[var(--brand)]',
+  // SCRUM-92 added the APPROVED status, and this map must cover every status
+  // or the build fails. Colour chosen to match the existing pair; SCRUM-82's
+  // author owns this component and should change it if they disagree.
+  APPROVED: 'bg-green-50 text-green-700',
 };
 
 export function EventRequestStatusBadge({ status }: { status: EventRequestStatus }) {
