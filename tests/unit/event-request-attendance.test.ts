@@ -47,7 +47,7 @@ describe('SCRUM-78 — State expected attendance', () => {
       purpose: 'Networking',
       description: 'Yearly gathering',
       proposedDate: '2026-11-15',
-      timeSlots: ['PM'],
+      timeSlots: ['pm'],
       expectedAttendance: 80,
     });
     expect(result.expectedAttendance).toBe(80);
