@@ -77,6 +77,34 @@ export async function markEventRequestSubmitted(supabase: SupabaseClient, id: st
     .maybeSingle();
 }
 
+// ---------------------------------------------------------------------------
+// SCRUM-92 — Approve a request so planning can proceed
+// ---------------------------------------------------------------------------
+
+/**
+ * AC1 — flips a submitted request to approved and records the decision and who
+ * made it in the same statement. decided_at is stamped by the database (see
+ * set_decided_at), so the caller cannot choose the time.
+ *
+ * The `status` filter is the guard: a request that is not SUBMITTED matches no
+ * row and comes back empty, which is also what stops two coordinators
+ * approving the same request at once. Same shape as
+ * markEventRequestSubmitted above.
+ */
+export async function markEventRequestApproved(
+  supabase: SupabaseClient,
+  id: string,
+  actorId: string,
+) {
+  return supabase
+    .from('event_request')
+    .update({ status: 'APPROVED', decision: 'APPROVED', decided_by: actorId })
+    .eq('id', id)
+    .eq('status', 'SUBMITTED')
+    .select(COLUMNS)
+    .maybeSingle();
+}
+
 /** AC3 — an organiser's own requests, newest first. */
 export async function listEventRequestsForOrganiser(supabase: SupabaseClient, organiserId: string) {
   return supabase
