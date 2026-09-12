@@ -1,4 +1,5 @@
 import Link from 'next/link';
+import { describeTimeSlots } from '@/domain/event-request/policy';
 import { getEventRequest } from '@/domain/event-request/service';
 import { formatSingaporeDate, formatSingaporeDateTime } from '@/domain/shared/dates';
 
@@ -39,6 +40,8 @@ export default async function EventRequestPage({
             request.proposedDate ? formatSingaporeDate(request.proposedDate) : 'Not yet provided'
           }
         />
+        {/* SCRUM-77 AC2: all three slots read as a full-day booking requirement. */}
+        <Row label="Time slots" value={describeTimeSlots(request.timeSlots)} />
         <Row label="Created" value={formatSingaporeDateTime(request.createdAt)} />
         <Row label="Last updated" value={formatSingaporeDateTime(request.updatedAt)} />
       </dl>

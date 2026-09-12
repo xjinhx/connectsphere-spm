@@ -9,10 +9,11 @@ import {
 import { getCurrentActor, type Actor } from '@/lib/auth/currentActor';
 import { hasRole } from '@/domain/identity/policy';
 import { ForbiddenError, NotFoundError, ValidationError } from '@/domain/shared/errors';
-import { eventRequestBasicDetailsSchema, type EventRequestBasicDetails } from './schema';
+import { eventRequestSaveSchema, type EventRequestSaveInput, type TimeSlot } from './schema';
 
 /**
  * SCRUM-76 — orchestration for creating and reading an event request.
+ * SCRUM-77 — the time slots saved with it.
  * Decides who may act, validates, then delegates the actual Supabase calls to
  * src/lib/supabase/eventRequests.ts. Submission is SCRUM-82 and lives there.
  */
@@ -26,6 +27,8 @@ export interface EventRequest {
   purpose: string | null;
   description: string | null;
   proposedDate: string | null;
+  /** SCRUM-77. Null until at least one slot has been chosen. */
+  timeSlots: TimeSlot[] | null;
   createdAt: string;
   updatedAt: string;
 }
@@ -42,18 +45,22 @@ function toEventRequest(row: EventRequestRow): EventRequest {
     purpose: row.purpose,
     description: row.description,
     proposedDate: row.proposed_date,
+    // The database constraint guarantees only AM/PM/NIGHT are ever stored.
+    timeSlots: row.time_slots as TimeSlot[] | null,
     createdAt: row.created_at,
     updatedAt: row.updated_at,
   };
 }
 
-function toWrite(details: EventRequestBasicDetails): EventRequestWrite {
+function toWrite(input: EventRequestSaveInput): EventRequestWrite {
   return {
-    name: details.name,
-    purpose: details.purpose,
-    description: details.description,
+    name: input.name,
+    purpose: input.purpose,
+    description: input.description,
     // Stored as a calendar date, not an instant.
-    proposed_date: details.proposedDate.toISOString().slice(0, 10),
+    proposed_date: input.proposedDate.toISOString().slice(0, 10),
+    // SCRUM-77 AC1: the chosen slots, already deduplicated and in day order.
+    time_slots: input.timeSlots.length > 0 ? input.timeSlots : null,
   };
 }
 
@@ -90,8 +97,8 @@ async function requireOwnRequest(actor: Actor, id: string): Promise<EventRequest
   return request;
 }
 
-function parseBasicDetails(input: unknown): EventRequestBasicDetails {
-  const parsed = eventRequestBasicDetailsSchema.safeParse(input);
+function parseSaveInput(input: unknown): EventRequestSaveInput {
+  const parsed = eventRequestSaveSchema.safeParse(input);
   if (!parsed.success) {
     throw new ValidationError('The event request is not valid.', parsed.error.flatten());
   }
@@ -117,7 +124,7 @@ export async function createEventRequest(input: unknown): Promise<EventRequest> 
   const clientOrganisation = requireOrganiser(actor);
 
   const { data, error } = await insertEventRequest(createAdminClient(), {
-    ...toWrite(parseBasicDetails(input)),
+    ...toWrite(parseSaveInput(input)),
     organiser_id: actor.userId,
     client_organisation_id: clientOrganisation.id,
   });
@@ -136,7 +143,7 @@ export async function updateEventRequestDetails(id: string, input: unknown): Pro
   const { data, error } = await updateEventRequest(
     createAdminClient(),
     id,
-    toWrite(parseBasicDetails(input)),
+    toWrite(parseSaveInput(input)),
   );
   if (error || !data) {
     throw new ValidationError('The event request could not be updated.', error?.message);

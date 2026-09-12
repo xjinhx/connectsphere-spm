@@ -2,6 +2,7 @@
 
 import { useState } from 'react';
 import { useRouter } from 'next/navigation';
+import { TIME_SLOT_LABELS, TIME_SLOT_ORDER, type TimeSlot } from '@/domain/event-request/schema';
 
 /**
  * SCRUM-76 AC1 — the blank request form, with the client organisation already
@@ -10,6 +11,10 @@ import { useRouter } from 'next/navigation';
  * Saving never checks the proposed date (AC3): an organiser may keep a request
  * with a date they still have to fix. Applying the date rule at submission is
  * SCRUM-82, which adds the Submit action.
+ *
+ * SCRUM-77 AC4 — the slot picker is built from TIME_SLOT_ORDER, so the only
+ * slots it can offer are the three that exist. Nothing crossing midnight can be
+ * chosen because nothing crossing midnight is listed.
  */
 
 const labelClass = 'block text-sm font-medium text-[var(--text)]';
@@ -31,6 +36,7 @@ export function EventRequestForm({
   const [purpose, setPurpose] = useState('');
   const [description, setDescription] = useState('');
   const [proposedDate, setProposedDate] = useState('');
+  const [timeSlots, setTimeSlots] = useState<TimeSlot[]>([]);
 
   const [saving, setSaving] = useState(false);
   const [error, setError] = useState<string | null>(null);
@@ -46,7 +52,7 @@ export function EventRequestForm({
       const response = await fetch('/api/event-requests', {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({ name, purpose, description, proposedDate }),
+        body: JSON.stringify({ name, purpose, description, proposedDate, timeSlots }),
       });
 
       const payload = (await response.json().catch(() => null)) as {
@@ -64,6 +70,12 @@ export function EventRequestForm({
       setError(caught instanceof Error ? caught.message : 'The request could not be saved.');
       setSaving(false);
     }
+  }
+
+  function toggleSlot(slot: TimeSlot) {
+    setTimeSlots((current) =>
+      current.includes(slot) ? current.filter((value) => value !== slot) : [...current, slot],
+    );
   }
 
   function FieldError({ field }: { field: string }) {
@@ -155,6 +167,26 @@ export function EventRequestForm({
         </p>
         <FieldError field="proposedDate" />
       </div>
+
+      <fieldset>
+        <legend className={labelClass}>Time slots</legend>
+        <div className="mt-2 flex flex-wrap gap-x-6 gap-y-2">
+          {TIME_SLOT_ORDER.map((slot) => (
+            <label key={slot} className="flex items-center gap-2 text-sm">
+              <input
+                type="checkbox"
+                checked={timeSlots.includes(slot)}
+                onChange={() => toggleSlot(slot)}
+              />
+              {TIME_SLOT_LABELS[slot]}
+            </label>
+          ))}
+        </div>
+        <p className="mt-1 text-xs text-[var(--text-muted)]">
+          Select all three for a full-day booking. At least one is needed to submit.
+        </p>
+        <FieldError field="timeSlots" />
+      </fieldset>
 
       {error ? (
         <p role="alert" className="rounded-md bg-red-50 px-3 py-2 text-sm text-[var(--danger)]">

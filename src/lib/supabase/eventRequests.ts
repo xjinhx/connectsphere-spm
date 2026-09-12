@@ -6,7 +6,7 @@ import { SupabaseClient } from '@supabase/supabase-js';
  */
 
 const COLUMNS =
-  'id, reference, organiser_id, client_organisation_id, name, purpose, description, proposed_date, created_at, updated_at';
+  'id, reference, organiser_id, client_organisation_id, name, purpose, description, proposed_date, time_slots, created_at, updated_at';
 
 export interface EventRequestRow {
   id: string;
@@ -17,6 +17,8 @@ export interface EventRequestRow {
   purpose: string | null;
   description: string | null;
   proposed_date: string | null;
+  // SCRUM-77
+  time_slots: string[] | null;
   created_at: string;
   updated_at: string;
 }
@@ -26,6 +28,8 @@ export interface EventRequestWrite {
   purpose: string | null;
   description: string | null;
   proposed_date: string | null;
+  // SCRUM-77. Null when none chosen, so "not yet provided" has one spelling.
+  time_slots: string[] | null;
 }
 
 export async function insertEventRequest(

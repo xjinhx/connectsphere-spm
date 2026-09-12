@@ -1,4 +1,10 @@
-import { eventRequestCoreSchema } from './schema';
+import {
+  eventRequestCoreSchema,
+  normaliseTimeSlots,
+  TIME_SLOT_LABELS,
+  TIME_SLOT_ORDER,
+  type TimeSlot,
+} from './schema';
 import {
   isPastDate,
   todayInSingapore,
@@ -51,4 +57,26 @@ export function isProposedDateSubmittable(
   today: ISODate = todayInSingapore(),
 ): boolean {
   return !isPastDate(toSingaporeISODate(proposedDate), today);
+}
+
+// ---------------------------------------------------------------------------
+// SCRUM-77 — Choose the time slots the event needs
+// ---------------------------------------------------------------------------
+
+/**
+ * AC2 — all three slots together are a full-day booking requirement. Derived,
+ * not stored: a separate "full day" flag would be a second copy of the same
+ * fact that could drift from the slots it describes.
+ */
+export function isFullDay(slots: readonly TimeSlot[]): boolean {
+  return normaliseTimeSlots(slots).length === TIME_SLOT_ORDER.length;
+}
+
+/** What the request shows for its slots: "Full day", or the slots in day order. */
+export function describeTimeSlots(slots: readonly TimeSlot[] | null): string {
+  if (!slots || slots.length === 0) return 'Not yet provided';
+  if (isFullDay(slots)) return 'Full day';
+  return normaliseTimeSlots(slots)
+    .map((slot) => TIME_SLOT_LABELS[slot])
+    .join(', ');
 }

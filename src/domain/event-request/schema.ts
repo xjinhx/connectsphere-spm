@@ -40,3 +40,46 @@ export const eventRequestBasicDetailsSchema = eventRequestCoreSchema.pick({
 });
 
 export type EventRequestBasicDetails = z.infer<typeof eventRequestBasicDetailsSchema>;
+
+// ---------------------------------------------------------------------------
+// SCRUM-77 — Choose the time slots the event needs
+// ---------------------------------------------------------------------------
+// AC4: these three are the only slots that exist (customer clarification #50).
+// Venues are booked in these fixed blocks, so a request cannot ask for a slot
+// that crosses midnight - there is no such slot to ask for.
+
+export type TimeSlot = z.infer<typeof TimeSlotEnum>;
+
+/** The slots in the order a day runs. Also the order they are stored and shown. */
+export const TIME_SLOT_ORDER: readonly TimeSlot[] = TimeSlotEnum.options;
+
+export const TIME_SLOT_HOURS: Record<TimeSlot, { start: number; end: number }> = {
+  AM: { start: 7, end: 12 },
+  PM: { start: 13, end: 18 },
+  NIGHT: { start: 19, end: 24 },
+};
+
+export const TIME_SLOT_LABELS: Record<TimeSlot, string> = {
+  AM: 'AM (07:00–12:00)',
+  PM: 'PM (13:00–18:00)',
+  NIGHT: 'Night (19:00–24:00)',
+};
+
+/** A selection is a set: duplicates collapse, and the order is the day's order. */
+export function normaliseTimeSlots(slots: readonly TimeSlot[]): TimeSlot[] {
+  return TIME_SLOT_ORDER.filter((slot) => slots.includes(slot));
+}
+
+/**
+ * AC1: what is saved with the request. Any number of slots, including none -
+ * AC3 blocks submission without a slot, not saving. `.min(1)` stays on the
+ * core schema, where the completeness check (SCRUM-82) reads it.
+ */
+export const timeSlotsSchema = z.array(TimeSlotEnum).transform(normaliseTimeSlots);
+
+/** The whole form as it is saved: SCRUM-76's basic details plus SCRUM-77's slots. */
+export const eventRequestSaveSchema = eventRequestBasicDetailsSchema.extend({
+  timeSlots: timeSlotsSchema.default([]),
+});
+
+export type EventRequestSaveInput = z.infer<typeof eventRequestSaveSchema>;
