@@ -26,28 +26,92 @@ const fieldClass =
   'mt-1 w-full rounded-md border border-[var(--border)] bg-[var(--surface)] px-3 py-2 text-sm ' +
   'focus:border-[var(--brand)] focus:outline-none';
 
+/**
+ * SCRUM-83 / SCRUM-85 — the same form serves three jobs, because they are the
+ * same fields: a blank new request, "Save as draft" on either, and resuming a
+ * saved draft with `initial` pre-filled (SCRUM-85 AC3).
+ */
+export interface EventRequestFormInitialValues {
+  name: string;
+  purpose: string;
+  description: string;
+  proposedDate: string;
+  timeSlots: TimeSlot[];
+  expectedAttendance: string;
+}
+
 export function EventRequestForm({
   clientOrganisation,
   today,
+  initial,
+  requestId,
 }: {
   clientOrganisation: { id: string; name: string };
   /** Today in Singapore, from the server, so the picker agrees with the rules. */
   today: string;
+  /** SCRUM-85 AC3 — every value previously entered on a resumed draft. */
+  initial?: EventRequestFormInitialValues;
+  /** Set when resuming a saved draft: the draft this form writes back to. */
+  requestId?: string;
 }) {
   const router = useRouter();
 
-  const [name, setName] = useState('');
-  const [purpose, setPurpose] = useState('');
-  const [description, setDescription] = useState('');
-  const [proposedDate, setProposedDate] = useState('');
-  const [timeSlots, setTimeSlots] = useState<TimeSlot[]>([]);
+  const [name, setName] = useState(initial?.name ?? '');
+  const [purpose, setPurpose] = useState(initial?.purpose ?? '');
+  const [description, setDescription] = useState(initial?.description ?? '');
+  const [proposedDate, setProposedDate] = useState(initial?.proposedDate ?? '');
+  const [timeSlots, setTimeSlots] = useState<TimeSlot[]>(initial?.timeSlots ?? []);
   // Kept as a string, like proposedDate: an empty input is a valid "not yet
   // entered" save-time state, not a 0. Converted to a number only when sent.
-  const [expectedAttendance, setExpectedAttendance] = useState('');
+  const [expectedAttendance, setExpectedAttendance] = useState(initial?.expectedAttendance ?? '');
 
   const [saving, setSaving] = useState(false);
   const [error, setError] = useState<string | null>(null);
   const [fieldErrors, setFieldErrors] = useState<Record<string, string[]>>({});
+
+  /**
+   * SCRUM-83 AC1 — "Save as draft" keeps whatever is filled in and applies no
+   * mandatory-field check. SCRUM-83 AC4 / SCRUM-85 AC3 — when this form is
+   * already editing a saved draft it PATCHes that draft, so re-saving updates
+   * it in place instead of creating a second one.
+   */
+  async function onSaveDraft() {
+    setSaving(true);
+    setError(null);
+    setFieldErrors({});
+    try {
+      const response = await fetch(
+        requestId ? `/api/event-requests/${requestId}/draft` : '/api/event-requests/draft',
+        {
+          method: requestId ? 'PATCH' : 'POST',
+          headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify({
+            name,
+            purpose,
+            description,
+            proposedDate,
+            timeSlots,
+            expectedAttendance: expectedAttendance === '' ? undefined : Number(expectedAttendance),
+          }),
+        },
+      );
+
+      const payload = (await response.json().catch(() => null)) as {
+        id?: string;
+        message?: string;
+        details?: { fieldErrors?: Record<string, string[]> };
+      } | null;
+
+      if (!response.ok || !payload?.id) {
+        setFieldErrors(payload?.details?.fieldErrors ?? {});
+        throw new Error(payload?.message ?? 'The draft could not be saved.');
+      }
+      router.push(`/events/${payload.id}`);
+    } catch (caught) {
+      setError(caught instanceof Error ? caught.message : 'The draft could not be saved.');
+      setSaving(false);
+    }
+  }
 
   async function onSave() {
     setSaving(true);
@@ -59,8 +123,13 @@ export function EventRequestForm({
       // expectedAttendance is the one exception: an empty string is not a valid
       // number, so it is sent as undefined (JSON.stringify drops the key) and
       // the mandatory-field check, not a type error, is what names it missing.
-      const response = await fetch('/api/event-requests', {
-        method: 'POST',
+      // SCRUM-83 AC4 / SCRUM-85 — when this form is editing a saved draft, the
+      // full save updates that draft too. Posting would leave a second row
+      // behind, which AC4 explicitly rules out.
+      const response = await fetch(
+        requestId ? `/api/event-requests/${requestId}` : '/api/event-requests',
+        {
+        method: requestId ? 'PATCH' : 'POST',
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify({
           name,
@@ -70,7 +139,8 @@ export function EventRequestForm({
           timeSlots,
           expectedAttendance: expectedAttendance === '' ? undefined : Number(expectedAttendance),
         }),
-      });
+        },
+      );
 
       const payload = (await response.json().catch(() => null)) as {
         id?: string;
@@ -231,14 +301,31 @@ export function EventRequestForm({
         </p>
       ) : null}
 
-      <button
-        type="button"
-        onClick={onSave}
-        disabled={saving}
-        className="rounded-md bg-[var(--brand)] px-4 py-2 text-sm font-medium text-white hover:bg-[var(--brand-dark)] disabled:opacity-60"
-      >
-        {saving ? 'Saving...' : 'Save request'}
-      </button>
+      <div className="flex flex-wrap items-center gap-3">
+        <button
+          type="button"
+          onClick={onSave}
+          disabled={saving}
+          className="rounded-md bg-[var(--brand)] px-4 py-2 text-sm font-medium text-white hover:bg-[var(--brand-dark)] disabled:opacity-60"
+        >
+          {saving ? 'Saving...' : 'Save request'}
+        </button>
+
+        {/* SCRUM-83 AC1 — the other way to save: keeps whatever is filled in,
+            with no mandatory-field check. */}
+        <button
+          type="button"
+          onClick={onSaveDraft}
+          disabled={saving}
+          className="rounded-md border border-[var(--border)] bg-[var(--surface)] px-4 py-2 text-sm font-medium hover:bg-slate-50 disabled:opacity-60"
+        >
+          {saving ? 'Saving...' : 'Save as draft'}
+        </button>
+      </div>
+
+      <p className="text-xs text-[var(--text-muted)]">
+        Only the event name is needed to save a draft. You can come back and finish it later.
+      </p>
     </form>
   );
 }

@@ -36,6 +36,11 @@ export interface EventRequestWrite {
   proposed_date: string | null;
   // SCRUM-77. Null when none chosen, so "not yet provided" has one spelling.
   time_slots: string[] | null;
+  // SCRUM-78's column. Optional on the write so SCRUM-76's create path, which
+  // does not collect it, keeps compiling unchanged; SCRUM-83's draft save does
+  // send it. See the note in domain/event-request/service.ts about the create
+  // path still dropping this value.
+  expected_attendance?: number | null;
 }
 
 export async function insertEventRequest(

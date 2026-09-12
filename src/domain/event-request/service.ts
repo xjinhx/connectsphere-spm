@@ -17,12 +17,14 @@ import {
   ValidationError,
 } from '@/domain/shared/errors';
 import {
+  eventRequestDraftSchema,
   eventRequestSaveSchema,
+  type EventRequestDraftInput,
   type EventRequestSaveInput,
   type EventRequestStatus,
   type TimeSlot,
 } from './schema';
-import { canBeSubmitted, incompleteFields, isEditable } from './policy';
+import { canBeSubmitted, incompleteFields, isEditable, isOwnRequest, isResumable } from './policy';
 
 /**
  * SCRUM-76 — orchestration for creating and reading an event request.
@@ -113,7 +115,9 @@ async function requireOwnRequest(actor: Actor, id: string): Promise<EventRequest
   if (!data) throw new NotFoundError('Event request');
 
   const request = toEventRequest(data as unknown as EventRequestRow);
-  if (request.organiserId !== actor.userId) {
+  // SCRUM-83 AC3 — the rule itself lives in policy.ts so it can be tested
+  // without a database; this is where it is applied.
+  if (!isOwnRequest(request, actor.userId)) {
     throw new ForbiddenError('This event request belongs to another organiser.');
   }
   return request;
@@ -181,6 +185,102 @@ export async function updateEventRequestDetails(id: string, input: unknown): Pro
 
 export async function getEventRequest(id: string): Promise<EventRequest> {
   return requireOwnRequest(await getCurrentActor(), id);
+}
+
+// ---------------------------------------------------------------------------
+// SCRUM-83 — Save an incomplete request as a draft
+// SCRUM-85 — Resume editing a draft
+// ---------------------------------------------------------------------------
+
+function parseDraftInput(input: unknown): EventRequestDraftInput {
+  const parsed = eventRequestDraftSchema.safeParse(input);
+  if (!parsed.success) {
+    throw new ValidationError('The draft could not be saved.', parsed.error.flatten());
+  }
+  return parsed.data;
+}
+
+/**
+ * A draft writes every field it was given and nulls the rest. Null, not
+ * "leave alone": re-saving a draft after clearing a field has to clear it in
+ * the row too, or the form and the record would disagree (SCRUM-85 AC3 shows
+ * the organiser exactly what is stored).
+ */
+function toDraftWrite(input: EventRequestDraftInput): EventRequestWrite {
+  return {
+    name: input.name,
+    purpose: input.purpose ?? null,
+    description: input.description ?? null,
+    proposed_date: input.proposedDate ? input.proposedDate.toISOString().slice(0, 10) : null,
+    // SCRUM-77's constraint: no slots is NULL, never an empty array.
+    time_slots: input.timeSlots.length > 0 ? input.timeSlots : null,
+    expected_attendance: input.expectedAttendance ?? null,
+  };
+}
+
+/**
+ * SCRUM-83 AC1 — saves whatever has been filled in. No mandatory-field check
+ * runs here: that is the whole point of the action, and it is what separates
+ * this from createEventRequest() above. The row lands as DRAFT because the
+ * column defaults to it.
+ */
+export async function saveEventRequestDraft(input: unknown): Promise<EventRequest> {
+  const actor = await getCurrentActor();
+  const clientOrganisation = requireOrganiser(actor);
+
+  const { data, error } = await insertEventRequest(createAdminClient(), {
+    ...toDraftWrite(parseDraftInput(input)),
+    organiser_id: actor.userId,
+    client_organisation_id: clientOrganisation.id,
+  });
+
+  if (error || !data) {
+    throw new ValidationError('The draft could not be saved.', error?.message);
+  }
+  return toEventRequest(data as unknown as EventRequestRow);
+}
+
+/**
+ * SCRUM-83 AC4 — saving again while editing a draft updates that same draft.
+ * An UPDATE on the id, never an insert, so no second draft can appear.
+ *
+ * SCRUM-85 AC3 — this is also the save behind resumed editing.
+ */
+export async function updateEventRequestDraft(id: string, input: unknown): Promise<EventRequest> {
+  const actor = await getCurrentActor();
+  requireOrganiser(actor);
+
+  const existing = await requireOwnRequest(actor, id);
+  // A submitted request is read-only (SCRUM-82 AC4). Enforced here, not only
+  // by hiding the form, so a direct API call cannot get around it.
+  if (!isResumable(existing.status)) {
+    throw new InvalidTransitionError(existing.status, 'DRAFT');
+  }
+
+  const { data, error } = await updateEventRequest(
+    createAdminClient(),
+    id,
+    toDraftWrite(parseDraftInput(input)),
+  );
+  if (error || !data) {
+    throw new ValidationError('The draft could not be saved.', error?.message);
+  }
+  return toEventRequest(data as unknown as EventRequestRow);
+}
+
+/**
+ * SCRUM-85 AC3 — reopen a draft for editing, with everything previously
+ * entered still on it. Refuses anything that is no longer a draft, so the
+ * edit page cannot be reached for a submitted request by typing its URL.
+ */
+export async function getEventRequestDraftForEditing(id: string): Promise<EventRequest> {
+  const actor = await getCurrentActor();
+  const request = await requireOwnRequest(actor, id);
+
+  if (!isResumable(request.status)) {
+    throw new InvalidTransitionError(request.status, 'DRAFT');
+  }
+  return request;
 }
 
 // ---------------------------------------------------------------------------
