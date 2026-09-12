@@ -34,6 +34,60 @@ export type Database = {
   }
   public: {
     Tables: {
+      accessibility_features: {
+        Row: {
+          created_at: string
+          id: string
+          name: string
+        }
+        Insert: {
+          created_at?: string
+          id?: string
+          name: string
+        }
+        Update: {
+          created_at?: string
+          id?: string
+          name?: string
+        }
+        Relationships: []
+      }
+      facilities: {
+        Row: {
+          created_at: string
+          id: string
+          name: string
+        }
+        Insert: {
+          created_at?: string
+          id?: string
+          name: string
+        }
+        Update: {
+          created_at?: string
+          id?: string
+          name?: string
+        }
+        Relationships: []
+      }
+      locations: {
+        Row: {
+          created_at: string
+          id: string
+          name: string
+        }
+        Insert: {
+          created_at?: string
+          id?: string
+          name: string
+        }
+        Update: {
+          created_at?: string
+          id?: string
+          name?: string
+        }
+        Relationships: []
+      }
       profiles: {
         Row: {
           created_at: string
@@ -57,6 +111,142 @@ export type Database = {
           updated_at?: string
         }
         Relationships: []
+      }
+      venue_accessibility_features: {
+        Row: {
+          accessibility_feature_id: string
+          venue_id: string
+        }
+        Insert: {
+          accessibility_feature_id: string
+          venue_id: string
+        }
+        Update: {
+          accessibility_feature_id?: string
+          venue_id?: string
+        }
+        Relationships: [
+          {
+            foreignKeyName: "venue_accessibility_features_accessibility_feature_id_fkey"
+            columns: ["accessibility_feature_id"]
+            isOneToOne: false
+            referencedRelation: "accessibility_features"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "venue_accessibility_features_venue_id_fkey"
+            columns: ["venue_id"]
+            isOneToOne: false
+            referencedRelation: "venues"
+            referencedColumns: ["id"]
+          },
+        ]
+      }
+      venue_facilities: {
+        Row: {
+          facility_id: string
+          venue_id: string
+        }
+        Insert: {
+          facility_id: string
+          venue_id: string
+        }
+        Update: {
+          facility_id?: string
+          venue_id?: string
+        }
+        Relationships: [
+          {
+            foreignKeyName: "venue_facilities_facility_id_fkey"
+            columns: ["facility_id"]
+            isOneToOne: false
+            referencedRelation: "facilities"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "venue_facilities_venue_id_fkey"
+            columns: ["venue_id"]
+            isOneToOne: false
+            referencedRelation: "venues"
+            referencedColumns: ["id"]
+          },
+        ]
+      }
+      venue_layouts: {
+        Row: {
+          capacity: number
+          layout: string
+          venue_id: string
+        }
+        Insert: {
+          capacity: number
+          layout: string
+          venue_id: string
+        }
+        Update: {
+          capacity?: number
+          layout?: string
+          venue_id?: string
+        }
+        Relationships: [
+          {
+            foreignKeyName: "venue_layouts_venue_id_fkey"
+            columns: ["venue_id"]
+            isOneToOne: false
+            referencedRelation: "venues"
+            referencedColumns: ["id"]
+          },
+        ]
+      }
+      venues: {
+        Row: {
+          created_at: string
+          id: string
+          is_retired: boolean
+          location_id: string
+          max_capacity: number
+          name: string
+          operating_slots: string[]
+          setup_minutes: number | null
+          teardown_minutes: number | null
+          turnaround_minutes: number | null
+          updated_at: string
+        }
+        Insert: {
+          created_at?: string
+          id?: string
+          is_retired?: boolean
+          location_id: string
+          max_capacity: number
+          name: string
+          operating_slots?: string[]
+          setup_minutes?: number | null
+          teardown_minutes?: number | null
+          turnaround_minutes?: number | null
+          updated_at?: string
+        }
+        Update: {
+          created_at?: string
+          id?: string
+          is_retired?: boolean
+          location_id?: string
+          max_capacity?: number
+          name?: string
+          operating_slots?: string[]
+          setup_minutes?: number | null
+          teardown_minutes?: number | null
+          turnaround_minutes?: number | null
+          updated_at?: string
+        }
+        Relationships: [
+          {
+            foreignKeyName: "venues_location_id_fkey"
+            columns: ["location_id"]
+            isOneToOne: false
+            referencedRelation: "locations"
+            referencedColumns: ["id"]
+          },
+        ]
       }
     }
     Views: {
