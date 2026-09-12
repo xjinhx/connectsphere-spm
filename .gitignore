@@ -78,3 +78,7 @@ logs/
 *.pem
 .cache/
 tmp/
+
+# ---- doc folders ----
+TEST_CASES_LOGIN.md
+TEST_CASES_LOGIN.tsv
