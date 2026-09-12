@@ -1,4 +1,3 @@
-import { createAdminClient } from '@/lib/supabase/admin';
 import {
   deleteVenue,
   deleteVenueAccessibilityFeatures,
@@ -71,8 +70,7 @@ function requireLocation(location: ReferenceRow | null, venueName: string): Refe
 
 /** SCRUM-121 AC1 and AC3: the catalogue list, retired venues hidden by default. */
 export async function listVenues(includeRetired = false): Promise<VenueSummary[]> {
-  const supabase = createAdminClient();
-  const { data, error } = await fetchVenueSummaries(supabase, includeRetired);
+  const { data, error } = await fetchVenueSummaries(includeRetired);
 
   if (error || !data) {
     throw new ValidationError('Could not load the venue catalogue.', error?.message);
@@ -91,8 +89,7 @@ export async function listVenues(includeRetired = false): Promise<VenueSummary[]
 
 /** SCRUM-121 AC2: the full venue page, including the turnaround values. */
 export async function getVenue(venueId: string): Promise<VenueDetail> {
-  const supabase = createAdminClient();
-  const { data, error } = await fetchVenueDetail(supabase, venueId);
+  const { data, error } = await fetchVenueDetail(venueId);
 
   if (error) {
     throw new ValidationError('Could not load the venue.', error.message);
@@ -123,11 +120,10 @@ export async function getVenue(venueId: string): Promise<VenueDetail> {
 
 /** Everything the add and edit forms need for their dropdowns (SCRUM-116, 117). */
 export async function getVenueFormOptions(): Promise<VenueFormOptions> {
-  const supabase = createAdminClient();
   const [locations, facilities, accessibilityFeatures] = await Promise.all([
-    fetchLocations(supabase),
-    fetchFacilities(supabase),
-    fetchAccessibilityFeatures(supabase),
+    fetchLocations(),
+    fetchFacilities(),
+    fetchAccessibilityFeatures(),
   ]);
 
   const firstError = locations.error ?? facilities.error ?? accessibilityFeatures.error;
@@ -148,8 +144,8 @@ export async function getVenueFormOptions(): Promise<VenueFormOptions> {
 // Checking that chosen ids are really on the maintained lists
 // -----------------------------------------------------------------------------
 
-async function assertLocationExists(supabase: ReturnType<typeof createAdminClient>, locationId: string) {
-  const { data, error } = await fetchLocationById(supabase, locationId);
+async function assertLocationExists(locationId: string) {
+  const { data, error } = await fetchLocationById(locationId);
   if (error) {
     throw new ValidationError('Could not check the location.', error.message);
   }
@@ -158,12 +154,9 @@ async function assertLocationExists(supabase: ReturnType<typeof createAdminClien
   }
 }
 
-async function assertFacilitiesExist(
-  supabase: ReturnType<typeof createAdminClient>,
-  facilityIds: string[],
-): Promise<void> {
+async function assertFacilitiesExist(facilityIds: string[]): Promise<void> {
   if (facilityIds.length === 0) return;
-  const { data, error } = await fetchFacilityIdsIn(supabase, facilityIds);
+  const { data, error } = await fetchFacilityIdsIn(facilityIds);
   if (error) {
     throw new ValidationError('Could not check the facilities.', error.message);
   }
@@ -174,12 +167,9 @@ async function assertFacilitiesExist(
   }
 }
 
-async function assertAccessibilityFeaturesExist(
-  supabase: ReturnType<typeof createAdminClient>,
-  featureIds: string[],
-): Promise<void> {
+async function assertAccessibilityFeaturesExist(featureIds: string[]): Promise<void> {
   if (featureIds.length === 0) return;
-  const { data, error } = await fetchAccessibilityFeatureIdsIn(supabase, featureIds);
+  const { data, error } = await fetchAccessibilityFeatureIdsIn(featureIds);
   if (error) {
     throw new ValidationError('Could not check the accessibility features.', error.message);
   }
@@ -212,12 +202,11 @@ export async function createVenue(input: unknown): Promise<VenueDetail> {
   // SCRUM-118 AC3 and AC4: check before writing anything.
   assertLayoutsWithinMaxCapacity(venue.maxCapacity, venue.layouts);
 
-  const supabase = createAdminClient();
-  await assertLocationExists(supabase, venue.locationId);
-  await assertFacilitiesExist(supabase, venue.facilityIds);
-  await assertAccessibilityFeaturesExist(supabase, venue.accessibilityFeatureIds);
+  await assertLocationExists(venue.locationId);
+  await assertFacilitiesExist(venue.facilityIds);
+  await assertAccessibilityFeaturesExist(venue.accessibilityFeatureIds);
 
-  const { data: created, error: insertError } = await insertVenue(supabase, {
+  const { data: created, error: insertError } = await insertVenue({
     name: venue.name,
     location_id: venue.locationId,
     max_capacity: venue.maxCapacity,
@@ -236,13 +225,13 @@ export async function createVenue(input: unknown): Promise<VenueDetail> {
   }
 
   try {
-    await replaceVenueLinks(supabase, created.id, {
+    await replaceVenueLinks(created.id, {
       facilityIds: venue.facilityIds,
       accessibilityFeatureIds: venue.accessibilityFeatureIds,
       layouts: venue.layouts,
     });
   } catch (error) {
-    await deleteVenue(supabase, created.id);
+    await deleteVenue(created.id);
     throw error;
   }
 
@@ -279,18 +268,17 @@ export async function updateVenue(venueId: string, input: unknown): Promise<Venu
   const finalLayouts: VenueLayoutInput[] = changes.layouts ?? current.layouts;
   assertLayoutsWithinMaxCapacity(finalMaxCapacity, finalLayouts);
 
-  const supabase = createAdminClient();
   if (changes.locationId !== undefined) {
-    await assertLocationExists(supabase, changes.locationId);
+    await assertLocationExists(changes.locationId);
   }
   if (changes.facilityIds !== undefined) {
-    await assertFacilitiesExist(supabase, changes.facilityIds);
+    await assertFacilitiesExist(changes.facilityIds);
   }
   if (changes.accessibilityFeatureIds !== undefined) {
-    await assertAccessibilityFeaturesExist(supabase, changes.accessibilityFeatureIds);
+    await assertAccessibilityFeaturesExist(changes.accessibilityFeatureIds);
   }
 
-  const { error: updateError } = await updateVenueRow(supabase, venueId, {
+  const { error: updateError } = await updateVenueRow(venueId, {
     ...(changes.name !== undefined && { name: changes.name }),
     ...(changes.locationId !== undefined && { location_id: changes.locationId }),
     ...(changes.maxCapacity !== undefined && { max_capacity: changes.maxCapacity }),
@@ -305,7 +293,7 @@ export async function updateVenue(venueId: string, input: unknown): Promise<Venu
     throw new ValidationError('The venue could not be updated.', updateError.message);
   }
 
-  await replaceVenueLinks(supabase, venueId, {
+  await replaceVenueLinks(venueId, {
     facilityIds: changes.facilityIds,
     accessibilityFeatureIds: changes.accessibilityFeatureIds,
     layouts: changes.layouts,
@@ -319,7 +307,6 @@ export async function updateVenue(venueId: string, input: unknown): Promise<Venu
  * existing rows stay; an empty array means "remove them all".
  */
 async function replaceVenueLinks(
-  supabase: ReturnType<typeof createAdminClient>,
   venueId: string,
   lists: {
     facilityIds?: string[];
@@ -328,13 +315,12 @@ async function replaceVenueLinks(
   },
 ): Promise<void> {
   if (lists.facilityIds !== undefined) {
-    const removed = await deleteVenueFacilities(supabase, venueId);
+    const removed = await deleteVenueFacilities(venueId);
     if (removed.error) {
       throw new ValidationError('The facilities could not be saved.', removed.error.message);
     }
     if (lists.facilityIds.length > 0) {
       const added = await insertVenueFacilities(
-        supabase,
         lists.facilityIds.map((facilityId) => ({ venue_id: venueId, facility_id: facilityId })),
       );
       if (added.error) {
@@ -344,13 +330,12 @@ async function replaceVenueLinks(
   }
 
   if (lists.accessibilityFeatureIds !== undefined) {
-    const removed = await deleteVenueAccessibilityFeatures(supabase, venueId);
+    const removed = await deleteVenueAccessibilityFeatures(venueId);
     if (removed.error) {
       throw new ValidationError('The accessibility features could not be saved.', removed.error.message);
     }
     if (lists.accessibilityFeatureIds.length > 0) {
       const added = await insertVenueAccessibilityFeatures(
-        supabase,
         lists.accessibilityFeatureIds.map((featureId) => ({
           venue_id: venueId,
           accessibility_feature_id: featureId,
@@ -363,13 +348,12 @@ async function replaceVenueLinks(
   }
 
   if (lists.layouts !== undefined) {
-    const removed = await deleteVenueLayouts(supabase, venueId);
+    const removed = await deleteVenueLayouts(venueId);
     if (removed.error) {
       throw new ValidationError('The layouts could not be saved.', removed.error.message);
     }
     if (lists.layouts.length > 0) {
       const added = await insertVenueLayouts(
-        supabase,
         lists.layouts.map((entry) => ({
           venue_id: venueId,
           layout: entry.layout,

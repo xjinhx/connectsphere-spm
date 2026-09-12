@@ -1,16 +1,22 @@
 import type { SupabaseClient } from '@supabase/supabase-js';
+import { createAdminClient } from './admin';
 import type { Database, TablesInsert, TablesUpdate } from './database.types';
 
 /**
  * Venue Catalogue queries (EP-08).
  *
- * Same shape as profiles.ts: every function takes the Supabase client as its
- * first argument and hands back the raw Supabase result. No domain types, no
- * error mapping, no business rules. src/domain/venues/service.ts owns all of
- * that, which is what keeps domain/ free of Supabase.
+ * Per docs/architecture.md, both the Supabase client and the query building
+ * live in src/lib/. src/domain/venues/service.ts calls these functions and
+ * never holds a client or writes a .from() of its own.
+ *
+ * Each function returns the raw Supabase result. Error mapping and domain
+ * types are the service's job, not this file's.
  */
 
-type Db = SupabaseClient<Database>;
+/** createAdminClient memoises its client, so calling it per query is free. */
+function db(): SupabaseClient<Database> {
+  return createAdminClient();
+}
 
 /** SCRUM-121 AC1: name, location and maximum capacity are all the list needs. */
 const VENUE_SUMMARY_SELECT = 'id, name, max_capacity, is_retired, locations ( id, name )';
@@ -27,55 +33,55 @@ const VENUE_DETAIL_SELECT =
  * SCRUM-121 AC1 and AC3.
  * Retired venues are left out unless they were explicitly asked for.
  */
-export async function fetchVenueSummaries(supabase: Db, includeRetired: boolean) {
-  const query = supabase.from('venues').select(VENUE_SUMMARY_SELECT).order('name');
+export async function fetchVenueSummaries(includeRetired: boolean) {
+  const query = db().from('venues').select(VENUE_SUMMARY_SELECT).order('name');
   return includeRetired ? await query : await query.eq('is_retired', false);
 }
 
 /** SCRUM-121 AC2. maybeSingle so a missing id comes back as null, not an error. */
-export async function fetchVenueDetail(supabase: Db, venueId: string) {
-  return supabase.from('venues').select(VENUE_DETAIL_SELECT).eq('id', venueId).maybeSingle();
+export async function fetchVenueDetail(venueId: string) {
+  return db().from('venues').select(VENUE_DETAIL_SELECT).eq('id', venueId).maybeSingle();
 }
 
 // -----------------------------------------------------------------------------
 // The maintained reference lists (SCRUM-116 AC1, SCRUM-117 AC1 and AC2)
 // -----------------------------------------------------------------------------
 
-export async function fetchLocations(supabase: Db) {
-  return supabase.from('locations').select('id, name').order('name');
+export async function fetchLocations() {
+  return db().from('locations').select('id, name').order('name');
 }
 
-export async function fetchFacilities(supabase: Db) {
-  return supabase.from('facilities').select('id, name').order('name');
+export async function fetchFacilities() {
+  return db().from('facilities').select('id, name').order('name');
 }
 
-export async function fetchAccessibilityFeatures(supabase: Db) {
-  return supabase.from('accessibility_features').select('id, name').order('name');
+export async function fetchAccessibilityFeatures() {
+  return db().from('accessibility_features').select('id, name').order('name');
 }
 
 /** Used to confirm a chosen id really is on the maintained list before writing. */
-export async function fetchLocationById(supabase: Db, locationId: string) {
-  return supabase.from('locations').select('id').eq('id', locationId).maybeSingle();
+export async function fetchLocationById(locationId: string) {
+  return db().from('locations').select('id').eq('id', locationId).maybeSingle();
 }
 
-export async function fetchFacilityIdsIn(supabase: Db, facilityIds: string[]) {
-  return supabase.from('facilities').select('id').in('id', facilityIds);
+export async function fetchFacilityIdsIn(facilityIds: string[]) {
+  return db().from('facilities').select('id').in('id', facilityIds);
 }
 
-export async function fetchAccessibilityFeatureIdsIn(supabase: Db, featureIds: string[]) {
-  return supabase.from('accessibility_features').select('id').in('id', featureIds);
+export async function fetchAccessibilityFeatureIdsIn(featureIds: string[]) {
+  return db().from('accessibility_features').select('id').in('id', featureIds);
 }
 
 // -----------------------------------------------------------------------------
 // Writing a venue (SCRUM-116, SCRUM-120)
 // -----------------------------------------------------------------------------
 
-export async function insertVenue(supabase: Db, venue: TablesInsert<'venues'>) {
-  return supabase.from('venues').insert(venue).select('id').single();
+export async function insertVenue(venue: TablesInsert<'venues'>) {
+  return db().from('venues').insert(venue).select('id').single();
 }
 
-export async function updateVenueRow(supabase: Db, venueId: string, patch: TablesUpdate<'venues'>) {
-  return supabase.from('venues').update(patch).eq('id', venueId);
+export async function updateVenueRow(venueId: string, patch: TablesUpdate<'venues'>) {
+  return db().from('venues').update(patch).eq('id', venueId);
 }
 
 /**
@@ -83,8 +89,8 @@ export async function updateVenueRow(supabase: Db, venueId: string, patch: Table
  * transactions, so this is the compensating action; the foreign keys cascade,
  * so any link rows that did land go with it.
  */
-export async function deleteVenue(supabase: Db, venueId: string) {
-  return supabase.from('venues').delete().eq('id', venueId);
+export async function deleteVenue(venueId: string) {
+  return db().from('venues').delete().eq('id', venueId);
 }
 
 // -----------------------------------------------------------------------------
@@ -95,29 +101,28 @@ export async function deleteVenue(supabase: Db, venueId: string) {
 // out of the list is a facility removed.
 // -----------------------------------------------------------------------------
 
-export async function insertVenueFacilities(supabase: Db, rows: TablesInsert<'venue_facilities'>[]) {
-  return supabase.from('venue_facilities').insert(rows);
+export async function insertVenueFacilities(rows: TablesInsert<'venue_facilities'>[]) {
+  return db().from('venue_facilities').insert(rows);
 }
 
-export async function deleteVenueFacilities(supabase: Db, venueId: string) {
-  return supabase.from('venue_facilities').delete().eq('venue_id', venueId);
+export async function deleteVenueFacilities(venueId: string) {
+  return db().from('venue_facilities').delete().eq('venue_id', venueId);
 }
 
 export async function insertVenueAccessibilityFeatures(
-  supabase: Db,
   rows: TablesInsert<'venue_accessibility_features'>[],
 ) {
-  return supabase.from('venue_accessibility_features').insert(rows);
+  return db().from('venue_accessibility_features').insert(rows);
 }
 
-export async function deleteVenueAccessibilityFeatures(supabase: Db, venueId: string) {
-  return supabase.from('venue_accessibility_features').delete().eq('venue_id', venueId);
+export async function deleteVenueAccessibilityFeatures(venueId: string) {
+  return db().from('venue_accessibility_features').delete().eq('venue_id', venueId);
 }
 
-export async function insertVenueLayouts(supabase: Db, rows: TablesInsert<'venue_layouts'>[]) {
-  return supabase.from('venue_layouts').insert(rows);
+export async function insertVenueLayouts(rows: TablesInsert<'venue_layouts'>[]) {
+  return db().from('venue_layouts').insert(rows);
 }
 
-export async function deleteVenueLayouts(supabase: Db, venueId: string) {
-  return supabase.from('venue_layouts').delete().eq('venue_id', venueId);
+export async function deleteVenueLayouts(venueId: string) {
+  return db().from('venue_layouts').delete().eq('venue_id', venueId);
 }
