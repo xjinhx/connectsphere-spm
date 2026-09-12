@@ -66,7 +66,7 @@ function toEventRequest(row: EventRequestRow): EventRequest {
     purpose: row.purpose,
     description: row.description,
     proposedDate: row.proposed_date,
-    // The database constraint guarantees only AM/PM/NIGHT are ever stored.
+    // The database constraint guarantees only am/pm/night are ever stored.
     timeSlots: row.time_slots as TimeSlot[] | null,
     expectedAttendance: row.expected_attendance,
     status: row.status,
@@ -169,7 +169,7 @@ export async function updateEventRequestDetails(id: string, input: unknown): Pro
   // SCRUM-82 AC4 — a submitted request is read-only. The page hides the edit
   // action; this is the same rule where it cannot be bypassed.
   if (!isEditable(existing.status)) {
-    throw new InvalidTransitionError(existing.status, 'DRAFT');
+    throw new InvalidTransitionError(existing.status, 'draft');
   }
 
   const { data, error } = await updateEventRequest(
@@ -221,7 +221,7 @@ function toDraftWrite(input: EventRequestDraftInput): EventRequestWrite {
 /**
  * SCRUM-83 AC1 — saves whatever has been filled in. No mandatory-field check
  * runs here: that is the whole point of the action, and it is what separates
- * this from createEventRequest() above. The row lands as DRAFT because the
+ * this from createEventRequest() above. The row lands as draft because the
  * column defaults to it.
  */
 export async function saveEventRequestDraft(input: unknown): Promise<EventRequest> {
@@ -254,7 +254,7 @@ export async function updateEventRequestDraft(id: string, input: unknown): Promi
   // A submitted request is read-only (SCRUM-82 AC4). Enforced here, not only
   // by hiding the form, so a direct API call cannot get around it.
   if (!isResumable(existing.status)) {
-    throw new InvalidTransitionError(existing.status, 'DRAFT');
+    throw new InvalidTransitionError(existing.status, 'draft');
   }
 
   const { data, error } = await updateEventRequest(
@@ -278,7 +278,7 @@ export async function getEventRequestDraftForEditing(id: string): Promise<EventR
   const request = await requireOwnRequest(actor, id);
 
   if (!isResumable(request.status)) {
-    throw new InvalidTransitionError(request.status, 'DRAFT');
+    throw new InvalidTransitionError(request.status, 'draft');
   }
   return request;
 }
@@ -288,7 +288,7 @@ export async function getEventRequestDraftForEditing(id: string): Promise<EventR
 // ---------------------------------------------------------------------------
 
 /**
- * AC1 — a complete draft becomes SUBMITTED, with the submission time stamped
+ * AC1 — a complete draft becomes submitted, with the submission time stamped
  * by the database. It is in the assignment queue from that moment, because
  * the queue is defined as "every submitted request" (see
  * listSubmittedEventRequests in src/lib/supabase/eventRequests.ts).
@@ -302,7 +302,7 @@ export async function submitEventRequest(id: string): Promise<EventRequest> {
 
   const existing = await requireOwnRequest(actor, id);
   if (!canBeSubmitted(existing.status)) {
-    throw new InvalidTransitionError(existing.status, 'SUBMITTED');
+    throw new InvalidTransitionError(existing.status, 'submitted');
   }
 
   const incomplete = incompleteFields(existing);
@@ -318,7 +318,7 @@ export async function submitEventRequest(id: string): Promise<EventRequest> {
     throw new ValidationError('The event request could not be submitted.', error.message);
   }
   // No row matched: another call submitted it first (see the `status` filter).
-  if (!data) throw new InvalidTransitionError('SUBMITTED', 'SUBMITTED');
+  if (!data) throw new InvalidTransitionError('submitted', 'submitted');
   return toEventRequest(data as unknown as EventRequestRow);
 }
 

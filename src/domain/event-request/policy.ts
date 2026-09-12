@@ -178,12 +178,12 @@ export function canSubmit(
  * clarification request" is a later story, which will add a status here.
  */
 export function isEditable(status: EventRequestStatus): boolean {
-  return status === 'DRAFT';
+  return status === 'draft';
 }
 
 /** AC1 — the only transition this story knows: a draft becomes submitted. */
 export function canBeSubmitted(status: EventRequestStatus): boolean {
-  return status === 'DRAFT';
+  return status === 'draft';
 }
 
 // ---------------------------------------------------------------------------

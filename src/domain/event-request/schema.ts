@@ -4,7 +4,7 @@ import { z } from 'zod';
 // NOTE: `status` (draft/submitted) belongs to SCRUM-84's story, and `coordinatorId`
 // belongs to SCRUM-94/95/96 — intentionally left out of this schema to avoid collisions.
 
-export const TimeSlotEnum = z.enum(['AM', 'PM', 'NIGHT']); // 7am-12pm, 1pm-6pm, 7pm-12am
+export const TimeSlotEnum = z.enum(['am', 'pm', 'night']); // 7am-12pm, 1pm-6pm, 7pm-12am
 
 export const eventRequestCoreSchema = z.object({
   name: z.string().min(1, 'Event name is required'),
@@ -54,15 +54,15 @@ export type TimeSlot = z.infer<typeof TimeSlotEnum>;
 export const TIME_SLOT_ORDER: readonly TimeSlot[] = TimeSlotEnum.options;
 
 export const TIME_SLOT_HOURS: Record<TimeSlot, { start: number; end: number }> = {
-  AM: { start: 7, end: 12 },
-  PM: { start: 13, end: 18 },
-  NIGHT: { start: 19, end: 24 },
+  am: { start: 7, end: 12 },
+  pm: { start: 13, end: 18 },
+  night: { start: 19, end: 24 },
 };
 
 export const TIME_SLOT_LABELS: Record<TimeSlot, string> = {
-  AM: 'AM (07:00–12:00)',
-  PM: 'PM (13:00–18:00)',
-  NIGHT: 'Night (19:00–24:00)',
+  am: 'AM (07:00–12:00)',
+  pm: 'PM (13:00–18:00)',
+  night: 'Night (19:00–24:00)',
 };
 
 /** A selection is a set: duplicates collapse, and the order is the day's order. */
@@ -91,13 +91,13 @@ export type EventRequestSaveInput = z.infer<typeof eventRequestSaveSchema>;
 // Kept to the two values this story needs. The NOTE at the top of this file
 // still stands: the wider lifecycle (Event Status Management) is not in this
 // sprint and should extend this enum rather than replace it.
-export const EventRequestStatusEnum = z.enum(['DRAFT', 'SUBMITTED']);
+export const EventRequestStatusEnum = z.enum(['draft', 'submitted']);
 export type EventRequestStatus = z.infer<typeof EventRequestStatusEnum>;
 
 /** AC3/AC4 (US-5.3-TC03): the status as the organiser sees it, one spelling everywhere. */
 export const EVENT_REQUEST_STATUS_LABELS: Record<EventRequestStatus, string> = {
-  DRAFT: 'Draft',
-  SUBMITTED: 'Submitted',
+  draft: 'Draft',
+  submitted: 'Submitted',
 };
 
 // ---------------------------------------------------------------------------

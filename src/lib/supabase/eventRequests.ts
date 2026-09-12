@@ -23,7 +23,7 @@ export interface EventRequestRow {
   time_slots: string[] | null;
   expected_attendance: number | null;
   // SCRUM-82
-  status: 'DRAFT' | 'SUBMITTED';
+  status: 'draft' | 'submitted';
   submitted_at: string | null;
   created_at: string;
   updated_at: string;
@@ -75,9 +75,9 @@ export async function updateEventRequest(
 export async function markEventRequestSubmitted(supabase: SupabaseClient, id: string) {
   return supabase
     .from('event_request')
-    .update({ status: 'SUBMITTED' })
+    .update({ status: 'submitted' })
     .eq('id', id)
-    .eq('status', 'DRAFT')
+    .eq('status', 'draft')
     .select(COLUMNS)
     .maybeSingle();
 }
@@ -100,6 +100,6 @@ export async function listSubmittedEventRequests(supabase: SupabaseClient) {
   return supabase
     .from('event_request')
     .select(COLUMNS)
-    .eq('status', 'SUBMITTED')
+    .eq('status', 'submitted')
     .order('submitted_at', { ascending: true });
 }

@@ -90,14 +90,14 @@ describe('SCRUM-83 — Save an incomplete request as a draft', () => {
         purpose: 'Networking',
         description: 'Yearly gathering',
         proposedDate: '2026-11-15',
-        timeSlots: ['PM'],
+        timeSlots: ['pm'],
         expectedAttendance: 80,
       });
 
       expect(result.success).toBe(true);
       const draft = (result as { data: EventRequestDraftInput }).data;
       expect(draft.purpose).toBe('Networking');
-      expect(draft.timeSlots).toEqual(['PM']);
+      expect(draft.timeSlots).toEqual(['pm']);
       expect(draft.expectedAttendance).toBe(80);
     });
   });
@@ -159,7 +159,7 @@ describe('SCRUM-83 — Save an incomplete request as a draft', () => {
     // has something to update. The "one row, not two" half is the service
     // issuing an UPDATE, noted above as manual.
     it('leaves a draft editable after it has been saved', () => {
-      expect(isResumable('DRAFT')).toBe(true);
+      expect(isResumable('draft')).toBe(true);
     });
   });
 });
@@ -177,7 +177,7 @@ describe('SCRUM-85 — Resume editing a draft', () => {
     });
 
     it('allows a draft to be reopened', () => {
-      expect(isResumable('DRAFT')).toBe(true);
+      expect(isResumable('draft')).toBe(true);
     });
   });
 
@@ -186,7 +186,7 @@ describe('SCRUM-85 — Resume editing a draft', () => {
     // AC4 made a submitted request read-only, and resuming must not be a way
     // around it.
     it('refuses to reopen a submitted request', () => {
-      expect(isResumable('SUBMITTED')).toBe(false);
+      expect(isResumable('submitted')).toBe(false);
     });
   });
 });
@@ -197,7 +197,7 @@ describe('SCRUM-87 — Submit a draft for review', () => {
     purpose: 'Networking',
     description: 'Yearly gathering',
     proposedDate: '2026-11-15',
-    timeSlots: ['PM'],
+    timeSlots: ['pm'],
     expectedAttendance: 80,
   };
 
@@ -238,7 +238,7 @@ describe('SCRUM-87 — Submit a draft for review', () => {
     });
 
     it('leaves the draft editable so it can be finished', () => {
-      expect(isResumable('DRAFT')).toBe(true);
+      expect(isResumable('draft')).toBe(true);
     });
   });
 });

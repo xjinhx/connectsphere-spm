@@ -9,8 +9,8 @@ import {
  * page cannot disagree.
  */
 const STATUS_CLASS: Record<EventRequestStatus, string> = {
-  DRAFT: 'bg-slate-100 text-[var(--text-muted)]',
-  SUBMITTED: 'bg-blue-50 text-[var(--brand)]',
+  draft: 'bg-slate-100 text-[var(--text-muted)]',
+  submitted: 'bg-blue-50 text-[var(--brand)]',
 };
 
 export function EventRequestStatusBadge({ status }: { status: EventRequestStatus }) {
