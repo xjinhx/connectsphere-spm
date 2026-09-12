@@ -1,5 +1,10 @@
 import { describe, it, expect } from 'vitest';
-import { describeTimeSlots, isFullDay } from '@/domain/event-request/policy';
+import {
+  describeTimeSlots,
+  incompleteFields,
+  isFullDay,
+  type StoredEventRequestFields,
+} from '@/domain/event-request/policy';
 import {
   eventRequestSaveSchema,
   normaliseTimeSlots,
@@ -18,8 +23,9 @@ import {
  * all three = full day) and TC03 (two slots on one date) are this ticket's.
  *
  * AC3 ("no slot chosen → submission blocked, told at least one is required")
- * is enforced by the completeness check in SCRUM-82, so its tests live with
- * that story - there is no submission on this branch to block.
+ * is enforced by the completeness check that arrives with SCRUM-82, so its
+ * tests were added on that branch - there was no submission to block before.
+ * It has no sheet row yet and is tagged by Jira AC.
  *
  * Not coverable by a unit test - verify manually:
  *   AC1 "saved with the request" — a database write; save a request and read
@@ -28,11 +34,19 @@ import {
  *        is built from TIME_SLOT_ORDER, which is asserted below.
  */
 
+const A_MONDAY = '2026-11-09';
+
 const basicDetails = {
   name: 'Annual Tech Summit',
   purpose: 'Networking',
   description: 'Yearly gathering',
   proposedDate: '2026-11-15',
+};
+
+const complete: StoredEventRequestFields = {
+  ...basicDetails,
+  timeSlots: ['PM'],
+  expectedAttendance: 80,
 };
 
 describe('SCRUM-77 — Choose the time slots the event needs', () => {
@@ -77,6 +91,24 @@ describe('SCRUM-77 — Choose the time slots the event needs', () => {
     it('shows "not yet provided" until a slot is chosen', () => {
       expect(describeTimeSlots(null)).toBe('Not yet provided');
       expect(describeTimeSlots([])).toBe('Not yet provided');
+    });
+  });
+
+  describe('AC3 — no slot chosen: submission is blocked and the organiser is told', () => {
+    it('names time slots as incomplete when none are chosen', () => {
+      const result = incompleteFields({ ...complete, timeSlots: [] }, A_MONDAY);
+      expect(result).toEqual([
+        { field: 'timeSlots', label: 'Time slots', reason: 'Select at least one time slot' },
+      ]);
+    });
+
+    it('treats slots that were never chosen the same as an empty choice', () => {
+      const result = incompleteFields({ ...complete, timeSlots: null }, A_MONDAY);
+      expect(result.map((item) => item.field)).toEqual(['timeSlots']);
+    });
+
+    it('is satisfied by a single slot', () => {
+      expect(incompleteFields({ ...complete, timeSlots: ['NIGHT'] }, A_MONDAY)).toEqual([]);
     });
   });
 

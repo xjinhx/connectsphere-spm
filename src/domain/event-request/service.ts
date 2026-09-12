@@ -2,20 +2,33 @@ import { createAdminClient } from '@/lib/supabase/admin';
 import {
   fetchEventRequest,
   insertEventRequest,
+  listEventRequestsForOrganiser,
+  markEventRequestSubmitted,
   updateEventRequest,
   type EventRequestRow,
   type EventRequestWrite,
 } from '@/lib/supabase/eventRequests';
 import { getCurrentActor, type Actor } from '@/lib/auth/currentActor';
 import { hasRole } from '@/domain/identity/policy';
-import { ForbiddenError, NotFoundError, ValidationError } from '@/domain/shared/errors';
-import { eventRequestSaveSchema, type EventRequestSaveInput, type TimeSlot } from './schema';
+import {
+  ForbiddenError,
+  InvalidTransitionError,
+  NotFoundError,
+  ValidationError,
+} from '@/domain/shared/errors';
+import {
+  eventRequestSaveSchema,
+  type EventRequestSaveInput,
+  type EventRequestStatus,
+  type TimeSlot,
+} from './schema';
+import { canBeSubmitted, incompleteFields, isEditable } from './policy';
 
 /**
  * SCRUM-76 — orchestration for creating and reading an event request.
- * SCRUM-77 — the time slots saved with it.
- * Decides who may act, validates, then delegates the actual Supabase calls to
- * src/lib/supabase/eventRequests.ts. Submission is SCRUM-82 and lives there.
+ * SCRUM-82 — submitting one, and listing an organiser's own.
+ * Decides who may act, applies the rules from policy.ts, then delegates the
+ * actual Supabase calls to src/lib/supabase/eventRequests.ts.
  */
 
 export interface EventRequest {
@@ -29,6 +42,12 @@ export interface EventRequest {
   proposedDate: string | null;
   /** SCRUM-77. Null until at least one slot has been chosen. */
   timeSlots: TimeSlot[] | null;
+  /** SCRUM-78's column, read here for SCRUM-82's completeness check. */
+  expectedAttendance: number | null;
+  // SCRUM-82
+  status: EventRequestStatus;
+  /** An instant. Render with formatSingaporeDateTime() (AC1). */
+  submittedAt: string | null;
   createdAt: string;
   updatedAt: string;
 }
@@ -47,6 +66,9 @@ function toEventRequest(row: EventRequestRow): EventRequest {
     proposedDate: row.proposed_date,
     // The database constraint guarantees only AM/PM/NIGHT are ever stored.
     timeSlots: row.time_slots as TimeSlot[] | null,
+    expectedAttendance: row.expected_attendance,
+    status: row.status,
+    submittedAt: row.submitted_at,
     createdAt: row.created_at,
     updatedAt: row.updated_at,
   };
@@ -138,7 +160,13 @@ export async function createEventRequest(input: unknown): Promise<EventRequest> 
 export async function updateEventRequestDetails(id: string, input: unknown): Promise<EventRequest> {
   const actor = await getCurrentActor();
   requireOrganiser(actor);
-  await requireOwnRequest(actor, id);
+  const existing = await requireOwnRequest(actor, id);
+
+  // SCRUM-82 AC4 — a submitted request is read-only. The page hides the edit
+  // action; this is the same rule where it cannot be bypassed.
+  if (!isEditable(existing.status)) {
+    throw new InvalidTransitionError(existing.status, 'DRAFT');
+  }
 
   const { data, error } = await updateEventRequest(
     createAdminClient(),
@@ -153,4 +181,53 @@ export async function updateEventRequestDetails(id: string, input: unknown): Pro
 
 export async function getEventRequest(id: string): Promise<EventRequest> {
   return requireOwnRequest(await getCurrentActor(), id);
+}
+
+// ---------------------------------------------------------------------------
+// SCRUM-82 — Submit a completed event request
+// ---------------------------------------------------------------------------
+
+/**
+ * AC1 — a complete draft becomes SUBMITTED, with the submission time stamped
+ * by the database. It is in the assignment queue from that moment, because
+ * the queue is defined as "every submitted request" (see
+ * listSubmittedEventRequests in src/lib/supabase/eventRequests.ts).
+ *
+ * AC2 — an incomplete draft is refused with every incomplete field named, and
+ * nothing about it changes, so it stays editable.
+ */
+export async function submitEventRequest(id: string): Promise<EventRequest> {
+  const actor = await getCurrentActor();
+  requireOrganiser(actor);
+
+  const existing = await requireOwnRequest(actor, id);
+  if (!canBeSubmitted(existing.status)) {
+    throw new InvalidTransitionError(existing.status, 'SUBMITTED');
+  }
+
+  const incomplete = incompleteFields(existing);
+  if (incomplete.length > 0) {
+    throw new ValidationError(
+      'The request cannot be submitted until every mandatory field is complete.',
+      { incompleteFields: incomplete },
+    );
+  }
+
+  const { data, error } = await markEventRequestSubmitted(createAdminClient(), id);
+  if (error) {
+    throw new ValidationError('The event request could not be submitted.', error.message);
+  }
+  // No row matched: another call submitted it first (see the `status` filter).
+  if (!data) throw new InvalidTransitionError('SUBMITTED', 'SUBMITTED');
+  return toEventRequest(data as unknown as EventRequestRow);
+}
+
+/** AC3 — the organiser's own event list: reference, status and submission date. */
+export async function listMyEventRequests(): Promise<EventRequest[]> {
+  const actor = await getCurrentActor();
+  requireOrganiser(actor);
+
+  const { data, error } = await listEventRequestsForOrganiser(createAdminClient(), actor.userId);
+  if (error) throw new ValidationError('Your event requests could not be read.', error.message);
+  return (data ?? []).map((row) => toEventRequest(row as unknown as EventRequestRow));
 }

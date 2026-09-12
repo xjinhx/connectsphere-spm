@@ -1,6 +1,15 @@
 import { NextRequest, NextResponse } from 'next/server';
-import { createEventRequest } from '@/domain/event-request/service';
+import { createEventRequest, listMyEventRequests } from '@/domain/event-request/service';
 import { handleApiError } from '@/lib/api/handler';
+
+/** SCRUM-82 AC3 — the signed-in organiser's own event requests. */
+export async function GET() {
+  try {
+    return NextResponse.json(await listMyEventRequests());
+  } catch (error) {
+    return handleApiError(error);
+  }
+}
 
 export async function POST(req: NextRequest) {
   try {

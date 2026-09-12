@@ -9,8 +9,8 @@ import { TIME_SLOT_LABELS, TIME_SLOT_ORDER, type TimeSlot } from '@/domain/event
  * filled in and not editable.
  *
  * Saving never checks the proposed date (AC3): an organiser may keep a request
- * with a date they still have to fix. Applying the date rule at submission is
- * SCRUM-82, which adds the Submit action.
+ * with a date they still have to fix. The date rule is applied at submission
+ * (SCRUM-82), which happens from the saved request's own page, not this form.
  *
  * SCRUM-77 AC4 — the slot picker is built from TIME_SLOT_ORDER, so the only
  * slots it can offer are the three that exist. Nothing crossing midnight can be

@@ -1,5 +1,7 @@
 import Link from 'next/link';
-import { describeTimeSlots } from '@/domain/event-request/policy';
+import { EventRequestStatusBadge } from '@/components/event-request/EventRequestStatusBadge';
+import { SubmitEventRequestButton } from '@/components/event-request/SubmitEventRequestButton';
+import { describeTimeSlots, isEditable } from '@/domain/event-request/policy';
 import { getEventRequest } from '@/domain/event-request/service';
 import { formatSingaporeDate, formatSingaporeDateTime } from '@/domain/shared/dates';
 
@@ -23,10 +25,19 @@ export default async function EventRequestPage({
 }) {
   const { id } = await params;
   const request = await getEventRequest(id);
+  // SCRUM-82 AC2/AC4 — one rule decides every action shown on this page.
+  const editable = isEditable(request.status);
 
   return (
     <main className="mx-auto max-w-2xl px-4 py-8">
-      <h1 className="text-xl font-semibold">{request.name}</h1>
+      <Link href="/events" className="text-sm text-[var(--brand)] hover:underline">
+        ← My event requests
+      </Link>
+
+      <div className="mt-4 flex flex-wrap items-center gap-3">
+        <h1 className="text-xl font-semibold">{request.name}</h1>
+        <EventRequestStatusBadge status={request.status} />
+      </div>
       {/* AC2: the unique reference the database assigned on save. */}
       <p className="mt-1 font-mono text-sm text-[var(--text-muted)]">{request.reference}</p>
 
@@ -41,10 +52,30 @@ export default async function EventRequestPage({
           }
         />
         {/* SCRUM-77 AC2: all three slots read as a full-day booking requirement. */}
-        <Row label="Time slots" value={describeTimeSlots(request.timeSlots)} />
+        <Row
+          label="Time slots"
+          value={describeTimeSlots(request.timeSlots)}
+        />
         <Row label="Created" value={formatSingaporeDateTime(request.createdAt)} />
         <Row label="Last updated" value={formatSingaporeDateTime(request.updatedAt)} />
+        {/* SCRUM-82 AC1: the submission time, in Singapore time. */}
+        {request.submittedAt ? (
+          <Row label="Submitted" value={formatSingaporeDateTime(request.submittedAt)} />
+        ) : null}
       </dl>
+
+      {/* SCRUM-82 AC4: a submitted request is read-only - no edit, save or
+          delete is offered. Only a draft gets an action. */}
+      <section className="mt-6">
+        {editable ? (
+          <SubmitEventRequestButton requestId={request.id} />
+        ) : (
+          <p className="rounded-md border border-[var(--border)] bg-[var(--surface)] px-3 py-2 text-sm text-[var(--text-muted)]">
+            This request has been submitted and is now read-only. It can be changed again only
+            if a coordinator returns it with a clarification request.
+          </p>
+        )}
+      </section>
 
       <Link
         href="/events/new"
