@@ -83,3 +83,34 @@ export const eventRequestSaveSchema = eventRequestBasicDetailsSchema.extend({
 });
 
 export type EventRequestSaveInput = z.infer<typeof eventRequestSaveSchema>;
+
+// ---------------------------------------------------------------------------
+// SCRUM-82 — Submit a completed event request
+// ---------------------------------------------------------------------------
+// AC1 says "its status changes to Submitted", so a status has to exist here.
+// Kept to the two values this story needs. The NOTE at the top of this file
+// still stands: the wider lifecycle (Event Status Management) is not in this
+// sprint and should extend this enum rather than replace it.
+export const EventRequestStatusEnum = z.enum(['DRAFT', 'SUBMITTED']);
+export type EventRequestStatus = z.infer<typeof EventRequestStatusEnum>;
+
+/** AC3/AC4 (US-5.3-TC03): the status as the organiser sees it, one spelling everywhere. */
+export const EVENT_REQUEST_STATUS_LABELS: Record<EventRequestStatus, string> = {
+  DRAFT: 'Draft',
+  SUBMITTED: 'Submitted',
+};
+
+// "The proposed mandatory set" (AC1/AC2, customer clarification #72/#73) is
+// taken to be every field of eventRequestCoreSchema - the shape US-5.1 agreed.
+// Each key is paired with the name shown to the organiser when it is missing,
+// which is what AC2's "listed by name" means in practice.
+export const MANDATORY_FIELD_LABELS = {
+  name: 'Event name',
+  purpose: 'Purpose',
+  description: 'Description',
+  proposedDate: 'Proposed date',
+  timeSlots: 'Time slots',
+  expectedAttendance: 'Expected attendance',
+} as const satisfies Record<keyof EventRequestCore, string>;
+
+export type MandatoryField = keyof typeof MANDATORY_FIELD_LABELS;
