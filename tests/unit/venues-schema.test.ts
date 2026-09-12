@@ -1,0 +1,232 @@
+import { describe, it, expect } from 'vitest';
+import {
+  CreateVenueInputSchema,
+  UpdateVenueInputSchema,
+  VenueListQuerySchema,
+  OPERATING_SLOTS,
+} from '@/domain/venues/schema';
+
+/**
+ * Venue Catalogue schema rules.
+ *
+ * Acceptance criteria are quoted from Jira, which is authoritative. Test case
+ * IDs come from ConnectSphere_Test_Cases_v3, whose AC numbering differs from
+ * Jira's because the sheet merges SCRUM-116 and SCRUM-117 into US-11.1.
+ */
+
+const LOCATION_ID = '11111111-1111-4111-8111-111111111111';
+const FACILITY_ID = '22222222-2222-4222-8222-222222222222';
+const FEATURE_ID = '33333333-3333-4333-8333-333333333333';
+
+/** The minimum a Venue Staff member must supply (SCRUM-116 AC1). */
+const validVenue = () => ({
+  name: 'Hall A',
+  locationId: LOCATION_ID,
+  maxCapacity: 150,
+});
+
+const messagesFrom = (result: ReturnType<typeof CreateVenueInputSchema.safeParse>): string[] =>
+  result.success ? [] : result.error.issues.map((issue) => issue.message);
+
+describe('CreateVenueInputSchema: SCRUM-116 AC1 name, location and capacity', () => {
+  it('accepts a venue with only a name, location and capacity', () => {
+    const result = CreateVenueInputSchema.safeParse(validVenue());
+    expect(result.success).toBe(true);
+  });
+
+  it('requires a location chosen from the maintained list', () => {
+    const result = CreateVenueInputSchema.safeParse({ name: 'Hall A', maxCapacity: 150 });
+    expect(messagesFrom(result)).toContain('Location is required.');
+  });
+
+  it('rejects a blank name', () => {
+    const result = CreateVenueInputSchema.safeParse({ ...validVenue(), name: '   ' });
+    expect(messagesFrom(result)).toContain('Venue name is required.');
+  });
+});
+
+describe('CreateVenueInputSchema: SCRUM-116 AC3 maximum capacity', () => {
+  // US-11.1-TC03: a capacity that is not a whole number is blocked
+  it('US-11.1-TC03 rejects a non-numeric capacity', () => {
+    const result = CreateVenueInputSchema.safeParse({ ...validVenue(), maxCapacity: 'abc' });
+    expect(messagesFrom(result)).toContain('Maximum capacity must be a whole number.');
+  });
+
+  // US-11.1-TC03: a fractional capacity is blocked
+  it('US-11.1-TC03 rejects a fractional capacity', () => {
+    const result = CreateVenueInputSchema.safeParse({ ...validVenue(), maxCapacity: 150.5 });
+    expect(messagesFrom(result)).toContain('Maximum capacity must be a whole number.');
+  });
+
+  // US-11.1-TC04: capacity boundary, 0 versus 1
+  it('US-11.1-TC04 rejects a capacity of 0', () => {
+    const result = CreateVenueInputSchema.safeParse({ ...validVenue(), maxCapacity: 0 });
+    expect(messagesFrom(result)).toContain('Maximum capacity must be greater than 0.');
+  });
+
+  it('US-11.1-TC04 accepts a capacity of 1', () => {
+    const result = CreateVenueInputSchema.safeParse({ ...validVenue(), maxCapacity: 1 });
+    expect(result.success).toBe(true);
+  });
+});
+
+describe('CreateVenueInputSchema: SCRUM-116 AC4 operating slots', () => {
+  it('defaults to all three slots when none are given', () => {
+    const result = CreateVenueInputSchema.safeParse(validVenue());
+    expect(result.success).toBe(true);
+    if (result.success) {
+      expect(result.data.operatingSlots).toEqual([...OPERATING_SLOTS]);
+    }
+  });
+
+  // US-11.1-TC05a: a venue saved without Night shows Night as not operating
+  it('US-11.1-TC05a keeps only the slots that were selected', () => {
+    const result = CreateVenueInputSchema.safeParse({ ...validVenue(), operatingSlots: ['am', 'pm'] });
+    expect(result.success).toBe(true);
+    if (result.success) {
+      expect(result.data.operatingSlots).toEqual(['am', 'pm']);
+      expect(result.data.operatingSlots).not.toContain('night');
+    }
+  });
+
+  it('rejects an empty slot selection', () => {
+    const result = CreateVenueInputSchema.safeParse({ ...validVenue(), operatingSlots: [] });
+    expect(messagesFrom(result)).toContain('Select at least one operating slot.');
+  });
+
+  it('rejects the same slot twice', () => {
+    const result = CreateVenueInputSchema.safeParse({ ...validVenue(), operatingSlots: ['am', 'am'] });
+    expect(messagesFrom(result)).toContain('Each operating slot can only be selected once.');
+  });
+
+  it('rejects a slot outside AM, PM and Night', () => {
+    const result = CreateVenueInputSchema.safeParse({ ...validVenue(), operatingSlots: ['dawn'] });
+    expect(result.success).toBe(false);
+  });
+});
+
+describe('CreateVenueInputSchema: SCRUM-117 facilities and accessibility features', () => {
+  it('SCRUM-117 AC1 and AC2 default both lists to empty', () => {
+    const result = CreateVenueInputSchema.safeParse(validVenue());
+    expect(result.success).toBe(true);
+    if (result.success) {
+      expect(result.data.facilityIds).toEqual([]);
+      expect(result.data.accessibilityFeatureIds).toEqual([]);
+    }
+  });
+
+  it('SCRUM-117 AC1 accepts facilities chosen from the reference list', () => {
+    const result = CreateVenueInputSchema.safeParse({ ...validVenue(), facilityIds: [FACILITY_ID] });
+    expect(result.success).toBe(true);
+  });
+
+  it('SCRUM-117 AC2 accepts accessibility features', () => {
+    const result = CreateVenueInputSchema.safeParse({
+      ...validVenue(),
+      accessibilityFeatureIds: [FEATURE_ID],
+    });
+    expect(result.success).toBe(true);
+  });
+
+  it('rejects the same facility twice', () => {
+    const result = CreateVenueInputSchema.safeParse({
+      ...validVenue(),
+      facilityIds: [FACILITY_ID, FACILITY_ID],
+    });
+    expect(messagesFrom(result)).toContain('Each facility can only be selected once.');
+  });
+});
+
+describe('CreateVenueInputSchema: SCRUM-118 AC1 layouts', () => {
+  it('accepts a supported layout with its own capacity', () => {
+    const result = CreateVenueInputSchema.safeParse({
+      ...validVenue(),
+      layouts: [{ layout: 'theatre', capacity: 120 }],
+    });
+    expect(result.success).toBe(true);
+  });
+
+  it('rejects the same layout twice for one venue', () => {
+    const result = CreateVenueInputSchema.safeParse({
+      ...validVenue(),
+      layouts: [
+        { layout: 'theatre', capacity: 120 },
+        { layout: 'theatre', capacity: 90 },
+      ],
+    });
+    expect(messagesFrom(result)).toContain('Each layout can only be added once per venue.');
+  });
+
+  it('rejects a layout capacity of 0', () => {
+    const result = CreateVenueInputSchema.safeParse({
+      ...validVenue(),
+      layouts: [{ layout: 'theatre', capacity: 0 }],
+    });
+    expect(messagesFrom(result)).toContain('Layout capacity must be greater than 0.');
+  });
+
+  it('rejects a layout that is not on the supported list', () => {
+    const result = CreateVenueInputSchema.safeParse({
+      ...validVenue(),
+      layouts: [{ layout: 'amphitheatre', capacity: 120 }],
+    });
+    expect(result.success).toBe(false);
+  });
+});
+
+describe('UpdateVenueInputSchema: SCRUM-120 AC1 and SCRUM-117 AC3', () => {
+  it('SCRUM-120 AC1 accepts a capacity change on its own', () => {
+    const result = UpdateVenueInputSchema.safeParse({ maxCapacity: 250 });
+    expect(result.success).toBe(true);
+  });
+
+  it('leaves an omitted list undefined so it is not overwritten', () => {
+    const result = UpdateVenueInputSchema.safeParse({ maxCapacity: 250 });
+    expect(result.success).toBe(true);
+    if (result.success) {
+      expect(result.data.facilityIds).toBeUndefined();
+      expect(result.data.layouts).toBeUndefined();
+    }
+  });
+
+  // SCRUM-117 AC3: a removed facility is no longer part of the venue record.
+  // Sending the list without it is how removal is expressed.
+  it('SCRUM-117 AC3 treats an empty list as "remove them all"', () => {
+    const result = UpdateVenueInputSchema.safeParse({ facilityIds: [] });
+    expect(result.success).toBe(true);
+    if (result.success) {
+      expect(result.data.facilityIds).toEqual([]);
+    }
+  });
+
+  it('refuses an update that changes nothing', () => {
+    const result = UpdateVenueInputSchema.safeParse({});
+    expect(result.success).toBe(false);
+    if (!result.success) {
+      expect(result.error.issues.map((issue) => issue.message)).toContain('Nothing to update.');
+    }
+  });
+
+  it('refuses a confirmation flag with no actual change', () => {
+    const result = UpdateVenueInputSchema.safeParse({ confirmAffectedBookings: true });
+    expect(result.success).toBe(false);
+  });
+});
+
+describe('VenueListQuerySchema: SCRUM-121 AC3 retired venues', () => {
+  // US-11.3-TC03: the default filter excludes retired venues
+  it('US-11.3-TC03 excludes retired venues when the flag is absent', () => {
+    const result = VenueListQuerySchema.safeParse({});
+    expect(result.success).toBe(true);
+    if (result.success) {
+      expect(result.data.includeRetired).toBe(false);
+    }
+  });
+
+  it('US-11.3-TC03 includes retired venues only when the flag is "true"', () => {
+    const included = VenueListQuerySchema.safeParse({ includeRetired: 'true' });
+    const excluded = VenueListQuerySchema.safeParse({ includeRetired: 'false' });
+    expect(included.success && included.data.includeRetired).toBe(true);
+    expect(excluded.success && excluded.data.includeRetired).toBe(false);
+  });
+});
