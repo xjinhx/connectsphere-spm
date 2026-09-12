@@ -33,7 +33,7 @@ Next.js App Router pages and API routes. This layer **composes** the layers abov
 
 | Layer | Status | What exists |
 |---|---|---|
-| `src/domain/` | ✅ In use | `domain/shared/errors.ts` (DomainError classes); `domain/identity/` (roles.ts, policy.ts, service.ts — SCRUM-206) |
+| `src/domain/` | ✅ In use | `domain/shared/errors.ts` (DomainError classes); `domain/identity/` (roles.ts, policy.ts, service.ts — SCRUM-206); `domain/review/` (schema.ts — SCRUM-92) |
 | `src/lib/` | ✅ In use | `lib/env.ts` (Zod-validated env config); `lib/supabase/client.ts` + `server.ts`; `lib/api/handler.ts` (DomainError → HTTP status mapping) |
 | `src/components/` | ⏳ Not yet created | No UI components built yet — will be created by whoever first needs a reusable UI piece. Don't pre-scaffold empty subfolders; let structure emerge from real usage. |
 | `src/app/` | ✅ In use | `app/page.tsx`, `app/layout.tsx`; `app/api/accounts/[id]/roles/route.ts` (SCRUM-206) |
