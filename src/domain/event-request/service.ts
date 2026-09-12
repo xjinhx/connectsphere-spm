@@ -37,7 +37,8 @@ export interface EventRequest {
   id: string;
   reference: string;
   organiserId: string;
-  clientOrganisationId: string;
+  /** Null until the Client Organisations story lands. */
+  clientOrganisationId: string | null;
   name: string;
   purpose: string | null;
   description: string | null;
@@ -92,15 +93,15 @@ function toWrite(input: EventRequestSaveInput): EventRequestWrite {
  * AC1 — an Event Organiser always acts for their own client organisation. It is
  * read from the actor, never from the browser, so a request cannot be filed
  * against somebody else's organisation.
+ *
+ * Interim: the organisation may be null until the Client Organisations story
+ * lands (see lib/auth/currentActor.ts). Creating without one is allowed for
+ * now rather than blocking every organiser; the story that adds organisations
+ * should make this throw again.
  */
-function requireOrganiser(actor: Actor): { id: string; name: string } {
+function requireOrganiser(actor: Actor): { id: string; name: string } | null {
   if (!hasRole(actor.roles, 'event_organiser')) {
     throw new ForbiddenError('Only an Event Organiser can create an event request.');
-  }
-  if (actor.clientOrganisation === null) {
-    throw new ValidationError(
-      'Your account is not linked to a client organisation, so a request cannot be raised.',
-    );
   }
   return actor.clientOrganisation;
 }
@@ -134,7 +135,7 @@ function parseSaveInput(input: unknown): EventRequestSaveInput {
 /** AC1 — the blank form needs the organiser's own organisation to pre-fill. */
 export async function getNewEventRequestContext(): Promise<{
   organiserName: string;
-  clientOrganisation: { id: string; name: string };
+  clientOrganisation: { id: string; name: string } | null;
 }> {
   const actor = await getCurrentActor();
   return { organiserName: actor.fullName, clientOrganisation: requireOrganiser(actor) };
@@ -152,7 +153,7 @@ export async function createEventRequest(input: unknown): Promise<EventRequest> 
   const { data, error } = await insertEventRequest(createAdminClient(), {
     ...toWrite(parseSaveInput(input)),
     organiser_id: actor.userId,
-    client_organisation_id: clientOrganisation.id,
+    client_organisation_id: clientOrganisation?.id ?? null,
   });
 
   if (error || !data) {
@@ -231,7 +232,7 @@ export async function saveEventRequestDraft(input: unknown): Promise<EventReques
   const { data, error } = await insertEventRequest(createAdminClient(), {
     ...toDraftWrite(parseDraftInput(input)),
     organiser_id: actor.userId,
-    client_organisation_id: clientOrganisation.id,
+    client_organisation_id: clientOrganisation?.id ?? null,
   });
 
   if (error || !data) {

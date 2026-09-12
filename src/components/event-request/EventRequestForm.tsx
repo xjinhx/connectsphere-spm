@@ -46,7 +46,8 @@ export function EventRequestForm({
   initial,
   requestId,
 }: {
-  clientOrganisation: { id: string; name: string };
+  /** Null until the Client Organisations story lands (SCRUM-76 AC1 is blocked on it). */
+  clientOrganisation: { id: string; name: string } | null;
   /** Today in Singapore, from the server, so the picker agrees with the rules. */
   today: string;
   /** SCRUM-85 AC3 — every value previously entered on a resumed draft. */
@@ -184,12 +185,14 @@ export function EventRequestForm({
         <input
           id="organisation"
           className={`${fieldClass} bg-slate-50 text-[var(--text-muted)]`}
-          value={clientOrganisation.name}
+          value={clientOrganisation?.name ?? 'Not yet linked to an organisation'}
           readOnly
           aria-describedby="organisation-hint"
         />
         <p id="organisation-hint" className="mt-1 text-xs text-[var(--text-muted)]">
-          Taken from your account. A request is always raised for your own organisation.
+          {clientOrganisation
+            ? 'Taken from your account. A request is always raised for your own organisation.'
+            : 'Organisations are not set up yet. The request will be linked to yours once they are.'}
         </p>
       </div>
 
