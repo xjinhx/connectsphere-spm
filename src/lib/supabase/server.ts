@@ -33,3 +33,12 @@ export async function createSessionClient() {
     },
   });
 }
+
+/** The signed-in caller, or null if there's no valid session. */
+export async function getSessionUser() {
+  const supabase = await createSessionClient();
+  const {
+    data: { user },
+  } = await supabase.auth.getUser();
+  return user;
+}
