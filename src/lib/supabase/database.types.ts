@@ -52,6 +52,66 @@ export type Database = {
         }
         Relationships: []
       }
+      event_request: {
+        Row: {
+          client_organisation_id: string
+          created_at: string
+          decided_at: string | null
+          decided_by: string | null
+          decision: string | null
+          description: string | null
+          expected_attendance: number | null
+          id: string
+          name: string
+          organiser_id: string
+          proposed_date: string | null
+          purpose: string | null
+          reference: string
+          status: Database["public"]["Enums"]["event_request_status"]
+          submitted_at: string | null
+          time_slots: string[] | null
+          updated_at: string
+        }
+        Insert: {
+          client_organisation_id: string
+          created_at?: string
+          decided_at?: string | null
+          decided_by?: string | null
+          decision?: string | null
+          description?: string | null
+          expected_attendance?: number | null
+          id?: string
+          name: string
+          organiser_id: string
+          proposed_date?: string | null
+          purpose?: string | null
+          reference?: string
+          status?: Database["public"]["Enums"]["event_request_status"]
+          submitted_at?: string | null
+          time_slots?: string[] | null
+          updated_at?: string
+        }
+        Update: {
+          client_organisation_id?: string
+          created_at?: string
+          decided_at?: string | null
+          decided_by?: string | null
+          decision?: string | null
+          description?: string | null
+          expected_attendance?: number | null
+          id?: string
+          name?: string
+          organiser_id?: string
+          proposed_date?: string | null
+          purpose?: string | null
+          reference?: string
+          status?: Database["public"]["Enums"]["event_request_status"]
+          submitted_at?: string | null
+          time_slots?: string[] | null
+          updated_at?: string
+        }
+        Relationships: []
+      }
       facilities: {
         Row: {
           created_at: string
@@ -256,7 +316,7 @@ export type Database = {
       [_ in never]: never
     }
     Enums: {
-      [_ in never]: never
+      event_request_status: "DRAFT" | "SUBMITTED" | "APPROVED"
     }
     CompositeTypes: {
       [_ in never]: never
@@ -386,7 +446,9 @@ export const Constants = {
     Enums: {},
   },
   public: {
-    Enums: {},
+    Enums: {
+      event_request_status: ["DRAFT", "SUBMITTED", "APPROVED"],
+    },
   },
 } as const
 
