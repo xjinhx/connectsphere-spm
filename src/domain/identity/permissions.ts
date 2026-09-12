@@ -1,16 +1,20 @@
 import type { Role } from './roles';
 
 /**
- * SCRUM-69 — the authoritative list of actions the permission matrix names.
+ * SCRUM-69 — the list of actions the permission matrix names.
  *
- * PROVISIONAL: the real matrix content lives in customer clarifications
- * #52/#91, which weren't available when this was written. This list covers
- * only the actions already backed by a policy decision elsewhere in the
- * codebase (venues/policy.ts's canManageVenues/canViewVenueCatalogue,
+ * PROPOSAL, pending team agreement: clarifications #52/#91 confirm there is
+ * no 6th admin role (Operations Manager is the closest fit for any
+ * user-admin permissions - #52) and that access follows role/relationship to
+ * the event (#91), but both explicitly leave the exact access-control design
+ * for the team to propose - there is no external authoritative matrix to
+ * copy from. ROLE_PERMISSIONS below covers only the actions already backed
+ * by a policy decision elsewhere in the codebase
+ * (venues/policy.ts's canManageVenues/canViewVenueCatalogue,
  * identity/policy.ts's canAssignRoles) plus the three actions SCRUM-69 AC2
- * explicitly names as excluded from Event Organiser. Replace ROLE_PERMISSIONS
- * below with the confirmed matrix once #52/#91 are resolved - do not treat
- * this as final.
+ * explicitly names as excluded from Event Organiser. Treat this as a first
+ * draft for the team to review and extend, not a stand-in for a "real"
+ * matrix that exists somewhere else.
  */
 export const ACTIONS = [
   'event_request_creation',
