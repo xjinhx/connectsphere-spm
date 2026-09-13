@@ -1,13 +1,17 @@
 import { createAdminClient } from '@/lib/supabase/admin';
 import {
+  deleteEventRequestAccessibilityFeatures,
   fetchEventRequest,
   insertEventRequest,
+  insertEventRequestAccessibilityFeatures,
   listEventRequestsForOrganiser,
   markEventRequestSubmitted,
   updateEventRequest,
   type EventRequestRow,
   type EventRequestWrite,
+  type ReferenceRow,
 } from '@/lib/supabase/eventRequests';
+import { fetchAccessibilityFeatures, fetchLocations } from '@/lib/supabase/venues';
 import { getCurrentActor, type Actor } from '@/lib/auth/currentActor';
 import { hasRole } from '@/domain/identity/policy';
 import {
@@ -16,6 +20,7 @@ import {
   NotFoundError,
   ValidationError,
 } from '@/domain/shared/errors';
+import type { RoomLayout } from '@/domain/venues/schema';
 import {
   eventRequestDraftSchema,
   eventRequestSaveSchema,
@@ -23,8 +28,16 @@ import {
   type EventRequestSaveInput,
   type EventRequestStatus,
   type TimeSlot,
+  type VenueRequirementsInput,
 } from './schema';
-import { canBeSubmitted, incompleteFields, isEditable, isOwnRequest, isResumable } from './policy';
+import {
+  canBeSubmitted,
+  incompleteFields,
+  isEditable,
+  isOwnRequest,
+  isResumable,
+  normaliseAccessibility,
+} from './policy';
 
 /**
  * SCRUM-76 — orchestration for creating and reading an event request.
@@ -53,6 +66,16 @@ export interface EventRequest {
   submittedAt: string | null;
   createdAt: string;
   updatedAt: string;
+  // SCRUM-79
+  /** AC1. Null until the organiser has chosen one. */
+  roomLayout: RoomLayout | null;
+  /** AC2/AC3. Null until answered; false is "none required". */
+  accessibilityRequired: boolean | null;
+  /** AC2. From the maintained list; empty unless accessibilityRequired is true. */
+  accessibilityFeatures: ReferenceRow[];
+  accessibilityNotes: string | null;
+  /** AC4. From the maintained location list; null is "no preference". */
+  preferredLocation: ReferenceRow | null;
 }
 
 const UUID_PATTERN = /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i;
@@ -74,7 +97,62 @@ function toEventRequest(row: EventRequestRow): EventRequest {
     submittedAt: row.submitted_at,
     createdAt: row.created_at,
     updatedAt: row.updated_at,
+    // The database constraint guarantees only the seven catalogue layouts are stored.
+    roomLayout: row.room_layout as RoomLayout | null,
+    accessibilityRequired: row.accessibility_required,
+    accessibilityFeatures: row.event_request_accessibility_features.flatMap((link) =>
+      link.accessibility_features ? [link.accessibility_features] : [],
+    ),
+    accessibilityNotes: row.accessibility_notes,
+    preferredLocation: row.preferred_location,
   };
+}
+
+/**
+ * SCRUM-79 — the venue requirements as they are written, shared by the full
+ * save and the draft save because both write the same row. A requirement that
+ * was not stated is stored as NULL, never as an empty string.
+ */
+function toVenueRequirementsWrite(
+  input: VenueRequirementsInput,
+): Pick<
+  EventRequestWrite,
+  'room_layout' | 'accessibility_required' | 'accessibility_notes' | 'preferred_location_id'
+> {
+  const accessibility = normaliseAccessibility(input);
+  return {
+    // AC1
+    room_layout: input.roomLayout ?? null,
+    // AC2/AC3 — the answer itself, and the notes only when the answer is "yes".
+    accessibility_required: accessibility.required,
+    accessibility_notes: accessibility.notes,
+    // AC4 — blank is "no preference", and NULL is how that is recorded.
+    preferred_location_id: input.preferredLocationId ?? null,
+  };
+}
+
+/**
+ * SCRUM-79 AC2 — the chosen features live in a link table, one row each. The
+ * list is replaced whole on every save, so an answer of "none" (AC3) or a
+ * cleared selection removes what was there before.
+ *
+ * supabase-js has no transactions: if this fails after the row was written,
+ * the row stays (a draft is the organiser's work) and the error says why.
+ * That can only happen for an id that is not on the maintained list, which the
+ * form never offers.
+ */
+async function replaceAccessibilityFeatures(id: string, input: VenueRequirementsInput): Promise<void> {
+  const supabase = createAdminClient();
+  const { featureIds } = normaliseAccessibility(input);
+
+  const deleted = await deleteEventRequestAccessibilityFeatures(supabase, id);
+  if (deleted.error) {
+    throw new ValidationError('The accessibility requirements could not be saved.', deleted.error.message);
+  }
+  const inserted = await insertEventRequestAccessibilityFeatures(supabase, id, featureIds);
+  if (inserted.error) {
+    throw new ValidationError('Each accessibility feature must be chosen from the list.', inserted.error.message);
+  }
 }
 
 function toWrite(input: EventRequestSaveInput): EventRequestWrite {
@@ -86,6 +164,7 @@ function toWrite(input: EventRequestSaveInput): EventRequestWrite {
     proposed_date: input.proposedDate.toISOString().slice(0, 10),
     // SCRUM-77 AC1: the chosen slots, already deduplicated and in day order.
     time_slots: input.timeSlots.length > 0 ? input.timeSlots : null,
+    ...toVenueRequirementsWrite(input),
   };
 }
 
@@ -149,9 +228,10 @@ export async function getNewEventRequestContext(): Promise<{
 export async function createEventRequest(input: unknown): Promise<EventRequest> {
   const actor = await getCurrentActor();
   const clientOrganisation = requireOrganiser(actor);
+  const parsed = parseSaveInput(input);
 
   const { data, error } = await insertEventRequest(createAdminClient(), {
-    ...toWrite(parseSaveInput(input)),
+    ...toWrite(parsed),
     organiser_id: actor.userId,
     client_organisation_id: clientOrganisation?.id ?? null,
   });
@@ -159,7 +239,10 @@ export async function createEventRequest(input: unknown): Promise<EventRequest> 
   if (error || !data) {
     throw new ValidationError('The event request could not be saved.', error?.message);
   }
-  return toEventRequest(data as unknown as EventRequestRow);
+  // SCRUM-79 AC2 — the link rows, then a re-read so the result carries their names.
+  const { id } = data as unknown as EventRequestRow;
+  await replaceAccessibilityFeatures(id, parsed);
+  return requireOwnRequest(actor, id);
 }
 
 export async function updateEventRequestDetails(id: string, input: unknown): Promise<EventRequest> {
@@ -173,15 +256,13 @@ export async function updateEventRequestDetails(id: string, input: unknown): Pro
     throw new InvalidTransitionError(existing.status, 'draft');
   }
 
-  const { data, error } = await updateEventRequest(
-    createAdminClient(),
-    id,
-    toWrite(parseSaveInput(input)),
-  );
+  const parsed = parseSaveInput(input);
+  const { data, error } = await updateEventRequest(createAdminClient(), id, toWrite(parsed));
   if (error || !data) {
     throw new ValidationError('The event request could not be updated.', error?.message);
   }
-  return toEventRequest(data as unknown as EventRequestRow);
+  await replaceAccessibilityFeatures(id, parsed);
+  return requireOwnRequest(actor, id);
 }
 
 export async function getEventRequest(id: string): Promise<EventRequest> {
@@ -216,6 +297,7 @@ function toDraftWrite(input: EventRequestDraftInput): EventRequestWrite {
     // SCRUM-77's constraint: no slots is NULL, never an empty array.
     time_slots: input.timeSlots.length > 0 ? input.timeSlots : null,
     expected_attendance: input.expectedAttendance ?? null,
+    ...toVenueRequirementsWrite(input),
   };
 }
 
@@ -228,9 +310,10 @@ function toDraftWrite(input: EventRequestDraftInput): EventRequestWrite {
 export async function saveEventRequestDraft(input: unknown): Promise<EventRequest> {
   const actor = await getCurrentActor();
   const clientOrganisation = requireOrganiser(actor);
+  const parsed = parseDraftInput(input);
 
   const { data, error } = await insertEventRequest(createAdminClient(), {
-    ...toDraftWrite(parseDraftInput(input)),
+    ...toDraftWrite(parsed),
     organiser_id: actor.userId,
     client_organisation_id: clientOrganisation?.id ?? null,
   });
@@ -238,7 +321,10 @@ export async function saveEventRequestDraft(input: unknown): Promise<EventReques
   if (error || !data) {
     throw new ValidationError('The draft could not be saved.', error?.message);
   }
-  return toEventRequest(data as unknown as EventRequestRow);
+  // SCRUM-79 AC2 — a draft keeps the chosen accessibility features too.
+  const { id } = data as unknown as EventRequestRow;
+  await replaceAccessibilityFeatures(id, parsed);
+  return requireOwnRequest(actor, id);
 }
 
 /**
@@ -258,15 +344,13 @@ export async function updateEventRequestDraft(id: string, input: unknown): Promi
     throw new InvalidTransitionError(existing.status, 'draft');
   }
 
-  const { data, error } = await updateEventRequest(
-    createAdminClient(),
-    id,
-    toDraftWrite(parseDraftInput(input)),
-  );
+  const parsed = parseDraftInput(input);
+  const { data, error } = await updateEventRequest(createAdminClient(), id, toDraftWrite(parsed));
   if (error || !data) {
     throw new ValidationError('The draft could not be saved.', error?.message);
   }
-  return toEventRequest(data as unknown as EventRequestRow);
+  await replaceAccessibilityFeatures(id, parsed);
+  return requireOwnRequest(actor, id);
 }
 
 /**
@@ -321,6 +405,33 @@ export async function submitEventRequest(id: string): Promise<EventRequest> {
   // No row matched: another call submitted it first (see the `status` filter).
   if (!data) throw new InvalidTransitionError('submitted', 'submitted');
   return toEventRequest(data as unknown as EventRequestRow);
+}
+
+// ---------------------------------------------------------------------------
+// SCRUM-79 — State venue and accessibility requirements
+// ---------------------------------------------------------------------------
+
+export interface VenueRequirementOptions {
+  /** AC2 — the maintained accessibility list (SCRUM-117) the organiser picks from. */
+  accessibilityFeatures: ReferenceRow[];
+  /** AC4 — the maintained location list (SCRUM-116) a preference is chosen from. */
+  locations: ReferenceRow[];
+}
+
+/** What the request form needs to offer the venue-requirement choices. */
+export async function getVenueRequirementOptions(): Promise<VenueRequirementOptions> {
+  const [accessibilityFeatures, locations] = await Promise.all([
+    fetchAccessibilityFeatures(),
+    fetchLocations(),
+  ]);
+  const firstError = accessibilityFeatures.error ?? locations.error;
+  if (firstError) {
+    throw new ValidationError('The venue requirement options could not be read.', firstError.message);
+  }
+  return {
+    accessibilityFeatures: accessibilityFeatures.data ?? [],
+    locations: locations.data ?? [],
+  };
 }
 
 /** AC3 — the organiser's own event list: reference, status and submission date. */

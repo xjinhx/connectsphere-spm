@@ -1,4 +1,5 @@
 import { z } from 'zod';
+import { RoomLayoutSchema } from '@/domain/venues/schema';
 
 // Agreed shape for the base event request — confirmed with owner of SCRUM-76/77.
 // NOTE: `status` (draft/submitted) belongs to SCRUM-84's story, and `coordinatorId`
@@ -19,6 +20,15 @@ export const eventRequestCoreSchema = z.object({
 });
 
 export type EventRequestCore = z.infer<typeof eventRequestCoreSchema>;
+
+/**
+ * An untouched form input arrives as ''. That means "not entered", not "invalid".
+ * Introduced by SCRUM-83 for the draft schema; also how SCRUM-79's optional
+ * venue requirements read a blank select.
+ */
+function optionalFromBlank<T extends z.ZodTypeAny>(schema: T) {
+  return z.preprocess((value) => (value === '' || value === null ? undefined : value), schema.optional());
+}
 
 // ---------------------------------------------------------------------------
 // SCRUM-76 — Create an event request with basic details
@@ -77,9 +87,59 @@ export function normaliseTimeSlots(slots: readonly TimeSlot[]): TimeSlot[] {
  */
 export const timeSlotsSchema = z.array(TimeSlotEnum).transform(normaliseTimeSlots);
 
-/** The whole form as it is saved: SCRUM-76's basic details plus SCRUM-77's slots. */
+// ---------------------------------------------------------------------------
+// SCRUM-79 — State venue and accessibility requirements
+// ---------------------------------------------------------------------------
+// None of these is mandatory to save or to submit: the Jira card asks that
+// what the organiser states is saved, not that they must state it. They are
+// spread into both the save schema (SCRUM-76) and the draft schema (SCRUM-83)
+// because both write the same row.
+
+export const ACCESSIBILITY_NOTES_MAX_LENGTH = 1000;
+
+/**
+ * AC1 — the layout is one of the seven the venue catalogue knows. The list is
+ * imported from the catalogue (SCRUM-118) rather than copied, so a request
+ * can never ask for a layout no venue could be recorded as supporting.
+ *
+ * AC2/AC3 — accessibility is answered in three parts. `accessibilityRequired`
+ * is the answer itself: undefined is "not yet answered", false is "none"
+ * (AC3), true is "yes" with the features and notes saying what. The features
+ * are ids from the maintained list (SCRUM-117). Whether features and notes are
+ * kept when the answer is not "yes" is normaliseAccessibility() in policy.ts.
+ *
+ * AC4 — the preferred location is an id from the maintained location list
+ * (SCRUM-116). Left blank, it is "no preference"; nothing else is stored.
+ */
+export const venueRequirementsShape = {
+  roomLayout: optionalFromBlank(RoomLayoutSchema),
+  accessibilityRequired: optionalFromBlank(z.boolean()),
+  accessibilityFeatureIds: z
+    .array(z.string().uuid('Each accessibility feature must be chosen from the list.'))
+    .default([]),
+  accessibilityNotes: optionalFromBlank(
+    z
+      .string()
+      .max(
+        ACCESSIBILITY_NOTES_MAX_LENGTH,
+        `Accessibility notes must be ${ACCESSIBILITY_NOTES_MAX_LENGTH} characters or fewer.`,
+      ),
+  ),
+  preferredLocationId: optionalFromBlank(
+    z.string().uuid('Preferred location must be chosen from the list.'),
+  ),
+};
+
+export const venueRequirementsSchema = z.object(venueRequirementsShape);
+export type VenueRequirementsInput = z.infer<typeof venueRequirementsSchema>;
+
+/**
+ * The whole form as it is saved: SCRUM-76's basic details, SCRUM-77's slots
+ * and SCRUM-79's venue requirements.
+ */
 export const eventRequestSaveSchema = eventRequestBasicDetailsSchema.extend({
   timeSlots: timeSlotsSchema.default([]),
+  ...venueRequirementsShape,
 });
 
 export type EventRequestSaveInput = z.infer<typeof eventRequestSaveSchema>;
@@ -125,12 +185,9 @@ export const EVENT_REQUEST_STATUS_LABELS: Record<EventRequestStatus, string> = {
 // AC1's second half - "only format checks are applied to values I have
 // actually entered" - is why each field reuses its own rule from
 // eventRequestCoreSchema: an attendance of -5 is still refused on a draft, it
-// is only a *missing* attendance that is tolerated.
-
-/** An untouched form input arrives as ''. That means "not entered", not "invalid". */
-function optionalFromBlank<T extends z.ZodTypeAny>(schema: T) {
-  return z.preprocess((value) => (value === '' || value === null ? undefined : value), schema.optional());
-}
+// is only a *missing* attendance that is tolerated. (optionalFromBlank, the
+// helper that reads a blank input as "not entered", is defined near the top
+// of this file.)
 
 export const eventRequestDraftSchema = z.object({
   name: eventRequestCoreSchema.shape.name,
@@ -139,6 +196,8 @@ export const eventRequestDraftSchema = z.object({
   proposedDate: optionalFromBlank(eventRequestCoreSchema.shape.proposedDate),
   expectedAttendance: optionalFromBlank(eventRequestCoreSchema.shape.expectedAttendance),
   timeSlots: timeSlotsSchema.default([]),
+  // SCRUM-79 — a draft keeps whatever venue requirements were stated so far.
+  ...venueRequirementsShape,
 });
 
 export type EventRequestDraftInput = z.infer<typeof eventRequestDraftSchema>;

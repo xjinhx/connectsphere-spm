@@ -1,7 +1,13 @@
 import Link from 'next/link';
 import { EventRequestStatusBadge } from '@/components/event-request/EventRequestStatusBadge';
 import { SubmitEventRequestButton } from '@/components/event-request/SubmitEventRequestButton';
-import { describeTimeSlots, isEditable } from '@/domain/event-request/policy';
+import {
+  describeAccessibility,
+  describePreferredLocation,
+  describeRoomLayout,
+  describeTimeSlots,
+  isEditable,
+} from '@/domain/event-request/policy';
 import { getEventRequest } from '@/domain/event-request/service';
 import { formatSingaporeDate, formatSingaporeDateTime } from '@/domain/shared/dates';
 
@@ -56,6 +62,15 @@ export default async function EventRequestPage({
           label="Time slots"
           value={describeTimeSlots(request.timeSlots)}
         />
+        {/* SCRUM-79 AC1: the layout, as saved with the request. */}
+        <Row label="Room layout" value={describeRoomLayout(request.roomLayout)} />
+        {/* SCRUM-79 AC4: a blank choice reads as no preference, not as missing. */}
+        <Row
+          label="Preferred location"
+          value={describePreferredLocation(request.preferredLocation)}
+        />
+        {/* SCRUM-79 AC2/AC3: the answer given, "None required" included. */}
+        <Row label="Accessibility" value={describeAccessibility(request)} />
         <Row label="Created" value={formatSingaporeDateTime(request.createdAt)} />
         <Row label="Last updated" value={formatSingaporeDateTime(request.updatedAt)} />
         {/* SCRUM-82 AC1: the submission time, in Singapore time. */}

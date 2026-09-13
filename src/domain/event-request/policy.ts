@@ -15,6 +15,7 @@ import {
   toSingaporeISODate,
   type ISODate,
 } from '@/domain/shared/dates';
+import { ROOM_LAYOUT_LABELS, type RoomLayout } from '@/domain/venues/schema';
 
 /**
  * SCRUM-78 — State expected attendance.
@@ -83,6 +84,69 @@ export function describeTimeSlots(slots: readonly TimeSlot[] | null): string {
   return normaliseTimeSlots(slots)
     .map((slot) => TIME_SLOT_LABELS[slot])
     .join(', ');
+}
+
+// ---------------------------------------------------------------------------
+// SCRUM-79 — State venue and accessibility requirements
+// ---------------------------------------------------------------------------
+
+/** AC1 — what the request shows for its layout, in the catalogue's own words. */
+export function describeRoomLayout(layout: RoomLayout | null): string {
+  return layout ? ROOM_LAYOUT_LABELS[layout] : 'Not yet provided';
+}
+
+/** The accessibility answer as it is stored: the answer, then what it needs. */
+export interface AccessibilityRequirement {
+  /** Null is "not yet answered"; false is "none" (AC3); true is "yes" (AC2). */
+  required: boolean | null;
+  featureIds: string[];
+  notes: string | null;
+}
+
+/**
+ * AC2 and AC3 — only a "yes" carries features and notes. When the answer is
+ * "none" or not yet given, anything left over in those inputs (say, notes
+ * typed before the organiser changed their mind) is dropped rather than saved
+ * against an answer that contradicts it. The database enforces the notes half
+ * of this; the features half lives in a link table, so it is enforced here.
+ */
+export function normaliseAccessibility(input: {
+  accessibilityRequired?: boolean;
+  accessibilityFeatureIds: string[];
+  accessibilityNotes?: string;
+}): AccessibilityRequirement {
+  const required = input.accessibilityRequired ?? null;
+  if (required !== true) return { required, featureIds: [], notes: null };
+
+  const notes = input.accessibilityNotes?.trim() ?? '';
+  return {
+    required: true,
+    // A selection is a set: the same feature ticked twice is one feature.
+    featureIds: [...new Set(input.accessibilityFeatureIds)],
+    notes: notes === '' ? null : notes,
+  };
+}
+
+/** AC2/AC3 — what the request shows for accessibility: an answer, never a blank. */
+export function describeAccessibility(request: {
+  accessibilityRequired: boolean | null;
+  accessibilityFeatures: readonly { name: string }[];
+  accessibilityNotes: string | null;
+}): string {
+  if (request.accessibilityRequired === null) return 'Not yet answered';
+  if (request.accessibilityRequired === false) return 'None required';
+
+  const lines: string[] = [];
+  if (request.accessibilityFeatures.length > 0) {
+    lines.push(request.accessibilityFeatures.map((feature) => feature.name).join(', '));
+  }
+  if (request.accessibilityNotes) lines.push(request.accessibilityNotes);
+  return lines.length > 0 ? lines.join('\n') : 'Required - details not yet given';
+}
+
+/** AC4 — a blank location is recorded, and shown, as no preference. */
+export function describePreferredLocation(location: { name: string } | null): string {
+  return location ? location.name : 'No preference';
 }
 
 // ---------------------------------------------------------------------------
