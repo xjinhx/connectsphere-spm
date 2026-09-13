@@ -86,6 +86,9 @@ function toWrite(input: EventRequestSaveInput): EventRequestWrite {
     proposed_date: input.proposedDate.toISOString().slice(0, 10),
     // SCRUM-77 AC1: the chosen slots, already deduplicated and in day order.
     time_slots: input.timeSlots.length > 0 ? input.timeSlots : null,
+    // SCRUM-78. Was previously dropped on the create path entirely - the
+    // draft path (toDraftWrite, SCRUM-83) already wrote this correctly.
+    expected_attendance: input.expectedAttendance ?? null,
   };
 }
 

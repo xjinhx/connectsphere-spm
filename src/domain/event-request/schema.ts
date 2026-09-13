@@ -80,6 +80,12 @@ export const timeSlotsSchema = z.array(TimeSlotEnum).transform(normaliseTimeSlot
 /** The whole form as it is saved: SCRUM-76's basic details plus SCRUM-77's slots. */
 export const eventRequestSaveSchema = eventRequestBasicDetailsSchema.extend({
   timeSlots: timeSlotsSchema.default([]),
+  // SCRUM-78. Optional here, same as timeSlots: AC3's date rule already
+  // establishes that "Save request" doesn't enforce the mandatory set - only
+  // submission does (incompleteFields, SCRUM-82). A bare number, not the
+  // stricter schema.shape.expectedAttendance validation from the core
+  // schema, since a blank/omitted value must stay valid to save.
+  expectedAttendance: eventRequestCoreSchema.shape.expectedAttendance.optional(),
 });
 
 export type EventRequestSaveInput = z.infer<typeof eventRequestSaveSchema>;
