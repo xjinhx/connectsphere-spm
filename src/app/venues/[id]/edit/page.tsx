@@ -1,9 +1,12 @@
 import Link from 'next/link';
 import { notFound } from 'next/navigation';
 import { getVenue, getVenueFormOptions } from '@/domain/venues/service';
+import { canManageVenues, canViewVenueCatalogue } from '@/domain/venues/policy';
 import { NotFoundError } from '@/domain/shared/errors';
-import VenueForm from '@/components/venue/VenueForm';
 import type { VenueDetail } from '@/domain/venues/schema';
+import { getCurrentActor } from '@/lib/auth/currentActor';
+import VenueForm from '@/components/venue/VenueForm';
+import NoVenueAccess from '@/components/venue/NoVenueAccess';
 
 /**
  * SCRUM-120 Update venue information, plus SCRUM-117 AC3 and SCRUM-118, which
@@ -17,12 +20,22 @@ import type { VenueDetail } from '@/domain/venues/schema';
  * capacity reduction currently saves with no affected-booking step, because
  * there are no bookings to affect.
  *
- * TODO(SCRUM-69): gate on canManageVenues(currentUserRoles).
+ * Needs venue_administration, checked before the venue is read. The PATCH
+ * route refuses anyone else with a 403 regardless.
  */
 
 export const dynamic = 'force-dynamic';
 
 export default async function EditVenuePage({ params }: { params: Promise<{ id: string }> }) {
+  const actor = await getCurrentActor();
+  // View first, so a role with no catalogue access is not pointed back at it.
+  if (!canViewVenueCatalogue(actor.roles)) {
+    return <NoVenueAccess need="view" />;
+  }
+  if (!canManageVenues(actor.roles)) {
+    return <NoVenueAccess need="manage" />;
+  }
+
   const { id } = await params;
 
   let venue: VenueDetail;

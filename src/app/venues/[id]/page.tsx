@@ -1,8 +1,11 @@
 import Link from 'next/link';
 import { notFound } from 'next/navigation';
 import { getVenue } from '@/domain/venues/service';
+import { canManageVenues, canViewVenueCatalogue } from '@/domain/venues/policy';
 import { NotFoundError } from '@/domain/shared/errors';
 import { OPERATING_SLOT_LABELS, ROOM_LAYOUT_LABELS, type VenueDetail } from '@/domain/venues/schema';
+import { getCurrentActor } from '@/lib/auth/currentActor';
+import NoVenueAccess from '@/components/venue/NoVenueAccess';
 
 /**
  * SCRUM-121 AC2: opening a venue shows its location, capacities, supported
@@ -12,7 +15,8 @@ import { OPERATING_SLOT_LABELS, ROOM_LAYOUT_LABELS, type VenueDetail } from '@/d
  * The turnaround values are read-only here. Entering them is SCRUM-119, which
  * is deferred out of Sprint 1, so they only ever show what seed data set.
  *
- * TODO(SCRUM-69): gate on canViewVenueCatalogue(currentUserRoles).
+ * Needs venue_catalogue_view, checked before the venue is read. The "Edit
+ * venue" button only appears for Venue Staff.
  */
 
 export const dynamic = 'force-dynamic';
@@ -31,6 +35,11 @@ function minutesOrDash(minutes: number | null): string {
 }
 
 export default async function VenueDetailPage({ params }: { params: Promise<{ id: string }> }) {
+  const actor = await getCurrentActor();
+  if (!canViewVenueCatalogue(actor.roles)) {
+    return <NoVenueAccess need="view" />;
+  }
+
   const { id } = await params;
 
   let venue: VenueDetail;
@@ -51,12 +60,14 @@ export default async function VenueDetailPage({ params }: { params: Promise<{ id
 
       <div className="mt-3 mb-6 flex flex-wrap items-center justify-between gap-3">
         <h1 className="text-2xl font-semibold">{venue.name}</h1>
-        <Link
-          href={`/venues/${venue.id}/edit`}
-          className="rounded bg-[var(--brand)] px-4 py-2 text-sm font-medium text-white hover:bg-[var(--brand-dark)]"
-        >
-          Edit venue
-        </Link>
+        {canManageVenues(actor.roles) && (
+          <Link
+            href={`/venues/${venue.id}/edit`}
+            className="rounded bg-[var(--brand)] px-4 py-2 text-sm font-medium text-white hover:bg-[var(--brand-dark)]"
+          >
+            Edit venue
+          </Link>
+        )}
       </div>
 
       {venue.isRetired && (

@@ -1,5 +1,8 @@
 import Link from 'next/link';
 import { listVenues } from '@/domain/venues/service';
+import { canManageVenues, canViewVenueCatalogue } from '@/domain/venues/policy';
+import { getCurrentActor } from '@/lib/auth/currentActor';
+import NoVenueAccess from '@/components/venue/NoVenueAccess';
 
 /**
  * SCRUM-121 Browse the venue catalogue.
@@ -11,8 +14,8 @@ import { listVenues } from '@/domain/venues/service';
  * A server component reading through the domain service. The API routes exist
  * for the browser to write through, not for the app to call itself over HTTP.
  *
- * TODO(SCRUM-69): gate on canViewVenueCatalogue(currentUserRoles) once sign-in
- * exists. There is no current-user helper yet.
+ * Needs venue_catalogue_view, checked before any venue is read. The "Add venue"
+ * button only appears for roles that can actually use it.
  */
 
 export const dynamic = 'force-dynamic';
@@ -22,6 +25,11 @@ export default async function VenueCataloguePage({
 }: {
   searchParams: Promise<{ includeRetired?: string }>;
 }) {
+  const actor = await getCurrentActor();
+  if (!canViewVenueCatalogue(actor.roles)) {
+    return <NoVenueAccess need="view" />;
+  }
+
   const { includeRetired } = await searchParams;
   const showRetired = includeRetired === 'true';
   const venues = await listVenues(showRetired);
@@ -30,12 +38,14 @@ export default async function VenueCataloguePage({
     <main className="mx-auto max-w-4xl p-6">
       <div className="mb-6 flex flex-wrap items-center justify-between gap-3">
         <h1 className="text-2xl font-semibold">Venue catalogue</h1>
-        <Link
-          href="/venues/new"
-          className="rounded bg-[var(--brand)] px-4 py-2 text-sm font-medium text-white hover:bg-[var(--brand-dark)]"
-        >
-          Add venue
-        </Link>
+        {canManageVenues(actor.roles) && (
+          <Link
+            href="/venues/new"
+            className="rounded bg-[var(--brand)] px-4 py-2 text-sm font-medium text-white hover:bg-[var(--brand-dark)]"
+          >
+            Add venue
+          </Link>
+        )}
       </div>
 
       {/* SCRUM-121 AC3: off by default, so the plain URL hides retired venues. */}
