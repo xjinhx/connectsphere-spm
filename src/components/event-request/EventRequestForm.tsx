@@ -1,0 +1,334 @@
+'use client';
+
+import { useState } from 'react';
+import { useRouter } from 'next/navigation';
+import { TIME_SLOT_LABELS, TIME_SLOT_ORDER, type TimeSlot } from '@/domain/event-request/schema';
+
+/**
+ * SCRUM-76 AC1 — the blank request form, with the client organisation already
+ * filled in and not editable.
+ *
+ * Saving never checks the proposed date (AC3): an organiser may keep a request
+ * with a date they still have to fix. The date rule is applied at submission
+ * (SCRUM-82), which happens from the saved request's own page, not this form.
+ *
+ * SCRUM-77 AC4 — the slot picker is built from TIME_SLOT_ORDER, so the only
+ * slots it can offer are the three that exist. Nothing crossing midnight can be
+ * chosen because nothing crossing midnight is listed.
+ *
+ * SCRUM-78 — expected attendance, same permissive-save/strict-submit pattern
+ * as the date and slots above: blank is fine to save, and is only enforced as
+ * a mandatory field at submission (SCRUM-82's incompleteFields()).
+ */
+
+const labelClass = 'block text-sm font-medium text-[var(--text)]';
+const fieldClass =
+  'mt-1 w-full rounded-md border border-[var(--border)] bg-[var(--surface)] px-3 py-2 text-sm ' +
+  'focus:border-[var(--brand)] focus:outline-none';
+
+/**
+ * SCRUM-83 / SCRUM-85 — the same form serves three jobs, because they are the
+ * same fields: a blank new request, "Save as draft" on either, and resuming a
+ * saved draft with `initial` pre-filled (SCRUM-85 AC3).
+ */
+export interface EventRequestFormInitialValues {
+  name: string;
+  purpose: string;
+  description: string;
+  proposedDate: string;
+  timeSlots: TimeSlot[];
+  expectedAttendance: string;
+}
+
+export function EventRequestForm({
+  clientOrganisation,
+  today,
+  initial,
+  requestId,
+}: {
+  /** Null until the Client Organisations story lands (SCRUM-76 AC1 is blocked on it). */
+  clientOrganisation: { id: string; name: string } | null;
+  /** Today in Singapore, from the server, so the picker agrees with the rules. */
+  today: string;
+  /** SCRUM-85 AC3 — every value previously entered on a resumed draft. */
+  initial?: EventRequestFormInitialValues;
+  /** Set when resuming a saved draft: the draft this form writes back to. */
+  requestId?: string;
+}) {
+  const router = useRouter();
+
+  const [name, setName] = useState(initial?.name ?? '');
+  const [purpose, setPurpose] = useState(initial?.purpose ?? '');
+  const [description, setDescription] = useState(initial?.description ?? '');
+  const [proposedDate, setProposedDate] = useState(initial?.proposedDate ?? '');
+  const [timeSlots, setTimeSlots] = useState<TimeSlot[]>(initial?.timeSlots ?? []);
+  // Kept as a string, like proposedDate: an empty input is a valid "not yet
+  // entered" save-time state, not a 0. Converted to a number only when sent.
+  const [expectedAttendance, setExpectedAttendance] = useState(initial?.expectedAttendance ?? '');
+
+  const [saving, setSaving] = useState(false);
+  const [error, setError] = useState<string | null>(null);
+  const [fieldErrors, setFieldErrors] = useState<Record<string, string[]>>({});
+
+  /**
+   * SCRUM-83 AC1 — "Save as draft" keeps whatever is filled in and applies no
+   * mandatory-field check. SCRUM-83 AC4 / SCRUM-85 AC3 — when this form is
+   * already editing a saved draft it PATCHes that draft, so re-saving updates
+   * it in place instead of creating a second one.
+   */
+  async function onSaveDraft() {
+    setSaving(true);
+    setError(null);
+    setFieldErrors({});
+    try {
+      const response = await fetch(
+        requestId ? `/api/event-requests/${requestId}/draft` : '/api/event-requests/draft',
+        {
+          method: requestId ? 'PATCH' : 'POST',
+          headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify({
+            name,
+            purpose,
+            description,
+            proposedDate,
+            timeSlots,
+            expectedAttendance: expectedAttendance === '' ? undefined : Number(expectedAttendance),
+          }),
+        },
+      );
+
+      const payload = (await response.json().catch(() => null)) as {
+        id?: string;
+        message?: string;
+        details?: { fieldErrors?: Record<string, string[]> };
+      } | null;
+
+      if (!response.ok || !payload?.id) {
+        setFieldErrors(payload?.details?.fieldErrors ?? {});
+        throw new Error(payload?.message ?? 'The draft could not be saved.');
+      }
+      router.push(`/events/${payload.id}`);
+    } catch (caught) {
+      setError(caught instanceof Error ? caught.message : 'The draft could not be saved.');
+      setSaving(false);
+    }
+  }
+
+  async function onSave() {
+    setSaving(true);
+    setError(null);
+    setFieldErrors({});
+    try {
+      // Empty strings are sent as-is, not dropped: the schema's own message for
+      // a blank field ("Purpose is required") is what names the missing field.
+      // expectedAttendance is the one exception: an empty string is not a valid
+      // number, so it is sent as undefined (JSON.stringify drops the key) and
+      // the mandatory-field check, not a type error, is what names it missing.
+      // SCRUM-83 AC4 / SCRUM-85 — when this form is editing a saved draft, the
+      // full save updates that draft too. Posting would leave a second row
+      // behind, which AC4 explicitly rules out.
+      const response = await fetch(
+        requestId ? `/api/event-requests/${requestId}` : '/api/event-requests',
+        {
+        method: requestId ? 'PATCH' : 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({
+          name,
+          purpose,
+          description,
+          proposedDate,
+          timeSlots,
+          expectedAttendance: expectedAttendance === '' ? undefined : Number(expectedAttendance),
+        }),
+        },
+      );
+
+      const payload = (await response.json().catch(() => null)) as {
+        id?: string;
+        message?: string;
+        details?: { fieldErrors?: Record<string, string[]> };
+      } | null;
+
+      if (!response.ok || !payload?.id) {
+        setFieldErrors(payload?.details?.fieldErrors ?? {});
+        throw new Error(payload?.message ?? 'The request could not be saved.');
+      }
+      router.push(`/events/${payload.id}`);
+    } catch (caught) {
+      setError(caught instanceof Error ? caught.message : 'The request could not be saved.');
+      setSaving(false);
+    }
+  }
+
+  function toggleSlot(slot: TimeSlot) {
+    setTimeSlots((current) =>
+      current.includes(slot) ? current.filter((value) => value !== slot) : [...current, slot],
+    );
+  }
+
+  function FieldError({ field }: { field: string }) {
+    const messages = fieldErrors[field];
+    if (!messages?.length) return null;
+    return (
+      <p className="mt-1 text-xs text-[var(--danger)]" role="alert">
+        {messages[0]}
+      </p>
+    );
+  }
+
+  return (
+    <form className="space-y-5" onSubmit={(event) => event.preventDefault()}>
+      <div>
+        <label className={labelClass} htmlFor="organisation">
+          Client organisation
+        </label>
+        <input
+          id="organisation"
+          className={`${fieldClass} bg-slate-50 text-[var(--text-muted)]`}
+          value={clientOrganisation?.name ?? 'Not yet linked to an organisation'}
+          readOnly
+          aria-describedby="organisation-hint"
+        />
+        <p id="organisation-hint" className="mt-1 text-xs text-[var(--text-muted)]">
+          {clientOrganisation
+            ? 'Taken from your account. A request is always raised for your own organisation.'
+            : 'Organisations are not set up yet. The request will be linked to yours once they are.'}
+        </p>
+      </div>
+
+      <div>
+        <label className={labelClass} htmlFor="name">
+          Event name
+        </label>
+        <input
+          id="name"
+          className={fieldClass}
+          value={name}
+          onChange={(event) => setName(event.target.value)}
+          maxLength={200}
+          required
+        />
+        <FieldError field="name" />
+      </div>
+
+      <div>
+        <label className={labelClass} htmlFor="purpose">
+          Purpose
+        </label>
+        <textarea
+          id="purpose"
+          className={fieldClass}
+          rows={3}
+          value={purpose}
+          onChange={(event) => setPurpose(event.target.value)}
+        />
+        <FieldError field="purpose" />
+      </div>
+
+      <div>
+        <label className={labelClass} htmlFor="description">
+          Description
+        </label>
+        <textarea
+          id="description"
+          className={fieldClass}
+          rows={5}
+          value={description}
+          onChange={(event) => setDescription(event.target.value)}
+        />
+        <FieldError field="description" />
+      </div>
+
+      <div>
+        <label className={labelClass} htmlFor="proposedDate">
+          Proposed date
+        </label>
+        <input
+          id="proposedDate"
+          type="date"
+          className={fieldClass}
+          value={proposedDate}
+          min={today}
+          onChange={(event) => setProposedDate(event.target.value)}
+          aria-describedby="proposedDate-hint"
+        />
+        <p id="proposedDate-hint" className="mt-1 text-xs text-[var(--text-muted)]">
+          Singapore time. Must be today or later to submit; any date can be saved.
+        </p>
+        <FieldError field="proposedDate" />
+      </div>
+
+      <fieldset>
+        <legend className={labelClass}>Time slots</legend>
+        <div className="mt-2 flex flex-wrap gap-x-6 gap-y-2">
+          {TIME_SLOT_ORDER.map((slot) => (
+            <label key={slot} className="flex items-center gap-2 text-sm">
+              <input
+                type="checkbox"
+                checked={timeSlots.includes(slot)}
+                onChange={() => toggleSlot(slot)}
+              />
+              {TIME_SLOT_LABELS[slot]}
+            </label>
+          ))}
+        </div>
+        <p className="mt-1 text-xs text-[var(--text-muted)]">
+          Select all three for a full-day booking. At least one is needed to submit.
+        </p>
+        <FieldError field="timeSlots" />
+      </fieldset>
+
+      <div>
+        <label className={labelClass} htmlFor="expectedAttendance">
+          Expected attendance
+        </label>
+        <input
+          id="expectedAttendance"
+          type="number"
+          min={1}
+          step={1}
+          className={fieldClass}
+          value={expectedAttendance}
+          onChange={(event) => setExpectedAttendance(event.target.value)}
+          aria-describedby="expectedAttendance-hint"
+        />
+        <p id="expectedAttendance-hint" className="mt-1 text-xs text-[var(--text-muted)]">
+          A single whole number for the whole event. Must be greater than 0 to submit; any value can be saved.
+        </p>
+        <FieldError field="expectedAttendance" />
+      </div>
+
+      {error ? (
+        <p role="alert" className="rounded-md bg-red-50 px-3 py-2 text-sm text-[var(--danger)]">
+          {error}
+        </p>
+      ) : null}
+
+      <div className="flex flex-wrap items-center gap-3">
+        <button
+          type="button"
+          onClick={onSave}
+          disabled={saving}
+          className="rounded-md bg-[var(--brand)] px-4 py-2 text-sm font-medium text-white hover:bg-[var(--brand-dark)] disabled:opacity-60"
+        >
+          {saving ? 'Saving...' : 'Save request'}
+        </button>
+
+        {/* SCRUM-83 AC1 — the other way to save: keeps whatever is filled in,
+            with no mandatory-field check. */}
+        <button
+          type="button"
+          onClick={onSaveDraft}
+          disabled={saving}
+          className="rounded-md border border-[var(--border)] bg-[var(--surface)] px-4 py-2 text-sm font-medium hover:bg-slate-50 disabled:opacity-60"
+        >
+          {saving ? 'Saving...' : 'Save as draft'}
+        </button>
+      </div>
+
+      <p className="text-xs text-[var(--text-muted)]">
+        Only the event name is needed to save a draft. You can come back and finish it later.
+      </p>
+    </form>
+  );
+}
