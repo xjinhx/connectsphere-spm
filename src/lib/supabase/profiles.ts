@@ -30,3 +30,28 @@ export async function fetchProfileSummary(accountId: string) {
     .eq('id', accountId)
     .maybeSingle();
 }
+
+/** SCRUM-204 — the caller's own profile, including organisation membership. */
+export async function fetchProfileWithOrganisation(supabase: SupabaseClient, accountId: string) {
+  return supabase
+    .from('profiles')
+    .select('full_name, roles, client_organisation_id')
+    .eq('id', accountId)
+    .maybeSingle();
+}
+
+/** SCRUM-204 AC1 — roles and current membership, read before assigning a new one. */
+export async function fetchProfileRolesAndOrganisation(supabase: SupabaseClient, accountId: string) {
+  return supabase.from('profiles').select('roles, client_organisation_id').eq('id', accountId).maybeSingle();
+}
+
+export async function updateProfileOrganisation(
+  supabase: SupabaseClient,
+  accountId: string,
+  clientOrganisationId: string | null,
+) {
+  return supabase
+    .from('profiles')
+    .update({ client_organisation_id: clientOrganisationId })
+    .eq('id', accountId);
+}
