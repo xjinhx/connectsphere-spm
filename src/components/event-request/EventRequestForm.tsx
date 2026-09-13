@@ -32,6 +32,9 @@ import type { VenueRequirementOptions } from '@/domain/event-request/service';
  * SCRUM-80 — equipment follows the accessibility pattern (yes/none, then an
  * item list). The technical support box sits outside that toggle on purpose:
  * AC2 says it is saved whether or not any item is listed.
+ *
+ * SCRUM-81 — registration is one explicit yes/no, sent on every save so that
+ * unmarking it on a draft overwrites what was stored (AC3).
  */
 
 const labelClass = 'block text-sm font-medium text-[var(--text)]';
@@ -65,6 +68,8 @@ export interface EventRequestFormInitialValues {
   equipmentItems: { item: string; quantity: string }[];
   /** SCRUM-80 AC2. */
   technicalSupportNotes: string;
+  /** SCRUM-81. '' while unanswered. */
+  registrationRequired: '' | 'yes' | 'no';
 }
 
 export function EventRequestForm({
@@ -115,6 +120,10 @@ export function EventRequestForm({
   const [technicalSupportNotes, setTechnicalSupportNotes] = useState(
     initial?.technicalSupportNotes ?? '',
   );
+  // SCRUM-81
+  const [registrationRequired, setRegistrationRequired] = useState<'' | 'yes' | 'no'>(
+    initial?.registrationRequired ?? '',
+  );
 
   const [saving, setSaving] = useState(false);
   const [error, setError] = useState<string | null>(null);
@@ -156,6 +165,8 @@ export function EventRequestForm({
           quantity: row.quantity === '' ? undefined : Number(row.quantity),
         })),
       technicalSupportNotes,
+      // SCRUM-81. Same encoding: undefined is unanswered, false is "not required".
+      registrationRequired: registrationRequired === '' ? undefined : registrationRequired === 'yes',
     });
   }
 
@@ -617,6 +628,38 @@ export function EventRequestForm({
           </p>
           <FieldError field="technicalSupportNotes" />
         </div>
+      </fieldset>
+
+      {/* SCRUM-81 — AC1/AC2: an explicit yes/no. AC3: on a draft, switching to
+          "No" and saving overwrites the stored answer. */}
+      <fieldset className="border-t border-[var(--border)] pt-5">
+        <legend className="text-base font-semibold">Attendee registration</legend>
+        <div className="mt-2 flex flex-wrap gap-x-6 gap-y-2">
+          <label className="flex items-center gap-2 text-sm">
+            <input
+              type="radio"
+              name="registrationRequired"
+              value="yes"
+              checked={registrationRequired === 'yes'}
+              onChange={() => setRegistrationRequired('yes')}
+            />
+            Yes, attendees will need to register
+          </label>
+          <label className="flex items-center gap-2 text-sm">
+            <input
+              type="radio"
+              name="registrationRequired"
+              value="no"
+              checked={registrationRequired === 'no'}
+              onChange={() => setRegistrationRequired('no')}
+            />
+            No registration needed
+          </label>
+        </div>
+        <p className="mt-1 text-xs text-[var(--text-muted)]">
+          Registration is only set up for events that need it.
+        </p>
+        <FieldError field="registrationRequired" />
       </fieldset>
 
       {error ? (

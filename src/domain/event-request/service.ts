@@ -87,6 +87,9 @@ export interface EventRequest {
   equipmentItems: EquipmentItem[];
   /** AC2. Kept whatever the equipment answer is. */
   technicalSupportNotes: string | null;
+  // SCRUM-81
+  /** AC1/AC2. Null until answered. */
+  registrationRequired: boolean | null;
 }
 
 const UUID_PATTERN = /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i;
@@ -122,6 +125,7 @@ function toEventRequest(row: EventRequestRow): EventRequest {
       .sort((a, b) => a.position - b.position)
       .map(({ item, quantity }) => ({ item, quantity })),
     technicalSupportNotes: row.technical_support_notes,
+    registrationRequired: row.registration_required,
   };
 }
 
@@ -140,6 +144,7 @@ function toVenueRequirementsWrite(
   | 'preferred_location_id'
   | 'equipment_required'
   | 'technical_support_notes'
+  | 'registration_required'
 > {
   const accessibility = normaliseAccessibility(input);
   const technicalSupportNotes = input.technicalSupportNotes?.trim() ?? '';
@@ -155,6 +160,9 @@ function toVenueRequirementsWrite(
     equipment_required: normaliseEquipment(input).required,
     // SCRUM-80 AC2 — saved whatever the equipment answer is.
     technical_support_notes: technicalSupportNotes === '' ? null : technicalSupportNotes,
+    // SCRUM-81 — written on every save, so unmarking a draft overwrites a
+    // stored true (AC3); there is no separate "clear" step.
+    registration_required: input.registrationRequired ?? null,
   };
 }
 

@@ -71,6 +71,9 @@ export default async function EditEventRequestPage({
             quantity: String(entry.quantity),
           })),
           technicalSupportNotes: draft.technicalSupportNotes ?? '',
+          // SCRUM-81
+          registrationRequired:
+            draft.registrationRequired === null ? '' : draft.registrationRequired ? 'yes' : 'no',
         }}
       />
     </main>

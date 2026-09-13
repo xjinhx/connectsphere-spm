@@ -68,6 +68,7 @@ export type Database = {
           proposed_date: string | null
           purpose: string | null
           reference: string
+          registration_required: boolean | null
           room_layout: string | null
           status: Database["public"]["Enums"]["event_request_status"]
           submitted_at: string | null
@@ -90,6 +91,7 @@ export type Database = {
           proposed_date?: string | null
           purpose?: string | null
           reference?: string
+          registration_required?: boolean | null
           room_layout?: string | null
           status?: Database["public"]["Enums"]["event_request_status"]
           submitted_at?: string | null
@@ -112,6 +114,7 @@ export type Database = {
           proposed_date?: string | null
           purpose?: string | null
           reference?: string
+          registration_required?: boolean | null
           room_layout?: string | null
           status?: Database["public"]["Enums"]["event_request_status"]
           submitted_at?: string | null

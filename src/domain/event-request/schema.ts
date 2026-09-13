@@ -176,21 +176,31 @@ export const equipmentRequirementsShape = {
   ),
 };
 
-/** SCRUM-79's venue requirements and SCRUM-80's equipment, as one optional block. */
+// ---------------------------------------------------------------------------
+// SCRUM-81 — Indicate whether attendee registration is required
+// ---------------------------------------------------------------------------
+// One explicit answer. Undefined is "not yet answered"; true is AC1; false is
+// AC2/AC3. Attendee Registration itself is a later sprint, so there is nothing
+// else to record alongside it.
+export const registrationShape = {
+  registrationRequired: optionalFromBlank(z.boolean()),
+};
+
+/** US-5.2's optional block: SCRUM-79's venue requirements, SCRUM-80's equipment, SCRUM-81's registration. */
 export const venueRequirementsSchema = z.object({
   ...venueRequirementsShape,
   ...equipmentRequirementsShape,
+  ...registrationShape,
 });
 export type VenueRequirementsInput = z.infer<typeof venueRequirementsSchema>;
 
 /**
  * The whole form as it is saved: SCRUM-76's basic details, SCRUM-77's slots,
- * SCRUM-79's venue requirements and SCRUM-80's equipment.
+ * and US-5.2's optional block (SCRUM-79, 80, 81).
  */
 export const eventRequestSaveSchema = eventRequestBasicDetailsSchema.extend({
   timeSlots: timeSlotsSchema.default([]),
-  ...venueRequirementsShape,
-  ...equipmentRequirementsShape,
+  ...venueRequirementsSchema.shape,
 });
 
 export type EventRequestSaveInput = z.infer<typeof eventRequestSaveSchema>;
@@ -247,9 +257,8 @@ export const eventRequestDraftSchema = z.object({
   proposedDate: optionalFromBlank(eventRequestCoreSchema.shape.proposedDate),
   expectedAttendance: optionalFromBlank(eventRequestCoreSchema.shape.expectedAttendance),
   timeSlots: timeSlotsSchema.default([]),
-  // SCRUM-79 / SCRUM-80 — a draft keeps whatever requirements were stated so far.
-  ...venueRequirementsShape,
-  ...equipmentRequirementsShape,
+  // SCRUM-79 / 80 / 81 — a draft keeps whatever requirements were stated so far.
+  ...venueRequirementsSchema.shape,
 });
 
 export type EventRequestDraftInput = z.infer<typeof eventRequestDraftSchema>;

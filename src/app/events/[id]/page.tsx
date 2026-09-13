@@ -5,6 +5,7 @@ import {
   describeAccessibility,
   describeEquipment,
   describePreferredLocation,
+  describeRegistration,
   describeRoomLayout,
   describeTechnicalSupport,
   describeTimeSlots,
@@ -79,6 +80,11 @@ export default async function EventRequestPage({
         <Row
           label="Technical support"
           value={describeTechnicalSupport(request.technicalSupportNotes)}
+        />
+        {/* SCRUM-81 AC1/AC2: the answer as stored; "Not required" is an answer. */}
+        <Row
+          label="Attendee registration"
+          value={describeRegistration(request.registrationRequired)}
         />
         <Row label="Created" value={formatSingaporeDateTime(request.createdAt)} />
         <Row label="Last updated" value={formatSingaporeDateTime(request.updatedAt)} />

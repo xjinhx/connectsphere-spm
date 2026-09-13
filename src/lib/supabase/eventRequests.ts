@@ -15,7 +15,9 @@ const COLUMNS =
   'preferred_location:locations ( id, name ), ' +
   // SCRUM-80
   'equipment_required, technical_support_notes, ' +
-  'event_request_equipment ( position, item, quantity )';
+  'event_request_equipment ( position, item, quantity ), ' +
+  // SCRUM-81
+  'registration_required';
 
 export interface ReferenceRow {
   id: string;
@@ -51,6 +53,8 @@ export interface EventRequestRow {
   equipment_required: boolean | null;
   technical_support_notes: string | null;
   event_request_equipment: EquipmentRow[];
+  // SCRUM-81
+  registration_required: boolean | null;
 }
 
 export interface EquipmentRow {
@@ -81,6 +85,8 @@ export interface EventRequestWrite {
   // SCRUM-80. Null until answered; notes are independent of the answer (AC2).
   equipment_required: boolean | null;
   technical_support_notes: string | null;
+  // SCRUM-81. Null until answered. Written on every save, so unmarking clears it (AC3).
+  registration_required: boolean | null;
 }
 
 export async function insertEventRequest(

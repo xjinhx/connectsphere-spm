@@ -192,6 +192,30 @@ export function describeTechnicalSupport(notes: string | null): string {
 }
 
 // ---------------------------------------------------------------------------
+// SCRUM-81 — Indicate whether attendee registration is required
+// ---------------------------------------------------------------------------
+
+/**
+ * AC1/AC2 — what the request shows for registration. A stored false is an
+ * answer ("not required"), told apart from a question not yet reached.
+ */
+export function describeRegistration(required: boolean | null): string {
+  if (required === null) return 'Not yet answered';
+  return required ? 'Required' : 'Not required';
+}
+
+/**
+ * AC3 — the flag can be changed only while the request is still editable.
+ * Deliberately the same rule as isEditable(): "Draft or Clarification
+ * Requested" is the card's wording, and Clarification Requested does not exist
+ * yet (SCRUM-82 has only draft/submitted). When that status arrives it should
+ * be added to isEditable(), and this follows.
+ */
+export function canChangeRegistration(status: EventRequestStatus): boolean {
+  return isEditable(status);
+}
+
+// ---------------------------------------------------------------------------
 // SCRUM-82 — Submit a completed event request
 // ---------------------------------------------------------------------------
 
