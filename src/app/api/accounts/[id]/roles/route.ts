@@ -14,9 +14,15 @@ export async function GET(
   { params }: { params: Promise<{ id: string }> }
 ) {
   try {
-    const { roles: callerRoles } = await getCurrentActor();
-    assertPermission(callerRoles, 'account_role_management');
+    const { userId: callerId, roles: callerRoles } = await getCurrentActor();
     const { id } = await params;
+    // SCRUM-69 regression fix — a caller reading their own roles (e.g. the
+    // login redirect resolving where to land) must not need
+    // 'account_role_management'; that permission only gates looking up
+    // someone else's roles.
+    if (id !== callerId) {
+      assertPermission(callerRoles, 'account_role_management');
+    }
     const roles = await getAccountRoles(id);
     return NextResponse.json({ accountId: id, roles });
   } catch (error) {
