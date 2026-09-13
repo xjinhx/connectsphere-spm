@@ -1,24 +1,28 @@
 import { NextRequest, NextResponse } from 'next/server';
 import { createVenue, listVenues } from '@/domain/venues/service';
 import { VenueListQuerySchema } from '@/domain/venues/schema';
+import { assertPermission } from '@/domain/identity/policy';
 import { ValidationError } from '@/domain/shared/errors';
+import { getCurrentActor } from '@/lib/auth/currentActor';
 import { handleApiError } from '@/lib/api/handler';
 
 /**
  * /api/venues
  *
- * GET  SCRUM-121 AC1 and AC3, the catalogue list
- * POST SCRUM-116 AC1 to AC4, SCRUM-117 AC1 and AC2, SCRUM-118 AC1
+ * GET  SCRUM-121 AC1 and AC3, the catalogue list. Needs venue_catalogue_view.
+ * POST SCRUM-116 AC1 to AC4, SCRUM-117 AC1 and AC2, SCRUM-118 AC1. Needs
+ *      venue_administration, so only Venue Staff (SCRUM-116 AC1 "Given I am
+ *      Venue Staff").
  *
- * Plumbing only: parse the request, call the service, let handleApiError map
- * domain errors onto status codes.
+ * Permission is checked before anything is parsed or read, as SCRUM-69 AC3
+ * asks, so a refused caller never gets a partial result. A refusal is a
+ * ForbiddenError, which handleApiError turns into 403.
  */
 
 export async function GET(request: NextRequest) {
   try {
-    // TODO(SCRUM-69): once sign-in exists, refuse unless
-    // canViewVenueCatalogue(currentUserRoles). There is no current-user helper
-    // yet, so this is deliberately left open rather than faked as allow-all.
+    const actor = await getCurrentActor();
+    assertPermission(actor.roles, 'venue_catalogue_view');
 
     const includeRetired = request.nextUrl.searchParams.get('includeRetired');
     const query = VenueListQuerySchema.safeParse(
@@ -37,8 +41,8 @@ export async function GET(request: NextRequest) {
 
 export async function POST(request: NextRequest) {
   try {
-    // TODO(SCRUM-69): once sign-in exists, refuse unless
-    // canManageVenues(currentUserRoles). Only Venue Staff may add a venue.
+    const actor = await getCurrentActor();
+    assertPermission(actor.roles, 'venue_administration');
 
     let body: unknown;
     try {
