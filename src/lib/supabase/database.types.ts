@@ -181,13 +181,6 @@ export type Database = {
         }
         Relationships: [
           {
-            foreignKeyName: "event_request_client_organisation_id_fkey"
-            columns: ["client_organisation_id"]
-            isOneToOne: false
-            referencedRelation: "client_organisations"
-            referencedColumns: ["id"]
-          },
-          {
             foreignKeyName: "event_request_preferred_location_id_fkey"
             columns: ["preferred_location_id"]
             isOneToOne: false
@@ -219,47 +212,6 @@ export type Database = {
           },
           {
             foreignKeyName: "event_request_accessibility_features_event_request_id_fkey"
-            columns: ["event_request_id"]
-            isOneToOne: false
-            referencedRelation: "event_request"
-            referencedColumns: ["id"]
-          },
-        ]
-      }
-      event_request_coordinator_history: {
-        Row: {
-          assigned_at: string
-          assigned_by: string
-          coordinator_id: string
-          event_request_id: string
-          id: string
-          replaced_at: string
-          replaced_by: string
-          replaced_by_coordinator_id: string
-        }
-        Insert: {
-          assigned_at: string
-          assigned_by: string
-          coordinator_id: string
-          event_request_id: string
-          id?: string
-          replaced_at?: string
-          replaced_by: string
-          replaced_by_coordinator_id: string
-        }
-        Update: {
-          assigned_at?: string
-          assigned_by?: string
-          coordinator_id?: string
-          event_request_id?: string
-          id?: string
-          replaced_at?: string
-          replaced_by?: string
-          replaced_by_coordinator_id?: string
-        }
-        Relationships: [
-          {
-            foreignKeyName: "event_request_coordinator_history_event_request_id_fkey"
             columns: ["event_request_id"]
             isOneToOne: false
             referencedRelation: "event_request"
@@ -334,7 +286,7 @@ export type Database = {
       }
       profiles: {
         Row: {
-          contact_number: string | null
+          client_organisation_id: string | null
           created_at: string
           full_name: string | null
           id: string
@@ -342,7 +294,7 @@ export type Database = {
           updated_at: string
         }
         Insert: {
-          contact_number?: string | null
+          client_organisation_id?: string | null
           created_at?: string
           full_name?: string | null
           id: string
@@ -350,14 +302,22 @@ export type Database = {
           updated_at?: string
         }
         Update: {
-          contact_number?: string | null
+          client_organisation_id?: string | null
           created_at?: string
           full_name?: string | null
           id?: string
           roles?: string[]
           updated_at?: string
         }
-        Relationships: []
+        Relationships: [
+          {
+            foreignKeyName: "profiles_client_organisation_id_fkey"
+            columns: ["client_organisation_id"]
+            isOneToOne: false
+            referencedRelation: "client_organisations"
+            referencedColumns: ["id"]
+          },
+        ]
       }
       venue_accessibility_features: {
         Row: {
