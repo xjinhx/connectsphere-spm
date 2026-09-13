@@ -1,8 +1,7 @@
 import { createAdminClient } from '@/lib/supabase/admin';
 import { fetchProfileRoles, updateProfileRoles } from '@/lib/supabase/profiles';
-import { getSessionUser } from '@/lib/supabase/server';
 import { AccountRolesSchema, Role } from './roles';
-import { ValidationError, NotFoundError, UnauthenticatedError } from '@/domain/shared/errors';
+import { ValidationError, NotFoundError } from '@/domain/shared/errors';
 
 export async function getAccountRoles(accountId: string): Promise<Role[]> {
   const supabase = createAdminClient();
@@ -12,15 +11,6 @@ export async function getAccountRoles(accountId: string): Promise<Role[]> {
     throw new NotFoundError('Account');
   }
   return data.roles as Role[];
-}
-
-/** SCRUM-69 — the signed-in caller's own roles, for permission checks. */
-export async function getCallerRoles(): Promise<Role[]> {
-  const user = await getSessionUser();
-  if (!user) {
-    throw new UnauthenticatedError();
-  }
-  return getAccountRoles(user.id);
 }
 
 export async function setAccountRoles(accountId: string, roles: Role[]): Promise<Role[]> {
