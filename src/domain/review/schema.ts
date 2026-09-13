@@ -6,10 +6,10 @@ import { z } from 'zod';
 export const DecisionSchema = z.enum(['approved']);
 export type Decision = z.infer<typeof DecisionSchema>;
 
-// TODO: take the actor from the signed-in session with getCurrentActor() once
-// it is implemented on main. It still throws there; the working version is on
-// the event-request branch (SCRUM-76). The middleware already refuses this
-// endpoint without a signed-in user, so only *which* user is taken on trust.
+// The approving coordinator's id. The approve route fills it from the signed-in
+// session (getCurrentActor), never from the request body, so a caller cannot
+// record someone else as the decision maker. Still validated here so the
+// service stays safe to call directly, as the integration tests do.
 export const ApproveInputSchema = z.object({
   actorId: z.string().uuid(),
 });

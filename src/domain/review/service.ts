@@ -69,10 +69,8 @@ function toApprovalOutcome(row: EventRequestRow): ApprovalOutcome {
  * registration record is created here or anywhere else in this story
  * (customer clarification #80).
  *
- * TODO: actorId is taken from the caller until getCurrentActor() is implemented
- * on main (see ApproveInputSchema). Once it is, the route should read the
- * coordinator from the session and pass actor.userId in; this function's
- * signature does not need to change.
+ * `input.actorId` is the decision maker. The approve route supplies it from the
+ * signed-in session, so it cannot be chosen by whoever sends the request.
  */
 export async function approveEventRequest(id: string, input: unknown): Promise<ApprovalOutcome> {
   const parsedId = EventRequestIdSchema.safeParse(id);
