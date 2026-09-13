@@ -2,13 +2,14 @@ import { createAdminClient } from '@/lib/supabase/admin';
 import {
   fetchProfileRoles,
   fetchProfileRolesAndOrganisation,
+  listProfilesForOrganisation,
   updateProfileOrganisation,
   updateProfileRoles,
 } from '@/lib/supabase/profiles';
 import { fetchClientOrganisation } from '@/lib/supabase/clientOrganisations';
 import { isRole, AccountRolesSchema, Role } from './roles';
 import { canAssignOrganisation } from './policy';
-import { AssignOrganisationInputSchema, type AccountOrganisation } from './schema';
+import { AssignOrganisationInputSchema, type AccountOrganisation, type LinkedOrganiser } from './schema';
 import { ValidationError, NotFoundError } from '@/domain/shared/errors';
 
 export async function getAccountRoles(accountId: string): Promise<Role[]> {
@@ -82,4 +83,16 @@ export async function setAccountOrganisation(accountId: string, input: unknown):
     throw new ValidationError('Could not update the organisation membership.', error.message);
   }
   return { accountId, clientOrganisationId: parsed.data.clientOrganisationId };
+}
+
+/** SCRUM-204 AC1 — the Event Organiser accounts currently linked to an organisation, for its page. */
+export async function listOrganisersForOrganisation(clientOrganisationId: string): Promise<LinkedOrganiser[]> {
+  const supabase = createAdminClient();
+  const { data, error } = await listProfilesForOrganisation(supabase, clientOrganisationId);
+  if (error) throw new ValidationError('Linked Event Organisers could not be read.', error.message);
+
+  return (data ?? []).map((row) => ({
+    accountId: row.id,
+    fullName: row.full_name ?? 'Unnamed account',
+  }));
 }

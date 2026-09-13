@@ -55,3 +55,13 @@ export async function updateProfileOrganisation(
     .update({ client_organisation_id: clientOrganisationId })
     .eq('id', accountId);
 }
+
+/** SCRUM-204 AC1 — the Event Organiser accounts currently linked to an organisation. */
+export async function listProfilesForOrganisation(supabase: SupabaseClient, clientOrganisationId: string) {
+  return supabase
+    .from('profiles')
+    .select('id, full_name')
+    .eq('client_organisation_id', clientOrganisationId)
+    .contains('roles', ['event_organiser'])
+    .order('full_name', { ascending: true });
+}

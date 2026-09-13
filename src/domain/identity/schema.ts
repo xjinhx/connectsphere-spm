@@ -15,3 +15,10 @@ export const AccountOrganisationSchema = z.object({
   clientOrganisationId: z.string().uuid().nullable(),
 });
 export type AccountOrganisation = z.infer<typeof AccountOrganisationSchema>;
+
+/** SCRUM-204 AC1 — an Event Organiser account, as listed on its organisation's page. */
+export const LinkedOrganiserSchema = z.object({
+  accountId: z.string().uuid(),
+  fullName: z.string(),
+});
+export type LinkedOrganiser = z.infer<typeof LinkedOrganiserSchema>;
