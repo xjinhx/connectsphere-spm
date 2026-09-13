@@ -54,7 +54,7 @@ export type Database = {
       }
       event_request: {
         Row: {
-          client_organisation_id: string
+          client_organisation_id: string | null
           created_at: string
           decided_at: string | null
           decided_by: string | null
@@ -73,7 +73,7 @@ export type Database = {
           updated_at: string
         }
         Insert: {
-          client_organisation_id: string
+          client_organisation_id?: string | null
           created_at?: string
           decided_at?: string | null
           decided_by?: string | null
@@ -92,7 +92,7 @@ export type Database = {
           updated_at?: string
         }
         Update: {
-          client_organisation_id?: string
+          client_organisation_id?: string | null
           created_at?: string
           decided_at?: string | null
           decided_by?: string | null
