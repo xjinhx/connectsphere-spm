@@ -68,7 +68,16 @@ export default async function EventRequestPage({
           delete is offered. Only a draft gets an action. */}
       <section className="mt-6">
         {editable ? (
-          <SubmitEventRequestButton requestId={request.id} />
+          <div className="flex flex-wrap items-center gap-3">
+            <SubmitEventRequestButton requestId={request.id} />
+            {/* SCRUM-85 AC3 — the way back into a saved draft. */}
+            <Link
+              href={`/events/${request.id}/edit`}
+              className="rounded-md border border-[var(--border)] bg-[var(--surface)] px-4 py-2 text-sm font-medium hover:bg-slate-50"
+            >
+              Continue editing
+            </Link>
+          </div>
         ) : (
           <p className="rounded-md border border-[var(--border)] bg-[var(--surface)] px-3 py-2 text-sm text-[var(--text-muted)]">
             This request has been submitted and is now read-only. It can be changed again only

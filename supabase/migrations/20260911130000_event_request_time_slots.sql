@@ -19,6 +19,6 @@ alter table event_request
       -- coalesce, because array_length('{}') is NULL, not 0 - without it an
       -- empty array reads as "unknown" and satisfies the check.
       coalesce(array_length(time_slots, 1), 0) between 1 and 3
-      and time_slots <@ array['AM', 'PM', 'NIGHT']::text[]
+      and time_slots <@ array['am', 'pm', 'night']::text[]
     )
   );

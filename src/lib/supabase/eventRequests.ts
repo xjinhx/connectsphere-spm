@@ -28,7 +28,7 @@ export interface EventRequestRow {
   expected_attendance: number | null;
   // SCRUM-82. Uses the shared type rather than a literal union, so adding a
   // status in one place cannot leave this row shape claiming the value is
-  // impossible (SCRUM-92 added APPROVED).
+  // impossible (SCRUM-92 added approved).
   status: EventRequestStatus;
   submitted_at: string | null;
   created_at: string;
@@ -47,6 +47,11 @@ export interface EventRequestWrite {
   proposed_date: string | null;
   // SCRUM-77. Null when none chosen, so "not yet provided" has one spelling.
   time_slots: string[] | null;
+  // SCRUM-78's column. Optional on the write so SCRUM-76's create path, which
+  // does not collect it, keeps compiling unchanged; SCRUM-83's draft save does
+  // send it. See the note in domain/event-request/service.ts about the create
+  // path still dropping this value.
+  expected_attendance?: number | null;
 }
 
 export async function insertEventRequest(
@@ -81,9 +86,9 @@ export async function updateEventRequest(
 export async function markEventRequestSubmitted(supabase: SupabaseClient, id: string) {
   return supabase
     .from('event_request')
-    .update({ status: 'SUBMITTED' })
+    .update({ status: 'submitted' })
     .eq('id', id)
-    .eq('status', 'DRAFT')
+    .eq('status', 'draft')
     .select(COLUMNS)
     .maybeSingle();
 }
@@ -134,6 +139,6 @@ export async function listSubmittedEventRequests(supabase: SupabaseClient) {
   return supabase
     .from('event_request')
     .select(COLUMNS)
-    .eq('status', 'SUBMITTED')
+    .eq('status', 'submitted')
     .order('submitted_at', { ascending: true });
 }

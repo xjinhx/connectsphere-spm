@@ -4,7 +4,7 @@ import { z } from 'zod';
 // NOTE: `status` (draft/submitted) belongs to SCRUM-84's story, and `coordinatorId`
 // belongs to SCRUM-94/95/96 — intentionally left out of this schema to avoid collisions.
 
-export const TimeSlotEnum = z.enum(['AM', 'PM', 'NIGHT']); // 7am-12pm, 1pm-6pm, 7pm-12am
+export const TimeSlotEnum = z.enum(['am', 'pm', 'night']); // 7am-12pm, 1pm-6pm, 7pm-12am
 
 export const eventRequestCoreSchema = z.object({
   name: z.string().min(1, 'Event name is required'),
@@ -54,15 +54,15 @@ export type TimeSlot = z.infer<typeof TimeSlotEnum>;
 export const TIME_SLOT_ORDER: readonly TimeSlot[] = TimeSlotEnum.options;
 
 export const TIME_SLOT_HOURS: Record<TimeSlot, { start: number; end: number }> = {
-  AM: { start: 7, end: 12 },
-  PM: { start: 13, end: 18 },
-  NIGHT: { start: 19, end: 24 },
+  am: { start: 7, end: 12 },
+  pm: { start: 13, end: 18 },
+  night: { start: 19, end: 24 },
 };
 
 export const TIME_SLOT_LABELS: Record<TimeSlot, string> = {
-  AM: 'AM (07:00–12:00)',
-  PM: 'PM (13:00–18:00)',
-  NIGHT: 'Night (19:00–24:00)',
+  am: 'AM (07:00–12:00)',
+  pm: 'PM (13:00–18:00)',
+  night: 'Night (19:00–24:00)',
 };
 
 /** A selection is a set: duplicates collapse, and the order is the day's order. */
@@ -91,18 +91,61 @@ export type EventRequestSaveInput = z.infer<typeof eventRequestSaveSchema>;
 // Kept to the two values this story needs. The NOTE at the top of this file
 // still stands: the wider lifecycle (Event Status Management) is not in this
 // sprint and should extend this enum rather than replace it.
-// SCRUM-92 extended this with 'APPROVED', matching the Postgres enum (see
+// SCRUM-92 extended this with 'approved', matching the Postgres enum (see
 // supabase/migrations/20260912154742_event_request_approved_status.sql) so the
-// contract and the database agree. SCRUM-93 adds 'REJECTED' the same way.
-export const EventRequestStatusEnum = z.enum(['DRAFT', 'SUBMITTED', 'APPROVED']);
+// contract and the database agree. SCRUM-93 adds 'rejected' the same way.
+export const EventRequestStatusEnum = z.enum(['draft', 'submitted', 'approved']);
 export type EventRequestStatus = z.infer<typeof EventRequestStatusEnum>;
 
 /** AC3/AC4 (US-5.3-TC03): the status as the organiser sees it, one spelling everywhere. */
 export const EVENT_REQUEST_STATUS_LABELS: Record<EventRequestStatus, string> = {
-  DRAFT: 'Draft',
-  SUBMITTED: 'Submitted',
-  APPROVED: 'Approved',
+  draft: 'Draft',
+  submitted: 'Submitted',
+  approved: 'Approved',
 };
+
+// ---------------------------------------------------------------------------
+// SCRUM-83 — Save an incomplete request as a draft
+// ---------------------------------------------------------------------------
+// US-6.1 AC1: "stored as a draft with whatever fields are completed;
+// mandatory-field validation is not applied". This is a DIFFERENT action from
+// SCRUM-76's save, not a replacement for it:
+//
+//   eventRequestSaveSchema  (SCRUM-76) — "Save request": US-5.1 AC5 applies,
+//                                        the basic details are mandatory.
+//   eventRequestDraftSchema (SCRUM-83) — "Save as draft": nothing but the name
+//                                        is required.
+//
+// Both write the same row, and a row is DRAFT either way (the column defaults
+// to it) - the difference is only how much must be filled in before the save
+// is allowed.
+//
+// Why `name` is still required: the column is `not null` with a non-blank
+// check (SCRUM-76's migration), the event list needs something to label a
+// draft with (AC2), and US-6.1-TC01 supplies one ("Only the event name has
+// been entered"). Relaxing it would mean altering a shared table and the
+// row/write types every other event-request story depends on.
+//
+// AC1's second half - "only format checks are applied to values I have
+// actually entered" - is why each field reuses its own rule from
+// eventRequestCoreSchema: an attendance of -5 is still refused on a draft, it
+// is only a *missing* attendance that is tolerated.
+
+/** An untouched form input arrives as ''. That means "not entered", not "invalid". */
+function optionalFromBlank<T extends z.ZodTypeAny>(schema: T) {
+  return z.preprocess((value) => (value === '' || value === null ? undefined : value), schema.optional());
+}
+
+export const eventRequestDraftSchema = z.object({
+  name: eventRequestCoreSchema.shape.name,
+  purpose: optionalFromBlank(eventRequestCoreSchema.shape.purpose),
+  description: optionalFromBlank(eventRequestCoreSchema.shape.description),
+  proposedDate: optionalFromBlank(eventRequestCoreSchema.shape.proposedDate),
+  expectedAttendance: optionalFromBlank(eventRequestCoreSchema.shape.expectedAttendance),
+  timeSlots: timeSlotsSchema.default([]),
+});
+
+export type EventRequestDraftInput = z.infer<typeof eventRequestDraftSchema>;
 
 // "The proposed mandatory set" (AC1/AC2, customer clarification #72/#73) is
 // taken to be every field of eventRequestCoreSchema - the shape US-5.1 agreed.
