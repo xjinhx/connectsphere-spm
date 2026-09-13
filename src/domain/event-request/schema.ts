@@ -91,13 +91,17 @@ export type EventRequestSaveInput = z.infer<typeof eventRequestSaveSchema>;
 // Kept to the two values this story needs. The NOTE at the top of this file
 // still stands: the wider lifecycle (Event Status Management) is not in this
 // sprint and should extend this enum rather than replace it.
-export const EventRequestStatusEnum = z.enum(['draft', 'submitted']);
+// SCRUM-92 extended this with 'approved', matching the Postgres enum (see
+// supabase/migrations/20260912154742_event_request_approved_status.sql) so the
+// contract and the database agree. SCRUM-93 adds 'rejected' the same way.
+export const EventRequestStatusEnum = z.enum(['draft', 'submitted', 'approved']);
 export type EventRequestStatus = z.infer<typeof EventRequestStatusEnum>;
 
 /** AC3/AC4 (US-5.3-TC03): the status as the organiser sees it, one spelling everywhere. */
 export const EVENT_REQUEST_STATUS_LABELS: Record<EventRequestStatus, string> = {
   draft: 'Draft',
   submitted: 'Submitted',
+  approved: 'Approved',
 };
 
 // ---------------------------------------------------------------------------
