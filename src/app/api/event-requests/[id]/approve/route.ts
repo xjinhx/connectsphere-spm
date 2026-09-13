@@ -1,5 +1,6 @@
 import { NextRequest, NextResponse } from 'next/server';
 import { approveEventRequest } from '@/domain/review/service';
+import { assertPermission } from '@/domain/identity/policy';
 import { handleApiError } from '@/lib/api/handler';
 import { getCurrentActor } from '@/lib/auth/currentActor';
 
@@ -12,14 +13,16 @@ import { getCurrentActor } from '@/lib/auth/currentActor';
  * middleware, and getCurrentActor throws UnauthenticatedError (401) as a second
  * line of defence.
  *
- * Which roles may approve is not on the Jira card, so no role check is made
- * here - raised with the team (SCRUM-69's permission matrix has no approve
- * action yet).
+ * Only coordinators may approve (the card's story is "As an Event Coordinator"),
+ * checked through SCRUM-69's permission matrix before any data is read, same
+ * pattern as api/accounts/[id]/roles. Other roles get 403. Narrowing this to the
+ * coordinator assigned to the request (US-7.3-TC04) waits on SCRUM-94.
  */
 export async function POST(_req: NextRequest, { params }: { params: Promise<{ id: string }> }) {
   try {
     const { id } = await params;
     const actor = await getCurrentActor();
+    assertPermission(actor.roles, 'event_request_approval');
     return NextResponse.json(await approveEventRequest(id, { actorId: actor.userId }));
   } catch (error) {
     return handleApiError(error);
