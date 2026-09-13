@@ -3,7 +3,12 @@ import { notFound } from 'next/navigation';
 import { getVenue } from '@/domain/venues/service';
 import { canManageVenues, canViewVenueCatalogue } from '@/domain/venues/policy';
 import { NotFoundError } from '@/domain/shared/errors';
-import { OPERATING_SLOT_LABELS, ROOM_LAYOUT_LABELS, type VenueDetail } from '@/domain/venues/schema';
+import {
+  OPERATING_SLOTS,
+  OPERATING_SLOT_LABELS,
+  ROOM_LAYOUT_LABELS,
+  type VenueDetail,
+} from '@/domain/venues/schema';
 import { getCurrentActor } from '@/lib/auth/currentActor';
 import NoVenueAccess from '@/components/venue/NoVenueAccess';
 
@@ -80,10 +85,23 @@ export default async function VenueDetailPage({ params }: { params: Promise<{ id
         <Row label="Location">{venue.location.name}</Row>
         <Row label="Maximum capacity">{venue.maxCapacity}</Row>
 
+        {/* SCRUM-116 AC4: the selected slots apply identically to every day, so all
+            three are listed and an unselected slot is shown as not operating
+            rather than silently left out (US-11.1-TC05a). */}
         <Row label="Operating slots">
-          {venue.operatingSlots.length === 0
-            ? 'None'
-            : venue.operatingSlots.map((slot) => OPERATING_SLOT_LABELS[slot]).join(', ')}
+          <p className="mb-1 text-[var(--text-muted)]">Applies to every day of the week.</p>
+          <ul>
+            {OPERATING_SLOTS.map((slot) => (
+              <li key={slot}>
+                {OPERATING_SLOT_LABELS[slot]}:{' '}
+                {venue.operatingSlots.includes(slot) ? (
+                  <span className="text-[var(--success)]">Operating</span>
+                ) : (
+                  <span className="text-[var(--text-muted)]">Not operating</span>
+                )}
+              </li>
+            ))}
+          </ul>
         </Row>
 
         <Row label="Supported layouts">
