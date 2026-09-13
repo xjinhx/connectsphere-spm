@@ -18,7 +18,7 @@ export interface EventRequestRow {
   id: string;
   reference: string;
   organiser_id: string;
-  client_organisation_id: string;
+  client_organisation_id: string | null;
   name: string;
   purpose: string | null;
   description: string | null;
@@ -57,7 +57,7 @@ export interface EventRequestWrite {
 
 export async function insertEventRequest(
   supabase: SupabaseClient,
-  values: EventRequestWrite & { organiser_id: string; client_organisation_id: string },
+  values: EventRequestWrite & { organiser_id: string; client_organisation_id: string | null },
 ) {
   return supabase.from('event_request').insert(values).select(COLUMNS).single();
 }
