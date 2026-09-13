@@ -1,5 +1,5 @@
 import { describe, it, expect } from 'vitest';
-import { CreateClientOrganisationInputSchema } from '@/domain/client-organisation/schema';
+import { CreateClientOrganisationInputSchema, UpdateClientOrganisationInputSchema } from '@/domain/client-organisation/schema';
 
 /**
  * SCRUM-203 AC1 — a valid organisation needs a name; contact details are
@@ -37,6 +37,25 @@ describe('CreateClientOrganisationInputSchema: SCRUM-203 AC1', () => {
       name: 'Acme Events',
       contactEmail: 'not-an-email',
     });
+    expect(result.success).toBe(false);
+  });
+});
+
+/**
+ * SCRUM-203 — "update a client organisation record" (story description).
+ * Same shape and rules as create: the name is still required on an update.
+ */
+describe('UpdateClientOrganisationInputSchema: SCRUM-203', () => {
+  it('accepts an updated name and contact details', () => {
+    const result = UpdateClientOrganisationInputSchema.safeParse({
+      name: 'Acme Events Pte Ltd',
+      contactEmail: 'jane@acme.example',
+    });
+    expect(result.success).toBe(true);
+  });
+
+  it('rejects clearing the name', () => {
+    const result = UpdateClientOrganisationInputSchema.safeParse({ name: '' });
     expect(result.success).toBe(false);
   });
 });

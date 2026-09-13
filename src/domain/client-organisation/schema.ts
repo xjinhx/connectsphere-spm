@@ -26,6 +26,14 @@ export const CreateClientOrganisationInputSchema = z.object({
 });
 export type CreateClientOrganisationInput = z.infer<typeof CreateClientOrganisationInputSchema>;
 
+/**
+ * "create and update a client organisation record" (story description) — the
+ * same shape as create. Name is still required: an update clears a contact
+ * field by omitting it, but never blanks the name itself.
+ */
+export const UpdateClientOrganisationInputSchema = CreateClientOrganisationInputSchema;
+export type UpdateClientOrganisationInput = z.infer<typeof UpdateClientOrganisationInputSchema>;
+
 /** AC3 — an event recorded against the organisation, as shown on its page. */
 export const OrganisationEventSummarySchema = z.object({
   id: z.string().uuid(),

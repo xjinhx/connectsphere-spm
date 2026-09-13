@@ -4,12 +4,18 @@ import {
   insertClientOrganisation,
   listClientOrganisations as listClientOrganisationRows,
   listEventsForOrganisation,
+  updateClientOrganisation as updateClientOrganisationRow,
   type ClientOrganisationRow,
   type OrganisationEventRow,
 } from '@/lib/supabase/clientOrganisations';
 import { getCurrentActor } from '@/lib/auth/currentActor';
 import { ConflictError, ForbiddenError, NotFoundError, ValidationError, isUniqueViolation } from '@/domain/shared/errors';
-import { CreateClientOrganisationInputSchema, type ClientOrganisation, type ClientOrganisationDetail } from './schema';
+import {
+  CreateClientOrganisationInputSchema,
+  UpdateClientOrganisationInputSchema,
+  type ClientOrganisation,
+  type ClientOrganisationDetail,
+} from './schema';
 import { canManageClientOrganisations } from './policy';
 
 /**
@@ -42,6 +48,14 @@ async function requireCoordinator() {
 
 function parseCreateInput(input: unknown) {
   const parsed = CreateClientOrganisationInputSchema.safeParse(input);
+  if (!parsed.success) {
+    throw new ValidationError('The organisation is not valid.', parsed.error.flatten());
+  }
+  return parsed.data;
+}
+
+function parseUpdateInput(input: unknown) {
+  const parsed = UpdateClientOrganisationInputSchema.safeParse(input);
   if (!parsed.success) {
     throw new ValidationError('The organisation is not valid.', parsed.error.flatten());
   }
@@ -103,4 +117,31 @@ export async function getClientOrganisation(id: string): Promise<ClientOrganisat
       proposedDate: row.proposed_date,
     })),
   };
+}
+
+/**
+ * "create and update a client organisation record" (story description) — the
+ * same unique-name rule from AC2 applies here too: renaming to a name another
+ * organisation already holds is refused the same way a duplicate create is.
+ */
+export async function updateClientOrganisation(id: string, input: unknown): Promise<ClientOrganisation> {
+  await requireCoordinator();
+  if (!UUID_PATTERN.test(id)) throw new NotFoundError('Client organisation');
+  const parsed = parseUpdateInput(input);
+
+  const { data, error } = await updateClientOrganisationRow(createAdminClient(), id, {
+    name: parsed.name,
+    contact_name: parsed.contactName ?? null,
+    contact_email: parsed.contactEmail ?? null,
+    contact_phone: parsed.contactPhone ?? null,
+  });
+
+  if (error) {
+    if (isUniqueViolation(error)) {
+      throw new ConflictError('An organisation with this name already exists.');
+    }
+    throw new ValidationError('The organisation could not be saved.', error.message);
+  }
+  if (!data) throw new NotFoundError('Client organisation');
+  return toClientOrganisation(data as unknown as ClientOrganisationRow);
 }

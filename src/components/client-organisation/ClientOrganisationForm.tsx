@@ -3,20 +3,41 @@
 import { useState } from 'react';
 import { useRouter } from 'next/navigation';
 
-/** SCRUM-203 AC1 — name plus optional contact details. AC2 — a duplicate name comes back as an error, not a silent overwrite. */
+/**
+ * SCRUM-203 AC1 — name plus optional contact details. AC2 — a duplicate name
+ * comes back as an error, not a silent overwrite.
+ *
+ * The same form serves both jobs the story description names ("create and
+ * update a client organisation record"): a blank create when `organisationId`
+ * is unset, and an edit that PATCHes that organisation when it is set.
+ */
 
 const labelClass = 'block text-sm font-medium text-[var(--text)]';
 const fieldClass =
   'mt-1 w-full rounded-md border border-[var(--border)] bg-[var(--surface)] px-3 py-2 text-sm ' +
   'focus:border-[var(--brand)] focus:outline-none';
 
-export function ClientOrganisationForm() {
+export interface ClientOrganisationFormInitialValues {
+  name: string;
+  contactName: string;
+  contactEmail: string;
+  contactPhone: string;
+}
+
+export function ClientOrganisationForm({
+  organisationId,
+  initial,
+}: {
+  /** Set when editing an existing organisation; unset for a new one. */
+  organisationId?: string;
+  initial?: ClientOrganisationFormInitialValues;
+}) {
   const router = useRouter();
 
-  const [name, setName] = useState('');
-  const [contactName, setContactName] = useState('');
-  const [contactEmail, setContactEmail] = useState('');
-  const [contactPhone, setContactPhone] = useState('');
+  const [name, setName] = useState(initial?.name ?? '');
+  const [contactName, setContactName] = useState(initial?.contactName ?? '');
+  const [contactEmail, setContactEmail] = useState(initial?.contactEmail ?? '');
+  const [contactPhone, setContactPhone] = useState(initial?.contactPhone ?? '');
 
   const [saving, setSaving] = useState(false);
   const [error, setError] = useState<string | null>(null);
@@ -27,16 +48,19 @@ export function ClientOrganisationForm() {
     setError(null);
     setFieldErrors({});
     try {
-      const response = await fetch('/api/organisations', {
-        method: 'POST',
-        headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({
-          name,
-          contactName: contactName === '' ? undefined : contactName,
-          contactEmail: contactEmail === '' ? undefined : contactEmail,
-          contactPhone: contactPhone === '' ? undefined : contactPhone,
-        }),
-      });
+      const response = await fetch(
+        organisationId ? `/api/organisations/${organisationId}` : '/api/organisations',
+        {
+          method: organisationId ? 'PATCH' : 'POST',
+          headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify({
+            name,
+            contactName: contactName === '' ? undefined : contactName,
+            contactEmail: contactEmail === '' ? undefined : contactEmail,
+            contactPhone: contactPhone === '' ? undefined : contactPhone,
+          }),
+        },
+      );
 
       const payload = (await response.json().catch(() => null)) as {
         organisation?: { id: string };
@@ -134,7 +158,7 @@ export function ClientOrganisationForm() {
         disabled={saving}
         className="rounded-md bg-[var(--brand)] px-4 py-2 text-sm font-medium text-white hover:bg-[var(--brand-dark)] disabled:opacity-60"
       >
-        {saving ? 'Saving...' : 'Save organisation'}
+        {saving ? 'Saving...' : organisationId ? 'Save changes' : 'Save organisation'}
       </button>
     </form>
   );

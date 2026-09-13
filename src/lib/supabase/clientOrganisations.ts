@@ -45,6 +45,14 @@ export async function fetchClientOrganisation(supabase: SupabaseClient, id: stri
   return supabase.from('client_organisations').select(COLUMNS).eq('id', id).maybeSingle();
 }
 
+export async function updateClientOrganisation(
+  supabase: SupabaseClient,
+  id: string,
+  values: ClientOrganisationWrite,
+) {
+  return supabase.from('client_organisations').update(values).eq('id', id).select(COLUMNS).maybeSingle();
+}
+
 /** AC3 — events recorded against the organisation, most recently proposed first. */
 export async function listEventsForOrganisation(supabase: SupabaseClient, organisationId: string) {
   return supabase

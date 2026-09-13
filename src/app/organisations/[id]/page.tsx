@@ -25,7 +25,15 @@ export default async function ClientOrganisationPage({ params }: { params: Promi
         ← Client organisations
       </Link>
 
-      <h1 className="mt-4 text-xl font-semibold">{organisation.name}</h1>
+      <div className="mt-4 flex flex-wrap items-center justify-between gap-3">
+        <h1 className="text-xl font-semibold">{organisation.name}</h1>
+        <Link
+          href={`/organisations/${organisation.id}/edit`}
+          className="rounded-md border border-[var(--border)] bg-[var(--surface)] px-4 py-2 text-sm font-medium hover:bg-slate-50"
+        >
+          Edit
+        </Link>
+      </div>
 
       <dl className="mt-6 rounded-lg border border-[var(--border)] bg-[var(--surface)] px-4">
         <Row label="Contact name" value={organisation.contactName ?? 'Not provided'} />
