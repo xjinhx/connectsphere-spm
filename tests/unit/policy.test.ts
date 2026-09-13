@@ -1,5 +1,5 @@
 import { describe, it, expect } from 'vitest';
-import { hasRole, hasAnyRole, canAssignRoles } from '@/domain/identity/policy';
+import { hasRole, hasAnyRole, canAssignRoles, assertPermission } from '@/domain/identity/policy';
 import type { Role } from '@/domain/identity/roles';
 
 
@@ -40,5 +40,18 @@ describe('canAssignRoles', () => {
   it('allows when the actor is an admin assigning roles to someone else', () => {
     const result = canAssignRoles(['operations_manager'], 'account-2', 'account-1');
     expect(result).toBe(true);
+  });
+});
+
+// SCRUM-69 AC3: an action absent from the caller's permitted list is refused
+describe('assertPermission', () => {
+  it('does not throw when the role permits the action', () => {
+    expect(() => assertPermission(['operations_manager'], 'account_role_management')).not.toThrow();
+  });
+
+  it('throws a ForbiddenError when the role does not permit the action', () => {
+    expect(() => assertPermission(['event_organiser'], 'account_role_management')).toThrow(
+      /does not permit/,
+    );
   });
 });
