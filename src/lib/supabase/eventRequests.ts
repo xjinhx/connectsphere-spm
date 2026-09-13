@@ -12,7 +12,10 @@ const COLUMNS =
   // link table, the same way a venue's do in lib/supabase/venues.ts.
   'room_layout, accessibility_required, accessibility_notes, ' +
   'event_request_accessibility_features ( accessibility_features ( id, name ) ), ' +
-  'preferred_location:locations ( id, name )';
+  'preferred_location:locations ( id, name ), ' +
+  // SCRUM-80
+  'equipment_required, technical_support_notes, ' +
+  'event_request_equipment ( position, item, quantity )';
 
 export interface ReferenceRow {
   id: string;
@@ -44,6 +47,16 @@ export interface EventRequestRow {
   event_request_accessibility_features: { accessibility_features: ReferenceRow | null }[];
   /** Null is "no preference" (AC4). */
   preferred_location: ReferenceRow | null;
+  // SCRUM-80
+  equipment_required: boolean | null;
+  technical_support_notes: string | null;
+  event_request_equipment: EquipmentRow[];
+}
+
+export interface EquipmentRow {
+  position: number;
+  item: string;
+  quantity: number;
 }
 
 export interface EventRequestWrite {
@@ -65,6 +78,9 @@ export interface EventRequestWrite {
   accessibility_notes: string | null;
   // SCRUM-79. Null is "no preference"; the foreign key refuses an unknown id.
   preferred_location_id: string | null;
+  // SCRUM-80. Null until answered; notes are independent of the answer (AC2).
+  equipment_required: boolean | null;
+  technical_support_notes: string | null;
 }
 
 export async function insertEventRequest(
@@ -117,6 +133,34 @@ export async function deleteEventRequestAccessibilityFeatures(
     .from('event_request_accessibility_features')
     .delete()
     .eq('event_request_id', eventRequestId);
+}
+
+// ---------------------------------------------------------------------------
+// SCRUM-80 — State equipment and technical support requirements
+// ---------------------------------------------------------------------------
+
+/**
+ * AC1 — one row per item, in the order listed. Like the accessibility links,
+ * the list sent replaces the whole list: delete, then insert.
+ */
+export async function insertEventRequestEquipment(
+  supabase: SupabaseClient,
+  eventRequestId: string,
+  items: { item: string; quantity: number }[],
+) {
+  if (items.length === 0) return { error: null };
+  return supabase.from('event_request_equipment').insert(
+    items.map((entry, position) => ({
+      event_request_id: eventRequestId,
+      position,
+      item: entry.item,
+      quantity: entry.quantity,
+    })),
+  );
+}
+
+export async function deleteEventRequestEquipment(supabase: SupabaseClient, eventRequestId: string) {
+  return supabase.from('event_request_equipment').delete().eq('event_request_id', eventRequestId);
 }
 
 // ---------------------------------------------------------------------------

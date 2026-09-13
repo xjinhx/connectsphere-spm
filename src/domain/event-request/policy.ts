@@ -4,6 +4,7 @@ import {
   normaliseTimeSlots,
   TIME_SLOT_LABELS,
   TIME_SLOT_ORDER,
+  type EquipmentItem,
   type EventRequestStatus,
   type MandatoryField,
   type TimeSlot,
@@ -147,6 +148,47 @@ export function describeAccessibility(request: {
 /** AC4 — a blank location is recorded, and shown, as no preference. */
 export function describePreferredLocation(location: { name: string } | null): string {
   return location ? location.name : 'No preference';
+}
+
+// ---------------------------------------------------------------------------
+// SCRUM-80 — State equipment and technical support requirements
+// ---------------------------------------------------------------------------
+
+export interface EquipmentRequirement {
+  /** Null is "not yet answered"; false is "none" (AC3); true is "yes" (AC1). */
+  required: boolean | null;
+  items: EquipmentItem[];
+}
+
+/**
+ * AC1 and AC3 — only a "yes" carries items; a "none" or an unanswered
+ * question saves with no items, whatever was left in the list. The technical
+ * support description is not part of this on purpose (AC2): it is kept
+ * whatever the equipment answer is, so it is handled by the write directly.
+ */
+export function normaliseEquipment(input: {
+  equipmentRequired?: boolean;
+  equipmentItems: EquipmentItem[];
+}): EquipmentRequirement {
+  const required = input.equipmentRequired ?? null;
+  if (required !== true) return { required, items: [] };
+  return { required: true, items: input.equipmentItems };
+}
+
+/** AC1/AC3 — what the request shows for equipment: an answer, never a blank. */
+export function describeEquipment(request: {
+  equipmentRequired: boolean | null;
+  equipmentItems: readonly EquipmentItem[];
+}): string {
+  if (request.equipmentRequired === null) return 'Not yet answered';
+  if (request.equipmentRequired === false) return 'None required';
+  if (request.equipmentItems.length === 0) return 'Required - items not yet listed';
+  return request.equipmentItems.map((entry) => `${entry.item} × ${entry.quantity}`).join('\n');
+}
+
+/** AC2 — the description stands alone, so "none given" is its only other state. */
+export function describeTechnicalSupport(notes: string | null): string {
+  return notes ?? 'Not yet provided';
 }
 
 // ---------------------------------------------------------------------------

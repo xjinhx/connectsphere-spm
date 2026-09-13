@@ -63,6 +63,14 @@ export default async function EditEventRequestPage({
           accessibilityFeatureIds: draft.accessibilityFeatures.map((feature) => feature.id),
           accessibilityNotes: draft.accessibilityNotes ?? '',
           preferredLocationId: draft.preferredLocation?.id ?? '',
+          // SCRUM-80
+          equipmentRequired:
+            draft.equipmentRequired === null ? '' : draft.equipmentRequired ? 'yes' : 'no',
+          equipmentItems: draft.equipmentItems.map((entry) => ({
+            item: entry.item,
+            quantity: String(entry.quantity),
+          })),
+          technicalSupportNotes: draft.technicalSupportNotes ?? '',
         }}
       />
     </main>

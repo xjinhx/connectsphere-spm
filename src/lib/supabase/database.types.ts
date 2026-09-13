@@ -59,6 +59,7 @@ export type Database = {
           client_organisation_id: string | null
           created_at: string
           description: string | null
+          equipment_required: boolean | null
           expected_attendance: number | null
           id: string
           name: string
@@ -70,6 +71,7 @@ export type Database = {
           room_layout: string | null
           status: Database["public"]["Enums"]["event_request_status"]
           submitted_at: string | null
+          technical_support_notes: string | null
           time_slots: string[] | null
           updated_at: string
         }
@@ -79,6 +81,7 @@ export type Database = {
           client_organisation_id?: string | null
           created_at?: string
           description?: string | null
+          equipment_required?: boolean | null
           expected_attendance?: number | null
           id?: string
           name: string
@@ -90,6 +93,7 @@ export type Database = {
           room_layout?: string | null
           status?: Database["public"]["Enums"]["event_request_status"]
           submitted_at?: string | null
+          technical_support_notes?: string | null
           time_slots?: string[] | null
           updated_at?: string
         }
@@ -99,6 +103,7 @@ export type Database = {
           client_organisation_id?: string | null
           created_at?: string
           description?: string | null
+          equipment_required?: boolean | null
           expected_attendance?: number | null
           id?: string
           name?: string
@@ -110,6 +115,7 @@ export type Database = {
           room_layout?: string | null
           status?: Database["public"]["Enums"]["event_request_status"]
           submitted_at?: string | null
+          technical_support_notes?: string | null
           time_slots?: string[] | null
           updated_at?: string
         }
@@ -146,6 +152,35 @@ export type Database = {
           },
           {
             foreignKeyName: "event_request_accessibility_features_event_request_id_fkey"
+            columns: ["event_request_id"]
+            isOneToOne: false
+            referencedRelation: "event_request"
+            referencedColumns: ["id"]
+          },
+        ]
+      }
+      event_request_equipment: {
+        Row: {
+          event_request_id: string
+          item: string
+          position: number
+          quantity: number
+        }
+        Insert: {
+          event_request_id: string
+          item: string
+          position: number
+          quantity: number
+        }
+        Update: {
+          event_request_id?: string
+          item?: string
+          position?: number
+          quantity?: number
+        }
+        Relationships: [
+          {
+            foreignKeyName: "event_request_equipment_event_request_id_fkey"
             columns: ["event_request_id"]
             isOneToOne: false
             referencedRelation: "event_request"

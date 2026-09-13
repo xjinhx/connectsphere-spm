@@ -130,16 +130,67 @@ export const venueRequirementsShape = {
   ),
 };
 
-export const venueRequirementsSchema = z.object(venueRequirementsShape);
+// ---------------------------------------------------------------------------
+// SCRUM-80 — State equipment and technical support requirements
+// ---------------------------------------------------------------------------
+// Same three-part shape as accessibility above: an explicit answer, the
+// detail, and free text. The one difference is deliberate: the technical
+// support description stands on its own (AC2, "whether or not any equipment
+// item has been added"), so it is never dropped when the answer is "none".
+//
+// No equipment catalogue exists in this sprint, so an item is its name.
+
+export const EQUIPMENT_ITEM_MAX_LENGTH = 100;
+export const TECHNICAL_SUPPORT_NOTES_MAX_LENGTH = 1000;
+
+/** AC1 — an item and how many of it. */
+export const equipmentItemSchema = z.object({
+  item: z
+    .string({ required_error: 'Equipment item is required' })
+    .trim()
+    .min(1, 'Equipment item is required')
+    .max(EQUIPMENT_ITEM_MAX_LENGTH, `Equipment item must be ${EQUIPMENT_ITEM_MAX_LENGTH} characters or fewer`),
+  quantity: z
+    .number({ required_error: 'Quantity is required', invalid_type_error: 'Quantity must be a whole number' })
+    .int('Quantity must be a whole number')
+    .positive('Quantity must be greater than 0'),
+});
+export type EquipmentItem = z.infer<typeof equipmentItemSchema>;
+
+export const equipmentRequirementsShape = {
+  equipmentRequired: optionalFromBlank(z.boolean()),
+  equipmentItems: z
+    .array(equipmentItemSchema)
+    .default([])
+    .refine(
+      (items) => new Set(items.map((entry) => entry.item.toLowerCase())).size === items.length,
+      'Each equipment item can only be listed once',
+    ),
+  technicalSupportNotes: optionalFromBlank(
+    z
+      .string()
+      .max(
+        TECHNICAL_SUPPORT_NOTES_MAX_LENGTH,
+        `Technical support notes must be ${TECHNICAL_SUPPORT_NOTES_MAX_LENGTH} characters or fewer.`,
+      ),
+  ),
+};
+
+/** SCRUM-79's venue requirements and SCRUM-80's equipment, as one optional block. */
+export const venueRequirementsSchema = z.object({
+  ...venueRequirementsShape,
+  ...equipmentRequirementsShape,
+});
 export type VenueRequirementsInput = z.infer<typeof venueRequirementsSchema>;
 
 /**
- * The whole form as it is saved: SCRUM-76's basic details, SCRUM-77's slots
- * and SCRUM-79's venue requirements.
+ * The whole form as it is saved: SCRUM-76's basic details, SCRUM-77's slots,
+ * SCRUM-79's venue requirements and SCRUM-80's equipment.
  */
 export const eventRequestSaveSchema = eventRequestBasicDetailsSchema.extend({
   timeSlots: timeSlotsSchema.default([]),
   ...venueRequirementsShape,
+  ...equipmentRequirementsShape,
 });
 
 export type EventRequestSaveInput = z.infer<typeof eventRequestSaveSchema>;
@@ -196,8 +247,9 @@ export const eventRequestDraftSchema = z.object({
   proposedDate: optionalFromBlank(eventRequestCoreSchema.shape.proposedDate),
   expectedAttendance: optionalFromBlank(eventRequestCoreSchema.shape.expectedAttendance),
   timeSlots: timeSlotsSchema.default([]),
-  // SCRUM-79 — a draft keeps whatever venue requirements were stated so far.
+  // SCRUM-79 / SCRUM-80 — a draft keeps whatever requirements were stated so far.
   ...venueRequirementsShape,
+  ...equipmentRequirementsShape,
 });
 
 export type EventRequestDraftInput = z.infer<typeof eventRequestDraftSchema>;

@@ -3,8 +3,10 @@ import { EventRequestStatusBadge } from '@/components/event-request/EventRequest
 import { SubmitEventRequestButton } from '@/components/event-request/SubmitEventRequestButton';
 import {
   describeAccessibility,
+  describeEquipment,
   describePreferredLocation,
   describeRoomLayout,
+  describeTechnicalSupport,
   describeTimeSlots,
   isEditable,
 } from '@/domain/event-request/policy';
@@ -71,6 +73,13 @@ export default async function EventRequestPage({
         />
         {/* SCRUM-79 AC2/AC3: the answer given, "None required" included. */}
         <Row label="Accessibility" value={describeAccessibility(request)} />
+        {/* SCRUM-80 AC1/AC3: the items listed, or the explicit "none". */}
+        <Row label="Equipment" value={describeEquipment(request)} />
+        {/* SCRUM-80 AC2: shown on its own, whatever the equipment answer. */}
+        <Row
+          label="Technical support"
+          value={describeTechnicalSupport(request.technicalSupportNotes)}
+        />
         <Row label="Created" value={formatSingaporeDateTime(request.createdAt)} />
         <Row label="Last updated" value={formatSingaporeDateTime(request.updatedAt)} />
         {/* SCRUM-82 AC1: the submission time, in Singapore time. */}

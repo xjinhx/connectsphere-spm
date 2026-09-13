@@ -28,6 +28,10 @@ import type { VenueRequirementOptions } from '@/domain/event-request/service';
  * answer first; only "yes" opens the feature list (the maintained one, passed
  * in as `options`) and the notes. AC4: the location select's blank option IS
  * the "no preference" answer. Nothing here is mandatory.
+ *
+ * SCRUM-80 — equipment follows the accessibility pattern (yes/none, then an
+ * item list). The technical support box sits outside that toggle on purpose:
+ * AC2 says it is saved whether or not any item is listed.
  */
 
 const labelClass = 'block text-sm font-medium text-[var(--text)]';
@@ -55,6 +59,12 @@ export interface EventRequestFormInitialValues {
   accessibilityNotes: string;
   /** SCRUM-79 AC4. '' is "no preference". */
   preferredLocationId: string;
+  /** SCRUM-80 AC1/AC3. '' while unanswered; 'no' is the explicit "none". */
+  equipmentRequired: '' | 'yes' | 'no';
+  /** Quantity kept as text, like expectedAttendance: '' is "not entered". */
+  equipmentItems: { item: string; quantity: string }[];
+  /** SCRUM-80 AC2. */
+  technicalSupportNotes: string;
 }
 
 export function EventRequestForm({
@@ -95,6 +105,16 @@ export function EventRequestForm({
   );
   const [accessibilityNotes, setAccessibilityNotes] = useState(initial?.accessibilityNotes ?? '');
   const [preferredLocationId, setPreferredLocationId] = useState(initial?.preferredLocationId ?? '');
+  // SCRUM-80
+  const [equipmentRequired, setEquipmentRequired] = useState<'' | 'yes' | 'no'>(
+    initial?.equipmentRequired ?? '',
+  );
+  const [equipmentItems, setEquipmentItems] = useState<{ item: string; quantity: string }[]>(
+    initial?.equipmentItems ?? [],
+  );
+  const [technicalSupportNotes, setTechnicalSupportNotes] = useState(
+    initial?.technicalSupportNotes ?? '',
+  );
 
   const [saving, setSaving] = useState(false);
   const [error, setError] = useState<string | null>(null);
@@ -125,6 +145,17 @@ export function EventRequestForm({
       accessibilityNotes,
       // AC4: '' is "no preference", read as "not stated" on the server.
       preferredLocationId,
+      // SCRUM-80. Same unanswered/none/yes encoding as accessibility. A row the
+      // organiser added but never filled in is not a requirement, so it is not
+      // sent; a half-filled one is, so the schema can name what is missing.
+      equipmentRequired: equipmentRequired === '' ? undefined : equipmentRequired === 'yes',
+      equipmentItems: equipmentItems
+        .filter((row) => row.item.trim() !== '' || row.quantity !== '')
+        .map((row) => ({
+          item: row.item,
+          quantity: row.quantity === '' ? undefined : Number(row.quantity),
+        })),
+      technicalSupportNotes,
     });
   }
 
@@ -209,6 +240,16 @@ export function EventRequestForm({
     setAccessibilityFeatureIds((current) =>
       current.includes(id) ? current.filter((value) => value !== id) : [...current, id],
     );
+  }
+
+  function updateEquipmentItem(index: number, patch: Partial<{ item: string; quantity: string }>) {
+    setEquipmentItems((current) =>
+      current.map((row, i) => (i === index ? { ...row, ...patch } : row)),
+    );
+  }
+
+  function removeEquipmentItem(index: number) {
+    setEquipmentItems((current) => current.filter((_, i) => i !== index));
   }
 
   function FieldError({ field }: { field: string }) {
@@ -463,6 +504,119 @@ export function EventRequestForm({
             </div>
           ) : null}
         </fieldset>
+      </fieldset>
+
+      {/* SCRUM-80 — equipment and technical support. Optional, like the venue
+          requirements above. */}
+      <fieldset className="space-y-5 border-t border-[var(--border)] pt-5">
+        <legend className="text-base font-semibold">Equipment and technical support</legend>
+        <p className="-mt-3 text-xs text-[var(--text-muted)]">
+          Optional. Recorded for the coordinator to pass to Technical Support.
+        </p>
+
+        {/* AC1/AC3 — the answer first; "None" is saved as an answer. */}
+        <fieldset>
+          <legend className={labelClass}>Equipment</legend>
+          <div className="mt-2 flex flex-wrap gap-x-6 gap-y-2">
+            <label className="flex items-center gap-2 text-sm">
+              <input
+                type="radio"
+                name="equipmentRequired"
+                value="yes"
+                checked={equipmentRequired === 'yes'}
+                onChange={() => setEquipmentRequired('yes')}
+              />
+              Yes, this event needs equipment
+            </label>
+            <label className="flex items-center gap-2 text-sm">
+              <input
+                type="radio"
+                name="equipmentRequired"
+                value="no"
+                checked={equipmentRequired === 'no'}
+                onChange={() => setEquipmentRequired('no')}
+              />
+              None
+            </label>
+          </div>
+          <FieldError field="equipmentRequired" />
+
+          {equipmentRequired === 'yes' ? (
+            <div className="mt-3 space-y-3 rounded-md border border-[var(--border)] bg-slate-50 p-3">
+              {equipmentItems.map((row, index) => (
+                <div key={index} className="flex flex-wrap items-end gap-2">
+                  <div className="min-w-[12rem] flex-1">
+                    <label className={labelClass} htmlFor={`equipment-item-${index}`}>
+                      Item
+                    </label>
+                    <input
+                      id={`equipment-item-${index}`}
+                      className={fieldClass}
+                      value={row.item}
+                      maxLength={100}
+                      placeholder="e.g. Wireless microphone"
+                      onChange={(event) => updateEquipmentItem(index, { item: event.target.value })}
+                    />
+                  </div>
+                  <div className="w-24">
+                    <label className={labelClass} htmlFor={`equipment-quantity-${index}`}>
+                      Quantity
+                    </label>
+                    <input
+                      id={`equipment-quantity-${index}`}
+                      type="number"
+                      min={1}
+                      step={1}
+                      className={fieldClass}
+                      value={row.quantity}
+                      onChange={(event) =>
+                        updateEquipmentItem(index, { quantity: event.target.value })
+                      }
+                    />
+                  </div>
+                  <button
+                    type="button"
+                    onClick={() => removeEquipmentItem(index)}
+                    className="rounded-md border border-[var(--border)] bg-[var(--surface)] px-3 py-2 text-sm hover:bg-slate-100"
+                    aria-label={`Remove equipment item ${index + 1}`}
+                  >
+                    Remove
+                  </button>
+                </div>
+              ))}
+              <button
+                type="button"
+                onClick={() =>
+                  setEquipmentItems((current) => [...current, { item: '', quantity: '' }])
+                }
+                className="rounded-md border border-[var(--border)] bg-[var(--surface)] px-3 py-2 text-sm font-medium hover:bg-slate-100"
+              >
+                Add item
+              </button>
+              <FieldError field="equipmentItems" />
+            </div>
+          ) : null}
+        </fieldset>
+
+        {/* AC2 — always shown: it is saved whether or not any item is listed. */}
+        <div>
+          <label className={labelClass} htmlFor="technicalSupportNotes">
+            Technical support required
+          </label>
+          <textarea
+            id="technicalSupportNotes"
+            className={fieldClass}
+            rows={3}
+            maxLength={1000}
+            value={technicalSupportNotes}
+            onChange={(event) => setTechnicalSupportNotes(event.target.value)}
+            aria-describedby="technicalSupportNotes-hint"
+          />
+          <p id="technicalSupportNotes-hint" className="mt-1 text-xs text-[var(--text-muted)]">
+            Describe any set-up or on-the-day support needed, even if no equipment is listed.
+          </p>
+          <FieldError field="technicalSupportNotes" />
+        </div>
       </fieldset>
 
       {error ? (
