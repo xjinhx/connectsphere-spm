@@ -316,7 +316,7 @@ export type Database = {
       [_ in never]: never
     }
     Enums: {
-      event_request_status: "DRAFT" | "SUBMITTED" | "APPROVED"
+      event_request_status: "draft" | "submitted" | "approved"
     }
     CompositeTypes: {
       [_ in never]: never
@@ -447,7 +447,7 @@ export const Constants = {
   },
   public: {
     Enums: {
-      event_request_status: ["DRAFT", "SUBMITTED", "APPROVED"],
+      event_request_status: ["draft", "submitted", "approved"],
     },
   },
 } as const

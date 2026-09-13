@@ -6,7 +6,7 @@
 -- whoever calls the API. This mirrors set_submitted_at(), which SCRUM-82 uses
 -- for exactly the same reason.
 --
--- Fires when a decision is first recorded, so SCRUM-93 gets it for 'REJECTED'
+-- Fires when a decision is first recorded, so SCRUM-93 gets it for 'rejected'
 -- without adding a second trigger.
 
 create or replace function set_decided_at() returns trigger language plpgsql as $$

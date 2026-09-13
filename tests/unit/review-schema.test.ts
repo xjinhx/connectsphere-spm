@@ -19,18 +19,18 @@ describe('ApproveInputSchema', () => {
 });
 
 describe('DecisionSchema', () => {
-  it('accepts APPROVED', () => {
-    expect(DecisionSchema.safeParse('APPROVED').success).toBe(true);
+  it('accepts approved', () => {
+    expect(DecisionSchema.safeParse('approved').success).toBe(true);
   });
 
-  // The database check constraint stores 'APPROVED'; lower case would be
+  // The database check constraint stores 'approved'; upper case would be
   // rejected by Postgres, so it must be rejected here too.
-  it('rejects lower case approved', () => {
-    expect(DecisionSchema.safeParse('approved').success).toBe(false);
+  it('rejects upper case APPROVED', () => {
+    expect(DecisionSchema.safeParse('APPROVED').success).toBe(false);
   });
 
-  it('rejects REJECTED, which SCRUM-93 adds later, and typos', () => {
-    expect(DecisionSchema.safeParse('REJECTED').success).toBe(false);
-    expect(DecisionSchema.safeParse('APROVED').success).toBe(false);
+  it('rejects rejected, which SCRUM-93 adds later, and typos', () => {
+    expect(DecisionSchema.safeParse('rejected').success).toBe(false);
+    expect(DecisionSchema.safeParse('aproved').success).toBe(false);
   });
 });

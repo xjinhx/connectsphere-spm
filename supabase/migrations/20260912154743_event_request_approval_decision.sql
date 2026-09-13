@@ -6,7 +6,7 @@
 -- AC1: "its status changes to Approved and the decision, decision maker and
 -- timestamp are recorded". The column names are deliberately generic because
 -- SCRUM-93 (reject) records the same three facts; that story widens the
--- decision check to include 'REJECTED'.
+-- decision check to include 'rejected'.
 --
 -- Approval commits ConnectSphere to nothing (customer clarification #80), so
 -- there is no venue, equipment or registration state here.
@@ -18,10 +18,10 @@ alter table event_request
   add column decided_by uuid references auth.users (id) on delete restrict,
   add column decided_at timestamptz;
 
--- Only the outcome this story owns. SCRUM-93 extends this to 'REJECTED'.
+-- Only the outcome this story owns. SCRUM-93 extends this to 'rejected'.
 alter table event_request
   add constraint event_request_decision_valid
-  check (decision in ('APPROVED'));
+  check (decision in ('approved'));
 
 -- One fact in three columns: all recorded together, or none of them.
 alter table event_request
@@ -34,19 +34,19 @@ alter table event_request
 -- decision.
 alter table event_request
   add constraint event_request_approved_has_decision
-  check (status <> 'APPROVED' or decision is not null);
+  check (status <> 'approved' or decision is not null);
 
--- SCRUM-82's constraint listed the statuses exhaustively: DRAFT with no
--- submission time, or SUBMITTED with one. APPROVED matched neither branch, so
--- approving would have been rejected by the database.
+-- SCRUM-82's constraint listed the statuses exhaustively: draft with no
+-- submission time, or submitted with one. An approved request matched neither
+-- branch, so approving would have been rejected by the database.
 --
 -- Restated as the rule underneath it: a request has no submission time exactly
 -- when it is a draft. Identical behaviour today, and no later story that adds a
--- status (SCRUM-93's REJECTED, Event Status Management's CONFIRMED) has to edit
+-- status (SCRUM-93's rejected, Event Status Management's confirmed) has to edit
 -- this constraint again.
 alter table event_request
   drop constraint event_request_submitted_at_matches_status;
 
 alter table event_request
   add constraint event_request_submitted_at_matches_status
-  check ((status = 'DRAFT') = (submitted_at is null));
+  check ((status = 'draft') = (submitted_at is null));

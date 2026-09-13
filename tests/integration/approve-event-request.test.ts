@@ -9,16 +9,19 @@ import { approveEventRequest } from '@/domain/review/service';
  *
  * Runs against the local Supabase stack (`npm run db:start` + `npm run db:reset`),
  * which is also what CI's "Migrations and integration tests" job does. A real
- * database is the point: the rule that only a SUBMITTED request can be approved
+ * database is the point: the rule that only a submitted request can be approved
  * lives inside the UPDATE statement, so no test without Postgres can prove it.
+ *
+ * The test itself uses the admin client to arrange rows - that is test setup,
+ * not the code under test, which never holds a client (docs/architecture.md).
  *
  * Not covered here - verify manually or in a later sprint:
  *   US-7.3-TC01, the "no venue, equipment or registration record is
  *        auto-created" half. Those tables do not exist this sprint, so the
  *        assertion can only pass trivially. Flag for re-execution once Venue
  *        Booking, Equipment and Attendee Registration land.
- *   AC1 end to end through the HTTP route - blocked on Authentication
- *        (getCurrentActor throws), which is why the approver's id is passed in.
+ *   AC1 through the HTTP route - the middleware requires a signed-in session,
+ *        so that path is covered by the manual test rather than here.
  */
 
 const supabase = createAdminClient();
@@ -29,7 +32,7 @@ const CLIENT_ORGANISATION_ID = '22222222-2222-2222-2222-222222222222';
 let coordinatorId: string;
 const createdRequestIds: string[] = [];
 
-async function createEventRequest(status: 'DRAFT' | 'SUBMITTED'): Promise<string> {
+async function createEventRequest(status: 'draft' | 'submitted'): Promise<string> {
   const { data, error } = await supabase
     .from('event_request')
     .insert({
@@ -44,12 +47,12 @@ async function createEventRequest(status: 'DRAFT' | 'SUBMITTED'): Promise<string
   const id = data.id as string;
   createdRequestIds.push(id);
 
-  if (status === 'SUBMITTED') {
+  if (status === 'submitted') {
     // Through the same path the app uses, so SCRUM-82's trigger stamps
     // submitted_at and the row satisfies its constraints.
     const { error: submitError } = await supabase
       .from('event_request')
-      .update({ status: 'SUBMITTED' })
+      .update({ status: 'submitted' })
       .eq('id', id);
     if (submitError) throw new Error(`could not submit test request: ${submitError.message}`);
   }
@@ -91,19 +94,19 @@ afterAll(async () => {
 describe('approveEventRequest', () => {
   // US-7.3-TC01 (AC1)
   it('approves a submitted request and records the decision, decision maker and timestamp', async () => {
-    const id = await createEventRequest('SUBMITTED');
+    const id = await createEventRequest('submitted');
 
     const outcome = await approveEventRequest(id, { actorId: coordinatorId });
 
-    expect(outcome.status).toBe('APPROVED');
-    expect(outcome.decision).toBe('APPROVED');
+    expect(outcome.status).toBe('approved');
+    expect(outcome.decision).toBe('approved');
     expect(outcome.decidedBy).toBe(coordinatorId);
     expect(outcome.decidedAt).toBeTruthy();
 
     // And it is actually on the row, not just in the returned object.
     const row = await readRow(id);
-    expect(row.status).toBe('APPROVED');
-    expect(row.decision).toBe('APPROVED');
+    expect(row.status).toBe('approved');
+    expect(row.decision).toBe('approved');
     expect(row.decided_by).toBe(coordinatorId);
     expect(row.decided_at).toBeTruthy();
     // AC1 changes the decision, not the submission: the request was still
@@ -113,7 +116,7 @@ describe('approveEventRequest', () => {
 
   // Negative coverage: approving from an invalid starting status.
   it('refuses to approve a request that is already approved', async () => {
-    const id = await createEventRequest('SUBMITTED');
+    const id = await createEventRequest('submitted');
     await approveEventRequest(id, { actorId: coordinatorId });
 
     await expect(approveEventRequest(id, { actorId: coordinatorId })).rejects.toMatchObject({
@@ -122,14 +125,14 @@ describe('approveEventRequest', () => {
   });
 
   it('refuses to approve a draft, which has not been submitted for review', async () => {
-    const id = await createEventRequest('DRAFT');
+    const id = await createEventRequest('draft');
 
     await expect(approveEventRequest(id, { actorId: coordinatorId })).rejects.toMatchObject({
       code: 'INVALID_TRANSITION',
     });
 
     const row = await readRow(id);
-    expect(row.status).toBe('DRAFT');
+    expect(row.status).toBe('draft');
     expect(row.decision).toBeNull();
   });
 
@@ -147,14 +150,14 @@ describe('approveEventRequest', () => {
   });
 
   it('refuses an approval with no valid approver', async () => {
-    const id = await createEventRequest('SUBMITTED');
+    const id = await createEventRequest('submitted');
 
     await expect(approveEventRequest(id, { actorId: 'coordinator-1' })).rejects.toMatchObject({
       code: 'VALIDATION_ERROR',
     });
 
     const row = await readRow(id);
-    expect(row.status).toBe('SUBMITTED');
+    expect(row.status).toBe('submitted');
     expect(row.decision).toBeNull();
   });
 });
