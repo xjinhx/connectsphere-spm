@@ -1,6 +1,9 @@
 import { isRole, type Role } from '@/domain/identity/roles';
 import { UnauthenticatedError } from '@/domain/shared/errors';
+import { createAdminClient } from '@/lib/supabase/admin';
 import { createSessionClient } from '@/lib/supabase/server';
+import { fetchProfileWithOrganisation } from '@/lib/supabase/profiles';
+import { fetchClientOrganisation } from '@/lib/supabase/clientOrganisations';
 
 /**
  * Who is making the current request.
@@ -10,15 +13,17 @@ import { createSessionClient } from '@/lib/supabase/server';
  * ("Users can view own profile") is what lets this read the row - nothing
  * here needs the service role.
  *
- * clientOrganisation is null for everyone until the Client Organisations
- * story lands: there is no table or column to read it from yet. SCRUM-76 AC1
- * (organisation pre-filled on the form) is blocked on that, and nothing else.
+ * SCRUM-204 — clientOrganisation is read from profiles.client_organisation_id
+ * (set via /api/accounts/[id]/organisation), then resolved to a name with the
+ * admin client: client_organisations has deny-by-default RLS with no
+ * authenticated-read policy (see 20260913000000_create_client_organisations),
+ * so the session client alone cannot follow the join. Still null for internal
+ * staff, and for an Event Organiser not yet linked to one (AC2).
  */
 export interface Actor {
   userId: string;
   fullName: string;
   roles: Role[];
-  /** Null for internal staff - and, for now, for everyone (see above). */
   clientOrganisation: { id: string; name: string } | null;
 }
 
@@ -30,17 +35,19 @@ export async function getCurrentActor(): Promise<Actor> {
   } = await supabase.auth.getUser();
   if (!user) throw new UnauthenticatedError();
 
-  const { data: profile } = await supabase
-    .from('profiles')
-    .select('full_name, roles')
-    .eq('id', user.id)
-    .maybeSingle();
+  const { data: profile } = await fetchProfileWithOrganisation(supabase, user.id);
+
+  let clientOrganisation: { id: string; name: string } | null = null;
+  if (profile?.client_organisation_id) {
+    const { data: org } = await fetchClientOrganisation(createAdminClient(), profile.client_organisation_id);
+    clientOrganisation = org ? { id: org.id, name: org.name } : null;
+  }
 
   return {
     userId: user.id,
     // `pnpm seed:users` does not set full_name, so fall back to the email.
     fullName: profile?.full_name ?? user.email ?? 'Unknown user',
     roles: ((profile?.roles as unknown[] | null) ?? []).filter(isRole),
-    clientOrganisation: null,
+    clientOrganisation,
   };
 }
