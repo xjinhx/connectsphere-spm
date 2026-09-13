@@ -1,5 +1,9 @@
 import { describe, it, expect } from 'vitest';
-import { ApproveInputSchema, DecisionSchema } from '@/domain/review/schema';
+import {
+  ApproveInputSchema,
+  DecisionSchema,
+  RequestClarificationInputSchema,
+} from '@/domain/review/schema';
 
 describe('ApproveInputSchema', () => {
   it('accepts a valid actor id', () => {
@@ -32,5 +36,36 @@ describe('DecisionSchema', () => {
   it('rejects rejected, which SCRUM-93 adds later, and typos', () => {
     expect(DecisionSchema.safeParse('rejected').success).toBe(false);
     expect(DecisionSchema.safeParse('aproved').success).toBe(false);
+  });
+});
+
+// SCRUM-90 AC3: "Given I attempt to request clarification without entering a
+// note, when I submit, then the action is blocked and I am told a note is
+// required."
+describe('RequestClarificationInputSchema', () => {
+  it('accepts a note describing what is needed', () => {
+    const result = RequestClarificationInputSchema.safeParse({
+      note: 'Please confirm the expected AV setup',
+    });
+    expect(result.success).toBe(true);
+  });
+
+  it('rejects a missing note', () => {
+    expect(RequestClarificationInputSchema.safeParse({}).success).toBe(false);
+  });
+
+  it('rejects an empty note', () => {
+    expect(RequestClarificationInputSchema.safeParse({ note: '' }).success).toBe(false);
+  });
+
+  // AC3 says "without entering a note" — whitespace is not an entry, so a
+  // caller cannot satisfy the rule by sending spaces instead of nothing.
+  it('rejects a note that is only whitespace', () => {
+    expect(RequestClarificationInputSchema.safeParse({ note: '   ' }).success).toBe(false);
+  });
+
+  it('trims surrounding whitespace from a real note', () => {
+    const result = RequestClarificationInputSchema.safeParse({ note: '  Needs more detail  ' });
+    expect(result.success && result.data.note).toBe('Needs more detail');
   });
 });

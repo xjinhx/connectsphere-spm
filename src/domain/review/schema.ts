@@ -20,3 +20,22 @@ export type ApproveInput = z.infer<typeof ApproveInputSchema>;
 // before any query runs. Same reasoning as UUID_PATTERN in
 // domain/event-request/service.ts.
 export const EventRequestIdSchema = z.string().uuid();
+
+// ---------------------------------------------------------------------------
+// SCRUM-90 — Request clarification from the Event Organiser
+// ---------------------------------------------------------------------------
+
+/**
+ * AC3 — "Given I attempt to request clarification without entering a note,
+ * when I submit, then the action is blocked and I am told a note is
+ * required." Trimmed before the length check, so a note of only whitespace is
+ * refused the same as an empty one — a caller cannot satisfy "a note" by
+ * sending spaces.
+ */
+export const RequestClarificationInputSchema = z.object({
+  note: z
+    .string({ required_error: 'A note describing what is needed is required' })
+    .trim()
+    .min(1, 'A note describing what is needed is required'),
+});
+export type RequestClarificationInput = z.infer<typeof RequestClarificationInputSchema>;

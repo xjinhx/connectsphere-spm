@@ -24,7 +24,9 @@ const COLUMNS =
   // SCRUM-92
   'decision, decided_by, decided_at, ' +
   // SCRUM-94
-  'coordinator_id, assigned_by, assigned_at';
+  'coordinator_id, assigned_by, assigned_at, ' +
+  // SCRUM-90
+  'clarification_note, clarification_requested_by, clarification_requested_at';
 
 export interface ReferenceRow {
   id: string;
@@ -80,6 +82,11 @@ export interface EventRequestRow {
   coordinator_id: string | null;
   assigned_by: string | null;
   assigned_at: string | null;
+  // SCRUM-90. All three are null together or set together
+  // (event_request_clarification_complete).
+  clarification_note: string | null;
+  clarification_requested_by: string | null;
+  clarification_requested_at: string | null;
 }
 
 export interface EventRequestWrite {
@@ -306,4 +313,36 @@ export async function listEventRequestsForCoordinator(coordinatorId: string) {
     .select(COLUMNS)
     .eq('coordinator_id', coordinatorId)
     .order('submitted_at', { ascending: true });
+}
+
+// ---------------------------------------------------------------------------
+// SCRUM-90 — Request clarification from the Event Organiser
+// ---------------------------------------------------------------------------
+
+/**
+ * AC1 — flips a submitted request to clarification_requested and records the
+ * note and who asked in the same statement. clarification_requested_at is
+ * stamped by the database (see set_clarification_requested_at), same reason
+ * as decided_at.
+ *
+ * The `status` filter is the guard, same shape as markEventRequestApproved: a
+ * request that is not submitted matches no row and comes back empty rather
+ * than silently overwriting an existing note or clarifying a draft.
+ */
+export async function markEventRequestClarificationRequested(
+  id: string,
+  note: string,
+  actorId: string,
+) {
+  return db()
+    .from('event_request')
+    .update({
+      status: 'clarification_requested',
+      clarification_note: note,
+      clarification_requested_by: actorId,
+    })
+    .eq('id', id)
+    .eq('status', 'submitted')
+    .select(COLUMNS)
+    .maybeSingle();
 }

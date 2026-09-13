@@ -305,10 +305,11 @@ export function canSubmit(
 /**
  * AC2 and AC4 — a draft stays editable; a submitted request is read-only, and
  * no edit, save or delete is offered. "Until a coordinator returns it with a
- * clarification request" is a later story, which will add a status here.
+ * clarification request" is SCRUM-90's story, which is what adds the second
+ * status here (SCRUM-90 AC2: "the request is editable again").
  */
 export function isEditable(status: EventRequestStatus): boolean {
-  return status === 'draft';
+  return status === 'draft' || status === 'clarification_requested';
 }
 
 /** AC1 — the only transition this story knows: a draft becomes submitted. */

@@ -15,6 +15,10 @@ const STATUS_CLASS: Record<EventRequestStatus, string> = {
   // or the build fails. Colour chosen to match the existing pair; SCRUM-82's
   // author owns this component and should change it if they disagree.
   approved: 'bg-green-50 text-green-700',
+  // SCRUM-90 — same reasoning: the build enforces exhaustiveness, and colour
+  // is a first guess (amber, distinct from submitted/approved) for whoever
+  // owns this component to revise.
+  clarification_requested: 'bg-amber-50 text-amber-700',
 };
 
 export function EventRequestStatusBadge({ status }: { status: EventRequestStatus }) {

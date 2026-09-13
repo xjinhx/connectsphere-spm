@@ -54,6 +54,24 @@ export const COMMITMENT_STATEMENT =
 
 
 // ---------------------------------------------------------------------------
+// SCRUM-90 — Request clarification from the Event Organiser
+// ---------------------------------------------------------------------------
+
+/**
+ * AC1 describes requesting clarification on "a submitted request", and
+ * nothing else. Clarifying a draft, or clarifying a request that is already
+ * Clarification Requested (a second note before the Organiser has responded),
+ * is not on the card and is refused — same reasoning as canBeApproved above:
+ * the rule is a readable statement here, and the database enforces the same
+ * thing inside the update itself (see markEventRequestClarificationRequested),
+ * which is what makes two coordinators requesting clarification at the same
+ * moment safe.
+ */
+export function canRequestClarification(status: EventRequestStatus): boolean {
+  return status === 'submitted';
+}
+
+// ---------------------------------------------------------------------------
 // SCRUM-88 — Review submitted requests from the queue
 // ---------------------------------------------------------------------------
 
