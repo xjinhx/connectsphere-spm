@@ -58,6 +58,9 @@ export type Database = {
           accessibility_required: boolean | null
           client_organisation_id: string | null
           created_at: string
+          decided_at: string | null
+          decided_by: string | null
+          decision: string | null
           description: string | null
           equipment_required: boolean | null
           expected_attendance: number | null
@@ -81,6 +84,9 @@ export type Database = {
           accessibility_required?: boolean | null
           client_organisation_id?: string | null
           created_at?: string
+          decided_at?: string | null
+          decided_by?: string | null
+          decision?: string | null
           description?: string | null
           equipment_required?: boolean | null
           expected_attendance?: number | null
@@ -104,6 +110,9 @@ export type Database = {
           accessibility_required?: boolean | null
           client_organisation_id?: string | null
           created_at?: string
+          decided_at?: string | null
+          decided_by?: string | null
+          decision?: string | null
           description?: string | null
           equipment_required?: boolean | null
           expected_attendance?: number | null
@@ -395,7 +404,7 @@ export type Database = {
       [_ in never]: never
     }
     Enums: {
-      event_request_status: "draft" | "submitted"
+      event_request_status: "draft" | "submitted" | "approved"
     }
     CompositeTypes: {
       [_ in never]: never
@@ -526,8 +535,7 @@ export const Constants = {
   },
   public: {
     Enums: {
-      event_request_status: ["draft", "submitted"],
+      event_request_status: ["draft", "submitted", "approved"],
     },
   },
 } as const
-

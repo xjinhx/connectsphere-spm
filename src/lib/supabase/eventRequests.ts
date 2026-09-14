@@ -1,4 +1,7 @@
 import { SupabaseClient } from '@supabase/supabase-js';
+import type { EventRequestStatus } from '@/domain/event-request/schema';
+import type { Decision } from '@/domain/review/schema';
+import { createAdminClient } from './admin';
 
 /**
  * Supabase access for event requests. Thin by design: the query lives here, the
@@ -17,11 +20,19 @@ const COLUMNS =
   'equipment_required, technical_support_notes, ' +
   'event_request_equipment ( position, item, quantity ), ' +
   // SCRUM-81
-  'registration_required';
+  'registration_required, ' +
+  // SCRUM-92
+  'decision, decided_by, decided_at';
 
 export interface ReferenceRow {
   id: string;
   name: string;
+}
+
+export interface EquipmentRow {
+  position: number;
+  item: string;
+  quantity: number;
 }
 
 export interface EventRequestRow {
@@ -37,8 +48,10 @@ export interface EventRequestRow {
   // completeness once those tickets start filling them in.
   time_slots: string[] | null;
   expected_attendance: number | null;
-  // SCRUM-82
-  status: 'draft' | 'submitted';
+  // SCRUM-82. Uses the shared type rather than a literal union, so adding a
+  // status in one place cannot leave this row shape claiming the value is
+  // impossible (SCRUM-92 added approved).
+  status: EventRequestStatus;
   submitted_at: string | null;
   created_at: string;
   updated_at: string;
@@ -55,12 +68,11 @@ export interface EventRequestRow {
   event_request_equipment: EquipmentRow[];
   // SCRUM-81
   registration_required: boolean | null;
-}
-
-export interface EquipmentRow {
-  position: number;
-  item: string;
-  quantity: number;
+  // SCRUM-92. All three are null together or set together
+  // (event_request_decision_complete).
+  decision: Decision | null;
+  decided_by: string | null;
+  decided_at: string | null;
 }
 
 export interface EventRequestWrite {
@@ -185,6 +197,44 @@ export async function markEventRequestSubmitted(supabase: SupabaseClient, id: st
     .update({ status: 'submitted' })
     .eq('id', id)
     .eq('status', 'draft')
+    .select(COLUMNS)
+    .maybeSingle();
+}
+
+// ---------------------------------------------------------------------------
+// SCRUM-92 — Approve a request so planning can proceed
+// ---------------------------------------------------------------------------
+// Per docs/architecture.md (rule 3), both the Supabase client and the query
+// live here, so domain/review/service.ts never holds a client. The SCRUM-82
+// functions above predate that wording and still take the client as a
+// parameter; they are left as they are rather than refactored from this story.
+
+/** createAdminClient memoises its client, so calling it per query is free. */
+function db(): SupabaseClient {
+  return createAdminClient();
+}
+
+/** AC1 and AC2 — one request by id, including its decision columns. */
+export async function fetchEventRequestById(id: string) {
+  return db().from('event_request').select(COLUMNS).eq('id', id).maybeSingle();
+}
+
+/**
+ * AC1 — flips a submitted request to approved and records the decision and who
+ * made it in the same statement. decided_at is stamped by the database (see
+ * set_decided_at), so the caller cannot choose the time.
+ *
+ * The `status` filter is the guard: a request that is not submitted matches no
+ * row and comes back empty, which is also what stops two coordinators
+ * approving the same request at once. Same shape as
+ * markEventRequestSubmitted above.
+ */
+export async function markEventRequestApproved(id: string, actorId: string) {
+  return db()
+    .from('event_request')
+    .update({ status: 'approved', decision: 'approved', decided_by: actorId })
+    .eq('id', id)
+    .eq('status', 'submitted')
     .select(COLUMNS)
     .maybeSingle();
 }
