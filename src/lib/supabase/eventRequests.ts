@@ -22,7 +22,9 @@ const COLUMNS =
   // SCRUM-81
   'registration_required, ' +
   // SCRUM-92
-  'decision, decided_by, decided_at';
+  'decision, decided_by, decided_at, ' +
+  // SCRUM-94
+  'coordinator_id, assigned_by, assigned_at';
 
 export interface ReferenceRow {
   id: string;
@@ -73,6 +75,11 @@ export interface EventRequestRow {
   decision: Decision | null;
   decided_by: string | null;
   decided_at: string | null;
+  // SCRUM-94. All three are null together or set together
+  // (event_request_assignment_complete).
+  coordinator_id: string | null;
+  assigned_by: string | null;
+  assigned_at: string | null;
 }
 
 export interface EventRequestWrite {
@@ -258,5 +265,45 @@ export async function listSubmittedEventRequests(supabase: SupabaseClient) {
     .from('event_request')
     .select(COLUMNS)
     .eq('status', 'submitted')
+    .order('submitted_at', { ascending: true });
+}
+// ---------------------------------------------------------------------------
+// SCRUM-94 — Assign an Event Coordinator to a submitted event
+// ---------------------------------------------------------------------------
+// Same arrangement as SCRUM-92 above: the client and the query both live here
+// so domain/assignment/service.ts never holds one (docs/architecture.md rule 3).
+
+/**
+ * AC1 — puts a coordinator on a submitted event and records who assigned them
+ * in the same statement. assigned_at is stamped by the database (see
+ * set_assigned_at), so the caller cannot choose the time.
+ *
+ * The two filters are the guard, and they are what makes AC5 true: an event
+ * that is no longer submitted, or that someone else has already been put on,
+ * matches no row and comes back empty. Two managers assigning at the same
+ * moment therefore produce exactly one assignment, decided by Postgres rather
+ * than by whichever request happened to read first.
+ */
+export async function assignCoordinatorToEventRequest(
+  id: string,
+  coordinatorId: string,
+  assignedBy: string,
+) {
+  return db()
+    .from('event_request')
+    .update({ coordinator_id: coordinatorId, assigned_by: assignedBy })
+    .eq('id', id)
+    .eq('status', 'submitted')
+    .is('coordinator_id', null)
+    .select(COLUMNS)
+    .maybeSingle();
+}
+
+/** AC3 — the events one coordinator owns, oldest submission first. */
+export async function listEventRequestsForCoordinator(coordinatorId: string) {
+  return db()
+    .from('event_request')
+    .select(COLUMNS)
+    .eq('coordinator_id', coordinatorId)
     .order('submitted_at', { ascending: true });
 }
