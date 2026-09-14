@@ -56,7 +56,10 @@ export type Database = {
         Row: {
           accessibility_notes: string | null
           accessibility_required: boolean | null
+          assigned_at: string | null
+          assigned_by: string | null
           client_organisation_id: string | null
+          coordinator_id: string | null
           created_at: string
           decided_at: string | null
           decided_by: string | null
@@ -82,7 +85,10 @@ export type Database = {
         Insert: {
           accessibility_notes?: string | null
           accessibility_required?: boolean | null
+          assigned_at?: string | null
+          assigned_by?: string | null
           client_organisation_id?: string | null
+          coordinator_id?: string | null
           created_at?: string
           decided_at?: string | null
           decided_by?: string | null
@@ -108,7 +114,10 @@ export type Database = {
         Update: {
           accessibility_notes?: string | null
           accessibility_required?: boolean | null
+          assigned_at?: string | null
+          assigned_by?: string | null
           client_organisation_id?: string | null
+          coordinator_id?: string | null
           created_at?: string
           decided_at?: string | null
           decided_by?: string | null
@@ -539,3 +548,4 @@ export const Constants = {
     },
   },
 } as const
+
