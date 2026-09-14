@@ -1,5 +1,5 @@
 import { describe, it, expect } from 'vitest';
-import { canBeApproved } from '@/domain/review/policy';
+import { canBeApproved, isAwaitingReview } from '@/domain/review/policy';
 
 /**
  * SCRUM-92 — Approve a request so planning can proceed (US-7.3).
@@ -28,5 +28,20 @@ describe('canBeApproved', () => {
   // twice is refused rather than silently re-stamping the first decision.
   it('refuses a request that is already approved', () => {
     expect(canBeApproved('approved')).toBe(false);
+  });
+});
+
+describe('isAwaitingReview', () => {
+  // AC1/AC3: "requests assigned to me awaiting review"
+  it('treats a submitted request as awaiting review', () => {
+    expect(isAwaitingReview('submitted')).toBe(true);
+  });
+
+  it('does not treat a draft as awaiting review — it has not been submitted', () => {
+    expect(isAwaitingReview('draft')).toBe(false);
+  });
+
+  it('does not treat an approved request as awaiting review — it has already been decided', () => {
+    expect(isAwaitingReview('approved')).toBe(false);
   });
 });

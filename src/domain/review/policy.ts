@@ -49,3 +49,24 @@ export const NO_COMMITMENTS: Readonly<Commitments> = Object.freeze({
 /** AC2's statement, worded as the Jira card words it. */
 export const COMMITMENT_STATEMENT =
   'No venue, equipment or registration arrangement is yet committed.';
+
+
+// ---------------------------------------------------------------------------
+// SCRUM-88 — Review submitted requests from the queue
+// ---------------------------------------------------------------------------
+
+/**
+ * AC1/AC3 — a request is awaiting review for as long as it is submitted and
+ * nothing has been decided yet. Once a decision is recorded (e.g. approved
+ * via SCRUM-92), it should no longer appear as awaiting review.
+ *
+ * TODO: AC1 also says "requests assigned to me" — filtering the queue by
+ * which coordinator it's assigned to is not implemented here, since there is
+ * no coordinator_id column yet (SCRUM-94, Coordinator Assignment, has not
+ * been built). Whoever builds the real queue page/route needs to add that
+ * filter once the assignment data exists; this function only covers the
+ * "awaiting review" half of the rule.
+ */
+export function isAwaitingReview(status: EventRequestStatus): boolean {
+  return status === 'submitted';
+}
