@@ -52,7 +52,6 @@ describe('SCRUM-78 — State expected attendance', () => {
     });
     expect(result.expectedAttendance).toBe(80);
   });
-});
 
   // Regression test: expectedAttendance was silently dropped by the
   // eventRequestSaveSchema (the "Save request" / create path) even though
@@ -82,3 +81,19 @@ describe('SCRUM-78 — State expected attendance', () => {
     });
     expect(result.success).toBe(true);
   });
+
+  // Added after review: eventRequestSaveSchema now uses optionalFromBlank,
+  // matching the draft schema's tolerance for an explicit null, not just an
+  // omitted value.
+  it('treats an explicit null the same as omitted — still optional to save', () => {
+    const result = eventRequestSaveSchema.safeParse({
+      name: 'Annual Tech Summit',
+      purpose: 'Networking',
+      description: 'Yearly gathering',
+      proposedDate: '2026-11-15',
+      timeSlots: ['pm'],
+      expectedAttendance: null,
+    });
+    expect(result.success).toBe(true);
+  });
+});

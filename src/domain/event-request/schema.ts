@@ -32,6 +32,12 @@ export type EventRequestCore = z.infer<typeof eventRequestCoreSchema>;
 // isProposedDateSubmittable() from policy.ts.
 //
 // timeSlots (77) and expectedAttendance (78) are left to their own tickets.
+
+/** An untouched form input arrives as ''. That means "not entered", not "invalid". */
+function optionalFromBlank<T extends z.ZodTypeAny>(schema: T) {
+  return z.preprocess((value) => (value === '' || value === null ? undefined : value), schema.optional());
+}
+
 export const eventRequestBasicDetailsSchema = eventRequestCoreSchema.pick({
   name: true,
   purpose: true,
@@ -79,13 +85,17 @@ export const timeSlotsSchema = z.array(TimeSlotEnum).transform(normaliseTimeSlot
 
 /** The whole form as it is saved: SCRUM-76's basic details plus SCRUM-77's slots. */
 export const eventRequestSaveSchema = eventRequestBasicDetailsSchema.extend({
-  timeSlots: timeSlotsSchema.default([]),
+    timeSlots: timeSlotsSchema.default([]),
   // SCRUM-78. Optional here, same as timeSlots: AC3's date rule already
   // establishes that "Save request" doesn't enforce the mandatory set - only
-  // submission does (incompleteFields, SCRUM-82). A bare number, not the
-  // stricter schema.shape.expectedAttendance validation from the core
-  // schema, since a blank/omitted value must stay valid to save.
-  expectedAttendance: eventRequestCoreSchema.shape.expectedAttendance.optional(),
+  // submission does (incompleteFields, SCRUM-82). Reuses the core schema's
+  // stricter rule (whole number, greater than 0) via
+  // schema.shape.expectedAttendance, so a real value is still validated the
+  // same way everywhere; optionalFromBlank additionally lets a blank or
+  // explicit null through as "not entered", matching the draft schema's
+  // handling of the same situation rather than treating save and draft
+  // differently for no reason.
+  expectedAttendance: optionalFromBlank(eventRequestCoreSchema.shape.expectedAttendance),
 });
 
 export type EventRequestSaveInput = z.infer<typeof eventRequestSaveSchema>;
@@ -132,11 +142,6 @@ export const EVENT_REQUEST_STATUS_LABELS: Record<EventRequestStatus, string> = {
 // actually entered" - is why each field reuses its own rule from
 // eventRequestCoreSchema: an attendance of -5 is still refused on a draft, it
 // is only a *missing* attendance that is tolerated.
-
-/** An untouched form input arrives as ''. That means "not entered", not "invalid". */
-function optionalFromBlank<T extends z.ZodTypeAny>(schema: T) {
-  return z.preprocess((value) => (value === '' || value === null ? undefined : value), schema.optional());
-}
 
 export const eventRequestDraftSchema = z.object({
   name: eventRequestCoreSchema.shape.name,
