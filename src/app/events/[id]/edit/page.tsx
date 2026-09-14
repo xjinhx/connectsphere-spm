@@ -3,6 +3,7 @@ import { EventRequestForm } from '@/components/event-request/EventRequestForm';
 import {
   getEventRequestDraftForEditing,
   getNewEventRequestContext,
+  getVenueRequirementOptions,
 } from '@/domain/event-request/service';
 import { todayInSingapore } from '@/domain/shared/dates';
 import type { TimeSlot } from '@/domain/event-request/schema';
@@ -27,7 +28,10 @@ export default async function EditEventRequestPage({
 }) {
   const { id } = await params;
   const draft = await getEventRequestDraftForEditing(id);
-  const { clientOrganisation } = await getNewEventRequestContext();
+  const [{ clientOrganisation }, options] = await Promise.all([
+    getNewEventRequestContext(),
+    getVenueRequirementOptions(),
+  ]);
 
   return (
     <main className="mx-auto max-w-2xl px-4 py-8">
@@ -41,6 +45,7 @@ export default async function EditEventRequestPage({
       <EventRequestForm
         clientOrganisation={clientOrganisation}
         today={todayInSingapore()}
+        options={options}
         requestId={draft.id}
         initial={{
           name: draft.name,
@@ -51,6 +56,24 @@ export default async function EditEventRequestPage({
           timeSlots: (draft.timeSlots ?? []) as TimeSlot[],
           expectedAttendance:
             draft.expectedAttendance === null ? '' : String(draft.expectedAttendance),
+          // SCRUM-79
+          roomLayout: draft.roomLayout ?? '',
+          accessibilityRequired:
+            draft.accessibilityRequired === null ? '' : draft.accessibilityRequired ? 'yes' : 'no',
+          accessibilityFeatureIds: draft.accessibilityFeatures.map((feature) => feature.id),
+          accessibilityNotes: draft.accessibilityNotes ?? '',
+          preferredLocationId: draft.preferredLocation?.id ?? '',
+          // SCRUM-80
+          equipmentRequired:
+            draft.equipmentRequired === null ? '' : draft.equipmentRequired ? 'yes' : 'no',
+          equipmentItems: draft.equipmentItems.map((entry) => ({
+            item: entry.item,
+            quantity: String(entry.quantity),
+          })),
+          technicalSupportNotes: draft.technicalSupportNotes ?? '',
+          // SCRUM-81
+          registrationRequired:
+            draft.registrationRequired === null ? '' : draft.registrationRequired ? 'yes' : 'no',
         }}
       />
     </main>

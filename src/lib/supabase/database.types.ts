@@ -54,63 +54,151 @@ export type Database = {
       }
       event_request: {
         Row: {
+          accessibility_notes: string | null
+          accessibility_required: boolean | null
           client_organisation_id: string | null
           created_at: string
           decided_at: string | null
           decided_by: string | null
           decision: string | null
           description: string | null
+          equipment_required: boolean | null
           expected_attendance: number | null
           id: string
           name: string
           organiser_id: string
+          preferred_location_id: string | null
           proposed_date: string | null
           purpose: string | null
           reference: string
+          registration_required: boolean | null
+          room_layout: string | null
           status: Database["public"]["Enums"]["event_request_status"]
           submitted_at: string | null
+          technical_support_notes: string | null
           time_slots: string[] | null
           updated_at: string
         }
         Insert: {
+          accessibility_notes?: string | null
+          accessibility_required?: boolean | null
           client_organisation_id?: string | null
           created_at?: string
           decided_at?: string | null
           decided_by?: string | null
           decision?: string | null
           description?: string | null
+          equipment_required?: boolean | null
           expected_attendance?: number | null
           id?: string
           name: string
           organiser_id: string
+          preferred_location_id?: string | null
           proposed_date?: string | null
           purpose?: string | null
           reference?: string
+          registration_required?: boolean | null
+          room_layout?: string | null
           status?: Database["public"]["Enums"]["event_request_status"]
           submitted_at?: string | null
+          technical_support_notes?: string | null
           time_slots?: string[] | null
           updated_at?: string
         }
         Update: {
+          accessibility_notes?: string | null
+          accessibility_required?: boolean | null
           client_organisation_id?: string | null
           created_at?: string
           decided_at?: string | null
           decided_by?: string | null
           decision?: string | null
           description?: string | null
+          equipment_required?: boolean | null
           expected_attendance?: number | null
           id?: string
           name?: string
           organiser_id?: string
+          preferred_location_id?: string | null
           proposed_date?: string | null
           purpose?: string | null
           reference?: string
+          registration_required?: boolean | null
+          room_layout?: string | null
           status?: Database["public"]["Enums"]["event_request_status"]
           submitted_at?: string | null
+          technical_support_notes?: string | null
           time_slots?: string[] | null
           updated_at?: string
         }
-        Relationships: []
+        Relationships: [
+          {
+            foreignKeyName: "event_request_preferred_location_id_fkey"
+            columns: ["preferred_location_id"]
+            isOneToOne: false
+            referencedRelation: "locations"
+            referencedColumns: ["id"]
+          },
+        ]
+      }
+      event_request_accessibility_features: {
+        Row: {
+          accessibility_feature_id: string
+          event_request_id: string
+        }
+        Insert: {
+          accessibility_feature_id: string
+          event_request_id: string
+        }
+        Update: {
+          accessibility_feature_id?: string
+          event_request_id?: string
+        }
+        Relationships: [
+          {
+            foreignKeyName: "event_request_accessibility_featu_accessibility_feature_id_fkey"
+            columns: ["accessibility_feature_id"]
+            isOneToOne: false
+            referencedRelation: "accessibility_features"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "event_request_accessibility_features_event_request_id_fkey"
+            columns: ["event_request_id"]
+            isOneToOne: false
+            referencedRelation: "event_request"
+            referencedColumns: ["id"]
+          },
+        ]
+      }
+      event_request_equipment: {
+        Row: {
+          event_request_id: string
+          item: string
+          position: number
+          quantity: number
+        }
+        Insert: {
+          event_request_id: string
+          item: string
+          position: number
+          quantity: number
+        }
+        Update: {
+          event_request_id?: string
+          item?: string
+          position?: number
+          quantity?: number
+        }
+        Relationships: [
+          {
+            foreignKeyName: "event_request_equipment_event_request_id_fkey"
+            columns: ["event_request_id"]
+            isOneToOne: false
+            referencedRelation: "event_request"
+            referencedColumns: ["id"]
+          },
+        ]
       }
       facilities: {
         Row: {
@@ -451,4 +539,3 @@ export const Constants = {
     },
   },
 } as const
-

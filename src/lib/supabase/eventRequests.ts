@@ -11,8 +11,29 @@ import { createAdminClient } from './admin';
 const COLUMNS =
   'id, reference, organiser_id, client_organisation_id, name, purpose, description, proposed_date, ' +
   'time_slots, expected_attendance, status, submitted_at, created_at, updated_at, ' +
+  // SCRUM-79. The chosen accessibility features come back nested through the
+  // link table, the same way a venue's do in lib/supabase/venues.ts.
+  'room_layout, accessibility_required, accessibility_notes, ' +
+  'event_request_accessibility_features ( accessibility_features ( id, name ) ), ' +
+  'preferred_location:locations ( id, name ), ' +
+  // SCRUM-80
+  'equipment_required, technical_support_notes, ' +
+  'event_request_equipment ( position, item, quantity ), ' +
+  // SCRUM-81
+  'registration_required, ' +
   // SCRUM-92
   'decision, decided_by, decided_at';
+
+export interface ReferenceRow {
+  id: string;
+  name: string;
+}
+
+export interface EquipmentRow {
+  position: number;
+  item: string;
+  quantity: number;
+}
 
 export interface EventRequestRow {
   id: string;
@@ -34,6 +55,19 @@ export interface EventRequestRow {
   submitted_at: string | null;
   created_at: string;
   updated_at: string;
+  // SCRUM-79. The check constraint guarantees only the seven catalogue layouts.
+  room_layout: string | null;
+  accessibility_required: boolean | null;
+  accessibility_notes: string | null;
+  event_request_accessibility_features: { accessibility_features: ReferenceRow | null }[];
+  /** Null is "no preference" (AC4). */
+  preferred_location: ReferenceRow | null;
+  // SCRUM-80
+  equipment_required: boolean | null;
+  technical_support_notes: string | null;
+  event_request_equipment: EquipmentRow[];
+  // SCRUM-81
+  registration_required: boolean | null;
   // SCRUM-92. All three are null together or set together
   // (event_request_decision_complete).
   decision: Decision | null;
@@ -53,6 +87,18 @@ export interface EventRequestWrite {
   // send it. See the note in domain/event-request/service.ts about the create
   // path still dropping this value.
   expected_attendance?: number | null;
+  // SCRUM-79. Null until the organiser has chosen one.
+  room_layout: string | null;
+  // SCRUM-79. Null until answered; notes only ever alongside `true`.
+  accessibility_required: boolean | null;
+  accessibility_notes: string | null;
+  // SCRUM-79. Null is "no preference"; the foreign key refuses an unknown id.
+  preferred_location_id: string | null;
+  // SCRUM-80. Null until answered; notes are independent of the answer (AC2).
+  equipment_required: boolean | null;
+  technical_support_notes: string | null;
+  // SCRUM-81. Null until answered. Written on every save, so unmarking clears it (AC3).
+  registration_required: boolean | null;
 }
 
 export async function insertEventRequest(
@@ -72,6 +118,67 @@ export async function updateEventRequest(
   values: EventRequestWrite,
 ) {
   return supabase.from('event_request').update(values).eq('id', id).select(COLUMNS).single();
+}
+
+// ---------------------------------------------------------------------------
+// SCRUM-79 — State venue and accessibility requirements
+// ---------------------------------------------------------------------------
+
+/**
+ * AC2 — the chosen features, one link row each. The list sent replaces the
+ * whole list: the service deletes first, then inserts. The foreign key is what
+ * refuses an id that is not on the maintained list.
+ */
+export async function insertEventRequestAccessibilityFeatures(
+  supabase: SupabaseClient,
+  eventRequestId: string,
+  featureIds: string[],
+) {
+  if (featureIds.length === 0) return { error: null };
+  return supabase.from('event_request_accessibility_features').insert(
+    featureIds.map((accessibility_feature_id) => ({
+      event_request_id: eventRequestId,
+      accessibility_feature_id,
+    })),
+  );
+}
+
+export async function deleteEventRequestAccessibilityFeatures(
+  supabase: SupabaseClient,
+  eventRequestId: string,
+) {
+  return supabase
+    .from('event_request_accessibility_features')
+    .delete()
+    .eq('event_request_id', eventRequestId);
+}
+
+// ---------------------------------------------------------------------------
+// SCRUM-80 — State equipment and technical support requirements
+// ---------------------------------------------------------------------------
+
+/**
+ * AC1 — one row per item, in the order listed. Like the accessibility links,
+ * the list sent replaces the whole list: delete, then insert.
+ */
+export async function insertEventRequestEquipment(
+  supabase: SupabaseClient,
+  eventRequestId: string,
+  items: { item: string; quantity: number }[],
+) {
+  if (items.length === 0) return { error: null };
+  return supabase.from('event_request_equipment').insert(
+    items.map((entry, position) => ({
+      event_request_id: eventRequestId,
+      position,
+      item: entry.item,
+      quantity: entry.quantity,
+    })),
+  );
+}
+
+export async function deleteEventRequestEquipment(supabase: SupabaseClient, eventRequestId: string) {
+  return supabase.from('event_request_equipment').delete().eq('event_request_id', eventRequestId);
 }
 
 // ---------------------------------------------------------------------------
