@@ -42,6 +42,7 @@ function optionalFromBlank<T extends z.ZodTypeAny>(schema: T) {
 // isProposedDateSubmittable() from policy.ts.
 //
 // timeSlots (77) and expectedAttendance (78) are left to their own tickets.
+
 export const eventRequestBasicDetailsSchema = eventRequestCoreSchema.pick({
   name: true,
   purpose: true,
@@ -196,10 +197,20 @@ export type VenueRequirementsInput = z.infer<typeof venueRequirementsSchema>;
 
 /**
  * The whole form as it is saved: SCRUM-76's basic details, SCRUM-77's slots,
- * and US-5.2's optional block (SCRUM-79, 80, 81).
+ * SCRUM-78's attendance, and US-5.2's optional block (SCRUM-79, 80, 81).
  */
 export const eventRequestSaveSchema = eventRequestBasicDetailsSchema.extend({
   timeSlots: timeSlotsSchema.default([]),
+  // SCRUM-78. Optional here, same as timeSlots: AC3's date rule already
+  // establishes that "Save request" doesn't enforce the mandatory set - only
+  // submission does (incompleteFields, SCRUM-82). Reuses the core schema's
+  // stricter rule (whole number, greater than 0) via
+  // schema.shape.expectedAttendance, so a real value is still validated the
+  // same way everywhere; optionalFromBlank additionally lets a blank or
+  // explicit null through as "not entered", matching the draft schema's
+  // handling of the same situation rather than treating save and draft
+  // differently for no reason.
+  expectedAttendance: optionalFromBlank(eventRequestCoreSchema.shape.expectedAttendance),
   ...venueRequirementsSchema.shape,
 });
 
