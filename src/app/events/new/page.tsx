@@ -1,12 +1,19 @@
 import { EventRequestForm } from '@/components/event-request/EventRequestForm';
-import { getNewEventRequestContext } from '@/domain/event-request/service';
+import {
+  getNewEventRequestContext,
+  getVenueRequirementOptions,
+} from '@/domain/event-request/service';
 import { todayInSingapore } from '@/domain/shared/dates';
 
 // Depends on who is signed in, so there is nothing to prerender at build time.
 export const dynamic = 'force-dynamic';
 
 export default async function NewEventRequestPage() {
-  const { clientOrganisation } = await getNewEventRequestContext();
+  const [{ clientOrganisation }, options] = await Promise.all([
+    getNewEventRequestContext(),
+    // SCRUM-79 — the maintained lists behind the venue-requirement choices.
+    getVenueRequirementOptions(),
+  ]);
 
   return (
     <main className="mx-auto max-w-2xl px-4 py-8">
@@ -15,7 +22,11 @@ export default async function NewEventRequestPage() {
         Capture the basics now. You can save a draft and finish it later.
       </p>
 
-      <EventRequestForm clientOrganisation={clientOrganisation} today={todayInSingapore()} />
+      <EventRequestForm
+        clientOrganisation={clientOrganisation}
+        today={todayInSingapore()}
+        options={options}
+      />
     </main>
   );
 }

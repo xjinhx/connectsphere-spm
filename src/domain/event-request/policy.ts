@@ -4,6 +4,7 @@ import {
   normaliseTimeSlots,
   TIME_SLOT_LABELS,
   TIME_SLOT_ORDER,
+  type EquipmentItem,
   type EventRequestStatus,
   type MandatoryField,
   type TimeSlot,
@@ -15,6 +16,7 @@ import {
   toSingaporeISODate,
   type ISODate,
 } from '@/domain/shared/dates';
+import { ROOM_LAYOUT_LABELS, type RoomLayout } from '@/domain/venues/schema';
 
 /**
  * SCRUM-78 — State expected attendance.
@@ -83,6 +85,134 @@ export function describeTimeSlots(slots: readonly TimeSlot[] | null): string {
   return normaliseTimeSlots(slots)
     .map((slot) => TIME_SLOT_LABELS[slot])
     .join(', ');
+}
+
+// ---------------------------------------------------------------------------
+// SCRUM-79 — State venue and accessibility requirements
+// ---------------------------------------------------------------------------
+
+/** AC1 — what the request shows for its layout, in the catalogue's own words. */
+export function describeRoomLayout(layout: RoomLayout | null): string {
+  return layout ? ROOM_LAYOUT_LABELS[layout] : 'Not yet provided';
+}
+
+/** The accessibility answer as it is stored: the answer, then what it needs. */
+export interface AccessibilityRequirement {
+  /** Null is "not yet answered"; false is "none" (AC3); true is "yes" (AC2). */
+  required: boolean | null;
+  featureIds: string[];
+  notes: string | null;
+}
+
+/**
+ * AC2 and AC3 — only a "yes" carries features and notes. When the answer is
+ * "none" or not yet given, anything left over in those inputs (say, notes
+ * typed before the organiser changed their mind) is dropped rather than saved
+ * against an answer that contradicts it. The database enforces the notes half
+ * of this; the features half lives in a link table, so it is enforced here.
+ */
+export function normaliseAccessibility(input: {
+  accessibilityRequired?: boolean;
+  accessibilityFeatureIds: string[];
+  accessibilityNotes?: string;
+}): AccessibilityRequirement {
+  const required = input.accessibilityRequired ?? null;
+  if (required !== true) return { required, featureIds: [], notes: null };
+
+  const notes = input.accessibilityNotes?.trim() ?? '';
+  return {
+    required: true,
+    // A selection is a set: the same feature ticked twice is one feature.
+    featureIds: [...new Set(input.accessibilityFeatureIds)],
+    notes: notes === '' ? null : notes,
+  };
+}
+
+/** AC2/AC3 — what the request shows for accessibility: an answer, never a blank. */
+export function describeAccessibility(request: {
+  accessibilityRequired: boolean | null;
+  accessibilityFeatures: readonly { name: string }[];
+  accessibilityNotes: string | null;
+}): string {
+  if (request.accessibilityRequired === null) return 'Not yet answered';
+  if (request.accessibilityRequired === false) return 'None required';
+
+  const lines: string[] = [];
+  if (request.accessibilityFeatures.length > 0) {
+    lines.push(request.accessibilityFeatures.map((feature) => feature.name).join(', '));
+  }
+  if (request.accessibilityNotes) lines.push(request.accessibilityNotes);
+  return lines.length > 0 ? lines.join('\n') : 'Required - details not yet given';
+}
+
+/** AC4 — a blank location is recorded, and shown, as no preference. */
+export function describePreferredLocation(location: { name: string } | null): string {
+  return location ? location.name : 'No preference';
+}
+
+// ---------------------------------------------------------------------------
+// SCRUM-80 — State equipment and technical support requirements
+// ---------------------------------------------------------------------------
+
+export interface EquipmentRequirement {
+  /** Null is "not yet answered"; false is "none" (AC3); true is "yes" (AC1). */
+  required: boolean | null;
+  items: EquipmentItem[];
+}
+
+/**
+ * AC1 and AC3 — only a "yes" carries items; a "none" or an unanswered
+ * question saves with no items, whatever was left in the list. The technical
+ * support description is not part of this on purpose (AC2): it is kept
+ * whatever the equipment answer is, so it is handled by the write directly.
+ */
+export function normaliseEquipment(input: {
+  equipmentRequired?: boolean;
+  equipmentItems: EquipmentItem[];
+}): EquipmentRequirement {
+  const required = input.equipmentRequired ?? null;
+  if (required !== true) return { required, items: [] };
+  return { required: true, items: input.equipmentItems };
+}
+
+/** AC1/AC3 — what the request shows for equipment: an answer, never a blank. */
+export function describeEquipment(request: {
+  equipmentRequired: boolean | null;
+  equipmentItems: readonly EquipmentItem[];
+}): string {
+  if (request.equipmentRequired === null) return 'Not yet answered';
+  if (request.equipmentRequired === false) return 'None required';
+  if (request.equipmentItems.length === 0) return 'Required - items not yet listed';
+  return request.equipmentItems.map((entry) => `${entry.item} × ${entry.quantity}`).join('\n');
+}
+
+/** AC2 — the description stands alone, so "none given" is its only other state. */
+export function describeTechnicalSupport(notes: string | null): string {
+  return notes ?? 'Not yet provided';
+}
+
+// ---------------------------------------------------------------------------
+// SCRUM-81 — Indicate whether attendee registration is required
+// ---------------------------------------------------------------------------
+
+/**
+ * AC1/AC2 — what the request shows for registration. A stored false is an
+ * answer ("not required"), told apart from a question not yet reached.
+ */
+export function describeRegistration(required: boolean | null): string {
+  if (required === null) return 'Not yet answered';
+  return required ? 'Required' : 'Not required';
+}
+
+/**
+ * AC3 — the flag can be changed only while the request is still editable.
+ * Deliberately the same rule as isEditable(): "Draft or Clarification
+ * Requested" is the card's wording, and Clarification Requested does not exist
+ * yet (SCRUM-82 has only draft/submitted). When that status arrives it should
+ * be added to isEditable(), and this follows.
+ */
+export function canChangeRegistration(status: EventRequestStatus): boolean {
+  return isEditable(status);
 }
 
 // ---------------------------------------------------------------------------

@@ -1,7 +1,16 @@
 import Link from 'next/link';
 import { EventRequestStatusBadge } from '@/components/event-request/EventRequestStatusBadge';
 import { SubmitEventRequestButton } from '@/components/event-request/SubmitEventRequestButton';
-import { describeTimeSlots, isEditable } from '@/domain/event-request/policy';
+import {
+  describeAccessibility,
+  describeEquipment,
+  describePreferredLocation,
+  describeRegistration,
+  describeRoomLayout,
+  describeTechnicalSupport,
+  describeTimeSlots,
+  isEditable,
+} from '@/domain/event-request/policy';
 import { getEventRequest } from '@/domain/event-request/service';
 import { formatSingaporeDate, formatSingaporeDateTime } from '@/domain/shared/dates';
 
@@ -55,6 +64,27 @@ export default async function EventRequestPage({
         <Row
           label="Time slots"
           value={describeTimeSlots(request.timeSlots)}
+        />
+        {/* SCRUM-79 AC1: the layout, as saved with the request. */}
+        <Row label="Room layout" value={describeRoomLayout(request.roomLayout)} />
+        {/* SCRUM-79 AC4: a blank choice reads as no preference, not as missing. */}
+        <Row
+          label="Preferred location"
+          value={describePreferredLocation(request.preferredLocation)}
+        />
+        {/* SCRUM-79 AC2/AC3: the answer given, "None required" included. */}
+        <Row label="Accessibility" value={describeAccessibility(request)} />
+        {/* SCRUM-80 AC1/AC3: the items listed, or the explicit "none". */}
+        <Row label="Equipment" value={describeEquipment(request)} />
+        {/* SCRUM-80 AC2: shown on its own, whatever the equipment answer. */}
+        <Row
+          label="Technical support"
+          value={describeTechnicalSupport(request.technicalSupportNotes)}
+        />
+        {/* SCRUM-81 AC1/AC2: the answer as stored; "Not required" is an answer. */}
+        <Row
+          label="Attendee registration"
+          value={describeRegistration(request.registrationRequired)}
         />
         <Row label="Created" value={formatSingaporeDateTime(request.createdAt)} />
         <Row label="Last updated" value={formatSingaporeDateTime(request.updatedAt)} />
