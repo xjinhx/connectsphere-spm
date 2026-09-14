@@ -1,5 +1,5 @@
 import { ValidationError } from '@/domain/shared/errors';
-import { hasAnyRole, hasRole } from '@/domain/identity/policy';
+import { isActionPermitted } from '@/domain/identity/permissions';
 import type { Role } from '@/domain/identity/roles';
 import type { VenueLayoutInput } from './schema';
 
@@ -43,19 +43,25 @@ export function assertLayoutsWithinMaxCapacity(maxCapacity: number, layouts: Ven
 }
 
 // -----------------------------------------------------------------------------
-// Permissions (to be wired into the API routes once sign-in exists)
+// Permissions
+//
+// Both read from the team's permission matrix (SCRUM-69,
+// src/domain/identity/permissions.ts) instead of listing roles here, so there
+// is one place that decides who may do what. These wrappers exist so pages can
+// ask a readable question when deciding what to render; route handlers call
+// assertPermission with the same action names.
 // -----------------------------------------------------------------------------
 
 /** SCRUM-116, 117, 118, 120: only Venue Staff maintain the catalogue. */
 export function canManageVenues(roles: Role[]): boolean {
-  return hasRole(roles, 'venue_staff');
+  return isActionPermitted(roles, 'venue_administration');
 }
 
 /**
  * SCRUM-121: internal staff may browse the catalogue.
- * Team proposal: Event Organisers and Attendees are not given catalogue access
- * in Release 1, because the stories only name Coordinators and Venue Staff.
+ * Event Organisers and Attendees are not given catalogue access in Release 1,
+ * because the stories only name Coordinators and Venue Staff.
  */
 export function canViewVenueCatalogue(roles: Role[]): boolean {
-  return hasAnyRole(roles, ['coordinator', 'venue_staff', 'operations_manager', 'technical_support']);
+  return isActionPermitted(roles, 'venue_catalogue_view');
 }
