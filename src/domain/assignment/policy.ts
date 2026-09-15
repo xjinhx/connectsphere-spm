@@ -1,6 +1,7 @@
 import type { EventRequestStatus } from '@/domain/event-request/schema';
 import type { Role } from '@/domain/identity/roles';
 import { hasRole } from '@/domain/identity/policy';
+import { isActionPermitted } from '@/domain/identity/permissions';
 
 /**
  * SCRUM-94 — Assign an Event Coordinator to a submitted event.
@@ -46,3 +47,51 @@ export function canReceiveAssignment(roles: readonly Role[]): boolean {
  * not an oversight, and AC2's test needs something to point at.
  */
 export const COORDINATOR_WORKLOAD_LIMIT: number | null = null;
+
+// ---------------------------------------------------------------------------
+// SCRUM-96 — Reassign an event to another coordinator
+// SCRUM-98 — See who my coordinator is
+// ---------------------------------------------------------------------------
+
+/**
+ * SCRUM-96 AC1 — "given an event has an assigned coordinator, when I reassign
+ * it to another coordinator". Two conditions, failing differently: an event
+ * with no coordinator has nothing to reassign (SCRUM-94 assigns it instead),
+ * and "another coordinator" rules out reassigning to the person who already
+ * holds it.
+ */
+export function canBeReassigned(currentCoordinatorId: string | null, newCoordinatorId: string): boolean {
+  return currentCoordinatorId !== null && currentCoordinatorId !== newCoordinatorId;
+}
+
+/**
+ * SCRUM-96 AC4 — a coordinator reassigned away from an event is denied it.
+ *
+ * Stated positively: a coordinator may see an event's planning information
+ * only while they are its current coordinator. Being reassigned away is the
+ * moment that stops being true. This is also the "assigned coordinator" rule
+ * SCRUM-89 AC1 needs, so any read that shows a coordinator an event's details
+ * should check it.
+ */
+export function isCurrentCoordinator(coordinatorId: string | null, actorUserId: string): boolean {
+  return coordinatorId !== null && coordinatorId === actorUserId;
+}
+
+/**
+ * Who may see an event's coordinator and assignment history.
+ *
+ * SCRUM-96 AC3 says "when anyone views it", meaning anyone who can view the
+ * event: the organiser who owns it (SCRUM-98 AC1), its current coordinator,
+ * and the Event Operations Managers who make assignments. A coordinator who
+ * has been reassigned away is none of these, so AC4 holds here too.
+ */
+export function canViewCoordinatorDetails(
+  event: { organiserId: string; coordinatorId: string | null },
+  actor: { userId: string; roles: readonly Role[] },
+): boolean {
+  return (
+    event.organiserId === actor.userId ||
+    isCurrentCoordinator(event.coordinatorId, actor.userId) ||
+    isActionPermitted(actor.roles, 'coordinator_assignment')
+  );
+}
