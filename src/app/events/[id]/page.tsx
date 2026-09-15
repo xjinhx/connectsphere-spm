@@ -12,6 +12,7 @@ import {
   isEditable,
 } from '@/domain/event-request/policy';
 import { getEventRequest } from '@/domain/event-request/service';
+import { getClarificationView } from '@/domain/review/service';
 import { formatSingaporeDate, formatSingaporeDateTime } from '@/domain/shared/dates';
 
 export const dynamic = 'force-dynamic';
@@ -36,6 +37,10 @@ export default async function EventRequestPage({
   const request = await getEventRequest(id);
   // SCRUM-82 AC2/AC4 — one rule decides every action shown on this page.
   const editable = isEditable(request.status);
+  // US-7.2 AC1/AC3 — the clarification note, if a coordinator has raised one.
+  // A separate read (getClarificationView) rather than a field on `request`
+  // itself — see the comment on ClarificationView in domain/review/service.ts.
+  const clarification = await getClarificationView(id);
 
   return (
     <main className="mx-auto max-w-2xl px-4 py-8">
@@ -49,6 +54,28 @@ export default async function EventRequestPage({
       </div>
       {/* AC2: the unique reference the database assigned on save. */}
       <p className="mt-1 font-mono text-sm text-[var(--text-muted)]">{request.reference}</p>
+
+      {/* US-7.2 AC1/AC3: what the Coordinator needs, shown as soon as one has
+          asked for it. No response is offered here — replying to it (US-7.2
+          AC2) is a separate, unbuilt story (SCRUM-91). */}
+      {clarification.clarificationNote ? (
+        <div className="mt-4 rounded-md border border-[var(--warning)] bg-amber-50 px-3 py-2 text-sm">
+          {/* The note is kept on the record after it has been addressed (AC3),
+              so it only reads as an outstanding ask while the request is
+              actually waiting on one. */}
+          <p className="font-medium text-[var(--warning)]">
+            {clarification.status === 'clarification_requested'
+              ? 'A coordinator has asked for clarification'
+              : 'Clarification asked for earlier'}
+          </p>
+          <p className="mt-1 whitespace-pre-wrap">{clarification.clarificationNote}</p>
+          {clarification.clarificationRequestedAt ? (
+            <p className="mt-1 text-xs text-[var(--text-muted)]">
+              Requested {formatSingaporeDateTime(clarification.clarificationRequestedAt)}
+            </p>
+          ) : null}
+        </div>
+      ) : null}
 
       {/* AC5: every date and time on this page is rendered in Singapore time. */}
       <dl className="mt-6 rounded-lg border border-[var(--border)] bg-[var(--surface)] px-4">
