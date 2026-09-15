@@ -37,8 +37,10 @@ export interface Commitments {
  * tables that do not exist would be building the absent feature to make a test
  * pass.
  *
- * TODO: once those epics exist, derive each flag from the booking, reservation
- * and registration records instead of asserting false.
+ * DUMMY(SCRUM-148) D-02: venue is asserted false until confirmed bookings exist.
+ * DUMMY(SCRUM-21) D-02: equipment is asserted false until reservations exist.
+ * DUMMY(SCRUM-22) D-02: registration is asserted false until registrations exist.
+ * Once they exist, derive each flag from those records - see docs/dummies.md.
  */
 export const NO_COMMITMENTS: Readonly<Commitments> = Object.freeze({
   venue: false,
