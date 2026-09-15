@@ -105,11 +105,12 @@ function toAssignmentOutcome(row: EventRequestRow, coordinatorName: string | nul
  * AC2 — no workload limit is applied: nothing here counts how many events the
  * chosen coordinator already holds (clarification #92).
  *
- * TODO(notifications): AC1 also says the assigned coordinator is notified.
- * There is no notification story in this sprint, so nothing is sent and the
+ * DUMMY(SCRUM-24) D-03: AC1 also says the assigned coordinator is notified.
+ * The Notification System (SCRUM-24) is not in this sprint, so nothing is sent:
+ * the recorded assignment is the minimum honest implementation, and the
  * limitation is documented rather than papered over with an email call. When
- * the Notification System story lands, this is the point to raise it from - the
- * assignment has just been recorded and the coordinator's id is to hand.
+ * SCRUM-24 lands, raise the notification from here - the assignment has just
+ * been recorded and the coordinator's id is to hand. See docs/dummies.md.
  */
 export async function assignCoordinator(
   eventRequestId: string,
