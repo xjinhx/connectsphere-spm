@@ -5,21 +5,21 @@ import { handleApiError } from '@/lib/api/handler';
 import { getCurrentActor } from '@/lib/auth/currentActor';
 
 /**
- * SCRUM-89 AC1/AC2 — open a submitted request and see everything the Event
- * Organiser provided.
+ * SCRUM-89 AC1/AC2/AC3 — open a submitted request and see everything the
+ * Event Organiser provided; denied if it's assigned to another Coordinator.
  *
- * Only coordinators may review (the card's story is "As an Event
+ * Only coordinators may review at all (the card's story is "As an Event
  * Coordinator"), checked through SCRUM-69's permission matrix before any data
- * is read — same pattern as the approve route. Narrowing this to the
- * coordinator assigned to the request (AC1/AC3) waits on SCRUM-94, same gap
- * already documented on the approve route.
+ * is read — same pattern as the approve route. The narrower per-request check
+ * (AC3) happens in getReviewDetail, now that SCRUM-94's coordinator_id makes
+ * it buildable.
  */
 export async function GET(_req: NextRequest, { params }: { params: Promise<{ id: string }> }) {
   try {
     const { id } = await params;
     const actor = await getCurrentActor();
     assertPermission(actor.roles, 'event_request_review');
-    return NextResponse.json(await getReviewDetail(id));
+    return NextResponse.json(await getReviewDetail(id, actor.userId));
   } catch (error) {
     return handleApiError(error);
   }

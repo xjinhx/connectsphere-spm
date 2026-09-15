@@ -5,6 +5,7 @@ import {
   type EventRequestRow,
 } from '@/lib/supabase/eventRequests';
 import {
+  ForbiddenError,
   InvalidTransitionError,
   NotFoundError,
   ValidationError,
@@ -22,6 +23,7 @@ import {
   NO_COMMITMENTS,
   canBeApproved,
   canRequestClarification,
+  canReviewDetail,
   type Commitments,
 } from './policy';
 
@@ -195,17 +197,14 @@ export interface ReviewDetail extends EventRequest {
 
 /**
  * AC1/AC3 — Jira says "the assigned coordinator" and "assigned to another
- * Event Coordinator ... access is denied". There is no coordinator_id column
- * to check that against - Coordinator Assignment (SCRUM-94/95/96) has not
- * landed - so this is a role gate only (any Coordinator, enforced by
- * assertPermission('event_request_review') at the route), same gap SCRUM-92
- * already documented for its own AC3 (see the approve route's comment).
- * Building a coordinator_id here myself would risk exactly the collision
- * SCRUM-83/84 already had over `status` - not repeating that. AC3's
- * "another Coordinator" refusal is unverifiable until SCRUM-94 lands; flag
- * US-7.1-TC03 for re-execution then rather than treating it as passing now.
+ * Event Coordinator ... access is denied". SCRUM-94 has since landed
+ * `coordinator_id` on `event_request`, so AC3 is enforced for real here
+ * (canReviewDetail in policy.ts) rather than left as the role-only
+ * placeholder docs/SCRUM-89-90-summary.md flagged. `actorUserId` is the
+ * signed-in Coordinator, supplied by the route from getCurrentActor, never
+ * from the request — same reasoning as every other actorId in this file.
  */
-export async function getReviewDetail(id: string): Promise<ReviewDetail> {
+export async function getReviewDetail(id: string, actorUserId: string): Promise<ReviewDetail> {
   const parsedId = EventRequestIdSchema.safeParse(id);
   if (!parsedId.success) throw new NotFoundError('Event request');
 
@@ -216,6 +215,10 @@ export async function getReviewDetail(id: string): Promise<ReviewDetail> {
   if (!data) throw new NotFoundError('Event request');
 
   const row = data as unknown as EventRequestRow;
+  if (!canReviewDetail(row.coordinator_id, actorUserId)) {
+    throw new ForbiddenError('This event request is assigned to another Event Coordinator.');
+  }
+
   return {
     ...toEventRequest(row),
     clarificationNote: row.clarification_note,

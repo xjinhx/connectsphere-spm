@@ -1,5 +1,13 @@
 import { describe, it, expect } from 'vitest';
-import { canBeApproved, canRequestClarification, isAwaitingReview } from '@/domain/review/policy';
+import {
+  canBeApproved,
+  canRequestClarification,
+  canReviewDetail,
+  isAwaitingReview,
+} from '@/domain/review/policy';
+
+const COORDINATOR_A = '11111111-1111-1111-1111-111111111111';
+const COORDINATOR_B = '22222222-2222-2222-2222-222222222222';
 
 /**
  * SCRUM-92 — Approve a request so planning can proceed (US-7.3).
@@ -75,5 +83,25 @@ describe('isAwaitingReview', () => {
 
   it('does not treat an approved request as awaiting review — it has already been decided', () => {
     expect(isAwaitingReview('approved')).toBe(false);
+  });
+});
+
+/**
+ * SCRUM-89 AC3 — "a request assigned to another Event Coordinator ... access
+ * is denied." Not coverable by a unit test: the row actually carrying
+ * coordinator_id, and getReviewDetail wiring this rule to a real fetch, need
+ * a database — see the note left in docs/SCRUM-89-90-summary.md.
+ */
+describe('canReviewDetail', () => {
+  it('allows the assigned coordinator', () => {
+    expect(canReviewDetail(COORDINATOR_A, COORDINATOR_A)).toBe(true);
+  });
+
+  it('refuses a coordinator the request is not assigned to', () => {
+    expect(canReviewDetail(COORDINATOR_A, COORDINATOR_B)).toBe(false);
+  });
+
+  it('allows any coordinator while the request is not yet assigned', () => {
+    expect(canReviewDetail(null, COORDINATOR_A)).toBe(true);
   });
 });
