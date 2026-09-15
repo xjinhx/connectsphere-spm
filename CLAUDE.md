@@ -134,6 +134,24 @@ it. If a sheet AC looks richer or more complete than what's on the Jira
 card, that's the sheet being stale, not a hidden requirement to build to
 — check Jira before writing code, not just before opening a PR.
 
+## Changing acceptance criteria and test cases
+
+Finding a missing acceptance criterion or test case mid-story is normal, and
+changing them is allowed **as long as the story-point estimate barely moves**
+(professor consultation, 15 Sep 2026). A change that would push a 4-point
+story to 6 is too big for the current story.
+
+- **Small change** (e.g. one more field): update the Jira card and
+  `ConnectSphere_Test_Cases_v3.xlsx` together so they don't drift further,
+  agree it in the daily standup, add a row to the team tracker's Change Log,
+  and note it in the PR description.
+- **Bigger change** (e.g. new validation logic): leave the current story as
+  estimated and create a new user story for a later sprint. User stories are
+  not tied to sprints.
+- **One story or two?** A story that bundles two functions must test both.
+  Split it unless it is plain CRUD on one thing, and be able to explain why it
+  is one story rather than two.
+
 ## Contract-first workflow (important — read before touching shared schemas)
 
 Many user stories are officially bundled together in Jira under one
@@ -181,20 +199,61 @@ encouraged (and required where the story's dependencies allow it — see
 Jira) is what's required. Don't treat a green `pnpm test` run as equivalent
 to a story being done.
 
-**Be precise about merged-code vs. done-story.** A ticket's own code being
-merged is not the same as its official acceptance-criteria being met and
-manually verified. Many stories require sibling tickets (sometimes in a
-different epic) to exist before their ACs are even testable. When code is
-merged but full AC verification is blocked on a dependency:
+**Manual testing does not need a screen.** Testing a story through its
+function or API — for example a request made with a signed-in session and
+checked against the stored row — counts as manual testing against its
+acceptance criteria. A backend-only story is not held back from Done just
+because no page shows it yet (professor consultation, 15 Sep 2026). The team's
+source for the table above is the **Definition of Done** tab in the team
+tracker (`IS212_Tracker_W4`); keep the two in step.
 
-- Do not mark it "Done" — per the DoD above, it isn't, and there's no
-  partial credit for it being close.
-- Document explicitly, in the PR description and/or the Jira ticket, which
-  acceptance criteria/test cases are blocked and what they're waiting on.
-- The board has a status for exactly this: **"Merged - Pending Verification"**
-  (category: In Progress) — between "In Review" and "Done." Move a ticket
-  here, not to "Done," until it's actually been manually tested against
-  every AC and genuinely meets the table above.
+**Proposed additions — not yet agreed.** These are proposed for the team to
+vote on. Do not apply them as part of the DoD until the tracker's Definition
+of Done tab is updated:
+
+- Every test case for **that Jira ticket's** acceptance criteria passes. Scope
+  it to the ticket, not the whole consolidated story on the test sheet —
+  US-8.1 bundles SCRUM-94, 95 and 96, so "every test case on the sheet" would
+  keep SCRUM-94 from being Done while reassignment is unbuilt.
+- No open bug tickets are logged against it (see "Bugs" below).
+- Git checks: testing is finished on the branch, and `main` has been merged in
+  with any conflicts resolved before review.
+
+**Board statuses:** To Do → In Progress → In Review → Merged - Pending
+Verification → Done.
+
+**Be precise about merged-code vs. done-story.** A ticket's own code being
+merged is not the same as its acceptance criteria being met and manually
+verified. When a story's ACs depend on a sibling ticket that doesn't exist
+yet, try a dummy first (see "Dependencies on other people's stories" under
+Team):
+
+- If every acceptance criterion passes against a dummy, the story **is Done**
+  and does not carry over to the next sprint.
+- **"Merged - Pending Verification"** (category: In Progress, between "In
+  Review" and "Done") is only for acceptance criteria that cannot be tested
+  even with a dummy. Document in the PR description and/or the Jira ticket
+  which acceptance criteria/test cases are blocked and what they're waiting
+  on, and move the ticket to Done once they have been tested.
+- Never mark a story Done while any of its acceptance criteria is untested —
+  there's no partial credit for it being close.
+
+## Bugs
+
+Bugs are normal, and fixing them inside a sprint is part of the process, not a
+sign it is failing (professor consultation, 15 Sep 2026).
+
+- **Found in merged or reviewed code:** log a Jira Bug ticket, big or small —
+  steps to reproduce, expected vs actual, linked to the story it came from.
+  No story points. This is tracking evidence: the examiners may ask what
+  unexpected problems came up.
+- **Found in your own branch before the PR:** just fix it; no ticket.
+- **A major bug that needs the story rewritten** becomes a user story for the
+  next sprint rather than a fix.
+- If a bug is fixed in a story that was already Done, be ready to explain,
+  when the fix is merged, why its test cases didn't catch it.
+- Name bugs and blockers in the daily standup with the time they cost
+  (e.g. "lost half a day on X because of Y").
 
 ## Supabase — local vs. cloud (read before running any `db:*` script or `supabase` command)
 
@@ -217,6 +276,11 @@ Migration files live in `supabase/migrations/`, applied in filename
 generated from the local schema via `pnpm run db:types` and should be
 regenerated after any migration that changes the schema.
 
+Creating or changing tables doesn't need a user story of its own — any story
+that needs a table or column may add it (see "Dependencies on other people's
+stories" under Team). The team plans an ER diagram and data dictionary; once
+they exist, update them in the same PR as the migration.
+
 To push a new migration to cloud once the team's agreed: `pnpm supabase
 login` → `pnpm supabase link --project-ref <ref>` → `pnpm supabase db push
 --dry-run` to review → `pnpm supabase db push` to apply.
@@ -227,6 +291,9 @@ login` → `pnpm supabase link --project-ref <ref>` → `pnpm supabase db push
   first, then `git checkout -b <branch> main`).
 - One feature/ticket per branch, named descriptively (e.g.
   `event-request-attendance`, not `scrum-78`).
+- **Push your branch and merge `main` into it at least every 2 days** while
+  work is in progress. Small, frequent merges keep conflicts small (professor
+  consultation, 15 Sep 2026).
 - PR required for everything — at least 1 approving review before merge
   (see Definition of Done: reviewed by someone other than the author). No
   direct pushes to `main`.
@@ -250,9 +317,12 @@ login` → `pnpm supabase link --project-ref <ref>` → `pnpm supabase db push
 ## Team
 
 **Every story in the current sprint has a named assignee in Jira. Do not
-implement, refactor or scaffold a story assigned to someone else, even if it
-blocks the work in hand — say so and stop.** Silently building another
-person's story causes merge conflicts and distorts the intra-team peer review.
+implement, refactor or scaffold another person's story — their business
+rules, routes or UI — even if it blocks the work in hand.** Silently building
+another person's story causes merge conflicts and distorts the intra-team peer
+review. Don't push commits to someone else's PR branch either, even to fix a
+comment; suggest the change in your review instead, so the work stays reviewed
+by someone other than its author.
 
 **Exception:** proposing a shared schema/contract for a sibling ticket under
 the same consolidated story (see "Contract-first workflow" above) is allowed
@@ -260,7 +330,34 @@ and expected, provided it's flagged explicitly in the PR description and the
 assignee hasn't already started their own version. This is proposing a
 shape for someone else to build against — not implementing their story's
 actual logic, policy rules, or routes for them. If in doubt whether a given
-change crosses that line, say so and stop, same as above.
+change crosses that line, say so and ask before going further.
+
+### Dependencies on other people's stories
+
+A dependency is not, by itself, a reason to stop (professor consultation,
+15 Sep 2026). In order of preference:
+
+1. **Shared tables belong to no single story.** If a table or column will
+   exist eventually and your story needs it too, your story may create it
+   rather than wait for the other story. Creating tables doesn't need a user
+   story of its own. Say so in the PR description.
+2. **Use a dummy for someone else's logic.** Where an acceptance criterion
+   relies on a function from another story that isn't built yet (e.g. auth),
+   write a placeholder in your own code and test your story against it:
+   - shape it the way the real thing will be called — in this codebase auth
+     is the function `getCurrentActor()`, so a dummy should look like that
+     function — so the later swap is a one-line change;
+   - mark it `TODO(SCRUM-<key>)`, naming the story that will replace it;
+   - add the `uses-dummy` label to your Jira ticket and an "is blocked by"
+     link to that story.
+
+   If your acceptance criteria pass against the dummy, your story is Done and
+   does not carry over. When the real code is built in a later sprint, that
+   work swaps the dummy out, re-runs the integration test, and records the
+   change in the team tracker's Change Log.
+3. **Stop only when a dummy would make the test meaningless** — for example,
+   complex validation owned by someone else, where faking it means the test
+   proves nothing. Then say what is missing and whose story owns it.
 
 Scrum roles rotate between sprints, and epics are intertwined rather than
 cleanly owned end to end, so don't assume long-term ownership of an area —
@@ -282,6 +379,12 @@ workflow") rather than assuming ownership of it.
 
 - **Jira** — authoritative source for acceptance criteria and story scope.
   Check the card before writing code, not just before opening a PR.
+- **Team tracker** (`IS212_Tracker_W4`, Google Sheets) — the management
+  overview. Its rule: anything with story points lives in Jira; anything that
+  is a date, a decision or a piece of evidence lives in the tracker. Tabs
+  include Definition of Done (the source for the DoD above), Meeting Tracker
+  (decisions and actions) and Change Log (one row per requirement change —
+  append, never overwrite).
 - `docs/architecture.md` — folder convention, current build status per layer.
 - `ConnectSphere_Test_Cases_v3.xlsx` — test case IDs and the story-to-SCRUM
   mapping (sheet "User Stories & ACs" shows which SCRUM numbers are bundled
