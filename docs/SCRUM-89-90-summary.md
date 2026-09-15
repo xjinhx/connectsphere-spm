@@ -3,154 +3,175 @@
 **Branch:** `review-detail-clarification` (off `main` @ `b1e21d2`; merged up to
 `main`'s `6780cdf` — SCRUM-94, SCRUM-88 and others — on 2026-09-15; not
 merged into `main`)
-**Epic:** Event Review and Approval (US-7.1 / US-7.2)
-**Status:** Code-complete on this branch, including SCRUM-89 AC3 (see
-"Known gap" below — now closed). **Not Done per team DoD** — see
-"What is not verified" below. Do not merge without a manual AC pass first.
+**Consolidated stories:** US-7.1 (Jira 88+89) and US-7.2 (Jira 90+91)
+**Status:** Both stories' own halves are code-complete **with UI**, and the
+AC/test-case mapping below has been re-checked against
+`ConnectSphere_Test_Cases_v3.xlsx`. **Not Done per team DoD** — no manual AC
+pass, no PR, not merged. See "DoD status" at the bottom.
 
 ---
 
-## What was built
+## Correction: the ACs this branch was originally built against were wrong
 
-### SCRUM-89 — Review the full detail of a request
-> *As an Event Coordinator, I want to open a submitted request and see
-> everything the Event Organiser provided, so that I can judge whether
-> planning can proceed.*
+The earlier version of this document listed SCRUM-89's ACs as "assigned
+coordinator opens a submitted request / blank shown as not provided / a
+request **assigned to another Coordinator is denied**", and a fix on
+2026-09-15 implemented that third one against SCRUM-94's new `coordinator_id`.
 
-| Jira AC | Implementation |
-|---|---|
-| AC1 — assigned coordinator opens a submitted request, every field shown | `getReviewDetail()` in `domain/review/service.ts`, reusing `toEventRequest()` (now exported from `domain/event-request/service.ts`) so this can never show a field the Organiser's own view doesn't also show |
-| AC2 — a blank section shown as "not provided", not omitted | `toEventRequest()` already maps every column as `null` rather than dropping the key; no filtering happens on the way out |
-| AC3 — a request assigned to another Coordinator is denied | `canReviewDetail()` in `domain/review/policy.ts`, applied in `getReviewDetail()` — see "Known gap" below, now closed |
+Checked against `ConnectSphere_Test_Cases_v3.xlsx` ("User Stories & ACs"),
+that is not what this story asks for:
 
-### SCRUM-90 — Request clarification from the Event Organiser
-> *As an Event Coordinator, I want to return a request to the Event
-> Organiser with a note describing what is unclear, so that I get the
-> information I need without leaving the system.*
+- **SCRUM-89 is bundled with SCRUM-88 as US-7.1**, whose three ACs are: the
+  queue lists requests assigned to me awaiting review (AC1); opening one shows
+  every field submitted, including attachments (AC2); a reviewed request no
+  longer appears as awaiting review (AC3). **None restricts *viewing* by
+  assignment.**
+- The "not the Coordinator in charge → refused" wording belongs to **US-7.3
+  AC3** (SCRUM-92/93, approve/reject) — a different story, owned by someone
+  else.
+- A DRAFT AC elsewhere in the same workbook points the other way for viewing:
+  "an event is assigned to another Coordinator ... I can view its details but
+  cannot edit any field."
 
-| Jira AC | Implementation |
-|---|---|
-| AC1 — clarification request moves status to Clarification Requested, note retained | `requestClarification()` in `domain/review/service.ts`; new `clarification_requested` status value + `clarification_note`/`clarification_requested_by`/`clarification_requested_at` columns |
-| AC2 — Organiser reopens it, note shown, request editable again | `isEditable()`/`isResumable()` in `domain/event-request/policy.ts` widened to include `clarification_requested` (existing draft-edit machinery reused, not duplicated) |
-| AC3 — missing/blank note is blocked, told a note is required | `RequestClarificationInputSchema` in `domain/review/schema.ts` — trims whitespace before the length check, so a whitespace-only note is refused the same as an empty one |
+So `canReviewDetail()` and its 403 have been **removed** — viewing a request's
+detail is role-gated (any Coordinator) and nothing more. Caveat: CLAUDE.md
+says Jira, not this sheet, is authoritative, and the sheet is known to be
+missing ACs on other cards. If SCRUM-89's Jira card really does carry an
+assignment-denial AC, this is the decision to revisit — it is a ~10-line
+change to restore.
 
 ---
 
-## Known gap: SCRUM-89 AC1 / AC3 — "assigned coordinator" (closed 2026-09-15)
+## AC and test-case status
 
-Originally: there was no `coordinator_id` column — Coordinator Assignment
-(SCRUM-94/95/96) hadn't landed — so both new endpoints were gated by **role
-only** (any Coordinator, via `assertPermission('event_request_review' /
-'event_request_clarification')`), not by assignment.
+### US-7.1 — Review submitted requests from the queue (SCRUM-88 + **89**)
 
-**SCRUM-94 has since merged into `main`** (PR #28, `coordinator_id` /
-`assigned_by` / `assigned_at` on `event_request`). This branch has been
-merged up to that point, and `getReviewDetail()` now checks
-`canReviewDetail(coordinatorId, actorUserId)` in `domain/review/policy.ts`
-before returning a request: an unassigned request stays open to any
-Coordinator (the card says nothing about that case, and assignment is a
-one-way Event Operations Manager action per SCRUM-94 AC4, never
-self-service), an assigned one is denied to anyone but the assigned
-Coordinator. Unit-tested in `tests/unit/review-policy.test.ts`
-(`canReviewDetail`).
+| AC / TC | Status | Where |
+|---|---|---|
+| AC1 / TC01 — queue lists assigned requests awaiting review, showing name, **client org**, proposed date, **submission date** | ⚠️ Partial — **SCRUM-88's page, not this branch's.** It lists name, reference, proposed date, status; client organisation and submission date are **not shown**, and `AssignedEvent` (SCRUM-94) doesn't carry them | `src/app/assigned-events/page.tsx` — flagged, deliberately not changed (another story's merged code) |
+| AC2 / TC02 — open a queued request, see every submitted field | ✅ Built this branch | `src/app/events/[id]/review/page.tsx` (new), linked from the queue's new "Open" column; data from `getReviewDetail()` |
+| AC2 / TC02 — …**including attachments** | ❌ Not possible — no attachment feature exists anywhere in the codebase, and none is in CLAUDE.md's Sprint 1 scope | Page shows an explicit "Attachments: not supported this sprint" row rather than omitting the clause silently |
+| AC3 / TC03 — a reviewed request no longer appears as awaiting review | ✅ Already satisfied by `isAwaitingReview()` (`status === 'submitted'`), which every review action moves the request out of | `src/domain/review/policy.ts` (SCRUM-88's function, unchanged) |
 
-**Note this only closes SCRUM-89 AC3.** SCRUM-92's approve route
-(`src/app/api/event-requests/[id]/approve/route.ts`) has the identical gap in
-its own comment, still unresolved on `main` — that's SCRUM-92's own already-
-merged story, not this ticket's to touch; flagging it here rather than fixing
-it silently, per CLAUDE.md's rule against scaffolding someone else's story.
+### US-7.2 — Clarification exchange with the Organiser (SCRUM-**90** + 91)
 
-**Still not covered:** the row actually carrying `coordinator_id` end-to-end
-through `getReviewDetail`, and the 403 it produces, need a real database — no
-Docker/Supabase CLI available in this environment (same limitation as
-everything else in "What is not verified" below). Flag US-7.1-TC03 for
-manual/integration verification, not as passing from this alone.
+| AC / TC | Status | Where |
+|---|---|---|
+| AC1 / TC01 — raise a clarification; saved with the event | ✅ Built (backend was already here; **UI added this branch**) | `RequestClarificationForm` on the review page → `POST /api/event-requests/[id]/clarification` |
+| AC1 / TC01 — …**visible to the Organiser** | ✅ Fixed this branch — previously the note was stored but shown to nobody | `getClarificationView()` + `GET` on the same route; rendered on the Organiser's own `src/app/events/[id]/page.tsx` |
+| AC2 / TC02 — Organiser responds, reply saved against the event | ❌ **Not built — this is SCRUM-91**, a separate ticket with no branch and no apparent assignee. Deliberately out of scope for this branch (team decision, 2026-09-15) | — |
+| AC3 / TC03 — clarification **and any response** shown to anyone with access | ⚠️ Partial — the clarification half is shown to both the Organiser and any Coordinator; the response half is blocked on SCRUM-91 | Organiser page + review page |
+| SCRUM-90's own AC3 — blank/missing note refused | ✅ Schema-level, trimmed before the length check; unit tested | `RequestClarificationInputSchema` |
+
+### Bug found and fixed: the clarification round trip was a dead end
+
+SCRUM-90 widened `isEditable()` to include `clarification_requested` (AC2's
+"editable again") but left `canBeSubmitted()` at `'draft'` only, and
+`markEventRequestSubmitted` filtering `.eq('status','draft')`. The Organiser's
+page therefore **offered** Submit on a returned request and both the policy and
+the database then **refused** it — so a clarified request could be edited but
+never sent back, which is the whole point of US-7.2 ("without leaving the
+system"). Confirmed against a real database before fixing.
+
+Fixed by widening both halves to match `isEditable`: `canBeSubmitted()` and the
+`.in('status', ['draft','clarification_requested'])` filter. `set_submitted_at`
+only stamps on `draft -> submitted`, so a resubmission keeps its original
+submission time and holds its place in the queue rather than going to the back
+— no migration change needed. Covered by a unit test (the two rules must agree)
+and four integration tests.
 
 ---
 
 ## Files touched
 
-**New:**
-- `supabase/migrations/20260914090000_event_request_clarification_requested_status.sql`
-- `supabase/migrations/20260914090100_event_request_clarification_note.sql`
-- `src/app/api/event-requests/[id]/review/route.ts` (GET, SCRUM-89)
-- `src/app/api/event-requests/[id]/clarification/route.ts` (POST, SCRUM-90)
-- `tests/unit/review-detail-clarification-permission.test.ts`
+**New this session:**
+- `src/app/events/[id]/review/page.tsx` — the Coordinator's full-detail review
+  page (US-7.1 AC2), the "open it" seam SCRUM-88's page left for this story
+- `src/components/event-request/RequestClarificationForm.tsx` — the
+  "enter a message / Send" action (US-7.2-TC01)
 
-**Extended (not duplicated):**
-- `domain/review/{schema,policy,service}.ts` — same files SCRUM-92 already
-  owns; added to rather than forked
-- `domain/event-request/schema.ts` — status enum +`clarification_requested`,
-  label map updated
-- `domain/event-request/policy.ts` — `isEditable` widened
-- `domain/event-request/service.ts` — `toEventRequest` exported (no logic
-  change)
-- `domain/identity/permissions.ts` — two new actions (`event_request_review`,
-  `event_request_clarification`), granted to `coordinator`
-- `lib/supabase/eventRequests.ts` — new columns on `EventRequestRow`/
-  `COLUMNS`, new `markEventRequestClarificationRequested()`
-- `components/event-request/EventRequestStatusBadge.tsx` — new status color
-  (placeholder amber; flagged in-code for the component's owner to revise)
-- `tests/unit/event-request-draft.test.ts`, `review-policy.test.ts`,
-  `review-schema.test.ts` — extended with the new cases
-- `app/api/event-requests/[id]/review/route.ts` — passes `actor.userId`
-  through to `getReviewDetail` for the AC3 check (2026-09-15)
+**Changed this session:**
+- `src/domain/review/service.ts` — `getReviewDetail()` no longer takes an
+  actor or enforces assignment (see "Correction" above); new
+  `getClarificationView()` for the Organiser-visible read
+- `src/domain/review/policy.ts` — `canReviewDetail()` removed
+- `src/app/api/event-requests/[id]/clarification/route.ts` — added `GET`
+- `src/app/api/event-requests/[id]/review/route.ts` — reverted to `getReviewDetail(id)`
+- `src/app/events/[id]/page.tsx` — Organiser now sees the clarification note
+- `src/app/assigned-events/page.tsx` — "Open" link per row (the handoff its
+  own comment described; no other change to SCRUM-88's page)
+- `tests/unit/review-policy.test.ts` — `canReviewDetail` cases removed
+
+**From the original build (unchanged this session):** the two migrations, the
+review/clarification routes, `domain/event-request` status-enum and
+`isEditable` widening, `domain/identity/permissions.ts`, `lib/supabase/eventRequests.ts`,
+`EventRequestStatusBadge.tsx`, and the unit tests listed in git history.
 
 ---
 
-## Verification performed on this branch
+## Verification performed
 
-| Check | Result | When |
-|---|---|---|
-| `tsc --noEmit` | Clean | Original build; re-run clean after the `main` merge + AC3 |
-| `eslint .` | Clean | Original build; re-run clean after the `main` merge + AC3 |
-| `next build` | Clean, exit 0 — both new routes appear correctly in the route manifest | Original build only — not re-run after the merge (this environment has no `NEXT_PUBLIC_SUPABASE_URL`/`ANON_KEY` configured, so `next build` now fails collecting page data on unrelated routes before it would reach these; `tsc`/`eslint`/`vitest` are the verification that's actually current) |
-| `vitest run tests/unit` | **272/272 passing** (185 prior + 3 new `canReviewDetail` cases + tests gained from the `main` merge) | Re-run after the `main` merge + AC3 |
-| Diff against original `main` (`b1e21d2`) reviewed line-by-line | Confirmed no logic removed — every deleted line was a line replaced by a strict superset | Original build only |
+All of the following was run against the **local Supabase stack**
+(`pnpm run db:start`), which this time was actually available.
 
-**Merge with `main` (2026-09-15):** three conflicts — `domain/review/policy.ts`,
-`lib/supabase/eventRequests.ts`, `tests/unit/review-policy.test.ts` — all
-purely additive (this branch's SCRUM-90 additions alongside `main`'s SCRUM-88/
-SCRUM-94 additions to the same files/functions), resolved by keeping both
-sides. No logic from either side was dropped; `tsc`/`eslint`/`vitest`
-above are the re-run confirming it.
+| Check | Result |
+|---|---|
+| `tsc --noEmit` | Clean |
+| `eslint .` | Clean |
+| `vitest run tests/` | **312/312 passing** — 271 unit, 41 integration |
+| Migrations applied to a real database | ✅ All 15 apply cleanly from scratch, including this branch's two |
+| `next build` | ✅ Clean, exit 0 — `/events/[id]/review` present in the route manifest |
+| `database.types.ts` regenerated | ✅ Now carries the clarification columns and the 4-value status enum |
+| Walked through the running app | ✅ See below |
+
+**Driven through the running app** (`next dev`, two seeded accounts — a
+Coordinator and an Organiser — with a real assigned request, exercising the
+actual pages, middleware, session auth and API routes):
+
+1. Coordinator's queue lists the assigned event with a working "Open" link
+2. Review page shows purpose, description, proposed date, room layout,
+   accessibility, equipment, technical support and registration (US-7.1-TC02)
+3. Organiser is refused the review page
+4. A whitespace-only note is refused, 400, "A note describing what is needed is required"
+5. A real clarification saves, status → Clarification Requested, timestamp stamped by the trigger (US-7.2-TC01)
+6. Organiser sees the note on their own event page, and the request is editable again (US-7.2 AC1, SCRUM-90 AC2)
+7. It leaves the awaiting-review queue (US-7.1-TC03)
+8. The clarification is visible to a Coordinator opening it (US-7.2-TC03, clarification half)
+9. **Organiser resubmits successfully** — the dead end described above, now fixed
+10. It returns to the coordinator's awaiting-review queue, with the clarification kept on the record
+
+Not a substitute for the team's own manual DoD pass — it was driven over HTTP
+rather than clicked in a browser (no Playwright in this project), so the
+rendering itself has not been eyeballed.
 
 ---
 
-## What is **not** verified
+## DoD status (CLAUDE.md's table)
 
-Per the team's Definition of Done, none of the above makes this "Done":
+| Criterion | Met? |
+|---|---|
+| All acceptance criteria are met | **No** — US-7.1 AC1 (client org / submission date, SCRUM-88's page), US-7.1 AC2's attachments clause, US-7.2 AC2/AC3 (SCRUM-91) |
+| Manually tested against those ACs | **Partly** — every AC this branch owns was driven end-to-end against a real stack, but not by a human in a browser |
+| Automated tested against those ACs | ✅ Unit for every pure rule, integration for every database-dependent one |
+| Merged into main, existing functionality still works | **No** — branch only |
+| Runs from the README instructions | ✅ Verified this session (`db:start`, `next build`, `next dev`) |
+| Merged and integrated into the Git | **No** |
+| Code reviewed by someone other than the author | **No** — no PR |
 
-- **No integration test.** Both new database functions
-  (`markEventRequestClarificationRequested`, the `set_clarification_requested_at`
-  trigger) need a real Postgres to prove — no Docker/Supabase CLI available
-  in this environment. `review-approval-view.test.ts`'s precedent (flagging
-  DB-dependent assertions for the integration suite) was followed the same
-  way here.
-- **Migrations have not been applied to any real database.** Written to
-  match the exact style of the three SCRUM-92 migrations they follow (enum
-  value in its own transaction, then columns + constraints + trigger in a
-  second file), but unexecuted.
-- **`database.types.ts` was not regenerated.** The admin Supabase client is
-  loosely typed (`SupabaseClient<any, 'public', any>`), so this doesn't
-  break the build — but it's stale until someone with Docker runs
-  `pnpm run db:types`.
-- **No manual testing against the Jira ACs.** This is the team's actual DoD
-  gate, and it hasn't happened.
-- **No PR opened**, no review by anyone else.
+Per CLAUDE.md there is no partial credit, so both stories should sit at
+**"Merged - Pending Verification"** at best — and not even that until the
+branch is actually merged and reviewed.
 
 ## Suggested next step
 
-1. Get this branch's migrations applied to a local Supabase instance
-   (`pnpm run db:reset`) and add the integration tests
-   `review-approval-view.test.ts` already implies are needed for the
-   database-dependent parts — now including SCRUM-89 AC3 (an assigned
-   request returning 403 to a different coordinator via the real route).
-2. Manually walk US-7.1-TC01/TC02/TC03 and US-7.2-TC01/TC02/TC03 against a
-   running app (TC03 was previously unexecutable; it is buildable now).
-3. Regenerate `database.types.ts`.
-4. Confirm with the team whether "unassigned request stays open to any
-   Coordinator" (this branch's reading of AC3, see "Known gap" above) is
-   actually what the Jira card intends, before treating AC3 as passing.
-5. Open a PR referencing SCRUM-89 and SCRUM-90 explicitly, listing the ACs
-   above and noting it was rebased onto `main` post-SCRUM-94 to close AC3.
+1. Open a PR referencing SCRUM-89 and SCRUM-90, listing the ACs and TCs above
+   with their status, and get the peer review the DoD requires.
+2. Have someone click through US-7.1-TC02 and US-7.2-TC01/TC03 in a browser —
+   the one DoD gate this session could not close.
+3. Raise with the team: (a) whether SCRUM-89's Jira card really carries an
+   assignment-denial AC, per the Correction section — the sheet says it does
+   not; (b) that US-7.1 AC1 needs client org + submission date added to
+   SCRUM-88's queue page, and `AssignedEvent` widened to carry them; (c) who
+   owns SCRUM-91, without which US-7.2 cannot close; (d) that SCRUM-92's
+   approve route still carries the same "assigned coordinator" gap in its own
+   comment, which US-7.3 AC3 genuinely does ask for.

@@ -58,6 +58,9 @@ export type Database = {
           accessibility_required: boolean | null
           assigned_at: string | null
           assigned_by: string | null
+          clarification_note: string | null
+          clarification_requested_at: string | null
+          clarification_requested_by: string | null
           client_organisation_id: string | null
           coordinator_id: string | null
           created_at: string
@@ -87,6 +90,9 @@ export type Database = {
           accessibility_required?: boolean | null
           assigned_at?: string | null
           assigned_by?: string | null
+          clarification_note?: string | null
+          clarification_requested_at?: string | null
+          clarification_requested_by?: string | null
           client_organisation_id?: string | null
           coordinator_id?: string | null
           created_at?: string
@@ -116,6 +122,9 @@ export type Database = {
           accessibility_required?: boolean | null
           assigned_at?: string | null
           assigned_by?: string | null
+          clarification_note?: string | null
+          clarification_requested_at?: string | null
+          clarification_requested_by?: string | null
           client_organisation_id?: string | null
           coordinator_id?: string | null
           created_at?: string
@@ -413,7 +422,11 @@ export type Database = {
       [_ in never]: never
     }
     Enums: {
-      event_request_status: "draft" | "submitted" | "approved"
+      event_request_status:
+        | "draft"
+        | "submitted"
+        | "approved"
+        | "clarification_requested"
     }
     CompositeTypes: {
       [_ in never]: never
@@ -544,7 +557,12 @@ export const Constants = {
   },
   public: {
     Enums: {
-      event_request_status: ["draft", "submitted", "approved"],
+      event_request_status: [
+        "draft",
+        "submitted",
+        "approved",
+        "clarification_requested",
+      ],
     },
   },
 } as const

@@ -1,0 +1,302 @@
+import { describe, it, expect, beforeAll, afterAll } from 'vitest';
+import { createAdminClient } from '@/lib/supabase/admin';
+import {
+  getClarificationView,
+  getReviewDetail,
+  requestClarification,
+} from '@/domain/review/service';
+import { isAwaitingReview } from '@/domain/review/policy';
+import { markEventRequestSubmitted } from '@/lib/supabase/eventRequests';
+
+/**
+ * SCRUM-89 / SCRUM-90 — US-7.1 AC2 and US-7.2 AC1/AC3, from
+ * `ConnectSphere_Test_Cases_v3.xlsx` ("User Stories & ACs" / "Test Cases"):
+ *   US-7.1-TC02 — "Open the request from the queue" -> all submitted fields,
+ *        including venue, equipment and registration requirements, are visible.
+ *        (The attachments clause of that TC is not covered: no attachment
+ *        feature exists in this codebase — see docs/SCRUM-89-90-summary.md.)
+ *   US-7.1-TC03 — a request that has been clarified no longer counts as
+ *        awaiting review.
+ *   US-7.2-TC01 — a clarification message is saved with the event and is
+ *        visible to the Organiser.
+ *   US-7.2-TC03 — the clarification is shown to any authorised viewer; the
+ *        *response* half needs SCRUM-91, which is not built.
+ *
+ * What only a real database can prove, and why this file exists: the note,
+ * requester and timestamp actually landing on the row, the
+ * set_clarification_requested_at trigger stamping the time, and the
+ * `.eq('status','submitted')` filter that decides two coordinators racing.
+ *
+ * Runs against the local Supabase stack (`pnpm run db:start` + `db:reset`),
+ * like approve-event-request.test.ts. The admin client below only arranges
+ * rows; the code under test never holds a client (docs/architecture.md).
+ */
+
+const supabase = createAdminClient();
+const CLIENT_ORGANISATION_ID = '22222222-2222-2222-2222-222222222222';
+
+let coordinatorId: string;
+const createdRequestIds: string[] = [];
+
+async function createRequest(
+  status: 'draft' | 'submitted',
+  values: Record<string, unknown> = {},
+): Promise<string> {
+  const { data, error } = await supabase
+    .from('event_request')
+    .insert({
+      organiser_id: coordinatorId,
+      client_organisation_id: CLIENT_ORGANISATION_ID,
+      name: 'Annual Tech Summit',
+      ...values,
+    })
+    .select('id')
+    .single();
+  if (error) throw new Error(`could not create test request: ${error.message}`);
+
+  const id = data.id as string;
+  createdRequestIds.push(id);
+
+  if (status === 'submitted') {
+    const { error: submitError } = await supabase
+      .from('event_request')
+      .update({ status: 'submitted' })
+      .eq('id', id);
+    if (submitError) throw new Error(`could not submit test request: ${submitError.message}`);
+  }
+
+  return id;
+}
+
+beforeAll(async () => {
+  const { data, error } = await supabase.auth.admin.createUser({
+    email: `coordinator+clarify${Date.now()}@connectsphere.example.com`,
+    password: 'Password123!',
+    email_confirm: true,
+  });
+  if (error || !data.user) {
+    throw new Error(`could not create test coordinator: ${error?.message ?? 'no user returned'}`);
+  }
+  coordinatorId = data.user.id;
+});
+
+afterAll(async () => {
+  // Requests first: clarification_requested_by is ON DELETE RESTRICT.
+  for (const id of createdRequestIds) {
+    await supabase.from('event_request').delete().eq('id', id);
+  }
+  if (coordinatorId) await supabase.auth.admin.deleteUser(coordinatorId);
+});
+
+describe('getReviewDetail', () => {
+  // US-7.1-TC02 (AC2)
+  it('shows every field the Organiser submitted', async () => {
+    const id = await createRequest('submitted', {
+      purpose: 'Client launch',
+      description: 'A full-day summit',
+      proposed_date: '2026-11-20',
+      expected_attendance: 120,
+      room_layout: 'theatre',
+      accessibility_required: true,
+      accessibility_notes: 'Step-free access to the stage',
+      equipment_required: true,
+      technical_support_notes: 'AV technician for the keynote',
+      registration_required: true,
+    });
+
+    const detail = await getReviewDetail(id);
+
+    expect(detail.purpose).toBe('Client launch');
+    expect(detail.description).toBe('A full-day summit');
+    expect(detail.proposedDate).toBe('2026-11-20');
+    expect(detail.expectedAttendance).toBe(120);
+    expect(detail.roomLayout).toBe('theatre');
+    expect(detail.accessibilityRequired).toBe(true);
+    expect(detail.accessibilityNotes).toBe('Step-free access to the stage');
+    expect(detail.equipmentRequired).toBe(true);
+    expect(detail.technicalSupportNotes).toBe('AV technician for the keynote');
+    expect(detail.registrationRequired).toBe(true);
+  });
+
+  // AC2's "a blank section is shown as not provided, not omitted" — the key is
+  // present and null, so the page can say "Not provided" rather than silently
+  // dropping the row.
+  it('carries an unanswered field as null rather than dropping the key', async () => {
+    const id = await createRequest('submitted');
+
+    const detail = await getReviewDetail(id);
+
+    expect(detail).toHaveProperty('purpose', null);
+    expect(detail).toHaveProperty('roomLayout', null);
+    expect(detail).toHaveProperty('registrationRequired', null);
+    expect(detail).toHaveProperty('clarificationNote', null);
+  });
+
+  it('reports an unknown request as not found', async () => {
+    await expect(getReviewDetail('99999999-9999-4999-8999-999999999999')).rejects.toMatchObject({
+      code: 'NOT_FOUND',
+    });
+  });
+
+  it('reports a malformed id as not found rather than failing', async () => {
+    await expect(getReviewDetail('not-a-uuid')).rejects.toMatchObject({ code: 'NOT_FOUND' });
+  });
+});
+
+describe('requestClarification', () => {
+  // US-7.2-TC01 (AC1)
+  it('saves the note with the event and moves it to Clarification Requested', async () => {
+    const id = await createRequest('submitted');
+
+    const outcome = await requestClarification(
+      id,
+      { note: 'Please confirm the expected AV setup' },
+      coordinatorId,
+    );
+
+    expect(outcome.status).toBe('clarification_requested');
+    expect(outcome.clarificationNote).toBe('Please confirm the expected AV setup');
+    expect(outcome.clarificationRequestedBy).toBe(coordinatorId);
+    // Stamped by set_clarification_requested_at, not by the caller.
+    expect(outcome.clarificationRequestedAt).not.toBeNull();
+  });
+
+  // SCRUM-90 AC3 — a blank note is refused before anything is written.
+  it('refuses a whitespace-only note the same as an empty one', async () => {
+    const id = await createRequest('submitted');
+
+    await expect(requestClarification(id, { note: '   ' }, coordinatorId)).rejects.toMatchObject({
+      code: 'VALIDATION_ERROR',
+    });
+
+    const detail = await getReviewDetail(id);
+    expect(detail.status).toBe('submitted');
+    expect(detail.clarificationNote).toBeNull();
+  });
+
+  it('refuses a draft, which has not been submitted for review yet', async () => {
+    const id = await createRequest('draft');
+
+    await expect(
+      requestClarification(id, { note: 'Anything' }, coordinatorId),
+    ).rejects.toMatchObject({ code: 'INVALID_TRANSITION' });
+  });
+
+  // The `.eq('status','submitted')` filter is what makes this safe; a second
+  // note before the Organiser has replied does not overwrite the first.
+  it('refuses a second clarification while one is already outstanding', async () => {
+    const id = await createRequest('submitted');
+    await requestClarification(id, { note: 'First question' }, coordinatorId);
+
+    await expect(
+      requestClarification(id, { note: 'Second question' }, coordinatorId),
+    ).rejects.toMatchObject({ code: 'INVALID_TRANSITION' });
+
+    const detail = await getReviewDetail(id);
+    expect(detail.clarificationNote).toBe('First question');
+  });
+
+  // US-7.1-TC03 (AC3) — once clarified, it is no longer awaiting review.
+  it('takes the request out of the awaiting-review queue', async () => {
+    const id = await createRequest('submitted');
+    expect(isAwaitingReview((await getReviewDetail(id)).status)).toBe(true);
+
+    await requestClarification(id, { note: 'Please confirm the venue' }, coordinatorId);
+
+    expect(isAwaitingReview((await getReviewDetail(id)).status)).toBe(false);
+  });
+});
+
+/**
+ * US-7.2's round trip — "so that I can get what I need without leaving the
+ * system". SCRUM-90 AC2 makes a clarified request editable again; this is the
+ * other half, that it can then be sent back.
+ *
+ * `submitEventRequest()` itself reads the signed-in session, so it cannot be
+ * driven from here; this exercises the database filter underneath it, which is
+ * what actually refused the resubmission before
+ * (markEventRequestSubmitted matched no row for a clarification_requested one).
+ */
+describe('resubmitting after a clarification', () => {
+  it('accepts a clarification_requested request back into submitted', async () => {
+    const id = await createRequest('submitted');
+    await requestClarification(id, { note: 'Please confirm the venue' }, coordinatorId);
+
+    const { data, error } = await markEventRequestSubmitted(supabase, id);
+
+    expect(error).toBeNull();
+    expect(data).not.toBeNull();
+    expect((data as unknown as { status: string }).status).toBe('submitted');
+  });
+
+  it('keeps the original submission time, so it holds its place in the queue', async () => {
+    const id = await createRequest('submitted');
+    const before = (await getReviewDetail(id)).submittedAt;
+    await requestClarification(id, { note: 'Please confirm the venue' }, coordinatorId);
+
+    await markEventRequestSubmitted(supabase, id);
+
+    expect((await getReviewDetail(id)).submittedAt).toBe(before);
+  });
+
+  // The note is not cleared: US-7.2 AC3 wants the clarification shown with the
+  // event, and the constraint only requires a note while the status is
+  // clarification_requested.
+  it('keeps the clarification on the record after it has been addressed', async () => {
+    const id = await createRequest('submitted');
+    await requestClarification(id, { note: 'Please confirm the venue' }, coordinatorId);
+
+    await markEventRequestSubmitted(supabase, id);
+
+    const view = await getClarificationView(id);
+    expect(view.status).toBe('submitted');
+    expect(view.clarificationNote).toBe('Please confirm the venue');
+  });
+
+  it('still refuses to resubmit a request that is already submitted', async () => {
+    const id = await createRequest('submitted');
+
+    const { data } = await markEventRequestSubmitted(supabase, id);
+
+    expect(data).toBeNull();
+  });
+});
+
+describe('getClarificationView', () => {
+  // US-7.2-TC01 (AC1) "visible to the Organiser" / US-7.2-TC03 (AC3)
+  it('shows the note to a viewer who holds no review permission', async () => {
+    const id = await createRequest('submitted');
+    await requestClarification(id, { note: 'Please confirm the expected AV setup' }, coordinatorId);
+
+    const view = await getClarificationView(id);
+
+    expect(view.clarificationNote).toBe('Please confirm the expected AV setup');
+    expect(view.clarificationRequestedAt).not.toBeNull();
+    expect(view.status).toBe('clarification_requested');
+  });
+
+  it('shows no note for a request nobody has asked about', async () => {
+    const id = await createRequest('submitted');
+
+    const view = await getClarificationView(id);
+
+    expect(view.clarificationNote).toBeNull();
+    expect(view.clarificationRequestedAt).toBeNull();
+  });
+
+  // AC3's "and any response" half is SCRUM-91 and is not built; this asserts
+  // the view does not pretend otherwise.
+  it('does not claim to carry a response', async () => {
+    const id = await createRequest('submitted');
+
+    const view = await getClarificationView(id);
+
+    expect(view).not.toHaveProperty('response');
+  });
+
+  it('reports an unknown request as not found', async () => {
+    await expect(
+      getClarificationView('99999999-9999-4999-8999-999999999999'),
+    ).rejects.toMatchObject({ code: 'NOT_FOUND' });
+  });
+});
