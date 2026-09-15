@@ -204,13 +204,19 @@ export async function deleteEventRequestEquipment(supabase: SupabaseClient, even
  * The `status` filter is what makes submitting twice impossible: a second
  * concurrent call matches no row and comes back empty rather than quietly
  * overwriting the first.
+ *
+ * SCRUM-90 AC2 — `clarification_requested` is accepted for the same reason
+ * canBeSubmitted() accepts it: a request returned for clarification is edited
+ * and sent back. Note set_submitted_at only stamps on draft -> submitted, so a
+ * resubmission keeps its original submission time and therefore its place in
+ * the coordinator's queue rather than going to the back of it.
  */
 export async function markEventRequestSubmitted(supabase: SupabaseClient, id: string) {
   return supabase
     .from('event_request')
     .update({ status: 'submitted' })
     .eq('id', id)
-    .eq('status', 'draft')
+    .in('status', ['draft', 'clarification_requested'])
     .select(COLUMNS)
     .maybeSingle();
 }

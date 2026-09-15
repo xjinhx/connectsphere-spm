@@ -65,6 +65,18 @@ describe('SCRUM-82 — Submit a completed event request', () => {
       expect(canBeSubmitted('submitted')).toBe(false);
     });
 
+    // SCRUM-90 AC2 — a request returned for clarification is editable again,
+    // so it has to be sendable again too. These two rules previously
+    // disagreed: the page offered the edit and the submit refused it.
+    it('lets a request returned for clarification be submitted again', () => {
+      expect(isEditable('clarification_requested')).toBe(true);
+      expect(canBeSubmitted('clarification_requested')).toBe(true);
+    });
+
+    it('never lets an approved request be submitted', () => {
+      expect(canBeSubmitted('approved')).toBe(false);
+    });
+
     it('renders the submission time in Singapore time, zone shown', () => {
       // 18:00 UTC on the 14th is already 2:00 am on the 15th in Singapore.
       const rendered = formatSingaporeDateTime('2026-11-14T18:00:00Z');

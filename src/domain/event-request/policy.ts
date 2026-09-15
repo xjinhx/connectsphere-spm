@@ -312,9 +312,17 @@ export function isEditable(status: EventRequestStatus): boolean {
   return status === 'draft' || status === 'clarification_requested';
 }
 
-/** AC1 — the only transition this story knows: a draft becomes submitted. */
+/**
+ * SCRUM-82 AC1 — a draft becomes submitted.
+ *
+ * SCRUM-90 AC2 adds the second way in: a request returned for clarification is
+ * editable again (see isEditable above), and "without leaving the system"
+ * (US-7.2) only holds if the Organiser can then send it back. Widened here
+ * rather than left at 'draft' because the two halves have to agree — offering
+ * an edit the resubmit would refuse is what this rule previously did.
+ */
 export function canBeSubmitted(status: EventRequestStatus): boolean {
-  return status === 'draft';
+  return status === 'draft' || status === 'clarification_requested';
 }
 
 // ---------------------------------------------------------------------------
