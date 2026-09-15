@@ -5,7 +5,6 @@ import {
   type EventRequestRow,
 } from '@/lib/supabase/eventRequests';
 import {
-  ForbiddenError,
   InvalidTransitionError,
   NotFoundError,
   ValidationError,
@@ -23,7 +22,6 @@ import {
   NO_COMMITMENTS,
   canBeApproved,
   canRequestClarification,
-  canReviewDetail,
   type Commitments,
 } from './policy';
 
@@ -196,15 +194,16 @@ export interface ReviewDetail extends EventRequest {
 }
 
 /**
- * AC1/AC3 — Jira says "the assigned coordinator" and "assigned to another
- * Event Coordinator ... access is denied". SCRUM-94 has since landed
- * `coordinator_id` on `event_request`, so AC3 is enforced for real here
- * (canReviewDetail in policy.ts) rather than left as the role-only
- * placeholder docs/SCRUM-89-90-summary.md flagged. `actorUserId` is the
- * signed-in Coordinator, supplied by the route from getCurrentActor, never
- * from the request — same reasoning as every other actorId in this file.
+ * AC1/AC2 (US-7.1, `ConnectSphere_Test_Cases_v3.xlsx` "User Stories & ACs") —
+ * open a queued request and see every field the Organiser submitted. No
+ * assignment check here: that sheet's US-7.1 (Jira 88+89, this story's actual
+ * consolidated pairing) carries no AC restricting *viewing* by assignment —
+ * the "another Coordinator... refused" wording belongs to US-7.3 AC3
+ * (SCRUM-92/93, approving/rejecting), not this one. An earlier version of
+ * this function gated viewing by `coordinator_id`, conflating the two; see
+ * docs/SCRUM-89-90-summary.md for the correction.
  */
-export async function getReviewDetail(id: string, actorUserId: string): Promise<ReviewDetail> {
+export async function getReviewDetail(id: string): Promise<ReviewDetail> {
   const parsedId = EventRequestIdSchema.safeParse(id);
   if (!parsedId.success) throw new NotFoundError('Event request');
 
@@ -215,9 +214,6 @@ export async function getReviewDetail(id: string, actorUserId: string): Promise<
   if (!data) throw new NotFoundError('Event request');
 
   const row = data as unknown as EventRequestRow;
-  if (!canReviewDetail(row.coordinator_id, actorUserId)) {
-    throw new ForbiddenError('This event request is assigned to another Event Coordinator.');
-  }
 
   return {
     ...toEventRequest(row),
@@ -258,6 +254,54 @@ function toClarificationOutcome(row: EventRequestRow): ClarificationOutcome {
     status: row.status,
     clarificationNote: row.clarification_note,
     clarificationRequestedBy: row.clarification_requested_by,
+    clarificationRequestedAt: row.clarification_requested_at,
+  };
+}
+
+/**
+ * What anyone viewing a request is told about its clarification state.
+ *
+ * US-7.2 AC1 ("saved with the event, visible to the Organiser") and AC3
+ * ("anyone with access opens it -> clarification ... shown with the event")
+ * — same reasoning as ApprovalView above: a separate read anyone signed-in
+ * can hit, rather than widening event-request's EventRequest (which SCRUM-89's
+ * own comment on toEventRequest already decided against, to match how
+ * SCRUM-92 kept its decision fields out of it too).
+ *
+ * No response half: AC2 ("Organiser responds ... reply saved") is SCRUM-91,
+ * a separate ticket not built on this branch. `response`/`respondedAt` are
+ * left out entirely rather than stubbed to null, so nothing here claims to
+ * answer AC2/AC3's "any response" half.
+ */
+export interface ClarificationView {
+  id: string;
+  status: EventRequestStatus;
+  clarificationNote: string | null;
+  clarificationRequestedAt: string | null;
+}
+
+/**
+ * AC1/AC3 — the organiser (or anyone else with access to the request) reads
+ * the clarification note without needing the Coordinator-only permission
+ * `getReviewDetail` requires. Who may view: Jira says "the Organiser" (AC1)
+ * and "anyone with access" (AC3), so no role/ownership check here, same as
+ * getApprovalView — the middleware already refuses this without a session.
+ */
+export async function getClarificationView(id: string): Promise<ClarificationView> {
+  const parsedId = EventRequestIdSchema.safeParse(id);
+  if (!parsedId.success) throw new NotFoundError('Event request');
+
+  const { data, error } = await fetchEventRequestById(parsedId.data);
+  if (error) {
+    throw new ValidationError('The event request could not be read.', error.message);
+  }
+  if (!data) throw new NotFoundError('Event request');
+
+  const row = data as unknown as EventRequestRow;
+  return {
+    id: row.id,
+    status: row.status,
+    clarificationNote: row.clarification_note,
     clarificationRequestedAt: row.clarification_requested_at,
   };
 }

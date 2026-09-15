@@ -90,25 +90,3 @@ export function canRequestClarification(status: EventRequestStatus): boolean {
 export function isAwaitingReview(status: EventRequestStatus): boolean {
   return status === 'submitted';
 }
-
-// ---------------------------------------------------------------------------
-// SCRUM-89 AC3 — deny a Coordinator who is not the one assigned
-// ---------------------------------------------------------------------------
-
-/**
- * AC3 (Jira): "a request assigned to another Event Coordinator ... access is
- * denied." Now buildable — SCRUM-94 landed `coordinator_id` on `event_request`
- * — so this is the real check the summary in docs/SCRUM-89-90-summary.md
- * flagged as blocked, not the role-only placeholder that shipped before it.
- *
- * Read literally: the card denies access when the request *is* assigned to
- * someone else. It says nothing about an unassigned request, so one is not
- * invented here — coordinator_id === null is left open to any Coordinator,
- * same as before assignment existed. Assignment itself is a
- * one-way Event Operations Manager action (SCRUM-94 AC4), never
- * self-service, so this never lets a Coordinator claim a request by opening
- * it.
- */
-export function canReviewDetail(coordinatorId: string | null, actorUserId: string): boolean {
-  return coordinatorId === null || coordinatorId === actorUserId;
-}
