@@ -267,6 +267,21 @@ export async function listSubmittedEventRequests(supabase: SupabaseClient) {
     .eq('status', 'submitted')
     .order('submitted_at', { ascending: true });
 }
+/**
+ * SCRUM-95 AC1 — submitted events with no coordinator yet: the pool an
+ * Operations Manager still needs to act on. Same predicate as
+ * canBeAssigned() in domain/assignment/policy.ts, checked at the database
+ * instead of read into memory to filter, since every submitted event's
+ * coordinator_id is already indexed (event_request_coordinator_id_idx).
+ */
+export async function listUnassignedSubmittedEventRequests(supabase: SupabaseClient) {
+  return supabase
+    .from('event_request')
+    .select(COLUMNS)
+    .eq('status', 'submitted')
+    .is('coordinator_id', null)
+    .order('submitted_at', { ascending: true });
+}
 // ---------------------------------------------------------------------------
 // SCRUM-94 — Assign an Event Coordinator to a submitted event
 // ---------------------------------------------------------------------------
