@@ -1,7 +1,7 @@
 import { getCurrentActor } from '@/lib/auth/currentActor';
 import { hasRole } from '@/domain/identity/policy';
 import { listUnassignedEvents } from '@/domain/assignment/service';
-import { formatSingaporeDateTime } from '@/domain/shared/dates';
+import { formatSingaporeDate, formatSingaporeDateTime } from '@/domain/shared/dates';
 
 /**
  * SCRUM-95 AC1 — submitted events with no coordinator yet: the pool an
@@ -58,6 +58,9 @@ export default async function EventOpsManagerAssignmentQueuePage() {
                   Reference
                 </th>
                 <th scope="col" className="p-3 font-medium">
+                  Proposed date
+                </th>
+                <th scope="col" className="p-3 font-medium">
                   Submitted
                 </th>
               </tr>
@@ -67,6 +70,9 @@ export default async function EventOpsManagerAssignmentQueuePage() {
                 <tr key={event.id} className="border-b border-[var(--border)] last:border-b-0">
                   <td className="p-3 font-medium">{event.name}</td>
                   <td className="p-3 font-mono text-xs text-[var(--text-muted)]">{event.reference}</td>
+                  <td className="p-3">
+                    {event.proposedDate ? formatSingaporeDate(event.proposedDate) : '—'}
+                  </td>
                   <td className="p-3">
                     {event.submittedAt ? formatSingaporeDateTime(event.submittedAt) : '—'}
                   </td>
