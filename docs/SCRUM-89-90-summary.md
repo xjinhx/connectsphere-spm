@@ -163,9 +163,9 @@ rendering itself has not been eyeballed.
 |---|---|
 | All acceptance criteria are met | **No** — US-7.1 AC1 (client org / submission date, SCRUM-88's page), US-7.1 AC2's attachments clause, US-7.2 AC2/AC3 (SCRUM-91) |
 | Manually tested against those ACs | **Partly** — every AC this branch owns was driven end-to-end against a real stack, but not by a human in a browser |
-| Automated tested against those ACs | ⚠️ Unit for every pure rule (274 passing). Integration written for every database-dependent one, but the **AC3 cases added 2026-09-16 have not been executed** — no Docker in that session |
+| Automated tested against those ACs | ✅ Unit for every pure rule (274 passing). Integration executed against a real local Supabase on 2026-09-16 (separate machine, Docker available): **43/43 passing**, including both AC3 cases (`review-detail-clarification.test.ts`, 19/19) |
 | Merged into main, existing functionality still works | **No** — branch only |
-| Runs from the README instructions | ⚠️ `next build`, `tsc`, `eslint` clean on 2026-09-16; `db:start`/`next dev` last verified 2026-09-15, not re-run since the rebase |
+| Runs from the README instructions | ✅ `db:start` → `db:reset` (all 15 migrations, including both `clarification_requested` ones) → `test:integration` verified end-to-end on 2026-09-16; `next build`/`tsc`/`eslint` clean the same day |
 | Merged and integrated into the Git | **No** |
 | Code reviewed by someone other than the author | **No** — no PR |
 
@@ -177,12 +177,12 @@ branch is actually merged and reviewed.
 
 1. Open a PR referencing SCRUM-89 and SCRUM-90, listing the ACs and TCs above
    with their status, and get the peer review the DoD requires.
-2. Have someone click through US-7.1-TC02, US-7.1-TC03 (the AC3 denial) and
-   US-7.2-TC01/TC03 in a browser — the one DoD gate this session could not
-   close.
-3. **Run the integration suite against a real database** (`pnpm run db:reset`
-   then the integration tests). The AC3 cases added on 2026-09-16 have never
-   executed — no Docker in the session that wrote them.
+2. Have someone **manually** click through US-7.1-TC02, US-7.1-TC03 (the AC3
+   denial) and US-7.2-TC01/TC03 — by hand, via the UI or a signed-in API call
+   (CLAUDE.md: manual testing does not need a screen, but it does need a
+   human, not the automated suite). This is the one DoD gate still open.
+3. ~~Run the integration suite against a real database~~ — done 2026-09-16 on
+   a machine with Docker: 43/43 passing, AC3 cases included.
 4. Raise with the team: (a) that the test-case sheet's US-7.1 is missing
    SCRUM-89's AC3, which the Jira card does carry — another instance of the
    drift CLAUDE.md warns about, worth reconciling centrally;
