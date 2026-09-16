@@ -306,6 +306,33 @@ describe('resubmitting after a clarification', () => {
     expect(view.clarificationNote).toBe('Please confirm the venue');
   });
 
+  // Bug found via manual testing on 2026-09-16: a second clarification round
+  // overwrote clarification_note correctly but left clarification_requested_at
+  // frozen at the first round's time, because set_clarification_requested_at
+  // originally only fired on a null -> not-null transition, and a resubmitted
+  // request's note is never cleared to null (see the test above). Fixed by
+  // firing on any change to the note's value instead.
+  it('stamps a fresh timestamp on a second clarification, not just the first', async () => {
+    const id = await createRequest('submitted');
+    await requestClarification(id, { note: 'First question' }, coordinatorId);
+    const firstRequestedAt = (await getReviewDetail(id, coordinatorId)).clarificationRequestedAt;
+
+    await markEventRequestSubmitted(supabase, id);
+    // The clock backing `now()` in Postgres is second-resolution in some
+    // environments; without this, a same-second second round could produce
+    // an identical timestamp for a reason that has nothing to do with the bug.
+    await new Promise((resolve) => setTimeout(resolve, 1100));
+    await requestClarification(id, { note: 'Second question' }, coordinatorId);
+
+    const detail = await getReviewDetail(id, coordinatorId);
+    expect(detail.clarificationNote).toBe('Second question');
+    expect(detail.clarificationRequestedAt).not.toBeNull();
+    expect(detail.clarificationRequestedAt).not.toBe(firstRequestedAt);
+    expect(new Date(detail.clarificationRequestedAt!).getTime()).toBeGreaterThan(
+      new Date(firstRequestedAt!).getTime(),
+    );
+  });
+
   it('still refuses to resubmit a request that is already submitted', async () => {
     const id = await createRequest('submitted');
 

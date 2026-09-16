@@ -39,9 +39,18 @@ alter table event_request
 -- set_decided_at (20260912161500_event_request_decided_at_trigger.sql) for
 -- exactly the same reason: one clock, and it cannot be faked by whoever calls
 -- the API.
+--
+-- Fires on any change to the note's text, not just null -> not-null. A
+-- resubmitted request keeps its previous clarification_note rather than
+-- clearing it (US-7.2 AC3 wants the history visible), so a *second*
+-- clarification request overwrites an already-non-null note - the
+-- null -> not-null guard this trigger shipped with would silently skip
+-- re-stamping the timestamp on every round after the first, leaving
+-- "Requested at" showing the first ask's time no matter how many followed it.
+-- Confirmed live via manual testing on 2026-09-16, not just reasoned about.
 create or replace function set_clarification_requested_at() returns trigger language plpgsql as $$
 begin
-  if new.clarification_note is not null and old.clarification_note is null then
+  if new.clarification_note is not null and new.clarification_note is distinct from old.clarification_note then
     new.clarification_requested_at := now();
   end if;
   return new;
