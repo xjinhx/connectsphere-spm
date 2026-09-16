@@ -30,7 +30,7 @@ export function SubmitEventRequestButton({ requestId }: { requestId: string }) {
         details?: { incompleteFields?: IncompleteField[] };
       } | null;
 
-      if (!response.ok || payload?.status !== 'SUBMITTED') {
+      if (!response.ok || payload?.status !== 'submitted') {
         setIncomplete(payload?.details?.incompleteFields ?? []);
         throw new Error(payload?.message ?? 'The request could not be submitted.');
       }
