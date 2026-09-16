@@ -3,7 +3,18 @@ import { hasRole } from '@/domain/identity/policy';
 import { listMyAssignedEvents } from '@/domain/assignment/service';
 import { isAwaitingReview } from '@/domain/review/policy';
 import { EventRequestStatusBadge } from '@/components/event-request/EventRequestStatusBadge';
-import { formatSingaporeDate } from '@/domain/shared/dates';
+import { formatSingaporeDate, formatSingaporeDateTime } from '@/domain/shared/dates';
+
+const SLOT_SHORT_LABELS: Record<string, string> = {
+  am: 'AM',
+  pm: 'PM',
+  night: 'Night',
+};
+
+function formatSlots(slots: string[] | null): string {
+  if (!slots || slots.length === 0) return '—';
+  return slots.map((slot) => SLOT_SHORT_LABELS[slot] ?? slot).join(', ');
+}
 
 /**
  * SCRUM-88 AC1/AC3 — the Event Coordinator's review queue: every event
@@ -71,6 +82,12 @@ export default async function EventCoordinatorAssignedEventsPage() {
                   Proposed date
                 </th>
                 <th scope="col" className="p-3 font-medium">
+                  Slots
+                </th>
+                <th scope="col" className="p-3 font-medium">
+                  Submitted
+                </th>
+                <th scope="col" className="p-3 font-medium">
                   Status
                 </th>
               </tr>
@@ -87,6 +104,10 @@ export default async function EventCoordinatorAssignedEventsPage() {
                   <td className="p-3 font-mono text-xs text-[var(--text-muted)]">{event.reference}</td>
                   <td className="p-3">
                     {event.proposedDate ? formatSingaporeDate(event.proposedDate) : '—'}
+                  </td>
+                  <td className="p-3">{formatSlots(event.timeSlots)}</td>
+                  <td className="p-3">
+                    {event.submittedAt ? formatSingaporeDateTime(event.submittedAt) : '—'}
                   </td>
                   <td className="p-3">
                     <EventRequestStatusBadge status={event.status} />

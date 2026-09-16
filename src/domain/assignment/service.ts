@@ -182,6 +182,8 @@ export interface AssignedEvent {
   name: string;
   status: EventRequestStatus;
   proposedDate: string | null;
+  submittedAt: string | null;
+  timeSlots: string[] | null;
   assignedAt: string | null;
 }
 
@@ -214,6 +216,8 @@ export async function listMyAssignedEvents(coordinatorId: string): Promise<Assig
     status: row.status,
     proposedDate: row.proposed_date,
     assignedAt: row.assigned_at,
+    submittedAt: row.submitted_at,
+    timeSlots: row.time_slots,
   }));
 }
 

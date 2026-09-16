@@ -61,6 +61,11 @@ owners switch them the next time they edit those files.
     can't be pre-filled
   - `supabase/migrations/20260912000000_event_request_organisation_nullable.sql`
     — `event_request.client_organisation_id` made nullable
+  - `src/domain/assignment/service.ts` — `AssignedEvent` carries no client
+    organisation field, so it cannot be shown on the assigned-events queue
+    (SCRUM-88 AC1)
+  - `src/app/assigned-events/page.tsx` — no client organisation column,
+    since there is nothing to show
 - **To replace:** once organisers are linked to organisations (SCRUM-204),
   read the organiser's organisation in `currentActor.ts`; make
   `requireOrganiser()` refuse a missing organisation; add a new migration
