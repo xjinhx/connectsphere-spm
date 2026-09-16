@@ -302,13 +302,14 @@ async function readEventAssignment(eventRequestId: string): Promise<EventAssignm
  * Who may reassign is checked in the route through SCRUM-69's permission
  * matrix (`coordinator_assignment`), the same as SCRUM-94's assign.
  *
- * TODO(notifications): AC1 also says both coordinators are notified. There is
- * no notification story in this sprint, so nothing is sent; the reassignment
- * itself is recorded in event_request_coordinator_history, which holds exactly
- * what a notification to either coordinator would need (who, from whom, to
- * whom, when). When the Notification System story lands, raise both
- * notifications from here, where previousCoordinatorId and coordinatorId are
- * both to hand.
+ * DUMMY(SCRUM-24) D-06: AC1 also says both coordinators are notified. The
+ * Notification System (SCRUM-24) is not in this sprint, so nothing is sent:
+ * the recorded reassignment is the minimum honest implementation, and
+ * event_request_coordinator_history holds exactly what a notification to
+ * either coordinator would need (who, from whom, to whom, when). When
+ * SCRUM-24 lands, raise both notifications from here, where
+ * previousCoordinatorId and coordinatorId are both to hand. See
+ * docs/dummies.md.
  */
 export async function reassignCoordinator(
   eventRequestId: string,

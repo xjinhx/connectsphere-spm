@@ -125,3 +125,16 @@ owners switch them the next time they edit those files.
   assigned to each affected event (`event_request.coordinator_id`, from
   SCRUM-94); re-test SCRUM-120 AC4.
 - **Status:** Active
+
+### D-06 — Neither coordinator is notified when an event is reassigned
+
+- **Kind:** Out-of-sprint stand-in
+- **Added by:** SCRUM-96 — commit `b81d88c` (PR #4)
+- **Waiting on:** SCRUM-24 Notification System
+- **Where:** `src/domain/assignment/service.ts` — `reassignCoordinator()`
+- **To replace:** notify both the previous and the new coordinator from
+  `reassignCoordinator()`, straight after the reassignment is recorded, using
+  SCRUM-24's mechanism; the `event_request_coordinator_history` row written by
+  the same update holds who, from whom, to whom and when. Re-run US-8.1-TC03
+  (SCRUM-96 AC1).
+- **Status:** Active
