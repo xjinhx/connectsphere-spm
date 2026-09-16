@@ -1,0 +1,127 @@
+# Dummy register
+
+Every dummy in the codebase, active or replaced. **Read this before starting a
+story**, and update it in the same PR that adds, changes or replaces a dummy.
+The rules behind it are in `CLAUDE.md`, under "Dependencies on other people's
+stories".
+
+## What counts as a dummy
+
+Something in the code that **must change when another story lands**. There are
+three kinds:
+
+| Kind | What it is | Example below |
+|---|---|---|
+| Stand-in code | A fake version of another story's unfinished function | D-04: a function that always returns an empty list |
+| Loosened rule | A real rule deliberately relaxed until another story lands | D-01: an organisation is allowed to be empty |
+| Out-of-sprint stand-in | The minimum honest version of a feature that isn't in this sprint | D-03: a "notification" that is only the stored record |
+
+**Not a dummy:** a column one story creates early for another (e.g.
+`time_slots`, created by SCRUM-76 for SCRUM-77). It's real, and there's
+nothing to swap.
+
+## How to use it
+
+- **Adding one.** Mark every place it lives with
+  `// DUMMY(SCRUM-<key>) D-<nn>: <what is faked>` — the key is the story it
+  waits on, or the epic's key if no story exists yet. Waiting on more than one
+  story? One marker line per key, so a search for any of them finds it. Then
+  add an entry below with the next number, and put the `uses-dummy` label on
+  your Jira ticket.
+- **Starting a story.** Run `git grep "DUMMY(SCRUM-<your key>"` and search this
+  file for your key. Replacing those dummies is part of your story.
+- **Replacing one.** Follow its "To replace" steps, re-run the tests of the
+  story that added it, remove its markers, and set **Status** to Replaced with
+  the PR number. Never delete an entry — replaced entries are the history.
+
+**Status** is one of Active, Partly replaced, Replaced.
+
+**Does a test against a dummy count?** Only if it actually runs the behaviour.
+D-02's check really shows "nothing is committed", so it counts. D-04's check
+has no bookings to find, so it proves nothing, and that AC stays in Merged -
+Pending Verification.
+
+D-01 to D-05 existed before the `DUMMY(...)` marker did. D-02 and D-03 have
+been switched to it; the others still carry their original comments, and their
+owners switch them the next time they edit those files.
+
+---
+
+### D-01 — An event request's client organisation may be empty
+
+- **Kind:** Loosened rule
+- **Added by:** SCRUM-76 — commit `bee2e54` (PR #9)
+- **Waiting on:** SCRUM-203 Create and maintain a client organisation ·
+  SCRUM-204 Link an Event Organiser to a client organisation
+- **Where:**
+  - `src/lib/auth/currentActor.ts` — `clientOrganisation` is always `null`
+  - `src/domain/event-request/service.ts` — `requireOrganiser()` accepts a
+    missing organisation instead of refusing (the "Interim" comment)
+  - `src/components/event-request/EventRequestForm.tsx` — the organisation
+    can't be pre-filled
+  - `supabase/migrations/20260912000000_event_request_organisation_nullable.sql`
+    — `event_request.client_organisation_id` made nullable
+- **To replace:** once organisers are linked to organisations (SCRUM-204),
+  read the organiser's organisation in `currentActor.ts`; make
+  `requireOrganiser()` refuse a missing organisation; add a new migration
+  restoring NOT NULL on `client_organisation_id` (old migrations are never
+  edited); re-test SCRUM-76's create flow.
+- **Status:** Active. The open `client-organisation` branch (SCRUM-203) adds
+  the foreign key but deliberately leaves NOT NULL — mark this Partly replaced
+  when it merges.
+
+### D-02 — "Nothing is committed" is hardcoded when a request is approved
+
+- **Kind:** Out-of-sprint stand-in
+- **Added by:** SCRUM-92 — commit `b7e48a9` (PR #23)
+- **Waiting on:** SCRUM-148 Approve a booking request (venue) · SCRUM-21
+  Equipment Reservation · SCRUM-22 Attendee Registration
+- **Where:** `src/domain/review/policy.ts` — `NO_COMMITMENTS`, every flag
+  asserted `false`
+- **To replace:** derive the venue, equipment and registration flags from
+  confirmed bookings, reservations and registrations; re-run US-7.3-TC05 and
+  TC06 (SCRUM-92 AC2 and AC3). Each flag can be replaced separately, as its
+  epic lands.
+- **Status:** Active
+
+### D-03 — A coordinator's "notification" is only the recorded assignment
+
+- **Kind:** Out-of-sprint stand-in
+- **Added by:** SCRUM-94 — commit `bb942af` (PR #28)
+- **Waiting on:** SCRUM-24 Notification System
+- **Where:** `src/domain/assignment/service.ts` — `assignCoordinator()`
+- **To replace:** notify the assigned coordinator from `assignCoordinator()`,
+  straight after the assignment is recorded, using SCRUM-24's mechanism;
+  re-run US-8.1-TC02 (SCRUM-94 AC1).
+- **Status:** Active
+
+### D-04 — The bookings a capacity cut would affect are always an empty list
+
+- **Kind:** Stand-in code
+- **Added by:** SCRUM-120 — commit `80dd30e` (PR #13)
+- **Waiting on:** SCRUM-148 Approve a booking request
+- **Where:**
+  - `src/domain/venues/service.ts` — `findAffectedFutureBookings()` returns
+    `[]` (`TODO(SCRUM-148)`)
+  - `src/app/api/venues/[id]/route.ts` — the venue update handler
+    (`TODO(SCRUM-148)`)
+- **To replace:** `findAffectedFutureBookings()` takes the venue id and the
+  proposed maximum capacity and returns the confirmed future bookings above
+  it; `updateVenue` refuses unless `confirmAffectedBookings` is true; re-test
+  SCRUM-120 AC2 and AC3.
+- **Status:** Active. Its ACs can't be tested against this stand-in — there is
+  nothing to find — so they stay in Merged - Pending Verification.
+
+### D-05 — A capacity cut doesn't notify the affected coordinators
+
+- **Kind:** Out-of-sprint stand-in
+- **Added by:** SCRUM-120 — commit `80dd30e` (PR #13)
+- **Waiting on:** SCRUM-24 Notification System (the code comment calls it
+  EP-20) — and D-04 first, since there are no affected events to notify about
+  until then
+- **Where:** `src/domain/venues/service.ts` — `TODO(EP-20)` on
+  `findAffectedFutureBookings()`
+- **To replace:** after a confirmed capacity cut, notify the coordinator
+  assigned to each affected event (`event_request.coordinator_id`, from
+  SCRUM-94); re-test SCRUM-120 AC4.
+- **Status:** Active
