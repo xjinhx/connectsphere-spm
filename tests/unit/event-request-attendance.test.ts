@@ -41,6 +41,10 @@ describe('SCRUM-78 — State expected attendance', () => {
     expect(() => validateExpectedAttendance(12.5)).toThrow('Expected attendance must be a whole number');
   });
 
+  it('rejects a non-numeric attendance value, matching the AC2 message', () => {
+    expect(() => validateExpectedAttendance('abc')).toThrow('Expected attendance must be a whole number');
+  });
+
   it('full schema: a complete, valid core event request parses successfully', () => {
     const result = eventRequestCoreSchema.parse({
       name: 'Annual Tech Summit',

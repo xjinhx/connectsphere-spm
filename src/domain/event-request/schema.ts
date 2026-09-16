@@ -14,7 +14,7 @@ export const eventRequestCoreSchema = z.object({
   proposedDate: z.coerce.date(),
   timeSlots: z.array(TimeSlotEnum).min(1, 'Select at least one time slot'),
   expectedAttendance: z
-    .number({ required_error: 'Expected attendance is required' })
+    .number({ required_error: 'Expected attendance is required', invalid_type_error: 'Expected attendance must be a whole number' })
     .int('Expected attendance must be a whole number')
     .positive('Expected attendance must be greater than 0'),
 });
