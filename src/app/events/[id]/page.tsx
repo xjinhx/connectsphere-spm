@@ -92,6 +92,15 @@ export default async function EventRequestPage({
           label="Time slots"
           value={describeTimeSlots(request.timeSlots)}
         />
+        {/* SCRUM-78. Was missing from this page entirely - confirmed via a
+            manual walkthrough (2026-09-16) that the API already returned it
+            correctly and only the row was never added. */}
+        <Row
+          label="Expected attendance"
+          value={
+            request.expectedAttendance !== null ? String(request.expectedAttendance) : 'Not yet provided'
+          }
+        />
         {/* SCRUM-79 AC1: the layout, as saved with the request. */}
         <Row label="Room layout" value={describeRoomLayout(request.roomLayout)} />
         {/* SCRUM-79 AC4: a blank choice reads as no preference, not as missing. */}

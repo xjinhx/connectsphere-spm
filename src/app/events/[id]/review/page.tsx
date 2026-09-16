@@ -102,10 +102,18 @@ export default async function ReviewEventRequestPage({
       </div>
       <p className="mt-1 font-mono text-sm text-[var(--text-muted)]">{request.reference}</p>
 
-      {/* US-7.2 AC1/AC3 — a clarification already raised on this request. */}
+      {/* US-7.2 AC1/AC3 — a clarification already raised on this request.
+          Status-aware wording, same reasoning as the Organiser's own page
+          (src/app/events/[id]/page.tsx): once the request is resubmitted the
+          note stays visible (AC3) but should no longer read as outstanding -
+          confirmed missing here in a manual walkthrough (2026-09-16). */}
       {request.clarificationNote ? (
         <div className="mt-4 rounded-md border border-[var(--warning)] bg-amber-50 px-3 py-2 text-sm">
-          <p className="font-medium text-[var(--warning)]">Clarification requested</p>
+          <p className="font-medium text-[var(--warning)]">
+            {request.status === 'clarification_requested'
+              ? 'Clarification requested'
+              : 'Clarification was requested earlier'}
+          </p>
           <p className="mt-1 whitespace-pre-wrap">{request.clarificationNote}</p>
           {request.clarificationRequestedAt ? (
             <p className="mt-1 text-xs text-[var(--text-muted)]">
@@ -123,6 +131,15 @@ export default async function ReviewEventRequestPage({
           value={request.proposedDate ? formatSingaporeDate(request.proposedDate) : 'Not provided'}
         />
         <Row label="Time slots" value={describeTimeSlots(request.timeSlots)} />
+        {/* SCRUM-78. Confirmed missing here in a manual walkthrough
+            (2026-09-16) - the API (getReviewDetail) already returned it
+            correctly, this row was never added. */}
+        <Row
+          label="Expected attendance"
+          value={
+            request.expectedAttendance !== null ? String(request.expectedAttendance) : 'Not provided'
+          }
+        />
         <Row label="Room layout" value={describeRoomLayout(request.roomLayout)} />
         <Row label="Preferred location" value={describePreferredLocation(request.preferredLocation)} />
         <Row label="Accessibility" value={describeAccessibility(request)} />
