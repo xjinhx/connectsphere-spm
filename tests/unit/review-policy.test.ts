@@ -1,5 +1,13 @@
 import { describe, it, expect } from 'vitest';
-import { canBeApproved, canRequestClarification, isAwaitingReview } from '@/domain/review/policy';
+import {
+  canBeApproved,
+  canRequestClarification,
+  canReviewDetail,
+  isAwaitingReview,
+} from '@/domain/review/policy';
+
+const COORDINATOR_A = '11111111-1111-1111-1111-111111111111';
+const COORDINATOR_B = '22222222-2222-2222-2222-222222222222';
 
 /**
  * SCRUM-92 — Approve a request so planning can proceed (US-7.3).
@@ -75,5 +83,30 @@ describe('isAwaitingReview', () => {
 
   it('does not treat an approved request as awaiting review — it has already been decided', () => {
     expect(isAwaitingReview('approved')).toBe(false);
+  });
+});
+
+/**
+ * SCRUM-89 AC3 (Jira, authoritative) — "Given a submitted request is assigned
+ * to another Event Coordinator, when I request it directly by its identifier,
+ * then access is denied and no request data is returned."
+ *
+ * The rule itself is unit-tested here; that getReviewDetail actually refuses
+ * before mapping the row needs a database — see
+ * tests/integration/review-detail-clarification.test.ts.
+ */
+describe('canReviewDetail', () => {
+  it('allows the assigned coordinator', () => {
+    expect(canReviewDetail(COORDINATOR_A, COORDINATOR_A)).toBe(true);
+  });
+
+  it('refuses a coordinator the request is not assigned to', () => {
+    expect(canReviewDetail(COORDINATOR_A, COORDINATOR_B)).toBe(false);
+  });
+
+  // AC3 denies only when the request *is* assigned to someone else; it says
+  // nothing about an unassigned one, so that stays open to any Coordinator.
+  it('allows any coordinator while the request is not yet assigned', () => {
+    expect(canReviewDetail(null, COORDINATOR_A)).toBe(true);
   });
 });

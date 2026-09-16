@@ -36,7 +36,22 @@ const supabase = createAdminClient();
 const CLIENT_ORGANISATION_ID = '22222222-2222-2222-2222-222222222222';
 
 let coordinatorId: string;
+/** SCRUM-89 AC3's "another Event Coordinator". */
+let otherCoordinatorId: string;
 const createdRequestIds: string[] = [];
+
+/**
+ * Assignment goes through an update, not the insert: assigned_at is stamped by
+ * the set_assigned_at trigger on update only, and
+ * event_request_assignment_complete requires the three columns together.
+ */
+async function assignTo(id: string, assignee: string): Promise<void> {
+  const { error } = await supabase
+    .from('event_request')
+    .update({ coordinator_id: assignee, assigned_by: assignee })
+    .eq('id', id);
+  if (error) throw new Error(`could not assign test request: ${error.message}`);
+}
 
 async function createRequest(
   status: 'draft' | 'submitted',
@@ -78,6 +93,18 @@ beforeAll(async () => {
     throw new Error(`could not create test coordinator: ${error?.message ?? 'no user returned'}`);
   }
   coordinatorId = data.user.id;
+
+  const { data: other, error: otherError } = await supabase.auth.admin.createUser({
+    email: `coordinator+other${Date.now()}@connectsphere.example.com`,
+    password: 'Password123!',
+    email_confirm: true,
+  });
+  if (otherError || !other.user) {
+    throw new Error(
+      `could not create second test coordinator: ${otherError?.message ?? 'no user returned'}`,
+    );
+  }
+  otherCoordinatorId = other.user.id;
 });
 
 afterAll(async () => {
@@ -86,6 +113,9 @@ afterAll(async () => {
     await supabase.from('event_request').delete().eq('id', id);
   }
   if (coordinatorId) await supabase.auth.admin.deleteUser(coordinatorId);
+  // Also ON DELETE RESTRICT via coordinator_id/assigned_by, so this must
+  // follow the requests above.
+  if (otherCoordinatorId) await supabase.auth.admin.deleteUser(otherCoordinatorId);
 });
 
 describe('getReviewDetail', () => {
@@ -104,7 +134,7 @@ describe('getReviewDetail', () => {
       registration_required: true,
     });
 
-    const detail = await getReviewDetail(id);
+    const detail = await getReviewDetail(id, coordinatorId);
 
     expect(detail.purpose).toBe('Client launch');
     expect(detail.description).toBe('A full-day summit');
@@ -124,7 +154,7 @@ describe('getReviewDetail', () => {
   it('carries an unanswered field as null rather than dropping the key', async () => {
     const id = await createRequest('submitted');
 
-    const detail = await getReviewDetail(id);
+    const detail = await getReviewDetail(id, coordinatorId);
 
     expect(detail).toHaveProperty('purpose', null);
     expect(detail).toHaveProperty('roomLayout', null);
@@ -133,13 +163,36 @@ describe('getReviewDetail', () => {
   });
 
   it('reports an unknown request as not found', async () => {
-    await expect(getReviewDetail('99999999-9999-4999-8999-999999999999')).rejects.toMatchObject({
+    await expect(
+      getReviewDetail('99999999-9999-4999-8999-999999999999', coordinatorId),
+    ).rejects.toMatchObject({
       code: 'NOT_FOUND',
     });
   });
 
+  // US-7.1-TC03 (AC3) — "Given a submitted request is assigned to another
+  // Event Coordinator, when I request it directly by its identifier, then
+  // access is denied and no request data is returned."
+  it('denies a request assigned to another coordinator, returning no data', async () => {
+    const id = await createRequest('submitted', { purpose: 'Client launch' });
+    await assignTo(id, otherCoordinatorId);
+
+    await expect(getReviewDetail(id, coordinatorId)).rejects.toMatchObject({ code: 'FORBIDDEN' });
+  });
+
+  it('allows the coordinator the request is actually assigned to', async () => {
+    const id = await createRequest('submitted', { purpose: 'Client launch' });
+    await assignTo(id, coordinatorId);
+
+    const detail = await getReviewDetail(id, coordinatorId);
+
+    expect(detail.purpose).toBe('Client launch');
+  });
+
   it('reports a malformed id as not found rather than failing', async () => {
-    await expect(getReviewDetail('not-a-uuid')).rejects.toMatchObject({ code: 'NOT_FOUND' });
+    await expect(getReviewDetail('not-a-uuid', coordinatorId)).rejects.toMatchObject({
+      code: 'NOT_FOUND',
+    });
   });
 });
 
@@ -169,7 +222,7 @@ describe('requestClarification', () => {
       code: 'VALIDATION_ERROR',
     });
 
-    const detail = await getReviewDetail(id);
+    const detail = await getReviewDetail(id, coordinatorId);
     expect(detail.status).toBe('submitted');
     expect(detail.clarificationNote).toBeNull();
   });
@@ -192,18 +245,18 @@ describe('requestClarification', () => {
       requestClarification(id, { note: 'Second question' }, coordinatorId),
     ).rejects.toMatchObject({ code: 'INVALID_TRANSITION' });
 
-    const detail = await getReviewDetail(id);
+    const detail = await getReviewDetail(id, coordinatorId);
     expect(detail.clarificationNote).toBe('First question');
   });
 
   // US-7.1-TC03 (AC3) — once clarified, it is no longer awaiting review.
   it('takes the request out of the awaiting-review queue', async () => {
     const id = await createRequest('submitted');
-    expect(isAwaitingReview((await getReviewDetail(id)).status)).toBe(true);
+    expect(isAwaitingReview((await getReviewDetail(id, coordinatorId)).status)).toBe(true);
 
     await requestClarification(id, { note: 'Please confirm the venue' }, coordinatorId);
 
-    expect(isAwaitingReview((await getReviewDetail(id)).status)).toBe(false);
+    expect(isAwaitingReview((await getReviewDetail(id, coordinatorId)).status)).toBe(false);
   });
 });
 
@@ -231,12 +284,12 @@ describe('resubmitting after a clarification', () => {
 
   it('keeps the original submission time, so it holds its place in the queue', async () => {
     const id = await createRequest('submitted');
-    const before = (await getReviewDetail(id)).submittedAt;
+    const before = (await getReviewDetail(id, coordinatorId)).submittedAt;
     await requestClarification(id, { note: 'Please confirm the venue' }, coordinatorId);
 
     await markEventRequestSubmitted(supabase, id);
 
-    expect((await getReviewDetail(id)).submittedAt).toBe(before);
+    expect((await getReviewDetail(id, coordinatorId)).submittedAt).toBe(before);
   });
 
   // The note is not cleared: US-7.2 AC3 wants the clarification shown with the

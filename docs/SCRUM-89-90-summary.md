@@ -1,8 +1,8 @@
 # SCRUM-89 / SCRUM-90 — Build Summary
 
-**Branch:** `review-detail-clarification` (off `main` @ `b1e21d2`; merged up to
-`main`'s `6780cdf` — SCRUM-94, SCRUM-88 and others — on 2026-09-15; not
-merged into `main`)
+**Branch:** `review-detail-clarification` — rebased onto `main` @ `0fd7e19` on
+2026-09-16 (linear, no merge commit; picks up SCRUM-94, SCRUM-88 and the
+dummy-register work). Not merged into `main`.
 **Consolidated stories:** US-7.1 (Jira 88+89) and US-7.2 (Jira 90+91)
 **Status:** Both stories' own halves are code-complete **with UI**, and the
 AC/test-case mapping below has been re-checked against
@@ -11,34 +11,35 @@ pass, no PR, not merged. See "DoD status" at the bottom.
 
 ---
 
-## Correction: the ACs this branch was originally built against were wrong
+## Resolved: SCRUM-89 AC3 is real, and the check is restored
 
-The earlier version of this document listed SCRUM-89's ACs as "assigned
-coordinator opens a submitted request / blank shown as not provided / a
-request **assigned to another Coordinator is denied**", and a fix on
-2026-09-15 implemented that third one against SCRUM-94's new `coordinator_id`.
+This branch changed its mind twice on whether viewing a request should be
+denied to a Coordinator it is not assigned to. Settled on 2026-09-16 by
+reading the Jira card itself, which is authoritative per CLAUDE.md.
 
-Checked against `ConnectSphere_Test_Cases_v3.xlsx` ("User Stories & ACs"),
-that is not what this story asks for:
+**SCRUM-89's Jira ACs, verbatim:**
 
-- **SCRUM-89 is bundled with SCRUM-88 as US-7.1**, whose three ACs are: the
-  queue lists requests assigned to me awaiting review (AC1); opening one shows
-  every field submitted, including attachments (AC2); a reviewed request no
-  longer appears as awaiting review (AC3). **None restricts *viewing* by
-  assignment.**
-- The "not the Coordinator in charge → refused" wording belongs to **US-7.3
-  AC3** (SCRUM-92/93, approve/reject) — a different story, owned by someone
-  else.
-- A DRAFT AC elsewhere in the same workbook points the other way for viewing:
-  "an event is assigned to another Coordinator ... I can view its details but
-  cannot edit any field."
+1. "Given I am the assigned coordinator and I open a submitted request, when
+   the page loads, then every field the Event Organiser supplied is displayed
+   with the value that was submitted."
+2. "Given a section of the request was left blank by the organiser, when I
+   view the request, then that section is shown as not provided rather than
+   omitted."
+3. "Given a submitted request is assigned to another Event Coordinator, when
+   I request it directly by its identifier, then access is denied and no
+   request data is returned."
 
-So `canReviewDetail()` and its 403 have been **removed** — viewing a request's
-detail is role-gated (any Coordinator) and nothing more. Caveat: CLAUDE.md
-says Jira, not this sheet, is authoritative, and the sheet is known to be
-missing ACs on other cards. If SCRUM-89's Jira card really does carry an
-assignment-denial AC, this is the decision to revisit — it is a ~10-line
-change to restore.
+(Customer clarification refs: #91.)
+
+So AC3 **does** exist on this story. The intermediate commit that removed
+`canReviewDetail()` argued from `ConnectSphere_Test_Cases_v3.xlsx`'s
+consolidated US-7.1, which carries no such AC — but that sheet is explicitly
+**not** authoritative, and this is exactly the drift CLAUDE.md warns about.
+The check and its 403 are restored, now quoting the card's own wording.
+
+`coordinator_id is null` (not yet assigned) stays open to any Coordinator:
+AC3 denies only when a request *is* assigned to someone else, and inventing a
+rule for the unassigned case would be building beyond the card.
 
 ---
 
@@ -52,6 +53,7 @@ change to restore.
 | AC2 / TC02 — open a queued request, see every submitted field | ✅ Built this branch | `src/app/events/[id]/review/page.tsx` (new), linked from the queue's new "Open" column; data from `getReviewDetail()` |
 | AC2 / TC02 — …**including attachments** | ❌ Not possible — no attachment feature exists anywhere in the codebase, and none is in CLAUDE.md's Sprint 1 scope | Page shows an explicit "Attachments: not supported this sprint" row rather than omitting the clause silently |
 | AC3 / TC03 — a reviewed request no longer appears as awaiting review | ✅ Already satisfied by `isAwaitingReview()` (`status === 'submitted'`), which every review action moves the request out of | `src/domain/review/policy.ts` (SCRUM-88's function, unchanged) |
+| **SCRUM-89's own Jira AC3** — a request assigned to another Coordinator is denied, no data returned | ✅ Restored 2026-09-16 (see "Resolved" above). Unit-tested; integration test written but **not executed** (no Docker this session) | `canReviewDetail()` in `src/domain/review/policy.ts`, thrown from `getReviewDetail()` before the row is mapped |
 
 ### US-7.2 — Clarification exchange with the Organiser (SCRUM-**90** + 91)
 
@@ -91,12 +93,21 @@ and four integration tests.
   "enter a message / Send" action (US-7.2-TC01)
 
 **Changed this session:**
-- `src/domain/review/service.ts` — `getReviewDetail()` no longer takes an
-  actor or enforces assignment (see "Correction" above); new
-  `getClarificationView()` for the Organiser-visible read
-- `src/domain/review/policy.ts` — `canReviewDetail()` removed
+- `src/domain/review/service.ts` — `getReviewDetail(id, actorUserId)` enforces
+  SCRUM-89 AC3, throwing `ForbiddenError` before the row is mapped so no
+  request data leaves the function on refusal; new `getClarificationView()`
+  for the Organiser-visible read
+- `src/domain/review/policy.ts` — `canReviewDetail()` restored, quoting the
+  Jira card (see "Resolved" above)
 - `src/app/api/event-requests/[id]/clarification/route.ts` — added `GET`
-- `src/app/api/event-requests/[id]/review/route.ts` — reverted to `getReviewDetail(id)`
+- `src/app/api/event-requests/[id]/review/route.ts` — passes `actor.userId`
+- `src/app/events/[id]/review/page.tsx` — renders a refusal message on
+  `ForbiddenError` rather than crashing, and shows no request fields
+- `tests/unit/review-policy.test.ts` — 3 `canReviewDetail` cases
+- `tests/integration/review-detail-clarification.test.ts` — AC3 denial and
+  assigned-coordinator cases, using a second real coordinator; assignment goes
+  through an update so `set_assigned_at` stamps and
+  `event_request_assignment_complete` holds
 - `src/app/events/[id]/page.tsx` — Organiser now sees the clarification note
 - `src/app/assigned-events/page.tsx` — "Open" link per row (the handoff its
   own comment described; no other change to SCRUM-88's page)
@@ -152,9 +163,9 @@ rendering itself has not been eyeballed.
 |---|---|
 | All acceptance criteria are met | **No** — US-7.1 AC1 (client org / submission date, SCRUM-88's page), US-7.1 AC2's attachments clause, US-7.2 AC2/AC3 (SCRUM-91) |
 | Manually tested against those ACs | **Partly** — every AC this branch owns was driven end-to-end against a real stack, but not by a human in a browser |
-| Automated tested against those ACs | ✅ Unit for every pure rule, integration for every database-dependent one |
+| Automated tested against those ACs | ⚠️ Unit for every pure rule (274 passing). Integration written for every database-dependent one, but the **AC3 cases added 2026-09-16 have not been executed** — no Docker in that session |
 | Merged into main, existing functionality still works | **No** — branch only |
-| Runs from the README instructions | ✅ Verified this session (`db:start`, `next build`, `next dev`) |
+| Runs from the README instructions | ⚠️ `next build`, `tsc`, `eslint` clean on 2026-09-16; `db:start`/`next dev` last verified 2026-09-15, not re-run since the rebase |
 | Merged and integrated into the Git | **No** |
 | Code reviewed by someone other than the author | **No** — no PR |
 
@@ -166,11 +177,16 @@ branch is actually merged and reviewed.
 
 1. Open a PR referencing SCRUM-89 and SCRUM-90, listing the ACs and TCs above
    with their status, and get the peer review the DoD requires.
-2. Have someone click through US-7.1-TC02 and US-7.2-TC01/TC03 in a browser —
-   the one DoD gate this session could not close.
-3. Raise with the team: (a) whether SCRUM-89's Jira card really carries an
-   assignment-denial AC, per the Correction section — the sheet says it does
-   not; (b) that US-7.1 AC1 needs client org + submission date added to
+2. Have someone click through US-7.1-TC02, US-7.1-TC03 (the AC3 denial) and
+   US-7.2-TC01/TC03 in a browser — the one DoD gate this session could not
+   close.
+3. **Run the integration suite against a real database** (`pnpm run db:reset`
+   then the integration tests). The AC3 cases added on 2026-09-16 have never
+   executed — no Docker in the session that wrote them.
+4. Raise with the team: (a) that the test-case sheet's US-7.1 is missing
+   SCRUM-89's AC3, which the Jira card does carry — another instance of the
+   drift CLAUDE.md warns about, worth reconciling centrally;
+   (b) that US-7.1 AC1 needs client org + submission date added to
    SCRUM-88's queue page, and `AssignedEvent` widened to carry them; (c) who
    owns SCRUM-91, without which US-7.2 cannot close; (d) that SCRUM-92's
    approve route still carries the same "assigned coordinator" gap in its own

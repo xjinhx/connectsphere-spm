@@ -5,6 +5,7 @@ import {
   type EventRequestRow,
 } from '@/lib/supabase/eventRequests';
 import {
+  ForbiddenError,
   InvalidTransitionError,
   NotFoundError,
   ValidationError,
@@ -22,6 +23,7 @@ import {
   NO_COMMITMENTS,
   canBeApproved,
   canRequestClarification,
+  canReviewDetail,
   type Commitments,
 } from './policy';
 
@@ -194,16 +196,20 @@ export interface ReviewDetail extends EventRequest {
 }
 
 /**
- * AC1/AC2 (US-7.1, `ConnectSphere_Test_Cases_v3.xlsx` "User Stories & ACs") —
- * open a queued request and see every field the Organiser submitted. No
- * assignment check here: that sheet's US-7.1 (Jira 88+89, this story's actual
- * consolidated pairing) carries no AC restricting *viewing* by assignment —
- * the "another Coordinator... refused" wording belongs to US-7.3 AC3
- * (SCRUM-92/93, approving/rejecting), not this one. An earlier version of
- * this function gated viewing by `coordinator_id`, conflating the two; see
- * docs/SCRUM-89-90-summary.md for the correction.
+ * AC1 — "Given I am the assigned coordinator and I open a submitted request
+ * ... every field the Event Organiser supplied is displayed with the value
+ * that was submitted."
+ * AC3 — "Given a submitted request is assigned to another Event Coordinator,
+ * when I request it directly by its identifier, then access is denied and no
+ * request data is returned." Enforced by canReviewDetail in policy.ts, and
+ * thrown before the row is mapped, so nothing about the request leaves this
+ * function when access is refused.
+ *
+ * `actorUserId` is the signed-in Coordinator, supplied by the caller from
+ * getCurrentActor, never from the request — same reasoning as every other
+ * actorId in this file.
  */
-export async function getReviewDetail(id: string): Promise<ReviewDetail> {
+export async function getReviewDetail(id: string, actorUserId: string): Promise<ReviewDetail> {
   const parsedId = EventRequestIdSchema.safeParse(id);
   if (!parsedId.success) throw new NotFoundError('Event request');
 
@@ -214,6 +220,9 @@ export async function getReviewDetail(id: string): Promise<ReviewDetail> {
   if (!data) throw new NotFoundError('Event request');
 
   const row = data as unknown as EventRequestRow;
+  if (!canReviewDetail(row.coordinator_id, actorUserId)) {
+    throw new ForbiddenError('This event request is assigned to another Event Coordinator.');
+  }
 
   return {
     ...toEventRequest(row),

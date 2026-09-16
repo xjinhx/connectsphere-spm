@@ -13,7 +13,7 @@ import {
 } from '@/domain/event-request/policy';
 import { getReviewDetail, type ReviewDetail } from '@/domain/review/service';
 import { canRequestClarification } from '@/domain/review/policy';
-import { NotFoundError } from '@/domain/shared/errors';
+import { ForbiddenError, NotFoundError } from '@/domain/shared/errors';
 import { isActionPermitted } from '@/domain/identity/permissions';
 import { getCurrentActor } from '@/lib/auth/currentActor';
 import { formatSingaporeDate, formatSingaporeDateTime } from '@/domain/shared/dates';
@@ -67,10 +67,25 @@ export default async function ReviewEventRequestPage({
 
   let request: ReviewDetail;
   try {
-    request = await getReviewDetail(id);
+    request = await getReviewDetail(id, actor.userId);
   } catch (error) {
     if (error instanceof NotFoundError) {
       notFound();
+    }
+    // AC3 — assigned to another Coordinator. Shown as a refusal rather than a
+    // crash, and nothing about the request is rendered.
+    if (error instanceof ForbiddenError) {
+      return (
+        <main className="mx-auto max-w-2xl p-8">
+          <Link href="/assigned-events" className="text-sm text-[var(--brand)] hover:underline">
+            ← Assigned events
+          </Link>
+          <h1 className="mt-4 text-2xl font-semibold">Review request</h1>
+          <p className="mt-4 text-[var(--text-muted)]">
+            This request is assigned to another Event Coordinator, so you cannot review it.
+          </p>
+        </main>
+      );
     }
     throw error;
   }
