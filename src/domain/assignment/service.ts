@@ -6,7 +6,6 @@ import {
   type EventRequestRow,
 } from '@/lib/supabase/eventRequests';
 import { fetchProfileSummary } from '@/lib/supabase/profiles';
-import { createAdminClient } from '@/lib/supabase/admin';
 import {
   ConflictError,
   InvalidTransitionError,
@@ -241,12 +240,12 @@ export interface UnassignedEvent {
  * "everything submitted" (listSubmittedEventRequests already answers that,
  * without the coordinator filter, and is used elsewhere).
  *
- * Who may read: checked in the route through SCRUM-69's permission matrix
+ * Who may read: checked in the page through SCRUM-69's permission matrix
  * (coordinator_assignment), same as the assign action itself - seeing the
  * queue and acting on it are gated by the same permission.
  */
 export async function listUnassignedEvents(): Promise<UnassignedEvent[]> {
-  const { data, error } = await listUnassignedSubmittedEventRequests(createAdminClient());
+  const { data, error } = await listUnassignedSubmittedEventRequests();
   if (error) {
     throw new ValidationError('The unassigned events could not be read.', error.message);
   }

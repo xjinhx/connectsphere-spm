@@ -1,5 +1,6 @@
 import { getCurrentActor } from '@/lib/auth/currentActor';
-import { hasRole } from '@/domain/identity/policy';
+import { assertPermission } from '@/domain/identity/policy';
+import { ForbiddenError } from '@/domain/shared/errors';
 import { listUnassignedEvents } from '@/domain/assignment/service';
 import { formatSingaporeDate, formatSingaporeDateTime } from '@/domain/shared/dates';
 
@@ -18,15 +19,20 @@ export const dynamic = 'force-dynamic';
 export default async function EventOpsManagerAssignmentQueuePage() {
   const actor = await getCurrentActor();
 
-  if (!hasRole(actor.roles, 'operations_manager')) {
-    return (
-      <main className="mx-auto max-w-2xl p-8">
-        <h1 className="text-2xl font-semibold">Assignment queue</h1>
-        <p className="mt-4 text-[var(--text-muted)]">
-          This page is for Event Operations Managers. Your account does not currently hold that role.
-        </p>
-      </main>
-    );
+  try {
+    assertPermission(actor.roles, 'coordinator_assignment');
+  } catch (error) {
+    if (error instanceof ForbiddenError) {
+      return (
+        <main className="mx-auto max-w-2xl p-8">
+          <h1 className="text-2xl font-semibold">Assignment queue</h1>
+          <p className="mt-4 text-[var(--text-muted)]">
+            This page is for Event Operations Managers. Your account does not currently hold that role.
+          </p>
+        </main>
+      );
+    }
+    throw error;
   }
 
   const events = await listUnassignedEvents();

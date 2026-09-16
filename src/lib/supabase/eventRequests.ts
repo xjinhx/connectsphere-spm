@@ -274,8 +274,8 @@ export async function listSubmittedEventRequests(supabase: SupabaseClient) {
  * instead of read into memory to filter, since every submitted event's
  * coordinator_id is already indexed (event_request_coordinator_id_idx).
  */
-export async function listUnassignedSubmittedEventRequests(supabase: SupabaseClient) {
-  return supabase
+export async function listUnassignedSubmittedEventRequests() {
+  return db()
     .from('event_request')
     .select(COLUMNS)
     .eq('status', 'submitted')
