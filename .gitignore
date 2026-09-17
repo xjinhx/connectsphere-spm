@@ -79,6 +79,11 @@ logs/
 .cache/
 tmp/
 
+# ---- python ----
+.venv/
+__pycache__/
+*.pyc
+
 # ---- doc folders ----
 TEST_CASES_LOGIN.md
 TEST_CASES_LOGIN.tsv
