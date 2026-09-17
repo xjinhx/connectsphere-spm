@@ -5,6 +5,7 @@ import {
   type EventRequestRow,
 } from '@/lib/supabase/eventRequests';
 import {
+  ConflictError,
   ForbiddenError,
   InvalidTransitionError,
   NotFoundError,
@@ -365,7 +366,16 @@ export async function requestClarification(
   // submitted` filter: another coordinator acted on it in between (approved
   // it, or already asked their own question) - same race canBeApproved
   // guards against for approval.
-  if (!data) throw new InvalidTransitionError('clarification_requested', 'clarification_requested');
+  //
+  // A conflict, not an invalid transition. InvalidTransitionError would render
+  // as "An event cannot move from clarification_requested to
+  // clarification_requested", which describes neither what the caller asked
+  // for nor what happened: the request was never in clarification_requested
+  // for them. Raised in review of PR #32 - this is the first place the race
+  // reaches a Coordinator through a form they submit themselves, so the
+  // message has to say who lost. approveEventRequest above still carries the
+  // older wording; that is SCRUM-92's merged code, left for its owner.
+  if (!data) throw new ConflictError('Someone else already acted on this request.');
 
   return toClarificationOutcome(data as unknown as EventRequestRow);
 }
