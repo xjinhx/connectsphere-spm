@@ -189,6 +189,18 @@ describe('SCRUM-85 — Resume editing a draft', () => {
       expect(isResumable('submitted')).toBe(false);
     });
   });
+
+  // SCRUM-90 AC2 (Jira): "Given a request is in Clarification Requested
+  // status, when the responsible Event Organiser opens it, then my note is
+  // displayed and the request is editable again." isEditable/isResumable are
+  // the one gate both the edit page and PATCH /api/event-requests/<id>/draft
+  // already go through (see the two blocks above), so SCRUM-90 widens this
+  // shared rule rather than adding a second, parallel one.
+  describe('AC2 (SCRUM-90) — a clarification-requested request is editable again', () => {
+    it('allows resuming a request the Coordinator sent back for clarification', () => {
+      expect(isResumable('clarification_requested')).toBe(true);
+    });
+  });
 });
 
 describe('SCRUM-87 — Submit a draft for review', () => {

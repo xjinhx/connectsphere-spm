@@ -1,19 +1,30 @@
 import {
   fetchEventRequestById,
   markEventRequestApproved,
+  markEventRequestClarificationRequested,
   type EventRequestRow,
 } from '@/lib/supabase/eventRequests';
 import {
+  ConflictError,
+  ForbiddenError,
   InvalidTransitionError,
   NotFoundError,
   ValidationError,
 } from '@/domain/shared/errors';
 import type { EventRequestStatus } from '@/domain/event-request/schema';
-import { ApproveInputSchema, EventRequestIdSchema, type Decision } from './schema';
+import { toEventRequest, type EventRequest } from '@/domain/event-request/service';
+import {
+  ApproveInputSchema,
+  EventRequestIdSchema,
+  RequestClarificationInputSchema,
+  type Decision,
+} from './schema';
 import {
   COMMITMENT_STATEMENT,
   NO_COMMITMENTS,
   canBeApproved,
+  canRequestClarification,
+  canReviewDetail,
   type Commitments,
 } from './policy';
 
@@ -161,4 +172,210 @@ export async function getApprovalView(id: string): Promise<ApprovalView> {
     commitments: { ...NO_COMMITMENTS },
     commitmentStatement: COMMITMENT_STATEMENT,
   };
+}
+
+// ---------------------------------------------------------------------------
+// SCRUM-89 — Review the full detail of a request
+// ---------------------------------------------------------------------------
+
+/**
+ * AC1 — every field the Event Organiser supplied, exactly as submitted, plus
+ * SCRUM-90's clarification note if one has been raised. Built on
+ * toEventRequest (event-request/service.ts) rather than a second mapper, so
+ * this can never list a field the Organiser's own view does not also show.
+ *
+ * AC2 — nothing here omits a blank field: toEventRequest already carries
+ * every column as `null` rather than dropping the key when it was never
+ * filled in, so "not provided" is a rendering choice for whoever calls this
+ * (there is no dedicated review page this sprint - see CLAUDE.md's Sprint 1
+ * scope), not something this function has to construct.
+ */
+export interface ReviewDetail extends EventRequest {
+  clarificationNote: string | null;
+  clarificationRequestedBy: string | null;
+  clarificationRequestedAt: string | null;
+}
+
+/**
+ * AC1 — "Given I am the assigned coordinator and I open a submitted request
+ * ... every field the Event Organiser supplied is displayed with the value
+ * that was submitted."
+ * AC3 — "Given a submitted request is assigned to another Event Coordinator,
+ * when I request it directly by its identifier, then access is denied and no
+ * request data is returned." Enforced by canReviewDetail in policy.ts, and
+ * thrown before the row is mapped, so nothing about the request leaves this
+ * function when access is refused.
+ *
+ * `actorUserId` is the signed-in Coordinator, supplied by the caller from
+ * getCurrentActor, never from the request — same reasoning as every other
+ * actorId in this file.
+ */
+export async function getReviewDetail(id: string, actorUserId: string): Promise<ReviewDetail> {
+  const parsedId = EventRequestIdSchema.safeParse(id);
+  if (!parsedId.success) throw new NotFoundError('Event request');
+
+  const { data, error } = await fetchEventRequestById(parsedId.data);
+  if (error) {
+    throw new ValidationError('The event request could not be read.', error.message);
+  }
+  if (!data) throw new NotFoundError('Event request');
+
+  const row = data as unknown as EventRequestRow;
+  if (!canReviewDetail(row.coordinator_id, actorUserId)) {
+    throw new ForbiddenError('This event request is assigned to another Event Coordinator.');
+  }
+
+  return {
+    ...toEventRequest(row),
+    clarificationNote: row.clarification_note,
+    clarificationRequestedBy: row.clarification_requested_by,
+    clarificationRequestedAt: row.clarification_requested_at,
+  };
+}
+
+// ---------------------------------------------------------------------------
+// SCRUM-90 — Request clarification from the Event Organiser
+// ---------------------------------------------------------------------------
+
+/** What AC1 records. Smaller than EventRequest, same reasoning as ApprovalOutcome. */
+export interface ClarificationOutcome {
+  id: string;
+  status: EventRequestStatus;
+  clarificationNote: string;
+  clarificationRequestedBy: string;
+  clarificationRequestedAt: string;
+}
+
+function toClarificationOutcome(row: EventRequestRow): ClarificationOutcome {
+  // event_request_clarification_complete guarantees the three are written
+  // together, so this cannot happen for a row just moved to
+  // clarification_requested. Checked, not asserted - same reasoning as
+  // toApprovalOutcome above.
+  if (
+    row.clarification_note === null ||
+    row.clarification_requested_by === null ||
+    row.clarification_requested_at === null
+  ) {
+    throw new ValidationError('The clarification request was recorded incompletely.');
+  }
+
+  return {
+    id: row.id,
+    status: row.status,
+    clarificationNote: row.clarification_note,
+    clarificationRequestedBy: row.clarification_requested_by,
+    clarificationRequestedAt: row.clarification_requested_at,
+  };
+}
+
+/**
+ * What anyone viewing a request is told about its clarification state.
+ *
+ * US-7.2 AC1 ("saved with the event, visible to the Organiser") and AC3
+ * ("anyone with access opens it -> clarification ... shown with the event")
+ * — same reasoning as ApprovalView above: a separate read anyone signed-in
+ * can hit, rather than widening event-request's EventRequest (which SCRUM-89's
+ * own comment on toEventRequest already decided against, to match how
+ * SCRUM-92 kept its decision fields out of it too).
+ *
+ * No response half: AC2 ("Organiser responds ... reply saved") is SCRUM-91,
+ * a separate ticket not built on this branch. `response`/`respondedAt` are
+ * left out entirely rather than stubbed to null, so nothing here claims to
+ * answer AC2/AC3's "any response" half.
+ */
+export interface ClarificationView {
+  id: string;
+  status: EventRequestStatus;
+  clarificationNote: string | null;
+  clarificationRequestedAt: string | null;
+}
+
+/**
+ * AC1/AC3 — the organiser (or anyone else with access to the request) reads
+ * the clarification note without needing the Coordinator-only permission
+ * `getReviewDetail` requires. Who may view: Jira says "the Organiser" (AC1)
+ * and "anyone with access" (AC3), so no role/ownership check here, same as
+ * getApprovalView — the middleware already refuses this without a session.
+ */
+export async function getClarificationView(id: string): Promise<ClarificationView> {
+  const parsedId = EventRequestIdSchema.safeParse(id);
+  if (!parsedId.success) throw new NotFoundError('Event request');
+
+  const { data, error } = await fetchEventRequestById(parsedId.data);
+  if (error) {
+    throw new ValidationError('The event request could not be read.', error.message);
+  }
+  if (!data) throw new NotFoundError('Event request');
+
+  const row = data as unknown as EventRequestRow;
+  return {
+    id: row.id,
+    status: row.status,
+    clarificationNote: row.clarification_note,
+    clarificationRequestedAt: row.clarification_requested_at,
+  };
+}
+
+/**
+ * AC1 — a submitted request moves to Clarification Requested and the note is
+ * retained with the event record.
+ * AC3 — a missing or blank note is blocked before anything is read or
+ * written, and the organiser (in this case the Coordinator submitting the
+ * form) is told a note is required.
+ *
+ * `actorId` is the Coordinator raising it, supplied by the route from the
+ * signed-in session (getCurrentActor) - never from the request body, same
+ * reasoning as approveEventRequest's actorId.
+ */
+export async function requestClarification(
+  id: string,
+  input: unknown,
+  actorId: string,
+): Promise<ClarificationOutcome> {
+  const parsedId = EventRequestIdSchema.safeParse(id);
+  if (!parsedId.success) throw new NotFoundError('Event request');
+
+  const parsedInput = RequestClarificationInputSchema.safeParse(input);
+  if (!parsedInput.success) {
+    throw new ValidationError(
+      'A note describing what is needed is required.',
+      parsedInput.error.flatten(),
+    );
+  }
+
+  const { data: existing, error: readError } = await fetchEventRequestById(parsedId.data);
+  if (readError) {
+    throw new ValidationError('The event request could not be read.', readError.message);
+  }
+  if (!existing) throw new NotFoundError('Event request');
+
+  const current = existing as unknown as EventRequestRow;
+  if (!canRequestClarification(current.status)) {
+    throw new InvalidTransitionError(current.status, 'clarification_requested');
+  }
+
+  const { data, error } = await markEventRequestClarificationRequested(
+    parsedId.data,
+    parsedInput.data.note,
+    actorId,
+  );
+  if (error) {
+    throw new ValidationError('The clarification request could not be saved.', error.message);
+  }
+  // The check above saw a submitted request, yet no row matched the `status =
+  // submitted` filter: another coordinator acted on it in between (approved
+  // it, or already asked their own question) - same race canBeApproved
+  // guards against for approval.
+  //
+  // A conflict, not an invalid transition. InvalidTransitionError would render
+  // as "An event cannot move from clarification_requested to
+  // clarification_requested", which describes neither what the caller asked
+  // for nor what happened: the request was never in clarification_requested
+  // for them. Raised in review of PR #32 - this is the first place the race
+  // reaches a Coordinator through a form they submit themselves, so the
+  // message has to say who lost. approveEventRequest above still carries the
+  // older wording; that is SCRUM-92's merged code, left for its owner.
+  if (!data) throw new ConflictError('Someone else already acted on this request.');
+
+  return toClarificationOutcome(data as unknown as EventRequestRow);
 }

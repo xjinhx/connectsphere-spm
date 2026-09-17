@@ -1,0 +1,165 @@
+import Link from 'next/link';
+import { notFound } from 'next/navigation';
+import { EventRequestStatusBadge } from '@/components/event-request/EventRequestStatusBadge';
+import { RequestClarificationForm } from '@/components/event-request/RequestClarificationForm';
+import {
+  describeAccessibility,
+  describeEquipment,
+  describePreferredLocation,
+  describeRegistration,
+  describeRoomLayout,
+  describeTechnicalSupport,
+  describeTimeSlots,
+} from '@/domain/event-request/policy';
+import { getReviewDetail, type ReviewDetail } from '@/domain/review/service';
+import { canRequestClarification } from '@/domain/review/policy';
+import { ForbiddenError, NotFoundError } from '@/domain/shared/errors';
+import { isActionPermitted } from '@/domain/identity/permissions';
+import { getCurrentActor } from '@/lib/auth/currentActor';
+import { formatSingaporeDate, formatSingaporeDateTime } from '@/domain/shared/dates';
+
+/**
+ * US-7.1 AC2 (`ConnectSphere_Test_Cases_v3.xlsx`, US-7.1-TC02) — open a
+ * queued request from the Coordinator's assigned-events queue and see every
+ * field the Organiser submitted. The queue itself is SCRUM-88
+ * (src/app/assigned-events/page.tsx); this is the "open it" page that
+ * page's own comment left for this story to build.
+ *
+ * Attachments (also named in TC02) are not shown: no attachment feature
+ * exists anywhere in this codebase yet (not in CLAUDE.md's current-sprint
+ * scope), so this shows everything that does exist and says so, rather than
+ * inventing a feature to satisfy one clause of the test case.
+ */
+
+export const dynamic = 'force-dynamic';
+
+function Row({ label, value }: { label: string; value: string }) {
+  return (
+    <div className="border-b border-[var(--border)] py-3 last:border-b-0">
+      <dt className="text-xs font-medium tracking-wide text-[var(--text-muted)] uppercase">
+        {label}
+      </dt>
+      <dd className="mt-1 text-sm whitespace-pre-wrap">{value}</dd>
+    </div>
+  );
+}
+
+export default async function ReviewEventRequestPage({
+  params,
+}: {
+  params: Promise<{ id: string }>;
+}) {
+  const actor = await getCurrentActor();
+  // The same permission the API route asserts, so the page and the route can
+  // never disagree about who may review.
+  if (!isActionPermitted(actor.roles, 'event_request_review')) {
+    return (
+      <main className="mx-auto max-w-2xl p-8">
+        <h1 className="text-2xl font-semibold">Review request</h1>
+        <p className="mt-4 text-[var(--text-muted)]">
+          This page is for Event Coordinators. Your account does not currently hold that role.
+        </p>
+      </main>
+    );
+  }
+
+  const { id } = await params;
+
+  let request: ReviewDetail;
+  try {
+    request = await getReviewDetail(id, actor.userId);
+  } catch (error) {
+    if (error instanceof NotFoundError) {
+      notFound();
+    }
+    // AC3 — assigned to another Coordinator. Shown as a refusal rather than a
+    // crash, and nothing about the request is rendered.
+    if (error instanceof ForbiddenError) {
+      return (
+        <main className="mx-auto max-w-2xl p-8">
+          <Link href="/assigned-events" className="text-sm text-[var(--brand)] hover:underline">
+            ← Assigned events
+          </Link>
+          <h1 className="mt-4 text-2xl font-semibold">Review request</h1>
+          <p className="mt-4 text-[var(--text-muted)]">
+            This request is assigned to another Event Coordinator, so you cannot review it.
+          </p>
+        </main>
+      );
+    }
+    throw error;
+  }
+
+  return (
+    <main className="mx-auto max-w-2xl px-4 py-8">
+      <Link href="/assigned-events" className="text-sm text-[var(--brand)] hover:underline">
+        ← Assigned events
+      </Link>
+
+      <div className="mt-4 flex flex-wrap items-center gap-3">
+        <h1 className="text-xl font-semibold">{request.name}</h1>
+        <EventRequestStatusBadge status={request.status} />
+      </div>
+      <p className="mt-1 font-mono text-sm text-[var(--text-muted)]">{request.reference}</p>
+
+      {/* US-7.2 AC1/AC3 — a clarification already raised on this request.
+          Status-aware wording, same reasoning as the Organiser's own page
+          (src/app/events/[id]/page.tsx): once the request is resubmitted the
+          note stays visible (AC3) but should no longer read as outstanding -
+          confirmed missing here in a manual walkthrough (2026-09-16). */}
+      {request.clarificationNote ? (
+        <div className="mt-4 rounded-md border border-[var(--warning)] bg-amber-50 px-3 py-2 text-sm">
+          <p className="font-medium text-[var(--warning)]">
+            {request.status === 'clarification_requested'
+              ? 'Clarification requested'
+              : 'Clarification was requested earlier'}
+          </p>
+          <p className="mt-1 whitespace-pre-wrap">{request.clarificationNote}</p>
+          {request.clarificationRequestedAt ? (
+            <p className="mt-1 text-xs text-[var(--text-muted)]">
+              Requested {formatSingaporeDateTime(request.clarificationRequestedAt)}
+            </p>
+          ) : null}
+        </div>
+      ) : null}
+
+      <dl className="mt-6 rounded-lg border border-[var(--border)] bg-[var(--surface)] px-4">
+        <Row label="Purpose" value={request.purpose ?? 'Not provided'} />
+        <Row label="Description" value={request.description ?? 'Not provided'} />
+        <Row
+          label="Proposed date"
+          value={request.proposedDate ? formatSingaporeDate(request.proposedDate) : 'Not provided'}
+        />
+        <Row label="Time slots" value={describeTimeSlots(request.timeSlots)} />
+        {/* SCRUM-78. Confirmed missing here in a manual walkthrough
+            (2026-09-16) - the API (getReviewDetail) already returned it
+            correctly, this row was never added. */}
+        <Row
+          label="Expected attendance"
+          value={
+            request.expectedAttendance !== null ? String(request.expectedAttendance) : 'Not provided'
+          }
+        />
+        <Row label="Room layout" value={describeRoomLayout(request.roomLayout)} />
+        <Row label="Preferred location" value={describePreferredLocation(request.preferredLocation)} />
+        <Row label="Accessibility" value={describeAccessibility(request)} />
+        <Row label="Equipment" value={describeEquipment(request)} />
+        <Row label="Technical support" value={describeTechnicalSupport(request.technicalSupportNotes)} />
+        <Row label="Attendee registration" value={describeRegistration(request.registrationRequired)} />
+        {/* US-7.1-TC02 also asks for attachments; there is no attachment
+            feature in this codebase to read one from. */}
+        <Row label="Attachments" value="Not supported this sprint" />
+        <Row label="Created" value={formatSingaporeDateTime(request.createdAt)} />
+        {request.submittedAt ? (
+          <Row label="Submitted" value={formatSingaporeDateTime(request.submittedAt)} />
+        ) : null}
+      </dl>
+
+      {canRequestClarification(request.status) ? (
+        <section className="mt-6 rounded-lg border border-[var(--border)] bg-[var(--surface)] p-4">
+          <RequestClarificationForm requestId={request.id} />
+        </section>
+      ) : null}
+    </main>
+  );
+}

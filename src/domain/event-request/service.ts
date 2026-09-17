@@ -94,7 +94,16 @@ export interface EventRequest {
 
 const UUID_PATTERN = /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i;
 
-function toEventRequest(row: EventRequestRow): EventRequest {
+/**
+ * Exported so domain/review/service.ts (SCRUM-89) can build its review shape
+ * from the same mapping rather than a second one that could drift from this
+ * one — "every field the Event Organiser supplied" (SCRUM-89 AC1) is exactly
+ * what this already maps. Review-only columns (SCRUM-90's clarification_note
+ * and friends) stay out of EventRequest itself, same as SCRUM-92 kept
+ * decision/decidedBy/decidedAt in its own ApprovalOutcome/ApprovalView
+ * instead of widening this interface.
+ */
+export function toEventRequest(row: EventRequestRow): EventRequest {
   return {
     id: row.id,
     reference: row.reference,

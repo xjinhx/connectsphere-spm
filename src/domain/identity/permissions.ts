@@ -26,6 +26,14 @@ export const ACTIONS = [
   // SCRUM-92 — the card's story is "As an Event Coordinator, I want to approve
   // a request". SCRUM-93 (reject) can reuse this action.
   'event_request_approval',
+  // SCRUM-89 — "As an Event Coordinator, I want to open a submitted request
+  // and see everything the Event Organiser provided". Read-only, kept
+  // separate from event_request_approval so viewing and deciding can diverge
+  // later without touching each other's grant.
+  'event_request_review',
+  // SCRUM-90 — "As an Event Coordinator, I want to return a request to the
+  // Event Organiser with a note describing what is unclear".
+  'event_request_clarification',
 ] as const;
 
 export type Action = (typeof ACTIONS)[number];
@@ -36,7 +44,12 @@ export function isAction(value: unknown): value is Action {
 
 export const ROLE_PERMISSIONS: Record<Role, readonly Action[]> = {
   event_organiser: ['event_request_creation'],
-  coordinator: ['venue_catalogue_view', 'event_request_approval'],
+  coordinator: [
+    'venue_catalogue_view',
+    'event_request_approval',
+    'event_request_review',
+    'event_request_clarification',
+  ],
   operations_manager: ['venue_catalogue_view', 'coordinator_assignment', 'account_role_management'],
   venue_staff: ['venue_administration', 'venue_catalogue_view'],
   technical_support: ['venue_catalogue_view', 'equipment_administration'],

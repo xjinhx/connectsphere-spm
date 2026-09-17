@@ -54,6 +54,24 @@ export const COMMITMENT_STATEMENT =
 
 
 // ---------------------------------------------------------------------------
+// SCRUM-90 — Request clarification from the Event Organiser
+// ---------------------------------------------------------------------------
+
+/**
+ * AC1 describes requesting clarification on "a submitted request", and
+ * nothing else. Clarifying a draft, or clarifying a request that is already
+ * Clarification Requested (a second note before the Organiser has responded),
+ * is not on the card and is refused — same reasoning as canBeApproved above:
+ * the rule is a readable statement here, and the database enforces the same
+ * thing inside the update itself (see markEventRequestClarificationRequested),
+ * which is what makes two coordinators requesting clarification at the same
+ * moment safe.
+ */
+export function canRequestClarification(status: EventRequestStatus): boolean {
+  return status === 'submitted';
+}
+
+// ---------------------------------------------------------------------------
 // SCRUM-88 — Review submitted requests from the queue
 // ---------------------------------------------------------------------------
 
@@ -71,4 +89,29 @@ export const COMMITMENT_STATEMENT =
  */
 export function isAwaitingReview(status: EventRequestStatus): boolean {
   return status === 'submitted';
+}
+
+// ---------------------------------------------------------------------------
+// SCRUM-89 AC3 — deny a Coordinator who is not the one assigned
+// ---------------------------------------------------------------------------
+
+/**
+ * AC3, quoted from the Jira card (authoritative per CLAUDE.md): "Given a
+ * submitted request is assigned to another Event Coordinator, when I request
+ * it directly by its identifier, then access is denied and no request data is
+ * returned."
+ *
+ * Read literally: the card denies access when the request *is* assigned to
+ * someone else. It says nothing about an unassigned request, so one is not
+ * invented here — coordinator_id === null stays open to any Coordinator.
+ * Assignment is a one-way Event Operations Manager action (SCRUM-94 AC4),
+ * never self-service, so this never lets a Coordinator claim a request by
+ * opening it.
+ *
+ * An earlier commit on this branch removed this check on the basis that the
+ * test-case spreadsheet's consolidated US-7.1 carries no such AC. The Jira
+ * card does carry it, and CLAUDE.md says Jira wins — so it is restored.
+ */
+export function canReviewDetail(coordinatorId: string | null, actorUserId: string): boolean {
+  return coordinatorId === null || coordinatorId === actorUserId;
 }

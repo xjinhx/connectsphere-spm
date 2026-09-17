@@ -1,3 +1,4 @@
+import Link from 'next/link';
 import { getCurrentActor } from '@/lib/auth/currentActor';
 import { hasRole } from '@/domain/identity/policy';
 import { listMyAssignedEvents } from '@/domain/assignment/service';
@@ -30,7 +31,8 @@ function formatSlots(slots: string[] | null): string {
  * coordinator's own events - so nothing here needs to filter by coordinator
  * id again.
  *
- * "Open the full detail" (AC2) is SCRUM-89's story, not built here.
+ * "Open the full detail" (AC2, US-7.1-TC02) links to /events/[id]/review —
+ * SCRUM-89's page, built there rather than here.
  */
 
 export const dynamic = 'force-dynamic';
@@ -90,6 +92,9 @@ export default async function EventCoordinatorAssignedEventsPage() {
                 <th scope="col" className="p-3 font-medium">
                   Status
                 </th>
+                <th scope="col" className="p-3 font-medium">
+                  <span className="sr-only">Actions</span>
+                </th>
               </tr>
             </thead>
             <tbody>
@@ -111,6 +116,11 @@ export default async function EventCoordinatorAssignedEventsPage() {
                   </td>
                   <td className="p-3">
                     <EventRequestStatusBadge status={event.status} />
+                  </td>
+                  <td className="p-3">
+                    <Link href={`/events/${event.id}/review`} className="text-[var(--brand)] hover:underline">
+                      Open
+                    </Link>
                   </td>
                 </tr>
               ))}
