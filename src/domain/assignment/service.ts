@@ -2,6 +2,7 @@ import {
   assignCoordinatorToEventRequest,
   fetchEventRequestById,
   listEventRequestsForCoordinator,
+  listUnassignedSubmittedEventRequests,
   type EventRequestRow,
 } from '@/lib/supabase/eventRequests';
 import { fetchProfileSummary } from '@/lib/supabase/profiles';
@@ -213,5 +214,48 @@ export async function listMyAssignedEvents(coordinatorId: string): Promise<Assig
     status: row.status,
     proposedDate: row.proposed_date,
     assignedAt: row.assigned_at,
+  }));
+}
+
+// ---------------------------------------------------------------------------
+// SCRUM-95 — See submitted events with no coordinator
+// ---------------------------------------------------------------------------
+
+/**
+ * One row of "submitted, needs a coordinator". Same shape as AssignedEvent
+ * (SCRUM-88's queue), minus the assignment fields this list is specifically
+ * about the absence of.
+ */
+export interface UnassignedEvent {
+  id: string;
+  reference: string;
+  name: string;
+  proposedDate: string | null;
+  submittedAt: string | null;
+}
+
+/**
+ * AC1 — every submitted event with no coordinator, oldest submission first.
+ * This is the pool an Operations Manager still needs to work through, not
+ * "everything submitted" (listSubmittedEventRequests already answers that,
+ * without the coordinator filter, and is used elsewhere).
+ *
+ * Who may read: checked in the page through SCRUM-69's permission matrix
+ * (coordinator_assignment), same as the assign action itself - seeing the
+ * queue and acting on it are gated by the same permission.
+ */
+export async function listUnassignedEvents(): Promise<UnassignedEvent[]> {
+  const { data, error } = await listUnassignedSubmittedEventRequests();
+  if (error) {
+    throw new ValidationError('The unassigned events could not be read.', error.message);
+  }
+
+  const rows = (data ?? []) as unknown as EventRequestRow[];
+  return rows.map((row) => ({
+    id: row.id,
+    reference: row.reference,
+    name: row.name,
+    proposedDate: row.proposed_date,
+    submittedAt: row.submitted_at,
   }));
 }
