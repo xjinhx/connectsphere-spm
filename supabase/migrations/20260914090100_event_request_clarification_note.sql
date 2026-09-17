@@ -40,23 +40,41 @@ alter table event_request
 -- exactly the same reason: one clock, and it cannot be faked by whoever calls
 -- the API.
 --
--- Fires on any change to the note's text, not just null -> not-null. A
--- resubmitted request keeps its previous clarification_note rather than
--- clearing it (US-7.2 AC3 wants the history visible), so a *second*
--- clarification request overwrites an already-non-null note - the
--- null -> not-null guard this trigger shipped with would silently skip
--- re-stamping the timestamp on every round after the first, leaving
--- "Requested at" showing the first ask's time no matter how many followed it.
--- Confirmed live via manual testing on 2026-09-16, not just reasoned about.
+-- Keyed on the STATUS transition into clarification_requested, because that
+-- is what "a clarification was raised" actually means. Two narrower guards
+-- were tried first and both leaked:
+--
+--   1. `old.clarification_note is null` - only ever true for the first
+--      clarification a request receives. The note is deliberately kept (never
+--      cleared) when the Organiser resubmits, since US-7.2 AC3 wants the
+--      history visible, so every later round wrote its note over a non-null
+--      one and skipped the re-stamp entirely.
+--   2. `new.clarification_note is distinct from old.clarification_note` -
+--      closes that gap only when the wording changes. A Coordinator who asks
+--      the SAME question again (the Organiser resubmitted without actually
+--      answering it, so the identical sentence is re-sent) still produced no
+--      re-stamp, while `status` and `clarification_requested_by` both updated
+--      - leaving a row that says one Coordinator asked at another
+--      Coordinator's timestamp.
+--
+-- The transition itself is unambiguous: requestClarification only ever moves a
+-- request from submitted -> clarification_requested (markEventRequestClarificationRequested
+-- filters on `status = 'submitted'`), so every genuine ask crosses this edge
+-- exactly once, whatever the note says. `is distinct from` rather than
+-- `old.status = 'submitted'` keeps it null-safe and reads like the sibling
+-- triggers (set_submitted_at, set_assigned_at).
 create or replace function set_clarification_requested_at() returns trigger language plpgsql as $$
 begin
-  if new.clarification_note is not null and new.clarification_note is distinct from old.clarification_note then
+  if new.status = 'clarification_requested' and old.status is distinct from new.status then
     new.clarification_requested_at := now();
   end if;
   return new;
 end;
 $$;
 
+-- `status` is in the column list as well as clarification_note: the body now
+-- keys on status, so the trigger has to be woken by a status write even in the
+-- (currently non-existent) case of one arriving without a note alongside it.
 create trigger event_request_set_clarification_requested_at
-  before update of clarification_note on event_request
+  before update of clarification_note, status on event_request
   for each row execute function set_clarification_requested_at();

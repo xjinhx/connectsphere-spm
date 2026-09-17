@@ -333,6 +333,31 @@ describe('resubmitting after a clarification', () => {
     );
   });
 
+  // The case the test above cannot catch, because it asks two *different*
+  // questions: a Coordinator re-asking the SAME question, which happens when
+  // the Organiser resubmits without actually answering it. An earlier version
+  // of set_clarification_requested_at only re-stamped when the note's text
+  // changed, so this path left clarification_requested_at frozen at the first
+  // ask while status and clarification_requested_by both moved on.
+  it('stamps a fresh timestamp even when the same question is asked again', async () => {
+    const SAME_QUESTION = 'Please add the expected attendance';
+    const id = await createRequest('submitted');
+    await requestClarification(id, { note: SAME_QUESTION }, coordinatorId);
+    const firstRequestedAt = (await getReviewDetail(id, coordinatorId)).clarificationRequestedAt;
+
+    await markEventRequestSubmitted(supabase, id);
+    // Same reason as the test above: second-resolution clocks would otherwise
+    // make an unchanged timestamp look correct.
+    await new Promise((resolve) => setTimeout(resolve, 1100));
+    await requestClarification(id, { note: SAME_QUESTION }, coordinatorId);
+
+    const detail = await getReviewDetail(id, coordinatorId);
+    expect(detail.clarificationNote).toBe(SAME_QUESTION);
+    expect(new Date(detail.clarificationRequestedAt!).getTime()).toBeGreaterThan(
+      new Date(firstRequestedAt!).getTime(),
+    );
+  });
+
   it('still refuses to resubmit a request that is already submitted', async () => {
     const id = await createRequest('submitted');
 
