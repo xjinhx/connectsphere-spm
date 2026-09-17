@@ -2,7 +2,7 @@ name: Slack reminder
 
 on:
   schedule:
-    - cron: "0 9 * * 1-7"   # 9am UTC = 5pm SGT, Mon to Sun
+    - cron: "0 9 * * *"   # 9am UTC = 5pm SGT, every day
   workflow_dispatch:         # "Run workflow" button for testing
     inputs:
       dry_run:
