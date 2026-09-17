@@ -1,4 +1,5 @@
 import Link from 'next/link';
+import CoordinatorPanel from '@/components/assignment/CoordinatorPanel';
 import { EventRequestStatusBadge } from '@/components/event-request/EventRequestStatusBadge';
 import { SubmitEventRequestButton } from '@/components/event-request/SubmitEventRequestButton';
 import {
@@ -93,6 +94,9 @@ export default async function EventRequestPage({
           <Row label="Submitted" value={formatSingaporeDateTime(request.submittedAt)} />
         ) : null}
       </dl>
+
+      {/* SCRUM-98: who the organiser's coordinator is (panel owned by SCRUM-96/98). */}
+      <CoordinatorPanel eventRequestId={request.id} />
 
       {/* SCRUM-82 AC4: a submitted request is read-only - no edit, save or
           delete is offered. Only a draft gets an action. */}
