@@ -33,12 +33,16 @@ describe('SCRUM-78 — State expected attendance', () => {
   });
 
   it('rejects a zero or negative attendance value', () => {
-    expect(() => validateExpectedAttendance(0)).toThrow('Expected attendance must be greater than 0');
-    expect(() => validateExpectedAttendance(-5)).toThrow('Expected attendance must be greater than 0');
+    expect(() => validateExpectedAttendance(0)).toThrow('Expected attendance must be a positive whole number');
+    expect(() => validateExpectedAttendance(-5)).toThrow('Expected attendance must be a positive whole number');
   });
 
   it('rejects a non-integer attendance value', () => {
-    expect(() => validateExpectedAttendance(12.5)).toThrow('Expected attendance must be a whole number');
+    expect(() => validateExpectedAttendance(12.5)).toThrow('Expected attendance must be a positive whole number');
+  });
+
+  it('rejects a non-numeric attendance value, matching the AC2 message', () => {
+    expect(() => validateExpectedAttendance('abc')).toThrow('Expected attendance must be a positive whole number');
   });
 
   it('full schema: a complete, valid core event request parses successfully', () => {
