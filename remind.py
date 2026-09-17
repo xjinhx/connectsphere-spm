@@ -2,7 +2,9 @@
 Slack channel reminder.
 Checks who hasn't posted a daily standup update in the channel today
 (SGT) and tags them. A message counts as a standup update only if it
-starts with the team's template header, "My daily standup:".
+contains the team's template header, "My daily standup:", anywhere
+in its text (not necessarily at the very start, since the template
+is often wrapped in other text/formatting).
 Uses a bot token, so the bot must be invited into the channel first:
     /invite @YourBotName
 """
@@ -18,7 +20,7 @@ from slack_sdk.errors import SlackApiError
 CHANNEL_ID = "C0C0S37SA2U"               # #spm-team2 channel ID
 TEAM = ["U0BQ65DLTFH", "U0BQBNLBTLK", "U0BQHS7J0VB", "U0BRCACG30Q", "U0BQG127CMC", "U0BQHUR8W1Y"]    # member IDs to chase
 MESSAGE = "Hi {tags}, please submit your daily standup soon, thank you!"
-STANDUP_PREFIX = "my daily standup:"      # matched case-insensitively against the message start
+STANDUP_MARKER = "my daily standup:"      # matched case-insensitively, anywhere in the message text
 # --------------------------------
 
 TOKEN = os.environ.get("SLACK_BOT_TOKEN")
@@ -36,7 +38,7 @@ def start_of_today_sgt():
 
 
 def is_standup(message):
-    return message.get("text", "").strip().lower().startswith(STANDUP_PREFIX)
+    return STANDUP_MARKER in message.get("text", "").lower()
 
 
 def who_posted(since):
