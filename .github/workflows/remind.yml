@@ -1,0 +1,25 @@
+name: Slack reminder
+
+on:
+  schedule:
+    - cron: "0 9 * * 1-7"   # 9am UTC = 5pm SGT, Mon to Sun
+  workflow_dispatch:         # "Run workflow" button for testing
+    inputs:
+      dry_run:
+        description: "Test only (don't actually post)"
+        type: boolean
+        default: true
+
+jobs:
+  remind:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-python@v5
+        with:
+          python-version: "3.12"
+      - run: pip install -r requirements.txt
+      - run: python remind.py
+        env:
+          SLACK_BOT_TOKEN: ${{ secrets.SLACK_BOT_TOKEN }}
+          DRY_RUN: ${{ inputs.dry_run && '1' || '0' }}
