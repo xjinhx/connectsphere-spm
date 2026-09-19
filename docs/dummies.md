@@ -143,3 +143,16 @@ owners switch them the next time they edit those files.
   the same update holds who, from whom, to whom and when. Re-run US-8.1-TC03
   (SCRUM-96 AC1).
 - **Status:** Active
+
+### D-07 — The coordinator isn't notified when a request is resubmitted
+
+- **Kind:** Out-of-sprint stand-in
+- **Added by:** SCRUM-91 — PR pending
+- **Waiting on:** SCRUM-24 Notification System
+- **Where:** `src/domain/clarification/service.ts` — `respondToClarification()`
+- **To replace:** notify the assigned coordinator from
+  `respondToClarification()`, straight after the round is closed, using
+  SCRUM-24's mechanism; the outcome already carries `coordinatorId`, and the
+  closed round holds the note that was asked, the answer and when it was given.
+  Re-run US-7.2-TC04 (SCRUM-91 AC1).
+- **Status:** Active
