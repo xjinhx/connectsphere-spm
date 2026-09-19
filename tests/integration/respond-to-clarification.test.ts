@@ -1,0 +1,414 @@
+import { describe, it, expect, beforeAll, afterAll, vi } from 'vitest';
+import { createAdminClient } from '@/lib/supabase/admin';
+
+/**
+ * SCRUM-91 — Respond to a clarification request (US-7.2).
+ *
+ * AC text is from the Jira card, which is authoritative. Test case IDs are the
+ * sheet's numbering for the bundled US-7.2 story:
+ *   sheet AC4 = Jira AC1, sheet AC5 = Jira AC2, sheet AC6 = Jira AC3.
+ *
+ * Runs against the local Supabase stack (`npm run db:start` + `npm run db:reset`).
+ * A real database is the point: rounds are opened by a trigger on event_request
+ * and a double answer is refused by a conditional UPDATE, so neither can be
+ * proven without Postgres.
+ *
+ * getCurrentActor is mocked because submitEventRequest (SCRUM-82) reads the
+ * signed-in session, and there is no browser here. The mock is the session, not
+ * the code under test — everything it guards (ownership, role, completeness) is
+ * still executed for real.
+ *
+ * The test uses the admin client to arrange rows - that is test setup, not the
+ * code under test, which never holds a client (docs/architecture.md).
+ *
+ * Not covered here - verify manually or in a later sprint:
+ *   AC1's "the assigned coordinator is notified" - there is no notification
+ *        story this sprint (DUMMY(SCRUM-24) D-07). What is asserted is that the
+ *        coordinator who would be told is identified and still owns the event.
+ */
+
+const actor = vi.hoisted(() => ({ current: null as { userId: string; roles: string[] } | null }));
+
+vi.mock('@/lib/auth/currentActor', () => ({
+  getCurrentActor: async () => {
+    if (!actor.current) throw new Error('no actor set for this test');
+    return {
+      userId: actor.current.userId,
+      fullName: 'Test Actor',
+      roles: actor.current.roles,
+      clientOrganisation: null,
+    };
+  },
+}));
+
+const { respondToClarification, getClarificationExchange } = await import(
+  '@/domain/clarification/service'
+);
+
+const supabase = createAdminClient();
+
+// No foreign key on this column yet: Client Organisations is its own story.
+const CLIENT_ORGANISATION_ID = '22222222-2222-2222-2222-222222222222';
+
+let organiserId: string;
+let otherOrganiserId: string;
+let coordinatorId: string;
+const createdRequestIds: string[] = [];
+
+async function createAccount(label: string, roles: string[]): Promise<string> {
+  const slug = label.toLowerCase().replace(/[^a-z0-9]+/g, '-');
+  const { data, error } = await supabase.auth.admin.createUser({
+    email: `${slug}+${Date.now()}${Math.random().toString(36).slice(2, 8)}@connectsphere.example.com`,
+    password: 'Password123!',
+    email_confirm: true,
+    user_metadata: { full_name: label },
+  });
+  if (error || !data.user) {
+    throw new Error(`could not create test ${label}: ${error?.message ?? 'no user returned'}`);
+  }
+  const { error: profileError } = await supabase
+    .from('profiles')
+    .update({ roles, full_name: label })
+    .eq('id', data.user.id);
+  if (profileError) throw new Error(`could not set roles for ${label}: ${profileError.message}`);
+  return data.user.id;
+}
+
+/** Complete enough to satisfy SCRUM-82's mandatory fields, so it can be submitted. */
+async function createCompleteRequest(ownerId = organiserId): Promise<string> {
+  const { data, error } = await supabase
+    .from('event_request')
+    .insert({
+      organiser_id: ownerId,
+      client_organisation_id: CLIENT_ORGANISATION_ID,
+      name: 'Annual Tech Summit',
+      purpose: 'Bring the engineering teams together for the yearly update.',
+      description: 'A full day of talks, workshops and a closing reception.',
+      proposed_date: '2027-03-15',
+      time_slots: ['am', 'pm'],
+      expected_attendance: 80,
+    })
+    .select('id')
+    .single();
+  if (error) throw new Error(`could not create test request: ${error.message}`);
+
+  const id = data.id as string;
+  createdRequestIds.push(id);
+  return id;
+}
+
+async function setStatus(id: string, status: string) {
+  const { error } = await supabase.from('event_request').update({ status }).eq('id', id);
+  if (error) throw new Error(`could not set status ${status}: ${error.message}`);
+}
+
+/** What SCRUM-90's requestClarification does, arranged directly. */
+async function raiseClarification(id: string, note: string) {
+  const { error } = await supabase
+    .from('event_request')
+    .update({
+      status: 'clarification_requested',
+      clarification_note: note,
+      clarification_requested_by: coordinatorId,
+    })
+    .eq('id', id);
+  if (error) throw new Error(`could not raise clarification: ${error.message}`);
+}
+
+async function assignCoordinator(id: string) {
+  const { error } = await supabase
+    .from('event_request')
+    .update({ coordinator_id: coordinatorId, assigned_by: coordinatorId })
+    .eq('id', id);
+  if (error) throw new Error(`could not assign coordinator: ${error.message}`);
+}
+
+async function readRow(id: string) {
+  const { data, error } = await supabase
+    .from('event_request')
+    .select('status, expected_attendance, clarification_note, coordinator_id')
+    .eq('id', id)
+    .single();
+  if (error) throw new Error(`could not read test request: ${error.message}`);
+  return data;
+}
+
+async function readRounds(id: string) {
+  const { data, error } = await supabase
+    .from('event_request_clarification_round')
+    .select('round_number, note, response, responded_by, responded_at')
+    .eq('event_request_id', id)
+    .order('round_number');
+  if (error) throw new Error(`could not read rounds: ${error.message}`);
+  return data;
+}
+
+/**
+ * Indexing a list under `noUncheckedIndexedAccess`. Fails the test with a
+ * readable message rather than a non-null assertion, which would hide a missing
+ * round behind a crash on the next line.
+ */
+function round<T>(rows: readonly T[], index: number): T {
+  const row = rows[index];
+  if (row === undefined) throw new Error(`expected a round at index ${index}, found none`);
+  return row;
+}
+
+/** The amendment itself is SCRUM-83's draft save; the value change is what matters here. */
+async function amend(id: string, expectedAttendance: number) {
+  const { error } = await supabase
+    .from('event_request')
+    .update({ expected_attendance: expectedAttendance })
+    .eq('id', id);
+  if (error) throw new Error(`could not amend: ${error.message}`);
+}
+
+beforeAll(async () => {
+  organiserId = await createAccount('Olivia Organiser', ['event_organiser']);
+  otherOrganiserId = await createAccount('Otto Other', ['event_organiser']);
+  coordinatorId = await createAccount('Casey Coordinator', ['coordinator']);
+});
+
+afterAll(async () => {
+  // Requests first: rounds cascade with them, but coordinator_id and
+  // requested_by are ON DELETE RESTRICT, so an account cannot go while a
+  // clarification of theirs is still recorded.
+  for (const id of createdRequestIds) {
+    await supabase.from('event_request').delete().eq('id', id);
+  }
+  for (const id of [organiserId, otherOrganiserId, coordinatorId]) {
+    if (id) await supabase.auth.admin.deleteUser(id);
+  }
+});
+
+describe('respondToClarification', () => {
+  // US-7.2-TC04 (Jira AC1)
+  it('returns the request to Submitted and records the response', async () => {
+    const id = await createCompleteRequest();
+    await setStatus(id, 'submitted');
+    await assignCoordinator(id);
+    await raiseClarification(id, 'How many people are you expecting?');
+    await amend(id, 200);
+
+    actor.current = { userId: organiserId, roles: ['event_organiser'] };
+    const outcome = await respondToClarification(
+      id,
+      { response: 'Expected attendance is now 200' },
+      organiserId,
+    );
+
+    expect(outcome.status).toBe('submitted');
+    expect(outcome.round.roundNumber).toBe(1);
+    expect(outcome.round.response).toBe('Expected attendance is now 200');
+    // AC1's notification: who would be told, recorded rather than sent (D-07).
+    expect(outcome.coordinatorId).toBe(coordinatorId);
+
+    const row = await readRow(id);
+    expect(row.status).toBe('submitted');
+
+    const rounds = await readRounds(id);
+    expect(rounds).toHaveLength(1);
+    expect(round(rounds, 0).response).toBe('Expected attendance is now 200');
+    expect(round(rounds, 0).responded_by).toBe(organiserId);
+    // Stamped by the database, not the caller.
+    expect(round(rounds, 0).responded_at).toBeTruthy();
+  });
+
+  // US-7.2-TC04 — the answer's timestamp comes from the database.
+  it('stamps the response time within a second of the call', async () => {
+    const id = await createCompleteRequest();
+    await setStatus(id, 'submitted');
+    await raiseClarification(id, 'Which venue did you have in mind?');
+    const before = Date.now();
+
+    actor.current = { userId: organiserId, roles: ['event_organiser'] };
+    const outcome = await respondToClarification(id, { response: 'Any central venue' }, organiserId);
+
+    const stamped = new Date(outcome.round.respondedAt as string).getTime();
+    expect(stamped).toBeGreaterThanOrEqual(before - 1000);
+    expect(stamped).toBeLessThanOrEqual(Date.now() + 1000);
+  });
+
+  // US-7.2-TC05 (Jira AC2)
+  it('retains the original note, the response and the amended values', async () => {
+    const id = await createCompleteRequest();
+    await setStatus(id, 'submitted');
+    await raiseClarification(id, 'How many people are you expecting?');
+    await amend(id, 200);
+
+    actor.current = { userId: organiserId, roles: ['event_organiser'] };
+    await respondToClarification(id, { response: 'Expected attendance is now 200' }, organiserId);
+
+    const exchange = await getClarificationExchange(id);
+    expect(exchange.rounds).toHaveLength(1);
+    expect(round(exchange.rounds, 0).note).toBe('How many people are you expecting?');
+    expect(round(exchange.rounds, 0).response).toBe('Expected attendance is now 200');
+
+    // The amended value is on the event record itself, not copied into the
+    // exchange - "retained" means nothing was lost.
+    const row = await readRow(id);
+    expect(row.expected_attendance).toBe(200);
+  });
+
+  // US-7.2-TC06 (Jira AC3)
+  it('lists both clarification rounds in order, and leaves the first unchanged', async () => {
+    const id = await createCompleteRequest();
+    await setStatus(id, 'submitted');
+    await raiseClarification(id, 'How many people are you expecting?');
+    await amend(id, 200);
+
+    actor.current = { userId: organiserId, roles: ['event_organiser'] };
+    await respondToClarification(id, { response: 'Expected attendance is now 200' }, organiserId);
+
+    // The coordinator comes back with a second question.
+    await raiseClarification(id, 'Please confirm the AV setup.');
+    await respondToClarification(id, { response: 'We need 2 wireless microphones' }, organiserId);
+
+    const exchange = await getClarificationExchange(id);
+    expect(exchange.rounds.map((r) => r.roundNumber)).toEqual([1, 2]);
+    expect(round(exchange.rounds, 0).note).toBe('How many people are you expecting?');
+    expect(round(exchange.rounds, 0).response).toBe('Expected attendance is now 200');
+    expect(round(exchange.rounds, 1).note).toBe('Please confirm the AV setup.');
+    expect(round(exchange.rounds, 1).response).toBe('We need 2 wireless microphones');
+    expect(exchange.status).toBe('submitted');
+  });
+
+  // US-7.2-TC07 (Jira AC1) — nothing to answer.
+  it('refuses a response when no clarification is open', async () => {
+    const id = await createCompleteRequest();
+    await setStatus(id, 'submitted');
+
+    actor.current = { userId: organiserId, roles: ['event_organiser'] };
+    await expect(
+      respondToClarification(id, { response: 'Anything' }, organiserId),
+    ).rejects.toMatchObject({ code: 'CONFLICT' });
+
+    const row = await readRow(id);
+    expect(row.status).toBe('submitted');
+    expect(await readRounds(id)).toHaveLength(0);
+  });
+
+  // US-7.2-TC08 (Jira AC1) — someone else's request.
+  it('refuses an organiser who does not own the request', async () => {
+    const id = await createCompleteRequest();
+    await setStatus(id, 'submitted');
+    await raiseClarification(id, 'How many people are you expecting?');
+
+    actor.current = { userId: otherOrganiserId, roles: ['event_organiser'] };
+    await expect(
+      respondToClarification(id, { response: 'Not my request' }, otherOrganiserId),
+    ).rejects.toMatchObject({ code: 'FORBIDDEN' });
+
+    const row = await readRow(id);
+    expect(row.status).toBe('clarification_requested');
+    const rounds = await readRounds(id);
+    expect(round(rounds, 0).response).toBeNull();
+  });
+
+  // US-7.2-TC08 (Jira AC1) — the coordinator cannot answer on the organiser's behalf.
+  it('refuses the assigned coordinator', async () => {
+    const id = await createCompleteRequest();
+    await setStatus(id, 'submitted');
+    await assignCoordinator(id);
+    await raiseClarification(id, 'How many people are you expecting?');
+
+    actor.current = { userId: coordinatorId, roles: ['coordinator'] };
+    await expect(
+      respondToClarification(id, { response: 'I will answer for them' }, coordinatorId),
+    ).rejects.toMatchObject({ code: 'FORBIDDEN' });
+
+    const row = await readRow(id);
+    expect(row.status).toBe('clarification_requested');
+  });
+
+  // US-7.2-TC09 (Jira AC1/AC2) — a blank response is refused.
+  it.each(['', '   '])('refuses the response %j and changes nothing', async (response) => {
+    const id = await createCompleteRequest();
+    await setStatus(id, 'submitted');
+    await raiseClarification(id, 'How many people are you expecting?');
+
+    actor.current = { userId: organiserId, roles: ['event_organiser'] };
+    await expect(respondToClarification(id, { response }, organiserId)).rejects.toMatchObject({
+      code: 'VALIDATION_ERROR',
+    });
+
+    const row = await readRow(id);
+    expect(row.status).toBe('clarification_requested');
+    const rounds = await readRounds(id);
+    expect(round(rounds, 0).response).toBeNull();
+  });
+
+  // US-7.2-TC10 (Jira AC1) — two resubmits at the same moment.
+  it('records one round when two resubmits arrive at once', async () => {
+    const id = await createCompleteRequest();
+    await setStatus(id, 'submitted');
+    await raiseClarification(id, 'How many people are you expecting?');
+    await amend(id, 200);
+
+    actor.current = { userId: organiserId, roles: ['event_organiser'] };
+    const results = await Promise.allSettled([
+      respondToClarification(id, { response: 'Expected attendance is now 200' }, organiserId),
+      respondToClarification(id, { response: 'Expected attendance is now 200' }, organiserId),
+    ]);
+
+    const fulfilled = results.filter((r) => r.status === 'fulfilled');
+    expect(fulfilled).toHaveLength(1);
+
+    const row = await readRow(id);
+    expect(row.status).toBe('submitted');
+    const rounds = await readRounds(id);
+    expect(rounds).toHaveLength(1);
+    expect(round(rounds, 0).response).toBe('Expected attendance is now 200');
+  });
+
+  // SCRUM-82 AC2 still applies to a resubmission: an incomplete request is
+  // refused, and the answer is not recorded against it.
+  it('refuses a resubmission while a mandatory field is incomplete', async () => {
+    const id = await createCompleteRequest();
+    await setStatus(id, 'submitted');
+    await raiseClarification(id, 'Your description is missing.');
+    await supabase.from('event_request').update({ description: null }).eq('id', id);
+
+    actor.current = { userId: organiserId, roles: ['event_organiser'] };
+    await expect(
+      respondToClarification(id, { response: 'I have added it' }, organiserId),
+    ).rejects.toMatchObject({ code: 'VALIDATION_ERROR' });
+
+    const row = await readRow(id);
+    expect(row.status).toBe('clarification_requested');
+    const rounds = await readRounds(id);
+    // The round stays open, so the organiser can fix the field and answer again.
+    expect(round(rounds, 0).response).toBeNull();
+  });
+});
+
+describe('getClarificationExchange', () => {
+  // Jira AC3 — a request with no clarification has no rounds, and that is not an error.
+  it('returns an empty list for a request that was never returned', async () => {
+    const id = await createCompleteRequest();
+    await setStatus(id, 'submitted');
+
+    const exchange = await getClarificationExchange(id);
+    expect(exchange.rounds).toEqual([]);
+    expect(exchange.status).toBe('submitted');
+  });
+
+  // US-7.2-TC06 — an open round is visible before it is answered.
+  it('shows an open round with no response yet', async () => {
+    const id = await createCompleteRequest();
+    await setStatus(id, 'submitted');
+    await raiseClarification(id, 'How many people are you expecting?');
+
+    const exchange = await getClarificationExchange(id);
+    expect(exchange.rounds).toHaveLength(1);
+    expect(round(exchange.rounds, 0).note).toBe('How many people are you expecting?');
+    expect(round(exchange.rounds, 0).response).toBeNull();
+    expect(round(exchange.rounds, 0).respondedAt).toBeNull();
+  });
+
+  it('refuses an id that is not a request', async () => {
+    await expect(
+      getClarificationExchange('11111111-1111-1111-1111-111111111111'),
+    ).rejects.toMatchObject({ code: 'NOT_FOUND' });
+  });
+});
