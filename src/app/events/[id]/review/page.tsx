@@ -1,6 +1,7 @@
 import Link from 'next/link';
 import { notFound } from 'next/navigation';
 import { EventRequestStatusBadge } from '@/components/event-request/EventRequestStatusBadge';
+import { ClarificationRounds } from '@/components/event-request/ClarificationRounds';
 import { RequestClarificationForm } from '@/components/event-request/RequestClarificationForm';
 import {
   describeAccessibility,
@@ -11,6 +12,7 @@ import {
   describeTechnicalSupport,
   describeTimeSlots,
 } from '@/domain/event-request/policy';
+import { getClarificationExchange } from '@/domain/clarification/service';
 import { getReviewDetail, type ReviewDetail } from '@/domain/review/service';
 import { canRequestClarification } from '@/domain/review/policy';
 import { ForbiddenError, NotFoundError } from '@/domain/shared/errors';
@@ -90,6 +92,11 @@ export default async function ReviewEventRequestPage({
     throw error;
   }
 
+  // SCRUM-91 AC2/AC3. Read after getReviewDetail, never before: that call is
+  // what refuses a request assigned to another coordinator (SCRUM-89 AC3), and
+  // the exchange must not be read for someone who is not allowed to see it.
+  const exchange = await getClarificationExchange(id);
+
   return (
     <main className="mx-auto max-w-2xl px-4 py-8">
       <Link href="/assigned-events" className="text-sm text-[var(--brand)] hover:underline">
@@ -122,6 +129,17 @@ export default async function ReviewEventRequestPage({
           ) : null}
         </div>
       ) : null}
+
+      {/* SCRUM-91 AC2/AC3 — "when the coordinator opens the request, the
+          original clarification note, my response and my amended values are all
+          retained", and "both rounds are listed in order". This is the page the
+          card means by "the coordinator opens it".
+
+          It sits below the box above rather than replacing it: that box is
+          SCRUM-90's, it says what is outstanding right now, and this is the
+          history behind it. The amended values are the fields listed under it,
+          which are read from the request itself. */}
+      <ClarificationRounds rounds={exchange.rounds} />
 
       <dl className="mt-6 rounded-lg border border-[var(--border)] bg-[var(--surface)] px-4">
         <Row label="Purpose" value={request.purpose ?? 'Not provided'} />
