@@ -99,6 +99,27 @@ export async function approveEventRequest(id: string, input: unknown): Promise<A
   if (!existing) throw new NotFoundError('Event request');
 
   const current = existing as unknown as EventRequestRow;
+
+  // SCRUM-213 — the coordinator an event was taken away from could still
+  // approve it. Checked before the status check on purpose: a coordinator this
+  // event is not assigned to should learn nothing about it, not even whether it
+  // is still awaiting a decision.
+  //
+  // SCRUM-96 AC4: "Given I have been reassigned away from an event, when I
+  // request that event directly by its identifier, then access is denied and no
+  // planning information is returned." Approving is requesting it by its
+  // identifier and then acting on it, so the same denial applies.
+  //
+  // canReviewDetail, not SCRUM-96's requireCurrentCoordinator: this card's AC1
+  // reads "Given I am reviewing a submitted request", so the gate is review
+  // access, and review access allows an event with no coordinator yet (SCRUM-89).
+  // requireCurrentCoordinator refuses those, which would offer a coordinator a
+  // review page they may open and an approval that always fails. It would also
+  // re-read a row this function already holds.
+  if (!canReviewDetail(current.coordinator_id, parsedInput.data.actorId)) {
+    throw new ForbiddenError('This event is not assigned to you.');
+  }
+
   if (!canBeApproved(current.status)) {
     throw new InvalidTransitionError(current.status, 'approved');
   }
@@ -107,13 +128,31 @@ export async function approveEventRequest(id: string, input: unknown): Promise<A
   if (error) {
     throw new ValidationError('The event request could not be approved.', error.message);
   }
-  // The check above saw a submitted request, yet no row matched the
-  // `status = submitted` filter: another coordinator approved it in between.
-  // The filter is what makes that safe; this turns it into an answer for
-  // whoever came second, rather than a silent no-op.
-  if (!data) throw new InvalidTransitionError('approved', 'approved');
+  // The checks above saw a submitted request this coordinator may act on, yet no
+  // row matched the filters. Something changed in between, and the two causes
+  // need different answers - so the row is re-read to say which.
+  if (!data) throw await approvalRaceError(parsedId.data, parsedInput.data.actorId);
 
   return toApprovalOutcome(data as unknown as EventRequestRow);
+}
+
+/**
+ * SCRUM-213 — why a conditional approval matched no row.
+ *
+ * Two races end up here, and telling them apart matters to whoever came second:
+ * another coordinator decided it first, or an Event Operations Manager
+ * reassigned the event out from under this one mid-request. Reported as a
+ * refusal rather than a silent no-op, the same as assignCoordinator's AC5.
+ */
+async function approvalRaceError(id: string, actorId: string): Promise<Error> {
+  const { data } = await fetchEventRequestById(id);
+  const row = data as unknown as EventRequestRow | null;
+  if (!row) return new NotFoundError('Event request');
+
+  if (!canReviewDetail(row.coordinator_id, actorId)) {
+    return new ForbiddenError('This event was reassigned to another coordinator.');
+  }
+  return new InvalidTransitionError(row.status, 'approved');
 }
 
 // ---------------------------------------------------------------------------
