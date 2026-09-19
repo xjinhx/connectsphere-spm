@@ -138,7 +138,7 @@ owners switch them the next time they edit those files.
 ### D-06 — Neither coordinator is notified when an event is reassigned
 
 - **Kind:** Out-of-sprint stand-in
-- **Added by:** SCRUM-96 — commit `b81d88c` (PR #4)
+- **Added by:** SCRUM-96 — commit `b81d88c` (PR #29)
 - **Waiting on:** SCRUM-24 Notification System
 - **Where:** `src/domain/assignment/service.ts` — `reassignCoordinator()`
 - **To replace:** notify both the previous and the new coordinator from
