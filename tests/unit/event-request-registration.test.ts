@@ -20,10 +20,12 @@ import {
  * Sheet mapping (US-5.2 = SCRUM-79+80+81): US-5.2-TC05 (registration
  * required = Yes → choice saved) is this ticket's.
  *
- * AC3 names "Draft or Clarification Requested". Clarification Requested is
- * not a status yet (SCRUM-82 has draft/submitted only), so the rule is
- * asserted for Draft and its negative for Submitted; re-run this once that
- * status exists.
+ * AC3 names "Draft or Clarification Requested". Clarification Requested now
+ * exists (SCRUM-90), and isEditable()/canChangeRegistration() already treat
+ * it as editable - asserted explicitly below rather than only through the
+ * generic canChangeRegistration()===isEditable() loop, so this ticket's own
+ * AC3 has a named assertion pinning down what the right answer is meant to
+ * be, not just that the two functions agree with each other.
  *
  * Not coverable by a unit test - verify manually:
  *   "records" / "cleared" — a database write; save a draft with Yes, reopen
@@ -111,6 +113,10 @@ describe('SCRUM-81 — Indicate whether attendee registration is required', () =
 
     it('can be changed on a draft', () => {
       expect(canChangeRegistration('draft')).toBe(true);
+    });
+
+    it('can be changed once a coordinator has requested clarification (SCRUM-90)', () => {
+      expect(canChangeRegistration('clarification_requested')).toBe(true);
     });
 
     it('cannot be changed once submitted', () => {
