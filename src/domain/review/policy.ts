@@ -130,3 +130,55 @@ export function isAwaitingReview(status: EventRequestStatus): boolean {
 export function canReviewDetail(coordinatorId: string | null, actorUserId: string): boolean {
   return coordinatorId === null || coordinatorId === actorUserId;
 }
+
+// ---------------------------------------------------------------------------
+// SCRUM-89 — a draft is not a request under review
+// ---------------------------------------------------------------------------
+
+/**
+ * Both SCRUM-89 ACs that describe opening a request say "a *submitted*
+ * request". A draft has not been sent to anyone: it is the Organiser's
+ * private working copy, which SCRUM-83 AC3 already keeps from other
+ * Organisers ("a colleague's draft ... access is denied", isOwnRequest).
+ *
+ * Nothing said so for Coordinators, because until SCRUM-94 there was no
+ * assignment to reason about. The effect was that a Coordinator could open
+ * any Organiser's unfinished draft through the review route, since a draft
+ * carries no coordinator_id and canReviewDetail treats "unassigned" as open
+ * to all — the one case where that reading is wrong.
+ *
+ * Refused as *not found* rather than forbidden, deliberately: a Coordinator
+ * has no business learning that a particular id exists as someone's draft.
+ */
+export function isReviewable(status: EventRequestStatus): boolean {
+  return status !== 'draft';
+}
+
+// ---------------------------------------------------------------------------
+// SCRUM-90 — who may read a clarification
+// ---------------------------------------------------------------------------
+
+/**
+ * US-7.2 AC1 says the note is "visible to the Organiser" and AC3 that it is
+ * shown to "anyone with access" to the request. This function is what "with
+ * access" means, rather than the previous reading of it as any signed-in
+ * account:
+ *
+ *   - the Organiser the request belongs to (AC1, and the same ownership rule
+ *     event-request's own reads apply);
+ *   - a Coordinator, on exactly the terms the review read allows
+ *     (canReviewDetail) — so a Coordinator reassigned away loses the note at
+ *     the same moment they lose the request.
+ *
+ * Everyone else is refused. The note is free text written by a Coordinator
+ * about someone else's event, so "anyone with access" cannot sensibly mean
+ * every account that happens to be logged in.
+ */
+export function canViewClarification(
+  request: { organiserId: string; coordinatorId: string | null },
+  actor: { userId: string; isCoordinator: boolean },
+): boolean {
+  if (request.organiserId === actor.userId) return true;
+  if (!actor.isCoordinator) return false;
+  return canReviewDetail(request.coordinatorId, actor.userId);
+}

@@ -4,7 +4,9 @@ import {
   canBeRejected,
   canRequestClarification,
   canReviewDetail,
+  canViewClarification,
   isAwaitingReview,
+  isReviewable,
 } from '@/domain/review/policy';
 
 const COORDINATOR_A = '11111111-1111-1111-1111-111111111111';
@@ -138,5 +140,64 @@ describe('canReviewDetail', () => {
   // nothing about an unassigned one, so that stays open to any Coordinator.
   it('allows any coordinator while the request is not yet assigned', () => {
     expect(canReviewDetail(null, COORDINATOR_A)).toBe(true);
+  });
+});
+
+/**
+ * Both SCRUM-89 ACs describe opening a *submitted* request. A draft carries no
+ * coordinator_id, so canReviewDetail alone read it as "unassigned, open to any
+ * Coordinator" — which exposed every Organiser's unfinished draft through the
+ * review route.
+ */
+describe('isReviewable', () => {
+  it('refuses a draft, which has not been sent to anyone', () => {
+    expect(isReviewable('draft')).toBe(false);
+  });
+
+  it.each(['submitted', 'clarification_requested', 'approved'] as const)(
+    'allows %s, which has been submitted at least once',
+    (status) => {
+      expect(isReviewable(status)).toBe(true);
+    },
+  );
+});
+
+/**
+ * US-7.2 AC1 ("visible to the Organiser") and AC3 ("anyone with access").
+ * "With access" previously meant any signed-in account, which let anybody read
+ * any request's note and status by id.
+ */
+describe('canViewClarification', () => {
+  const ORGANISER = '33333333-3333-3333-3333-333333333333';
+  const assigned = { organiserId: ORGANISER, coordinatorId: COORDINATOR_A };
+  const unassigned = { organiserId: ORGANISER, coordinatorId: null };
+
+  it('allows the organiser the request belongs to', () => {
+    expect(canViewClarification(assigned, { userId: ORGANISER, isCoordinator: false })).toBe(true);
+  });
+
+  it('allows the coordinator it is assigned to', () => {
+    expect(canViewClarification(assigned, { userId: COORDINATOR_A, isCoordinator: true })).toBe(
+      true,
+    );
+  });
+
+  // SCRUM-96 AC4 — reassigned away means the note goes with the event.
+  it('refuses a coordinator it is assigned away from', () => {
+    expect(canViewClarification(assigned, { userId: COORDINATOR_B, isCoordinator: true })).toBe(
+      false,
+    );
+  });
+
+  it('allows any coordinator while it is unassigned, matching the review rule', () => {
+    expect(canViewClarification(unassigned, { userId: COORDINATOR_B, isCoordinator: true })).toBe(
+      true,
+    );
+  });
+
+  it('refuses a signed-in account that is neither the organiser nor a coordinator', () => {
+    expect(canViewClarification(unassigned, { userId: COORDINATOR_B, isCoordinator: false })).toBe(
+      false,
+    );
   });
 });

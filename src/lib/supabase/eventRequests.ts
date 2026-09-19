@@ -411,8 +411,14 @@ export async function markEventRequestClarificationRequested(
   id: string,
   note: string,
   actorId: string,
+  /**
+   * The coordinator the caller saw on the request, so a reassignment landing
+   * between that read and this write cannot be written over. Null means the
+   * request was unassigned and must still be unassigned for this to apply.
+   */
+  expectedCoordinatorId: string | null,
 ) {
-  return db()
+  const update = db()
     .from('event_request')
     .update({
       status: 'clarification_requested',
@@ -420,7 +426,13 @@ export async function markEventRequestClarificationRequested(
       clarification_requested_by: actorId,
     })
     .eq('id', id)
-    .eq('status', 'submitted')
+    .eq('status', 'submitted');
+
+  return (
+    expectedCoordinatorId === null
+      ? update.is('coordinator_id', null)
+      : update.eq('coordinator_id', expectedCoordinatorId)
+  )
     .select(COLUMNS)
     .maybeSingle();
 }
