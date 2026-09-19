@@ -466,7 +466,14 @@ export function EventRequestForm({
                 name="accessibilityRequired"
                 value="no"
                 checked={accessibilityRequired === 'no'}
-                onChange={() => setAccessibilityRequired('no')}
+                onChange={() => {
+                  setAccessibilityRequired('no');
+                  // Otherwise a feature list or notes typed while "Yes" was
+                  // selected survive, hidden, and can still fail validation
+                  // on save even though the visible answer is now "None".
+                  setAccessibilityFeatureIds([]);
+                  setAccessibilityNotes('');
+                }}
               />
               None
             </label>
@@ -545,7 +552,14 @@ export function EventRequestForm({
                 name="equipmentRequired"
                 value="no"
                 checked={equipmentRequired === 'no'}
-                onChange={() => setEquipmentRequired('no')}
+                onChange={() => {
+                  setEquipmentRequired('no');
+                  // Otherwise an item typed while "Yes" was selected survives,
+                  // hidden, and can still fail validation on save (e.g. an
+                  // invalid quantity) even though the visible answer is now
+                  // "None".
+                  setEquipmentItems([]);
+                }}
               />
               None
             </label>
