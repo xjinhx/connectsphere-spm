@@ -145,8 +145,15 @@ export async function approveEventRequest(id: string, input: unknown): Promise<A
  * refusal rather than a silent no-op, the same as assignCoordinator's AC5.
  */
 async function approvalRaceError(id: string, actorId: string): Promise<Error> {
-  const { data } = await fetchEventRequestById(id);
+  const { data, error } = await fetchEventRequestById(id);
+  // A failed read is not a missing request. This row was read successfully a
+  // moment ago, so reporting "not found" here would send whoever is debugging a
+  // transient database fault looking for a deleted event. Reported the same way
+  // the first read reports it.
+  if (error) return new ValidationError('The event request could not be read.', error.message);
+
   const row = data as unknown as EventRequestRow | null;
+  // Genuinely gone: deleted between the update and this read.
   if (!row) return new NotFoundError('Event request');
 
   if (!canReviewDetail(row.coordinator_id, actorId)) {
