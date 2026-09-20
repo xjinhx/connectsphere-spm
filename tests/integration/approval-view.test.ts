@@ -15,8 +15,15 @@ import { approveEventRequest, getApprovalView } from '@/domain/review/service';
  *          as committed."
  *
  * Who may view: Jira AC3 says "anyone", so getApprovalView applies no ownership
- * or role check; the middleware refuses the route without a signed-in session.
- * The test sheet's TC06 wording ("any authorised user") is drift from Jira.
+ * or role check of its own; the middleware refuses the route without a
+ * signed-in session. The test sheet's TC06 wording ("any authorised user") is
+ * drift from Jira.
+ *
+ * SCRUM-72 AC2 narrows "anyone" to exclude an Attendee-only account — see the
+ * describe block at the bottom of this file and isAttendeeOnly's comment in
+ * domain/identity/policy.ts. The tests above pass a non-Attendee actor
+ * (`VIEWER`) precisely so they keep exercising SCRUM-92's "anyone" grant
+ * rather than the SCRUM-72 carve-out.
  *
  * Runs against the local Supabase stack, like approve-event-request.test.ts.
  * The admin client below only arranges rows; the code under test never holds
@@ -31,6 +38,8 @@ import { approveEventRequest, getApprovalView } from '@/domain/review/service';
 
 const supabase = createAdminClient();
 const CLIENT_ORGANISATION_ID = '22222222-2222-2222-2222-222222222222';
+/** Any non-Attendee role exercises SCRUM-92's "anyone" grant. */
+const VIEWER = { roles: ['event_organiser'] as const };
 
 let coordinatorId: string;
 const createdRequestIds: string[] = [];
@@ -85,7 +94,7 @@ describe('getApprovalView', () => {
     const id = await createSubmittedRequest();
     const outcome = await approveEventRequest(id, { actorId: coordinatorId });
 
-    const view = await getApprovalView(id);
+    const view = await getApprovalView(id, VIEWER);
 
     expect(view.decision).toBe('approved');
     // The date shown is the one recorded at approval, not a new one.
@@ -101,7 +110,7 @@ describe('getApprovalView', () => {
     const id = await createSubmittedRequest();
     await approveEventRequest(id, { actorId: coordinatorId });
 
-    const view = await getApprovalView(id);
+    const view = await getApprovalView(id, VIEWER);
 
     expect(view.status).toBe('approved');
     expect(view.status).not.toBe('confirmed');
@@ -112,7 +121,7 @@ describe('getApprovalView', () => {
   it('shows no outcome or date for a request that has not been decided yet', async () => {
     const id = await createSubmittedRequest();
 
-    const view = await getApprovalView(id);
+    const view = await getApprovalView(id, VIEWER);
 
     expect(view.status).toBe('submitted');
     expect(view.decision).toBeNull();
@@ -123,18 +132,43 @@ describe('getApprovalView', () => {
     const id = await createSubmittedRequest();
     await approveEventRequest(id, { actorId: coordinatorId });
 
-    const view = await getApprovalView(id);
+    const view = await getApprovalView(id, VIEWER);
 
     expect(view).not.toHaveProperty('decidedBy');
   });
 
   it('reports an unknown request as not found', async () => {
-    await expect(getApprovalView('99999999-9999-4999-8999-999999999999')).rejects.toMatchObject({
+    await expect(
+      getApprovalView('99999999-9999-4999-8999-999999999999', VIEWER),
+    ).rejects.toMatchObject({
       code: 'NOT_FOUND',
     });
   });
 
   it('reports a malformed id as not found rather than failing', async () => {
-    await expect(getApprovalView('not-a-uuid')).rejects.toMatchObject({ code: 'NOT_FOUND' });
+    await expect(getApprovalView('not-a-uuid', VIEWER)).rejects.toMatchObject({ code: 'NOT_FOUND' });
+  });
+});
+
+// ---------------------------------------------------------------------------
+// SCRUM-72 AC2 — an Attendee-only account may not read this by requesting it
+// directly, narrowing SCRUM-92 AC3's "anyone" per customer clarification #91.
+// ---------------------------------------------------------------------------
+describe('getApprovalView: SCRUM-72 AC2', () => {
+  it('refuses an Attendee-only account and returns no planning data', async () => {
+    const id = await createSubmittedRequest();
+    await approveEventRequest(id, { actorId: coordinatorId });
+
+    await expect(getApprovalView(id, { roles: ['attendee'] })).rejects.toMatchObject({
+      code: 'FORBIDDEN',
+    });
+  });
+
+  it('still allows an account holding both Attendee and a planning role', async () => {
+    const id = await createSubmittedRequest();
+    await approveEventRequest(id, { actorId: coordinatorId });
+
+    const view = await getApprovalView(id, { roles: ['attendee', 'coordinator'] });
+    expect(view.decision).toBe('approved');
   });
 });

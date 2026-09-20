@@ -13,6 +13,8 @@ import {
 } from '@/domain/shared/errors';
 import type { EventRequestStatus } from '@/domain/event-request/schema';
 import { toEventRequest, type EventRequest } from '@/domain/event-request/service';
+import type { Role } from '@/domain/identity/roles';
+import { isAttendeeOnly } from '@/domain/identity/policy';
 import {
   ApproveInputSchema,
   EventRequestIdSchema,
@@ -191,15 +193,23 @@ export interface ApprovalView {
  * no venue or equipment is committed.
  *
  * Who may view: Jira AC3 says "anyone", so there is no ownership or role check
- * here; the middleware already refuses the route without a signed-in session.
- * This is a separate read from event-request's getEventRequest, whose rule is
- * that only the owning organiser may read a request - widening that rule would
- * mean changing SCRUM-82's logic from this story.
+ * here beyond SCRUM-72's carve-out below; the middleware already refuses the
+ * route without a signed-in session. This is a separate read from
+ * event-request's getEventRequest, whose rule is that only the owning
+ * organiser may read a request - widening that rule would mean changing
+ * SCRUM-82's logic from this story.
+ *
+ * SCRUM-72 AC2 — "anyone" stops short of an Attendee-only account requesting
+ * this directly; see isAttendeeOnly's comment in domain/identity/policy.ts.
  *
  * The commitment flags and statement are returned for every request, decided
  * or not, because this sprint nothing can be committed against any request.
  */
-export async function getApprovalView(id: string): Promise<ApprovalView> {
+export async function getApprovalView(id: string, actor: { roles: readonly Role[] }): Promise<ApprovalView> {
+  if (isAttendeeOnly([...actor.roles])) {
+    throw new ForbiddenError('This information is not available to Attendees.');
+  }
+
   const parsedId = EventRequestIdSchema.safeParse(id);
   if (!parsedId.success) throw new NotFoundError('Event request');
 
@@ -340,10 +350,23 @@ export interface ClarificationView {
  * AC1/AC3 — the organiser (or anyone else with access to the request) reads
  * the clarification note without needing the Coordinator-only permission
  * `getReviewDetail` requires. Who may view: Jira says "the Organiser" (AC1)
- * and "anyone with access" (AC3), so no role/ownership check here, same as
- * getApprovalView — the middleware already refuses this without a session.
+ * and "anyone with access" (AC3), so no role/ownership check here beyond
+ * SCRUM-72's carve-out below, same as getApprovalView — the middleware
+ * already refuses this without a session.
+ *
+ * SCRUM-72 AC1/AC2 — the note this returns is exactly the "coordinator notes"
+ * an Attendee must not get by requesting an event directly; an Attendee-only
+ * account is refused before the note is read. See isAttendeeOnly's comment in
+ * domain/identity/policy.ts.
  */
-export async function getClarificationView(id: string): Promise<ClarificationView> {
+export async function getClarificationView(
+  id: string,
+  actor: { roles: readonly Role[] },
+): Promise<ClarificationView> {
+  if (isAttendeeOnly([...actor.roles])) {
+    throw new ForbiddenError('This information is not available to Attendees.');
+  }
+
   const parsedId = EventRequestIdSchema.safeParse(id);
   if (!parsedId.success) throw new NotFoundError('Event request');
 

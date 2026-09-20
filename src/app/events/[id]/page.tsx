@@ -15,6 +15,7 @@ import {
 import { getEventRequest } from '@/domain/event-request/service';
 import { getClarificationView } from '@/domain/review/service';
 import { formatSingaporeDate, formatSingaporeDateTime } from '@/domain/shared/dates';
+import { getCurrentActor } from '@/lib/auth/currentActor';
 
 export const dynamic = 'force-dynamic';
 
@@ -41,7 +42,10 @@ export default async function EventRequestPage({
   // US-7.2 AC1/AC3 — the clarification note, if a coordinator has raised one.
   // A separate read (getClarificationView) rather than a field on `request`
   // itself — see the comment on ClarificationView in domain/review/service.ts.
-  const clarification = await getClarificationView(id);
+  // getEventRequest above already refused anyone but the owning organiser, so
+  // the actor reaching this line is never an Attendee-only account.
+  const actor = await getCurrentActor();
+  const clarification = await getClarificationView(id, actor);
 
   return (
     <main className="mx-auto max-w-2xl px-4 py-8">
