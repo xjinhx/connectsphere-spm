@@ -3,7 +3,7 @@ import { z } from 'zod';
 /**
  * Client Organisations (SCRUM-203): data shapes shared by the API routes and
  * the UI. Mirrors the constraints in
- * supabase/migrations/20260913000000_create_client_organisations.sql.
+ * supabase/migrations/20260915100000_create_client_organisations.sql.
  */
 
 export const ClientOrganisationSchema = z.object({
