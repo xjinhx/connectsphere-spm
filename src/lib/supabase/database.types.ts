@@ -181,6 +181,13 @@ export type Database = {
         }
         Relationships: [
           {
+            foreignKeyName: "event_request_client_organisation_id_fkey"
+            columns: ["client_organisation_id"]
+            isOneToOne: false
+            referencedRelation: "client_organisations"
+            referencedColumns: ["id"]
+          },
+          {
             foreignKeyName: "event_request_preferred_location_id_fkey"
             columns: ["preferred_location_id"]
             isOneToOne: false
@@ -212,6 +219,47 @@ export type Database = {
           },
           {
             foreignKeyName: "event_request_accessibility_features_event_request_id_fkey"
+            columns: ["event_request_id"]
+            isOneToOne: false
+            referencedRelation: "event_request"
+            referencedColumns: ["id"]
+          },
+        ]
+      }
+      event_request_coordinator_history: {
+        Row: {
+          assigned_at: string
+          assigned_by: string
+          coordinator_id: string
+          event_request_id: string
+          id: string
+          replaced_at: string
+          replaced_by: string
+          replaced_by_coordinator_id: string
+        }
+        Insert: {
+          assigned_at: string
+          assigned_by: string
+          coordinator_id: string
+          event_request_id: string
+          id?: string
+          replaced_at?: string
+          replaced_by: string
+          replaced_by_coordinator_id: string
+        }
+        Update: {
+          assigned_at?: string
+          assigned_by?: string
+          coordinator_id?: string
+          event_request_id?: string
+          id?: string
+          replaced_at?: string
+          replaced_by?: string
+          replaced_by_coordinator_id?: string
+        }
+        Relationships: [
+          {
+            foreignKeyName: "event_request_coordinator_history_event_request_id_fkey"
             columns: ["event_request_id"]
             isOneToOne: false
             referencedRelation: "event_request"
@@ -287,6 +335,7 @@ export type Database = {
       profiles: {
         Row: {
           client_organisation_id: string | null
+          contact_number: string | null
           created_at: string
           full_name: string | null
           id: string
@@ -295,6 +344,7 @@ export type Database = {
         }
         Insert: {
           client_organisation_id?: string | null
+          contact_number?: string | null
           created_at?: string
           full_name?: string | null
           id: string
@@ -303,6 +353,7 @@ export type Database = {
         }
         Update: {
           client_organisation_id?: string | null
+          contact_number?: string | null
           created_at?: string
           full_name?: string | null
           id?: string
