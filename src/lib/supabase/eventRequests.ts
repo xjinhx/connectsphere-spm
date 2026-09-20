@@ -255,6 +255,15 @@ export async function markEventRequestApproved(id: string, actorId: string) {
     .update({ status: 'approved', decision: 'approved', decided_by: actorId })
     .eq('id', id)
     .eq('status', 'submitted')
+    // SCRUM-213 — the same rule as canReviewDetail, applied inside the UPDATE.
+    // The service checks it first, but an Event Operations Manager can reassign
+    // the event between that check and this write; the filter is what makes the
+    // decision impossible rather than merely unlikely, the same pattern as
+    // assignCoordinatorToEventRequest (SCRUM-94).
+    //
+    // `is.null` is part of the condition because an event with no coordinator
+    // yet may still be approved - see the comment on approveEventRequest.
+    .or(`coordinator_id.is.null,coordinator_id.eq.${actorId}`)
     .select(COLUMNS)
     .maybeSingle();
 }
