@@ -77,6 +77,15 @@ describe('SCRUM-82 — Submit a completed event request', () => {
       expect(canBeSubmitted('approved')).toBe(false);
     });
 
+    // SCRUM-93 AC6 — a rejected request cannot be edited or resubmitted; the
+    // organiser is told a new request must be raised instead. Neither rule is
+    // enforced by the compiler (both are plain booleans, not an exhaustive
+    // switch), so this is the direct proof.
+    it('never lets a rejected request be edited or submitted again', () => {
+      expect(isEditable('rejected')).toBe(false);
+      expect(canBeSubmitted('rejected')).toBe(false);
+    });
+
     it('renders the submission time in Singapore time, zone shown', () => {
       // 18:00 UTC on the 14th is already 2:00 am on the 15th in Singapore.
       const rendered = formatSingaporeDateTime('2026-11-14T18:00:00Z');

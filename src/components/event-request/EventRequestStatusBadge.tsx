@@ -19,6 +19,9 @@ const STATUS_CLASS: Record<EventRequestStatus, string> = {
   // is a first guess (amber, distinct from submitted/approved) for whoever
   // owns this component to revise.
   clarification_requested: 'bg-amber-50 text-amber-700',
+  // SCRUM-93 — same reasoning: red (--danger) so a rejected request cannot be
+  // mistaken for approved.
+  rejected: 'bg-red-50 text-[var(--danger)]',
 };
 
 export function EventRequestStatusBadge({ status }: { status: EventRequestStatus }) {

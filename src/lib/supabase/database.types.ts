@@ -78,6 +78,7 @@ export type Database = {
           purpose: string | null
           reference: string
           registration_required: boolean | null
+          rejection_reason: string | null
           room_layout: string | null
           status: Database["public"]["Enums"]["event_request_status"]
           submitted_at: string | null
@@ -110,6 +111,7 @@ export type Database = {
           purpose?: string | null
           reference?: string
           registration_required?: boolean | null
+          rejection_reason?: string | null
           room_layout?: string | null
           status?: Database["public"]["Enums"]["event_request_status"]
           submitted_at?: string | null
@@ -142,6 +144,7 @@ export type Database = {
           purpose?: string | null
           reference?: string
           registration_required?: boolean | null
+          rejection_reason?: string | null
           room_layout?: string | null
           status?: Database["public"]["Enums"]["event_request_status"]
           submitted_at?: string | null
@@ -182,6 +185,47 @@ export type Database = {
           },
           {
             foreignKeyName: "event_request_accessibility_features_event_request_id_fkey"
+            columns: ["event_request_id"]
+            isOneToOne: false
+            referencedRelation: "event_request"
+            referencedColumns: ["id"]
+          },
+        ]
+      }
+      event_request_coordinator_history: {
+        Row: {
+          assigned_at: string
+          assigned_by: string
+          coordinator_id: string
+          event_request_id: string
+          id: string
+          replaced_at: string
+          replaced_by: string
+          replaced_by_coordinator_id: string
+        }
+        Insert: {
+          assigned_at: string
+          assigned_by: string
+          coordinator_id: string
+          event_request_id: string
+          id?: string
+          replaced_at?: string
+          replaced_by: string
+          replaced_by_coordinator_id: string
+        }
+        Update: {
+          assigned_at?: string
+          assigned_by?: string
+          coordinator_id?: string
+          event_request_id?: string
+          id?: string
+          replaced_at?: string
+          replaced_by?: string
+          replaced_by_coordinator_id?: string
+        }
+        Relationships: [
+          {
+            foreignKeyName: "event_request_coordinator_history_event_request_id_fkey"
             columns: ["event_request_id"]
             isOneToOne: false
             referencedRelation: "event_request"
@@ -256,6 +300,7 @@ export type Database = {
       }
       profiles: {
         Row: {
+          contact_number: string | null
           created_at: string
           full_name: string | null
           id: string
@@ -263,6 +308,7 @@ export type Database = {
           updated_at: string
         }
         Insert: {
+          contact_number?: string | null
           created_at?: string
           full_name?: string | null
           id: string
@@ -270,6 +316,7 @@ export type Database = {
           updated_at?: string
         }
         Update: {
+          contact_number?: string | null
           created_at?: string
           full_name?: string | null
           id?: string
@@ -427,6 +474,7 @@ export type Database = {
         | "submitted"
         | "approved"
         | "clarification_requested"
+        | "rejected"
     }
     CompositeTypes: {
       [_ in never]: never
@@ -562,6 +610,7 @@ export const Constants = {
         "submitted",
         "approved",
         "clarification_requested",
+        "rejected",
       ],
     },
   },
