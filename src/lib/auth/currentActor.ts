@@ -16,7 +16,7 @@ import { fetchClientOrganisation } from '@/lib/supabase/clientOrganisations';
  * SCRUM-204 — clientOrganisation is read from profiles.client_organisation_id
  * (set via /api/accounts/[id]/organisation), then resolved to a name with the
  * admin client: client_organisations has deny-by-default RLS with no
- * authenticated-read policy (see 20260913000000_create_client_organisations),
+ * authenticated-read policy (see 20260915100000_create_client_organisations),
  * so the session client alone cannot follow the join. Still null for internal
  * staff, and for an Event Organiser not yet linked to one (AC2).
  */
