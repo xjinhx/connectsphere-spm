@@ -1,5 +1,6 @@
 import { describe, it, expect, beforeAll, afterAll, vi } from 'vitest';
 import { createAdminClient } from '@/lib/supabase/admin';
+import type { Role } from '@/domain/identity/roles';
 
 /**
  * SCRUM-91 — Respond to a clarification request (US-7.2).
@@ -53,6 +54,8 @@ const CLIENT_ORGANISATION_ID = '22222222-2222-2222-2222-222222222222';
 let organiserId: string;
 let otherOrganiserId: string;
 let coordinatorId: string;
+let otherCoordinatorId: string;
+let managerId: string;
 const createdRequestIds: string[] = [];
 
 async function createAccount(label: string, roles: string[]): Promise<string> {
@@ -148,6 +151,9 @@ async function readRounds(id: string) {
  * readable message rather than a non-null assertion, which would hide a missing
  * round behind a crash on the next line.
  */
+/** Who is asking, for the reads that now decide what they may see. */
+const asActor = (userId: string, ...roles: Role[]) => ({ userId, roles });
+
 function round<T>(rows: readonly T[], index: number): T {
   const row = rows[index];
   if (row === undefined) throw new Error(`expected a round at index ${index}, found none`);
@@ -167,6 +173,8 @@ beforeAll(async () => {
   organiserId = await createAccount('Olivia Organiser', ['event_organiser']);
   otherOrganiserId = await createAccount('Otto Other', ['event_organiser']);
   coordinatorId = await createAccount('Casey Coordinator', ['coordinator']);
+  otherCoordinatorId = await createAccount('Wei Coordinator', ['coordinator']);
+  managerId = await createAccount('Morgan Manager', ['operations_manager']);
 });
 
 afterAll(async () => {
@@ -176,7 +184,7 @@ afterAll(async () => {
   for (const id of createdRequestIds) {
     await supabase.from('event_request').delete().eq('id', id);
   }
-  for (const id of [organiserId, otherOrganiserId, coordinatorId]) {
+  for (const id of [organiserId, otherOrganiserId, coordinatorId, otherCoordinatorId, managerId]) {
     if (id) await supabase.auth.admin.deleteUser(id);
   }
 });
@@ -239,7 +247,7 @@ describe('respondToClarification', () => {
     actor.current = { userId: organiserId, roles: ['event_organiser'] };
     await respondToClarification(id, { response: 'Expected attendance is now 200' }, organiserId);
 
-    const exchange = await getClarificationExchange(id);
+    const exchange = await getClarificationExchange(id, asActor(coordinatorId, 'coordinator'));
     expect(exchange.rounds).toHaveLength(1);
     expect(round(exchange.rounds, 0).note).toBe('How many people are you expecting?');
     expect(round(exchange.rounds, 0).response).toBe('Expected attendance is now 200');
@@ -264,7 +272,7 @@ describe('respondToClarification', () => {
     await raiseClarification(id, 'Please confirm the AV setup.');
     await respondToClarification(id, { response: 'We need 2 wireless microphones' }, organiserId);
 
-    const exchange = await getClarificationExchange(id);
+    const exchange = await getClarificationExchange(id, asActor(coordinatorId, 'coordinator'));
     expect(exchange.rounds.map((r) => r.roundNumber)).toEqual([1, 2]);
     expect(round(exchange.rounds, 0).note).toBe('How many people are you expecting?');
     expect(round(exchange.rounds, 0).response).toBe('Expected attendance is now 200');
@@ -388,7 +396,7 @@ describe('getClarificationExchange', () => {
     const id = await createCompleteRequest();
     await setStatus(id, 'submitted');
 
-    const exchange = await getClarificationExchange(id);
+    const exchange = await getClarificationExchange(id, asActor(organiserId, 'event_organiser'));
     expect(exchange.rounds).toEqual([]);
     expect(exchange.status).toBe('submitted');
   });
@@ -399,7 +407,7 @@ describe('getClarificationExchange', () => {
     await setStatus(id, 'submitted');
     await raiseClarification(id, 'How many people are you expecting?');
 
-    const exchange = await getClarificationExchange(id);
+    const exchange = await getClarificationExchange(id, asActor(coordinatorId, 'coordinator'));
     expect(exchange.rounds).toHaveLength(1);
     expect(round(exchange.rounds, 0).note).toBe('How many people are you expecting?');
     expect(round(exchange.rounds, 0).response).toBeNull();
@@ -408,7 +416,131 @@ describe('getClarificationExchange', () => {
 
   it('refuses an id that is not a request', async () => {
     await expect(
-      getClarificationExchange('11111111-1111-1111-1111-111111111111'),
+      getClarificationExchange(
+        '11111111-1111-1111-1111-111111111111',
+        asActor(organiserId, 'event_organiser'),
+      ),
     ).rejects.toMatchObject({ code: 'NOT_FOUND' });
+  });
+});
+
+/**
+ * Raised in review: any signed-in account could read the whole exchange for any
+ * request id. The rounds carry the free text of a discussion about an event, so
+ * the read is now limited to the people the exchange belongs to.
+ */
+/**
+ * The defect found in review: when the answer and the status change were two
+ * writes, a failure between them left an open round on a submitted request. The
+ * Coordinator could then raise another, and with two rounds unanswered the read
+ * that finds "the open round" matched two rows and failed - permanently, for
+ * every later response to that request.
+ *
+ * Closing the round now performs the status change in the same statement, so
+ * the gap is gone. These cases prove the state cannot be reached even when the
+ * database is written to directly, which is the only way left to try.
+ */
+describe('two unanswered rounds do not stall the exchange', () => {
+  /**
+   * Reaching the state: SCRUM-82's submit endpoint accepts a request in
+   * Clarification Requested and knows nothing about rounds, so an Organiser who
+   * resubmits that way leaves one open. The Coordinator's next question then
+   * opens a second.
+   */
+  async function twoOpenRounds() {
+    const id = await createCompleteRequest();
+    await setStatus(id, 'submitted');
+    await assignCoordinator(id);
+    await raiseClarification(id, 'Round 1: how many?');
+    // Resubmitted without answering — the gap SCRUM-82's path leaves.
+    await setStatus(id, 'submitted');
+    await raiseClarification(id, 'Round 2: AV setup?');
+
+    const rounds = await readRounds(id);
+    expect(rounds.filter((r) => r.response === null)).toHaveLength(2);
+    return id;
+  }
+
+  /**
+   * The defect found in review: this read used maybeSingle() on an unordered
+   * query, so two open rounds made it fail with "multiple rows returned" — and
+   * because it runs before every response, every later response to that request
+   * failed too, permanently, until the table was edited by hand.
+   */
+  it('answers the newest open round instead of failing', async () => {
+    const id = await twoOpenRounds();
+
+    actor.current = { userId: organiserId, roles: ['event_organiser'] };
+    const outcome = await respondToClarification(id, { response: 'Two hundred' }, organiserId);
+
+    expect(outcome.round.roundNumber).toBe(2);
+    expect(outcome.status).toBe('submitted');
+
+    const rounds = await readRounds(id);
+    expect(rounds.filter((r) => r.response === null)).toHaveLength(1); // the orphan, stepped over
+    expect(rounds.find((r) => r.round_number === 2)?.response).toBe('Two hundred');
+  });
+
+  it('keeps working for every later round, rather than stalling once', async () => {
+    const id = await twoOpenRounds();
+    actor.current = { userId: organiserId, roles: ['event_organiser'] };
+    await respondToClarification(id, { response: 'Two hundred' }, organiserId);
+
+    await raiseClarification(id, 'Round 3: catering?');
+    const outcome = await respondToClarification(id, { response: 'No catering' }, organiserId);
+
+    expect(outcome.round.roundNumber).toBe(3);
+    expect(outcome.status).toBe('submitted');
+  });
+});
+
+describe('who may read the exchange', () => {
+  async function requestWithARound() {
+    const id = await createCompleteRequest();
+    await setStatus(id, 'submitted');
+    await assignCoordinator(id);
+    await raiseClarification(id, 'How many people are you expecting?');
+    return id;
+  }
+
+  it('lets the organiser who owns it read it', async () => {
+    const id = await requestWithARound();
+    const exchange = await getClarificationExchange(id, asActor(organiserId, 'event_organiser'));
+    expect(exchange.rounds).toHaveLength(1);
+  });
+
+  it('lets the assigned coordinator read it', async () => {
+    const id = await requestWithARound();
+    const exchange = await getClarificationExchange(id, asActor(coordinatorId, 'coordinator'));
+    expect(exchange.rounds).toHaveLength(1);
+  });
+
+  // They decide who owns the event, so an unanswered question is theirs to see.
+  it('lets an Event Operations Manager read it', async () => {
+    const id = await requestWithARound();
+    const exchange = await getClarificationExchange(id, asActor(managerId, 'operations_manager'));
+    expect(exchange.rounds).toHaveLength(1);
+  });
+
+  it('refuses another organiser', async () => {
+    const id = await requestWithARound();
+    await expect(
+      getClarificationExchange(id, asActor(otherOrganiserId, 'event_organiser')),
+    ).rejects.toMatchObject({ code: 'FORBIDDEN' });
+  });
+
+  // SCRUM-96 AC4 — reassigned away means access is denied.
+  it('refuses a coordinator the event is not assigned to', async () => {
+    const id = await requestWithARound();
+    await expect(
+      getClarificationExchange(id, asActor(otherCoordinatorId, 'coordinator')),
+    ).rejects.toMatchObject({ code: 'FORBIDDEN' });
+  });
+
+  it('refuses an account with no roles at all', async () => {
+    const id = await requestWithARound();
+    await expect(
+      getClarificationExchange(id, asActor(otherOrganiserId)),
+    ).rejects.toMatchObject({ code: 'FORBIDDEN' });
   });
 });
