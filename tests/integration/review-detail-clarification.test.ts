@@ -338,22 +338,43 @@ describe('requestClarification', () => {
 
   // The per-event check above is a read; this is the write refusing the same
   // thing, so a reassignment landing between the two cannot be written over.
+  // Exercised at the database function directly: the service's own check
+  // would refuse first, so this is the only way to reach the filter.
   it('refuses when the request is reassigned between the check and the write', async () => {
     const id = await createRequest('submitted');
     await assignTo(id, otherCoordinatorId);
 
-    // What markEventRequestClarificationRequested is given is the coordinator
-    // the caller saw; reassigning first makes the filter miss, which is the
-    // state the service turns into a conflict.
+    // The row is assigned to `other`; the write is attempted as `unrelated`.
+    // The UPDATE's own coordinator filter misses, which is the state the
+    // service turns into a denial.
     const { data } = await markEventRequestClarificationRequested(
       id,
       'Please confirm attendance.',
-      otherCoordinatorId,
       unrelatedCoordinatorId,
     );
 
     expect(data).toBeNull();
     expect((await readRow(id)).status).toBe('submitted');
+  });
+
+  // The filter asks whether the actor may act on the row now, not whether it
+  // is unchanged since they read it. A request that was unassigned when read
+  // and assigned to this very Coordinator in between is still theirs to
+  // clarify - an earlier version of the guard compared against what was read
+  // and would have refused this.
+  it('still allows a coordinator the request was assigned to mid-request', async () => {
+    const id = await createRequest('submitted');
+    // Read as unassigned; assigned to `other` before `other` writes.
+    await assignTo(id, otherCoordinatorId);
+
+    const { data } = await markEventRequestClarificationRequested(
+      id,
+      'Please confirm attendance.',
+      otherCoordinatorId,
+    );
+
+    expect(data).not.toBeNull();
+    expect((await readRow(id)).status).toBe('clarification_requested');
   });
 
   it('takes the request out of the awaiting-review queue', async () => {

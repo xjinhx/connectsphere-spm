@@ -411,14 +411,8 @@ export async function markEventRequestClarificationRequested(
   id: string,
   note: string,
   actorId: string,
-  /**
-   * The coordinator the caller saw on the request, so a reassignment landing
-   * between that read and this write cannot be written over. Null means the
-   * request was unassigned and must still be unassigned for this to apply.
-   */
-  expectedCoordinatorId: string | null,
 ) {
-  const update = db()
+  return db()
     .from('event_request')
     .update({
       status: 'clarification_requested',
@@ -426,13 +420,16 @@ export async function markEventRequestClarificationRequested(
       clarification_requested_by: actorId,
     })
     .eq('id', id)
-    .eq('status', 'submitted');
-
-  return (
-    expectedCoordinatorId === null
-      ? update.is('coordinator_id', null)
-      : update.eq('coordinator_id', expectedCoordinatorId)
-  )
+    .eq('status', 'submitted')
+    // The same rule as canReviewDetail, applied inside the UPDATE - the
+    // pattern SCRUM-213 set on markEventRequestApproved above, for the same
+    // reason: the service checks it first, but an Event Operations Manager
+    // can reassign the event between that check and this write. The filter
+    // asks whether this actor may act on the row *now*, not whether the row
+    // is unchanged since it was read - so a request assigned to the actor
+    // mid-request still goes through, and one reassigned away from them
+    // does not.
+    .or(`coordinator_id.is.null,coordinator_id.eq.${actorId}`)
     .select(COLUMNS)
     .maybeSingle();
 }

@@ -466,33 +466,22 @@ export async function requestClarification(
     throw new ForbiddenError('This event request is assigned to another Event Coordinator.');
   }
 
+  // The check above is a read; the assignment can change between it and the
+  // write. The UPDATE carries the same rule (see
+  // markEventRequestClarificationRequested), so a reassignment landing in
+  // between makes it miss rather than be written over.
   const { data, error } = await markEventRequestClarificationRequested(
     parsedId.data,
     parsedInput.data.note,
     actorId,
-    // The check above is a read; the assignment can change between it and the
-    // write. Passing what was read makes the UPDATE itself refuse a request
-    // reassigned in between, the same way its `status = 'submitted'` filter
-    // already refuses one acted on in between.
-    current.coordinator_id,
   );
   if (error) {
     throw new ValidationError('The clarification request could not be saved.', error.message);
   }
-  // The check above saw a submitted request, yet no row matched the `status =
-  // submitted` filter: another coordinator acted on it in between (approved
-  // it, or already asked their own question) - same race canBeApproved
-  // guards against for approval.
-  //
-  // A conflict, not an invalid transition. InvalidTransitionError would render
-  // as "An event cannot move from clarification_requested to
-  // clarification_requested", which describes neither what the caller asked
-  // for nor what happened: the request was never in clarification_requested
-  // for them. Raised in review of PR #32 - this is the first place the race
-  // reaches a Coordinator through a form they submit themselves, so the
-  // message has to say who lost. approveEventRequest above still carries the
-  // older wording; that is SCRUM-92's merged code, left for its owner.
-  if (!data) throw new ConflictError('Someone else already acted on this request.');
+  // The checks above saw a submitted request this Coordinator may act on, yet
+  // no row matched the filters. Two different things can have happened in
+  // between, and they need different answers - see clarificationRaceError.
+  if (!data) throw await clarificationRaceError(parsedId.data, actorId);
 
   return toClarificationOutcome(data as unknown as EventRequestRow);
 }
@@ -630,4 +619,32 @@ export async function rejectEventRequest(
   if (!data) throw new ConflictError('Someone else already acted on this request.');
 
   return toRejectionOutcome(data as unknown as EventRequestRow);
+/**
+ * Why a conditional clarification request matched no row.
+ *
+ * Mirrors approvalRaceError (SCRUM-213) rather than sharing it: that function
+ * is SCRUM-92's, and folding both into one would mean editing it from this
+ * story. The shape is the same because the two races are the same - another
+ * Coordinator acted first, or an Event Operations Manager reassigned the
+ * event out from under this one mid-request - and SCRUM-96 AC4 wants the
+ * second reported as a denial, not a generic conflict.
+ *
+ * Raised in review of PR #32: the earlier single ConflictError said "someone
+ * else already acted", which is right for the first race and misleading for
+ * the second. This is the first place either race reaches a Coordinator
+ * through a form they submit themselves, so the message has to say what
+ * actually happened.
+ */
+async function clarificationRaceError(id: string, actorId: string): Promise<Error> {
+  const { data, error } = await fetchEventRequestById(id);
+  // A failed read is not a missing request - the row was read a moment ago.
+  if (error) return new ValidationError('The event request could not be read.', error.message);
+
+  const row = data as unknown as EventRequestRow | null;
+  if (!row) return new NotFoundError('Event request');
+
+  if (!canReviewDetail(row.coordinator_id, actorId)) {
+    return new ForbiddenError('This event request was reassigned to another Event Coordinator.');
+  }
+  return new ConflictError('Someone else already acted on this request.');
 }
