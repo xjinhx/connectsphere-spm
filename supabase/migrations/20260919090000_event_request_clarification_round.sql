@@ -63,6 +63,25 @@ create table if not exists event_request_clarification_round (
   constraint event_request_clarification_round_unique unique (event_request_id, round_number)
 );
 
+-- Deliberately NOT a unique index on "one open round per request".
+--
+-- That was tried, and it is the wrong tool. More than one unanswered round is
+-- not a state this story can produce - closing a round performs the status
+-- change in the same statement (see the trigger below) - but it is a state
+-- SCRUM-82's submit endpoint can still produce, because markEventRequestSubmitted
+-- accepts clarification_requested and does not know rounds exist. An Organiser
+-- who resubmits that way leaves a round open on a submitted request.
+--
+-- A unique index there would then refuse the *Coordinator's* next clarification
+-- request, punishing them for what the Organiser's path did and breaking
+-- SCRUM-90. Instead the read tolerates it: "the open round" is the newest
+-- unanswered one (fetchOpenClarificationRound), so an older orphan is stepped
+-- over rather than stalling every later response.
+--
+-- Narrowing SCRUM-82's submit to exclude clarification_requested, now that this
+-- story owns that transition, would close the gap properly - but that is
+-- another story's rule to change.
+
 -- No separate index: the unique constraint above already indexes
 -- (event_request_id, round_number), which is exactly how AC3 reads them.
 
@@ -147,6 +166,50 @@ $$;
 create trigger event_request_clarification_round_set_responded_at
   before update of response on event_request_clarification_round
   for each row execute function set_clarification_responded_at();
+
+-- -----------------------------------------------------------------------------
+-- AC1 — answering the open round is what returns the request to Submitted.
+--
+-- The two facts are one event: the Organiser answered, so the request is back
+-- with the Coordinator. supabase-js has no transactions, so an application
+-- doing them as two writes cannot make them succeed or fail together - and the
+-- failure is not theoretical. Closing the round first and submitting second
+-- leaves an answered round on a request still sitting in Clarification
+-- Requested if the submit is refused, which SCRUM-82 AC2 does whenever a
+-- mandatory field is incomplete: an ordinary mistake, not a rare fault. Doing
+-- it the other way round leaves an open round on a submitted request, which is
+-- the state the one-open-round index above describes.
+--
+-- Performing the status change here means there is one write, so neither state
+-- can occur. The same reasoning as record_coordinator_reassignment (SCRUM-96),
+-- which writes its history row inside the reassignment for exactly this reason.
+--
+-- Guarded on the current status rather than applied blindly: answering a round
+-- on a request that is not awaiting one changes nothing, so a repair or a
+-- backfill cannot move a request by accident.
+--
+-- What this does NOT do is decide whether the request may be submitted at all.
+-- SCRUM-82 AC2's completeness rule (incompleteFields) is applied in the service
+-- before the answer is written, so an incomplete request is refused and no
+-- round is closed.
+-- -----------------------------------------------------------------------------
+create or replace function resubmit_on_clarification_response() returns trigger language plpgsql as $$
+begin
+  if new.response is not null and old.response is null then
+    update event_request
+      set status = 'submitted'
+      where id = new.event_request_id
+        and status = 'clarification_requested';
+  end if;
+  return null; -- AFTER trigger: the return value is ignored.
+end;
+$$;
+
+-- AFTER, so responded_at has been stamped by the BEFORE trigger above and the
+-- row is final before anything else reads it.
+create trigger event_request_clarification_round_resubmit
+  after update of response on event_request_clarification_round
+  for each row execute function resubmit_on_clarification_response();
 
 -- -----------------------------------------------------------------------------
 -- Backfill: every clarification raised before this migration becomes round 1.

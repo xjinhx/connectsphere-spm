@@ -36,8 +36,22 @@ export async function listClarificationRounds(eventRequestId: string) {
 
 /**
  * The round still waiting for an answer, if there is one. An open round is
- * exactly `response is null` — the same definition the conditional update
- * below filters on, so the check and the write cannot disagree about it.
+ * exactly `response is null` — the same definition the conditional update below
+ * filters on, so the check and the write cannot disagree about it.
+ *
+ * The NEWEST unanswered round, not "the" unanswered one. Normally there is at
+ * most one: closing a round returns the request to Submitted in the same
+ * statement, so a second cannot open while one is outstanding. But SCRUM-82's
+ * submit endpoint also accepts a request in Clarification Requested and knows
+ * nothing about rounds, so an Organiser resubmitting that way can leave one
+ * open; the Coordinator's next question then opens a second.
+ *
+ * Written as `maybeSingle()` on an unordered query first, which raised "multiple
+ * rows returned" the moment that happened - and, because it is read before every
+ * response, stalled every later response to that request until the table was
+ * edited by hand. Ordering and taking one means the Organiser answers the
+ * question they were actually asked, and an older orphan is stepped over instead
+ * of jamming the exchange.
  */
 export async function fetchOpenClarificationRound(eventRequestId: string) {
   return createAdminClient()
@@ -45,6 +59,8 @@ export async function fetchOpenClarificationRound(eventRequestId: string) {
     .select(COLUMNS)
     .eq('event_request_id', eventRequestId)
     .is('response', null)
+    .order('round_number', { ascending: false })
+    .limit(1)
     .maybeSingle();
 }
 
