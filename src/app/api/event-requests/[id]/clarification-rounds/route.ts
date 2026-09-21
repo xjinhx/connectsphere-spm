@@ -20,13 +20,16 @@ import { getCurrentActor } from '@/lib/auth/currentActor';
  * note it was raised with and the response it received. The amended values are
  * on the event request itself and are read through the existing request read.
  *
- * Anyone signed in may read it, matching SCRUM-90's clarification route — the
- * middleware already requires a session.
+ * Who may read is decided in the service (canViewClarificationExchange): the
+ * organiser who owns the request, its current coordinator, and the Event
+ * Operations Managers who assign coordinators. The actor comes from the session,
+ * never from the URL, so a caller cannot ask as somebody else.
  */
 export async function GET(_req: NextRequest, { params }: { params: Promise<{ id: string }> }) {
   try {
     const { id } = await params;
-    return NextResponse.json(await getClarificationExchange(id));
+    const actor = await getCurrentActor();
+    return NextResponse.json(await getClarificationExchange(id, actor));
   } catch (error) {
     return handleApiError(error);
   }

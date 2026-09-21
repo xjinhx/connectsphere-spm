@@ -95,7 +95,7 @@ export default async function ReviewEventRequestPage({
   // SCRUM-91 AC2/AC3. Read after getReviewDetail, never before: that call is
   // what refuses a request assigned to another coordinator (SCRUM-89 AC3), and
   // the exchange must not be read for someone who is not allowed to see it.
-  const exchange = await getClarificationExchange(id);
+  const exchange = await getClarificationExchange(id, actor);
 
   return (
     <main className="mx-auto max-w-2xl px-4 py-8">
