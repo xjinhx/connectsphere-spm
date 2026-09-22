@@ -15,6 +15,10 @@ export const dynamic = 'force-dynamic';
  * no events at all, with an explicit message rather than an empty-looking
  * list, since there is no organisation for the access rules to resolve
  * against yet.
+ *
+ * SCRUM-204 AC3 — once linked, the list widens to the whole organisation:
+ * every request a colleague there has submitted appears too, view-only,
+ * alongside the organiser's own (including their own still-private drafts).
  */
 export default async function MyEventRequestsPage() {
   const actor = await getCurrentActor();
@@ -23,7 +27,9 @@ export default async function MyEventRequestsPage() {
   return (
     <main className="mx-auto max-w-2xl px-4 py-8">
       <div className="flex flex-wrap items-center justify-between gap-3">
-        <h1 className="text-xl font-semibold">My event requests</h1>
+        <h1 className="text-xl font-semibold">
+          {actor.clientOrganisation ? `${actor.clientOrganisation.name}'s event requests` : 'My event requests'}
+        </h1>
         {actor.clientOrganisation && (
           <Link
             href="/events/new"
@@ -63,6 +69,11 @@ export default async function MyEventRequestsPage() {
                   <p className="mt-1 text-xs text-[var(--text-muted)]">
                     {submissionSummary(request.submittedAt)}
                   </p>
+                  {/* SCRUM-204 AC3 — a colleague's request is here view-only;
+                      "Yours" is the only visible cue for which is which. */}
+                  {request.organiserId !== actor.userId && (
+                    <p className="mt-1 text-xs text-[var(--text-muted)]">View-only</p>
+                  )}
                 </div>
               </Link>
             </li>
