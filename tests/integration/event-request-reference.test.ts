@@ -1,5 +1,6 @@
 import { describe, it, expect, beforeAll, afterAll } from 'vitest';
 import { createAdminClient } from '@/lib/supabase/admin';
+import { ensureTestClientOrganisation } from './fixtures/clientOrganisation';
 import { insertEventRequest } from '@/lib/supabase/eventRequests';
 import { todayInSingapore } from '@/domain/shared/dates';
 
@@ -72,6 +73,10 @@ async function createRequest(name: string): Promise<{ id: string; reference: str
 }
 
 beforeAll(async () => {
+  // SCRUM-203's FK on client_organisation_id means CLIENT_ORGANISATION_ID
+  // below must be a real row, not just a placeholder uuid.
+  await ensureTestClientOrganisation(supabase);
+
   const { data, error } = await supabase.auth.admin.createUser({
     email: `organiser+${Date.now()}@connectsphere.example.com`,
     password: 'Password123!',
