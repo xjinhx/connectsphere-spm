@@ -1,4 +1,5 @@
 import { z } from 'zod';
+import { EventRequestStatusEnum } from '@/domain/event-request/schema';
 
 /**
  * Client Organisations (SCRUM-203): data shapes shared by the API routes and
@@ -34,12 +35,17 @@ export type CreateClientOrganisationInput = z.infer<typeof CreateClientOrganisat
 export const UpdateClientOrganisationInputSchema = CreateClientOrganisationInputSchema;
 export type UpdateClientOrganisationInput = z.infer<typeof UpdateClientOrganisationInputSchema>;
 
-/** AC3 — an event recorded against the organisation, as shown on its page. */
+/**
+ * AC3 — an event recorded against the organisation, as shown on its page.
+ * Uses the shared status enum rather than a literal union, so an
+ * organisation whose event has since moved past 'submitted' (e.g. SCRUM-92's
+ * 'approved') is not a value this type claims is impossible.
+ */
 export const OrganisationEventSummarySchema = z.object({
   id: z.string().uuid(),
   reference: z.string(),
   name: z.string(),
-  status: z.enum(['draft', 'submitted']),
+  status: EventRequestStatusEnum,
   proposedDate: z.string().nullable(),
 });
 export type OrganisationEventSummary = z.infer<typeof OrganisationEventSummarySchema>;
