@@ -1,4 +1,3 @@
-import { createAdminClient } from '@/lib/supabase/admin';
 import {
   fetchClientOrganisation,
   insertClientOrganisation,
@@ -67,7 +66,7 @@ export async function createClientOrganisation(input: unknown): Promise<ClientOr
   await requireCoordinator();
   const parsed = parseCreateInput(input);
 
-  const { data, error } = await insertClientOrganisation(createAdminClient(), {
+  const { data, error } = await insertClientOrganisation({
     name: parsed.name,
     contact_name: parsed.contactName ?? null,
     contact_email: parsed.contactEmail ?? null,
@@ -89,7 +88,7 @@ export async function createClientOrganisation(input: unknown): Promise<ClientOr
 export async function listClientOrganisations(): Promise<ClientOrganisation[]> {
   await requireCoordinator();
 
-  const { data, error } = await listClientOrganisationRows(createAdminClient());
+  const { data, error } = await listClientOrganisationRows();
   if (error) throw new ValidationError('Client organisations could not be read.', error.message);
   return (data ?? []).map((row) => toClientOrganisation(row as unknown as ClientOrganisationRow));
 }
@@ -99,12 +98,11 @@ export async function getClientOrganisation(id: string): Promise<ClientOrganisat
   await requireCoordinator();
   if (!UUID_PATTERN.test(id)) throw new NotFoundError('Client organisation');
 
-  const admin = createAdminClient();
-  const { data: orgRow, error: orgError } = await fetchClientOrganisation(admin, id);
+  const { data: orgRow, error: orgError } = await fetchClientOrganisation(id);
   if (orgError) throw new ValidationError('The organisation could not be read.', orgError.message);
   if (!orgRow) throw new NotFoundError('Client organisation');
 
-  const { data: eventRows, error: eventsError } = await listEventsForOrganisation(admin, id);
+  const { data: eventRows, error: eventsError } = await listEventsForOrganisation(id);
   if (eventsError) throw new ValidationError('The organisation\'s events could not be read.', eventsError.message);
 
   return {
@@ -129,7 +127,7 @@ export async function updateClientOrganisation(id: string, input: unknown): Prom
   if (!UUID_PATTERN.test(id)) throw new NotFoundError('Client organisation');
   const parsed = parseUpdateInput(input);
 
-  const { data, error } = await updateClientOrganisationRow(createAdminClient(), id, {
+  const { data, error } = await updateClientOrganisationRow(id, {
     name: parsed.name,
     contact_name: parsed.contactName ?? null,
     contact_email: parsed.contactEmail ?? null,
