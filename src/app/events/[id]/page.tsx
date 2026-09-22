@@ -3,6 +3,7 @@ import CoordinatorPanel from '@/components/assignment/CoordinatorPanel';
 import { EventRequestStatusBadge } from '@/components/event-request/EventRequestStatusBadge';
 import { SubmitEventRequestButton } from '@/components/event-request/SubmitEventRequestButton';
 import {
+  canBeSubmitted,
   describeAccessibility,
   describeEquipment,
   describePreferredLocation,
@@ -38,6 +39,14 @@ export default async function EventRequestPage({
   const request = await getEventRequest(id);
   // SCRUM-82 AC2/AC4 — one rule decides every action shown on this page.
   const editable = isEditable(request.status);
+  // Bug fix, 2026-09-22 — a clarification-requested request is editable
+  // again (SCRUM-90 AC2) but is no longer resubmittable through this plain
+  // action (canBeSubmitted no longer accepts it, see policy.ts): resubmitting
+  // an unanswered clarification belongs to SCRUM-91's dedicated response
+  // flow, not this button. Kept as its own flag so "editable" and
+  // "submittable" can disagree without the Submit button offering an action
+  // that would just error.
+  const submittable = canBeSubmitted(request.status);
   // US-7.2 AC1/AC3 — the clarification note, if a coordinator has raised one.
   // A separate read (getClarificationView) rather than a field on `request`
   // itself — see the comment on ClarificationView in domain/review/service.ts.
@@ -139,14 +148,19 @@ export default async function EventRequestPage({
       <section className="mt-6">
         {editable ? (
           <>
-            {/* SCRUM-84 AC2: an explicit statement that a draft has not yet
-                reached ConnectSphere, distinct from the submitted read-only
-                notice below. */}
-            <p className="mb-3 rounded-md border border-[var(--border)] bg-[var(--surface)] px-3 py-2 text-sm text-[var(--text-muted)]">
-              This is a draft. ConnectSphere has not yet received it — save your changes or submit when ready.
-            </p>
+            {submittable ? (
+              // SCRUM-84 AC2: an explicit statement that a draft has not yet
+              // reached ConnectSphere, distinct from the submitted read-only
+              // notice below.
+              <p className="mb-3 rounded-md border border-[var(--border)] bg-[var(--surface)] px-3 py-2 text-sm text-[var(--text-muted)]">
+                This is a draft. ConnectSphere has not yet received it — save your changes or submit when ready.
+              </p>
+            ) : null}
             <div className="flex flex-wrap items-center gap-3">
-              <SubmitEventRequestButton requestId={request.id} />
+              {/* Bug fix, 2026-09-22 — no longer offered while a clarification
+                  is open: resubmitting here would error, since canBeSubmitted
+                  no longer accepts clarification_requested (see policy.ts). */}
+              {submittable ? <SubmitEventRequestButton requestId={request.id} /> : null}
               {/* SCRUM-85 AC3 — the way back into a saved draft. */}
               <Link
                 href={`/events/${request.id}/edit`}

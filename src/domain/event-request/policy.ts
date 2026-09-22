@@ -368,14 +368,21 @@ export function isEditable(status: EventRequestStatus): boolean {
 /**
  * SCRUM-82 AC1 — a draft becomes submitted.
  *
- * SCRUM-90 AC2 adds the second way in: a request returned for clarification is
- * editable again (see isEditable above), and "without leaving the system"
- * (US-7.2) only holds if the Organiser can then send it back. Widened here
- * rather than left at 'draft' because the two halves have to agree — offering
- * an edit the resubmit would refuse is what this rule previously did.
+ * Narrowed back to 'draft' only (bug fix, 2026-09-22). It briefly accepted
+ * 'clarification_requested' too, on the reasoning that "without leaving the
+ * system" (US-7.2) needs some way back to submitted — but this plain endpoint
+ * has no way to require an answer to the coordinator's question first, so an
+ * organiser could resubmit through it with the clarification still
+ * unanswered. SCRUM-91's dedicated response flow is the real way back
+ * (src/domain/clarification/service.ts's respondToClarification, PR #42):
+ * it records the answer and flips the status in one database write via its
+ * own trigger, entirely independent of this function, so narrowing this rule
+ * does not affect it. The bug and this fix are both called out directly in
+ * that PR's own migration comments
+ * (supabase/migrations/20260919090000_event_request_clarification_round.sql).
  */
 export function canBeSubmitted(status: EventRequestStatus): boolean {
-  return status === 'draft' || status === 'clarification_requested';
+  return status === 'draft';
 }
 
 // ---------------------------------------------------------------------------

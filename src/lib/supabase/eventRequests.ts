@@ -205,11 +205,18 @@ export async function deleteEventRequestEquipment(supabase: SupabaseClient, even
  * concurrent call matches no row and comes back empty rather than quietly
  * overwriting the first.
  *
- * SCRUM-90 AC2 — `clarification_requested` is accepted for the same reason
- * canBeSubmitted() accepts it: a request returned for clarification is edited
- * and sent back. Note set_submitted_at only stamps on draft -> submitted, so a
- * resubmission keeps its original submission time and therefore its place in
- * the coordinator's queue rather than going to the back of it.
+ * SCRUM-90 AC2 — `clarification_requested` is still accepted here even though
+ * canBeSubmitted() (domain/event-request/policy.ts) no longer allows it as of
+ * the 2026-09-22 bug fix: the real app never reaches this function for that
+ * status any more, since submitEventRequest() refuses it first. This filter is
+ * left wider on purpose so it keeps working as a direct write for whoever
+ * still calls it that way (e.g. tests/integration/review-detail-clarification.test.ts,
+ * which exercises this filter directly rather than the policy layer above it)
+ * and for SCRUM-91's own resubmission path, which writes status via its own
+ * database trigger and never calls this function at all. Note set_submitted_at
+ * only stamps on draft -> submitted, so a resubmission through here keeps its
+ * original submission time and therefore its place in the coordinator's queue
+ * rather than going to the back of it.
  */
 export async function markEventRequestSubmitted(supabase: SupabaseClient, id: string) {
   return supabase
