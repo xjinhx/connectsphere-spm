@@ -73,7 +73,7 @@ export async function setAccountOrganisation(accountId: string, input: unknown):
   }
 
   if (parsed.data.clientOrganisationId) {
-    const { data: org, error: orgError } = await fetchClientOrganisation(supabase, parsed.data.clientOrganisationId);
+    const { data: org, error: orgError } = await fetchClientOrganisation(parsed.data.clientOrganisationId);
     if (orgError) throw new ValidationError('The organisation could not be verified.', orgError.message);
     if (!org) throw new NotFoundError('Client organisation');
   }

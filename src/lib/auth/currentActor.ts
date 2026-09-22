@@ -1,6 +1,5 @@
 import { isRole, type Role } from '@/domain/identity/roles';
 import { UnauthenticatedError } from '@/domain/shared/errors';
-import { createAdminClient } from '@/lib/supabase/admin';
 import { createSessionClient } from '@/lib/supabase/server';
 import { fetchProfileWithOrganisation } from '@/lib/supabase/profiles';
 import { fetchClientOrganisation } from '@/lib/supabase/clientOrganisations';
@@ -39,7 +38,7 @@ export async function getCurrentActor(): Promise<Actor> {
 
   let clientOrganisation: { id: string; name: string } | null = null;
   if (profile?.client_organisation_id) {
-    const { data: org } = await fetchClientOrganisation(createAdminClient(), profile.client_organisation_id);
+    const { data: org } = await fetchClientOrganisation(profile.client_organisation_id);
     clientOrganisation = org ? { id: org.id, name: org.name } : null;
   }
 
