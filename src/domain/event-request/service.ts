@@ -462,7 +462,9 @@ export async function submitEventRequest(id: string): Promise<EventRequest> {
     throw new InvalidTransitionError(existing.status, 'submitted');
   }
 
-  const incomplete = incompleteFields(existing);
+  // `now` enables the same-day slot-lapsed check (SCRUM-77 AC5) alongside the
+  // date-only rules; incompleteFields() defaults `today` itself when omitted.
+  const incomplete = incompleteFields(existing, undefined, new Date());
   if (incomplete.length > 0) {
     throw new ValidationError(
       'The request cannot be submitted until every mandatory field is complete.',
