@@ -212,20 +212,35 @@ create trigger event_request_clarification_round_resubmit
   for each row execute function resubmit_on_clarification_response();
 
 -- -----------------------------------------------------------------------------
--- Backfill: every clarification raised before this migration becomes round 1.
+-- Backfill: a clarification that is STILL OUTSTANDING becomes round 1.
 --
 -- Without this, a request already sitting in Clarification Requested would have
--- a note on event_request and no round to show for it, and AC3 would list one
--- round fewer than actually happened. The response columns stay null because
--- there was nowhere to record a response until now - which is accurate, not a
--- gap.
+-- a note on event_request and no round to show for it, and its Organiser would
+-- be told there is nothing to respond to. The response columns stay null
+-- because there was nowhere to record a response until now, and null here means
+-- what it means everywhere else: waiting for a reply.
+--
+-- `status = 'clarification_requested'` is the whole point of this filter, not a
+-- tidying detail. SCRUM-90 deliberately never clears clarification_note when a
+-- request is resubmitted - US-7.2 AC3 wants the note to stay visible - so the
+-- column is also set on every request that was clarified and resolved long ago.
+-- Without the status filter each of those would get a round with no response,
+-- and ClarificationRounds would show "Waiting for the organiser to reply"
+-- forever on a conversation that finished months earlier.
+--
+-- Those resolved requests get no round at all, and that is the honest outcome:
+-- their reply was never recorded, because there was nowhere to put it until
+-- this table existed. Inventing a response to close the round would put words
+-- in an Organiser's mouth. The note itself is still shown, by SCRUM-90's own
+-- panel, which already words itself as "Clarification was requested earlier".
 -- -----------------------------------------------------------------------------
 insert into event_request_clarification_round (
   event_request_id, round_number, note, requested_by, requested_at
 )
 select id, 1, clarification_note, clarification_requested_by, clarification_requested_at
 from event_request
-where clarification_note is not null
+where status = 'clarification_requested'
+  and clarification_note is not null
   and clarification_requested_by is not null
   and clarification_requested_at is not null
 on conflict (event_request_id, round_number) do nothing;

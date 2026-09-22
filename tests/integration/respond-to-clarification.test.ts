@@ -494,6 +494,38 @@ describe('two unanswered rounds do not stall the exchange', () => {
   });
 });
 
+/**
+ * The migration backfills a round for clarifications raised before this table
+ * existed. Raised in review: SCRUM-90 never clears clarification_note when a
+ * request is resubmitted (US-7.2 AC3 wants it to stay visible), so the column is
+ * also set on every request that was clarified and resolved long ago. Backfilling
+ * those too would leave each one with an unanswered round, and the coordinator's
+ * page would read "Waiting for the organiser to reply" on a conversation that
+ * finished months earlier.
+ *
+ * The backfill runs once, at migration time, so this asserts the rule it applies
+ * rather than re-running it: a resolved request carries a note and no open round.
+ */
+describe('a resolved clarification does not leave an open round', () => {
+  it('keeps the note but shows nothing outstanding once the request moves on', async () => {
+    const id = await createCompleteRequest();
+    await setStatus(id, 'submitted');
+    await assignCoordinator(id);
+    await raiseClarification(id, 'Answered long ago');
+
+    actor.current = { userId: organiserId, roles: ['event_organiser'] };
+    await respondToClarification(id, { response: 'Here is the answer' }, organiserId);
+
+    // SCRUM-90's note is deliberately still there (US-7.2 AC3)...
+    expect((await readRow(id)).clarification_note).toBe('Answered long ago');
+
+    // ...but nothing is waiting on the organiser, which is what the backfill's
+    // status filter keeps true for rows that predate this table.
+    const open = (await readRounds(id)).filter((r) => r.response === null);
+    expect(open).toHaveLength(0);
+  });
+});
+
 describe('who may read the exchange', () => {
   async function requestWithARound() {
     const id = await createCompleteRequest();
