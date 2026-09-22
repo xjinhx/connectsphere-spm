@@ -1,6 +1,7 @@
 import { describe, it, expect, beforeAll, afterAll } from 'vitest';
 import { createAdminClient } from '@/lib/supabase/admin';
 import { assignCoordinator, listMyAssignedEvents } from '@/domain/assignment/service';
+import { ensureTestClientOrganisation } from './fixtures/clientOrganisation';
 
 /**
  * SCRUM-94 — Assign an Event Coordinator to a submitted event (US-7.4).
@@ -99,6 +100,10 @@ async function readRow(id: string) {
 }
 
 beforeAll(async () => {
+  // SCRUM-203's FK on client_organisation_id means CLIENT_ORGANISATION_ID
+  // below must be a real row, not just a placeholder uuid.
+  await ensureTestClientOrganisation(supabase);
+
   managerId = await createAccount('ops-manager', ['operations_manager']);
   coordinatorId = await createAccount('Jane Tan', ['coordinator']);
   otherCoordinatorId = await createAccount('Sam Lee', ['coordinator']);

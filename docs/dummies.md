@@ -71,9 +71,13 @@ owners switch them the next time they edit those files.
   `requireOrganiser()` refuse a missing organisation; add a new migration
   restoring NOT NULL on `client_organisation_id` (old migrations are never
   edited); re-test SCRUM-76's create flow.
-- **Status:** Active. The open `client-organisation` branch (SCRUM-203) adds
-  the foreign key but deliberately leaves NOT NULL — mark this Partly replaced
-  when it merges.
+- **Status:** Partly replaced. SCRUM-203 (this PR) added the
+  `client_organisations` table and the foreign key on
+  `client_organisation_id`, so an organisation can now actually be selected
+  and stored — but `currentActor.ts` still reports `clientOrganisation` as
+  `null` for everyone, `requireOrganiser()` still accepts a missing
+  organisation, and the column is still nullable, all waiting on SCRUM-204.
+  The remaining "To replace" steps above are unchanged.
 
 ### D-02 — "Nothing is committed" is hardcoded when a request is approved
 

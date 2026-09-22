@@ -52,6 +52,36 @@ export type Database = {
         }
         Relationships: []
       }
+      client_organisations: {
+        Row: {
+          contact_email: string | null
+          contact_name: string | null
+          contact_phone: string | null
+          created_at: string
+          id: string
+          name: string
+          updated_at: string
+        }
+        Insert: {
+          contact_email?: string | null
+          contact_name?: string | null
+          contact_phone?: string | null
+          created_at?: string
+          id?: string
+          name: string
+          updated_at?: string
+        }
+        Update: {
+          contact_email?: string | null
+          contact_name?: string | null
+          contact_phone?: string | null
+          created_at?: string
+          id?: string
+          name?: string
+          updated_at?: string
+        }
+        Relationships: []
+      }
       event_request: {
         Row: {
           accessibility_notes: string | null
@@ -150,6 +180,13 @@ export type Database = {
           updated_at?: string
         }
         Relationships: [
+          {
+            foreignKeyName: "event_request_client_organisation_id_fkey"
+            columns: ["client_organisation_id"]
+            isOneToOne: false
+            referencedRelation: "client_organisations"
+            referencedColumns: ["id"]
+          },
           {
             foreignKeyName: "event_request_preferred_location_id_fkey"
             columns: ["preferred_location_id"]
