@@ -1,8 +1,11 @@
 import { describe, it, expect } from 'vitest';
 import {
   describeTimeSlots,
+  haveAllTimeSlotsEndedToday,
+  hasTimeSlotEndedToday,
   incompleteFields,
   isFullDay,
+  PAST_TIME_SLOT_MESSAGE,
   type StoredEventRequestFields,
 } from '@/domain/event-request/policy';
 import {
@@ -146,6 +149,50 @@ describe('SCRUM-77 — Choose the time slots the event needs', () => {
         pm: { start: 13, end: 18 },
         night: { start: 19, end: 24 },
       });
+    });
+  });
+
+  describe('AC5 — a slot that has already ended today cannot still be submitted (bug fix, ex-US-76-TC06)', () => {
+    // 16:07 Singapore time on the proposed date (A_MONDAY) itself.
+    const AFTERNOON = new Date(`${A_MONDAY}T16:07:00+08:00`);
+
+    it('treats a slot whose end hour has passed as ended', () => {
+      expect(hasTimeSlotEndedToday('am', AFTERNOON)).toBe(true); // ended at 12:00
+      expect(hasTimeSlotEndedToday('pm', AFTERNOON)).toBe(false); // ends at 18:00
+      expect(hasTimeSlotEndedToday('night', AFTERNOON)).toBe(false); // has not started
+    });
+
+    it('is not satisfied only when every selected slot has ended', () => {
+      expect(haveAllTimeSlotsEndedToday(['am'], AFTERNOON)).toBe(true);
+      // pm is still ahead, so a mixed am+pm selection is not fully lapsed.
+      expect(haveAllTimeSlotsEndedToday(['am', 'pm'], AFTERNOON)).toBe(false);
+      expect(haveAllTimeSlotsEndedToday(['am', 'night'], AFTERNOON)).toBe(false);
+    });
+
+    it('blocks submission of an already-ended slot for a proposed date of today', () => {
+      const result = incompleteFields({ ...complete, proposedDate: A_MONDAY, timeSlots: ['am'] }, A_MONDAY, AFTERNOON);
+      expect(result).toEqual([
+        { field: 'timeSlots', label: 'Time slots', reason: PAST_TIME_SLOT_MESSAGE },
+      ]);
+    });
+
+    it('still allows a slot later in today that has not ended yet', () => {
+      const result = incompleteFields({ ...complete, proposedDate: A_MONDAY, timeSlots: ['pm'] }, A_MONDAY, AFTERNOON);
+      expect(result).toEqual([]);
+    });
+
+    it('does not apply this check to a future date - the whole day is still ahead', () => {
+      // complete.proposedDate is 2026-11-15, a Sunday after A_MONDAY. Its "am"
+      // slot has no relationship to AFTERNOON's clock time; only a date that
+      // equals `today` is ever checked against `now`.
+      expect(incompleteFields({ ...complete, timeSlots: ['am'] }, A_MONDAY, AFTERNOON)).toEqual([]);
+    });
+
+    it('leaves the date-only rules unchanged when `now` is not supplied', () => {
+      // The existing SCRUM-76 AC4 behaviour ("today, at any hour, is
+      // accepted") must not become wall-clock-dependent for callers that
+      // never asked for the slot check.
+      expect(incompleteFields({ ...complete, proposedDate: A_MONDAY, timeSlots: ['am'] }, A_MONDAY)).toEqual([]);
     });
   });
 });
