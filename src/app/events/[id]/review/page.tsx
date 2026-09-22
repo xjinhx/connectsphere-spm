@@ -12,7 +12,10 @@ import {
   describeTechnicalSupport,
   describeTimeSlots,
 } from '@/domain/event-request/policy';
-import { getClarificationExchange } from '@/domain/clarification/service';
+import {
+  getClarificationExchange,
+  type ClarificationExchange,
+} from '@/domain/clarification/service';
 import { getReviewDetail, type ReviewDetail } from '@/domain/review/service';
 import { canRequestClarification } from '@/domain/review/policy';
 import { ForbiddenError, NotFoundError } from '@/domain/shared/errors';
@@ -68,8 +71,20 @@ export default async function ReviewEventRequestPage({
   const { id } = await params;
 
   let request: ReviewDetail;
+  let exchange: ClarificationExchange;
   try {
     request = await getReviewDetail(id, actor.userId);
+    // SCRUM-91 AC2/AC3. Read after getReviewDetail, never before: that call is
+    // what refuses a request assigned to another coordinator (SCRUM-89 AC3), and
+    // the exchange must not be read for someone who is not allowed to see it.
+    //
+    // Inside the same try for a reason: it does its own read of the same row, so
+    // an Event Operations Manager reassigning the event in the gap between the
+    // two reads makes this one refuse where the first allowed. Outside the try
+    // that refusal was uncaught and took the whole page down, instead of showing
+    // the "assigned to another Event Coordinator" message below - which is
+    // exactly what that situation should say.
+    exchange = await getClarificationExchange(id, actor);
   } catch (error) {
     if (error instanceof NotFoundError) {
       notFound();
@@ -91,11 +106,6 @@ export default async function ReviewEventRequestPage({
     }
     throw error;
   }
-
-  // SCRUM-91 AC2/AC3. Read after getReviewDetail, never before: that call is
-  // what refuses a request assigned to another coordinator (SCRUM-89 AC3), and
-  // the exchange must not be read for someone who is not allowed to see it.
-  const exchange = await getClarificationExchange(id, actor);
 
   return (
     <main className="mx-auto max-w-2xl px-4 py-8">
