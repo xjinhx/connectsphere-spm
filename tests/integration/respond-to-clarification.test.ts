@@ -1,5 +1,6 @@
 import { describe, it, expect, beforeAll, afterAll, vi } from 'vitest';
 import { createAdminClient } from '@/lib/supabase/admin';
+import { ensureTestClientOrganisation } from './fixtures/clientOrganisation';
 import type { Role } from '@/domain/identity/roles';
 
 /**
@@ -48,7 +49,8 @@ const { respondToClarification, getClarificationExchange } = await import(
 
 const supabase = createAdminClient();
 
-// No foreign key on this column yet: Client Organisations is its own story.
+// SCRUM-203 put a foreign key on this column, so the row has to exist
+// (ensureTestClientOrganisation, below).
 const CLIENT_ORGANISATION_ID = '22222222-2222-2222-2222-222222222222';
 
 let organiserId: string;
@@ -170,6 +172,9 @@ async function amend(id: string, expectedAttendance: number) {
 }
 
 beforeAll(async () => {
+  // SCRUM-203's FK on client_organisation_id means CLIENT_ORGANISATION_ID
+  // below must be a real row, not just a placeholder uuid.
+  await ensureTestClientOrganisation(supabase);
   organiserId = await createAccount('Olivia Organiser', ['event_organiser']);
   otherOrganiserId = await createAccount('Otto Other', ['event_organiser']);
   coordinatorId = await createAccount('Casey Coordinator', ['coordinator']);
