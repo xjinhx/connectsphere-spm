@@ -2,9 +2,14 @@
 -- SCRUM-203 — Create and maintain a client organisation
 -- =============================================================================
 -- AC1/AC2: a Coordinator creates an organisation with a unique name and
--- contact details. The unique constraint is on the trimmed name so "Acme"
--- and "Acme " cannot both be saved; case is left alone (Postgres default),
--- matching how event_request.name is guarded (see 20260911000000).
+-- contact details. The unique constraint is on the raw name, not the
+-- trimmed one, so "Acme" and "Acme " are distinct as far as the database is
+-- concerned; the API's guarantee that they collide comes from
+-- CreateClientOrganisationInputSchema trimming the name before it reaches
+-- this table (src/domain/client-organisation/schema.ts), not from this
+-- constraint. A direct insert that skips the API would not get that
+-- protection. Case is left alone (Postgres default), matching how
+-- event_request.name is guarded (see 20260911000000).
 
 create table client_organisations (
   id uuid primary key default gen_random_uuid(),
