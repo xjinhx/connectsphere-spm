@@ -4,6 +4,7 @@ import {
   respondToClarification,
 } from '@/domain/clarification/service';
 import { handleApiError } from '@/lib/api/handler';
+import { ValidationError } from '@/domain/shared/errors';
 import { getCurrentActor } from '@/lib/auth/currentActor';
 
 /**
@@ -48,7 +49,18 @@ export async function POST(req: NextRequest, { params }: { params: Promise<{ id:
   try {
     const { id } = await params;
     const actor = await getCurrentActor();
-    const body = await req.json();
+
+    // A body that is not JSON is the caller's mistake, so it is a 400 saying so
+    // rather than the 500 an uncaught parse error becomes. Same shape as
+    // api/organisations and api/venues; the older event-request routes do not
+    // do this yet, which is what made it easy to leave out here.
+    let body: unknown;
+    try {
+      body = await req.json();
+    } catch {
+      throw new ValidationError('Request body must be valid JSON.');
+    }
+
     return NextResponse.json(await respondToClarification(id, body, actor.userId));
   } catch (error) {
     return handleApiError(error);
