@@ -48,7 +48,11 @@ export async function PATCH(req: NextRequest, { params }: { params: Promise<{ id
     const actor = await getCurrentActor();
     assertPermission(actor.roles, 'coordinator_assignment');
 
-    const body = await req.json().catch(() => ({}));
+    // A body of `null` is valid JSON, so the catch does not replace it, and
+    // reading a field off it would throw and answer 500. Anything that is not
+    // an object becomes {}, and the schema answers 400 for the missing fields.
+    const raw: unknown = await req.json().catch(() => ({}));
+    const body = typeof raw === 'object' && raw !== null ? raw : {};
     const { coordinatorId, fromCoordinatorId } = body as {
       coordinatorId?: unknown;
       fromCoordinatorId?: unknown;
