@@ -82,7 +82,7 @@ export default async function EventRequestPage({
   const [clarification, approval, rejection] = await Promise.all([
     getClarificationView(id),
     getApprovalView(id),
-    getRejectionView(id),
+    getRejectionView(id, actor),
   ]);
 
   return (
