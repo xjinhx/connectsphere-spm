@@ -51,33 +51,29 @@ owners switch them the next time they edit those files.
 
 - **Kind:** Loosened rule
 - **Added by:** SCRUM-76 — commit `bee2e54` (PR #9)
-- **Waiting on:** SCRUM-203 Create and maintain a client organisation ·
-  SCRUM-204 Link an Event Organiser to a client organisation
+- **Waiting on:** SCRUM-88 Show client organisation on the assigned-events queue
 - **Where:**
-  - `src/lib/auth/currentActor.ts` — `clientOrganisation` is always `null`
-  - `src/domain/event-request/service.ts` — `requireOrganiser()` accepts a
-    missing organisation instead of refusing (the "Interim" comment)
-  - `src/components/event-request/EventRequestForm.tsx` — the organisation
-    can't be pre-filled
-  - `supabase/migrations/20260912000000_event_request_organisation_nullable.sql`
-    — `event_request.client_organisation_id` made nullable
   - `src/domain/assignment/service.ts` — `AssignedEvent` carries no client
     organisation field, so it cannot be shown on the assigned-events queue
     (SCRUM-88 AC1)
   - `src/app/assigned-events/page.tsx` — no client organisation column,
     since there is nothing to show
-- **To replace:** once organisers are linked to organisations (SCRUM-204),
-  read the organiser's organisation in `currentActor.ts`; make
-  `requireOrganiser()` refuse a missing organisation; add a new migration
-  restoring NOT NULL on `client_organisation_id` (old migrations are never
-  edited); re-test SCRUM-76's create flow.
-- **Status:** Partly replaced. SCRUM-203 (this PR) added the
-  `client_organisations` table and the foreign key on
-  `client_organisation_id`, so an organisation can now actually be selected
-  and stored — but `currentActor.ts` still reports `clientOrganisation` as
-  `null` for everyone, `requireOrganiser()` still accepts a missing
-  organisation, and the column is still nullable, all waiting on SCRUM-204.
-  The remaining "To replace" steps above are unchanged.
+- **To replace:** once SCRUM-88 adds a client organisation column to the
+  assigned-events queue, have `AssignedEvent` carry `client_organisation_id`/
+  `name` and render it on that page; re-test SCRUM-88's own ACs.
+- **Status:** Partly replaced. SCRUM-203 (`client_organisations` table) and
+  SCRUM-204 (linking an organiser to one, PR #22, merged into main) resolved
+  the event-request side: `currentActor.ts` now reads the actor's real
+  `clientOrganisation` (`null` only for internal staff or an organiser not
+  yet linked by a Coordinator — a real, permanent state per SCRUM-204 AC2,
+  not a gap), `event_request.client_organisation_id` is a real nullable FK,
+  and SCRUM-76's create flow (AC1) now pre-fills the organisation correctly
+  for a linked organiser. The original "refuse a missing organisation" /
+  "restore NOT NULL" plan below no longer applies — SCRUM-204 does not
+  guarantee every organiser is linked, so enforcing non-null would wrongly
+  block an organiser a Coordinator hasn't linked yet. What remains is the
+  assigned-events display gap (SCRUM-88), unrelated to event-request
+  creation.
 
 ### D-02 — "Nothing is committed" is hardcoded when a request is approved
 
