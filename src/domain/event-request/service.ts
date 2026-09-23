@@ -35,6 +35,7 @@ import {
 } from './schema';
 import {
   canBeSubmitted,
+  canViewRequest,
   incompleteFields,
   isEditable,
   isOwnRequest,
@@ -257,7 +258,7 @@ function requireOrganiser(actor: Actor): { id: string; name: string } | null {
   return actor.clientOrganisation;
 }
 
-async function requireOwnRequest(actor: Actor, id: string): Promise<EventRequest> {
+async function fetchOwnableRequest(id: string): Promise<EventRequest> {
   // The id arrives from a URL. Postgres raises 22P02 on a malformed uuid, which
   // would surface as a 500 for what is really just a bad link.
   if (!UUID_PATTERN.test(id)) throw new NotFoundError('Event request');
@@ -266,11 +267,31 @@ async function requireOwnRequest(actor: Actor, id: string): Promise<EventRequest
   if (error) throw new ValidationError('The event request could not be read.', error.message);
   if (!data) throw new NotFoundError('Event request');
 
-  const request = toEventRequest(data as unknown as EventRequestRow);
+  return toEventRequest(data as unknown as EventRequestRow);
+}
+
+async function requireOwnRequest(actor: Actor, id: string): Promise<EventRequest> {
+  const request = await fetchOwnableRequest(id);
   // SCRUM-83 AC3 — the rule itself lives in policy.ts so it can be tested
   // without a database; this is where it is applied.
   if (!isOwnRequest(request, actor.userId)) {
     throw new ForbiddenError('This event request belongs to another organiser.');
+  }
+  return request;
+}
+
+/**
+ * SCRUM-204 AC3 — the read-only counterpart to requireOwnRequest(): also
+ * lets a colleague in the same client organisation open a request once it
+ * has left draft (canViewRequest in policy.ts). Editing, resubmitting, and
+ * resuming a draft stay gated behind requireOwnRequest/canEditRequest — this
+ * is for display only.
+ */
+async function requireViewableRequest(actor: Actor, id: string): Promise<EventRequest> {
+  const request = await fetchOwnableRequest(id);
+  const viewerOrganisation = { userId: actor.userId, clientOrganisationId: actor.clientOrganisation?.id ?? null };
+  if (!canViewRequest(request, viewerOrganisation)) {
+    throw new ForbiddenError('This event request belongs to another organisation.');
   }
   return request;
 }
@@ -338,7 +359,7 @@ export async function updateEventRequestDetails(id: string, input: unknown): Pro
 }
 
 export async function getEventRequest(id: string): Promise<EventRequest> {
-  return requireOwnRequest(await getCurrentActor(), id);
+  return requireViewableRequest(await getCurrentActor(), id);
 }
 
 // ---------------------------------------------------------------------------
@@ -462,7 +483,9 @@ export async function submitEventRequest(id: string): Promise<EventRequest> {
     throw new InvalidTransitionError(existing.status, 'submitted');
   }
 
-  const incomplete = incompleteFields(existing);
+  // `now` enables the same-day slot-lapsed check (SCRUM-77 AC5) alongside the
+  // date-only rules; incompleteFields() defaults `today` itself when omitted.
+  const incomplete = incompleteFields(existing, undefined, new Date());
   if (incomplete.length > 0) {
     throw new ValidationError(
       'The request cannot be submitted until every mandatory field is complete.',
@@ -506,12 +529,23 @@ export async function getVenueRequirementOptions(): Promise<VenueRequirementOpti
   };
 }
 
-/** AC3 — the organiser's own event list: reference, status and submission date. */
+/**
+ * AC3 — the organiser's own event list: reference, status and submission date.
+ *
+ * SCRUM-204 AC3 — plus every non-draft request from a colleague in the same
+ * client organisation, view-only (canViewRequest/canEditRequest in
+ * policy.ts). Unlinked organisers (no clientOrganisation, AC2) only ever see
+ * their own, since the query has no organisation to widen against.
+ */
 export async function listMyEventRequests(): Promise<EventRequest[]> {
   const actor = await getCurrentActor();
   requireOrganiser(actor);
 
-  const { data, error } = await listEventRequestsForOrganiser(createAdminClient(), actor.userId);
+  const { data, error } = await listEventRequestsForOrganiser(
+    createAdminClient(),
+    actor.userId,
+    actor.clientOrganisation?.id ?? null,
+  );
   if (error) throw new ValidationError('Your event requests could not be read.', error.message);
   return (data ?? []).map((row) => toEventRequest(row as unknown as EventRequestRow));
 }

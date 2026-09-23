@@ -255,17 +255,39 @@ export async function markEventRequestApproved(id: string, actorId: string) {
     .update({ status: 'approved', decision: 'approved', decided_by: actorId })
     .eq('id', id)
     .eq('status', 'submitted')
+    // SCRUM-213 — the same rule as canReviewDetail, applied inside the UPDATE.
+    // The service checks it first, but an Event Operations Manager can reassign
+    // the event between that check and this write; the filter is what makes the
+    // decision impossible rather than merely unlikely, the same pattern as
+    // assignCoordinatorToEventRequest (SCRUM-94).
+    //
+    // `is.null` is part of the condition because an event with no coordinator
+    // yet may still be approved - see the comment on approveEventRequest.
+    .or(`coordinator_id.is.null,coordinator_id.eq.${actorId}`)
     .select(COLUMNS)
     .maybeSingle();
 }
 
-/** AC3 — an organiser's own requests, newest first. */
-export async function listEventRequestsForOrganiser(supabase: SupabaseClient, organiserId: string) {
-  return supabase
-    .from('event_request')
-    .select(COLUMNS)
-    .eq('organiser_id', organiserId)
-    .order('created_at', { ascending: false });
+/**
+ * AC3 — an organiser's own requests, newest first.
+ *
+ * SCRUM-204 AC3 — plus, when the organiser belongs to a client organisation,
+ * every non-draft request from a colleague in that same organisation (the
+ * "not listed" half of canViewRequest() in domain/event-request/policy.ts —
+ * a colleague's still-private draft never appears here).
+ */
+export async function listEventRequestsForOrganiser(
+  supabase: SupabaseClient,
+  organiserId: string,
+  clientOrganisationId: string | null,
+) {
+  const query = supabase.from('event_request').select(COLUMNS);
+  const filtered = clientOrganisationId
+    ? query.or(
+        `organiser_id.eq.${organiserId},and(client_organisation_id.eq.${clientOrganisationId},status.neq.draft)`,
+      )
+    : query.eq('organiser_id', organiserId);
+  return filtered.order('created_at', { ascending: false });
 }
 
 /**
