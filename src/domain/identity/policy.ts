@@ -29,6 +29,30 @@ export function canAssignRoles(actorRoles: Role[], targetAccountId: string, acto
 }
 
 /**
+ * SCRUM-72 AC2 / customer clarification #91 — an account acting purely as an
+ * Attendee may not read internal planning data by requesting it directly.
+ *
+ * A few reads elsewhere in the codebase (getApprovalView, getClarificationView
+ * in domain/review/service.ts) were built with no role check at all, because
+ * their own Jira cards (SCRUM-92 AC3, SCRUM-90) say "anyone" may view them -
+ * written before clarification #91 existed. This narrows "anyone" to exclude
+ * an Attendee-only account without touching what those cards grant everyone
+ * else: an account that also holds one of the roles below keeps the access
+ * that role already earns it.
+ */
+const ROLES_WITH_LEGITIMATE_PLANNING_ACCESS: Role[] = [
+  'event_organiser',
+  'coordinator',
+  'operations_manager',
+  'venue_staff',
+  'technical_support',
+];
+
+export function isAttendeeOnly(userRoles: Role[]): boolean {
+  return hasRole(userRoles, 'attendee') && !hasAnyRole(userRoles, ROLES_WITH_LEGITIMATE_PLANNING_ACCESS);
+}
+
+/**
  * SCRUM-204 AC1 — client organisation membership only means something for an
  * Event Organiser account. The actor's permission to act at all is checked
  * separately via assertPermission(actorRoles, 'organisation_membership_management');

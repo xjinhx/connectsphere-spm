@@ -67,6 +67,7 @@ export default async function EventRequestPage({
   // US-7.2 AC1/AC3 — the clarification note, if a coordinator has raised one.
   // A separate read (getClarificationView) rather than a field on `request`
   // itself — see the comment on ClarificationView in domain/review/service.ts.
+  //
   // SCRUM-92 AC2 — "when the Event Organiser views it, the approval outcome and
   // date are shown together with a statement that no venue, equipment or
   // registration arrangement is yet committed". Read alongside the clarification
@@ -74,14 +75,15 @@ export default async function EventRequestPage({
   //
   // getApprovalView rather than request.status, because AC2 asks for the
   // decision date and the statement, and neither is on the request the page
-  // already holds. It applies no ownership rule of its own (AC3 says "anyone"),
-  // so who reaches this page is decided by getEventRequest above, as before.
+  // already holds. Both take `actor` (SCRUM-72 AC2) — an Attendee-only account
+  // is refused internal planning data even here, though getEventRequest above
+  // already keeps anyone but the owning organiser from reaching this line.
   // SCRUM-93 AC4/AC6 — the rejection reason and date, if this request has
   // been rejected. Same reasoning as the clarification/approval reads above:
   // a separate read rather than a field on `request` itself.
   const [clarification, approval, rejection] = await Promise.all([
-    getClarificationView(id),
-    getApprovalView(id),
+    getClarificationView(id, actor),
+    getApprovalView(id, actor),
     getRejectionView(id),
   ]);
 

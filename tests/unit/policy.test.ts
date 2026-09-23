@@ -1,5 +1,11 @@
 import { describe, it, expect } from 'vitest';
-import { hasRole, hasAnyRole, canAssignRoles, assertPermission } from '@/domain/identity/policy';
+import {
+  hasRole,
+  hasAnyRole,
+  canAssignRoles,
+  assertPermission,
+  isAttendeeOnly,
+} from '@/domain/identity/policy';
 import type { Role } from '@/domain/identity/roles';
 
 
@@ -53,5 +59,25 @@ describe('assertPermission', () => {
     expect(() => assertPermission(['event_organiser'], 'account_role_management')).toThrow(
       /does not permit/,
     );
+  });
+});
+
+// SCRUM-72 AC2 / customer clarification #91: an Attendee-only account is
+// denied internal planning data another story's card left open to "anyone".
+describe('isAttendeeOnly', () => {
+  it('is true for an account that holds only the Attendee role', () => {
+    expect(isAttendeeOnly(['attendee'])).toBe(true);
+  });
+
+  it('is false for a non-Attendee role', () => {
+    expect(isAttendeeOnly(['event_organiser'])).toBe(false);
+  });
+
+  it('is false when the account also holds a role with legitimate planning access', () => {
+    expect(isAttendeeOnly(['attendee', 'coordinator'])).toBe(false);
+  });
+
+  it('is false for an account with no roles at all', () => {
+    expect(isAttendeeOnly([])).toBe(false);
   });
 });
