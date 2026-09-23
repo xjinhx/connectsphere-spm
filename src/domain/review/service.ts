@@ -2,6 +2,7 @@ import {
   fetchEventRequestById,
   markEventRequestApproved,
   markEventRequestClarificationRequested,
+  markEventRequestRejected,
   type EventRequestRow,
 } from '@/lib/supabase/eventRequests';
 import {
@@ -16,6 +17,7 @@ import { toEventRequest, type EventRequest } from '@/domain/event-request/servic
 import {
   ApproveInputSchema,
   EventRequestIdSchema,
+  RejectInputSchema,
   RequestClarificationInputSchema,
   type Decision,
 } from './schema';
@@ -23,6 +25,7 @@ import {
   COMMITMENT_STATEMENT,
   NO_COMMITMENTS,
   canBeApproved,
+  canBeRejected,
   canRequestClarification,
   canReviewDetail,
   type Commitments,
@@ -424,4 +427,139 @@ export async function requestClarification(
   if (!data) throw new ConflictError('Someone else already acted on this request.');
 
   return toClarificationOutcome(data as unknown as EventRequestRow);
+}
+
+// ---------------------------------------------------------------------------
+// SCRUM-93 — Reject a request
+// ---------------------------------------------------------------------------
+
+/** What AC4 records. Smaller than EventRequest, same reasoning as ApprovalOutcome. */
+export interface RejectionOutcome {
+  id: string;
+  status: EventRequestStatus;
+  decision: Decision;
+  decidedBy: string;
+  decidedAt: string;
+  rejectionReason: string;
+}
+
+function toRejectionOutcome(row: EventRequestRow): RejectionOutcome {
+  // event_request_rejection_reason_matches_decision and
+  // event_request_decision_complete together guarantee all four are written
+  // together, so this cannot happen for a row just moved to rejected. Checked
+  // rather than asserted, same reasoning as toApprovalOutcome above.
+  if (
+    row.decision === null ||
+    row.decided_by === null ||
+    row.decided_at === null ||
+    row.rejection_reason === null
+  ) {
+    throw new ValidationError('The rejection was recorded incompletely.');
+  }
+
+  return {
+    id: row.id,
+    status: row.status,
+    decision: row.decision,
+    decidedBy: row.decided_by,
+    decidedAt: row.decided_at,
+    rejectionReason: row.rejection_reason,
+  };
+}
+
+/**
+ * What anyone viewing a request is told about its rejection.
+ *
+ * AC4 ("recorded and visible to the Event Organiser") and AC6 ("the
+ * rejection reason and date are shown") - same reasoning as
+ * getApprovalView/getClarificationView above: a separate read anyone
+ * signed-in can hit, rather than widening event-request's EventRequest.
+ */
+export interface RejectionView {
+  id: string;
+  status: EventRequestStatus;
+  rejectionReason: string | null;
+  /** The rejection date. Reuses decided_at, the same generic column approval uses. */
+  decidedAt: string | null;
+}
+
+/**
+ * AC4/AC6 — the organiser (or anyone else with access to the request) reads
+ * the rejection reason and date without needing the Coordinator-only
+ * permission getReviewDetail requires. Who may view: same reasoning as
+ * getApprovalView/getClarificationView - no role/ownership check here, the
+ * middleware already refuses this without a session.
+ */
+export async function getRejectionView(id: string): Promise<RejectionView> {
+  const parsedId = EventRequestIdSchema.safeParse(id);
+  if (!parsedId.success) throw new NotFoundError('Event request');
+
+  const { data, error } = await fetchEventRequestById(parsedId.data);
+  if (error) {
+    throw new ValidationError('The event request could not be read.', error.message);
+  }
+  if (!data) throw new NotFoundError('Event request');
+
+  const row = data as unknown as EventRequestRow;
+  return {
+    id: row.id,
+    status: row.status,
+    rejectionReason: row.rejection_reason,
+    decidedAt: row.decided_at,
+  };
+}
+
+/**
+ * AC4 — a submitted request moves to Rejected and the reason, decision maker
+ * and timestamp are recorded against it.
+ * AC5 — a missing or blank reason is blocked before anything is read or
+ * written, and the coordinator is told a reason is required.
+ *
+ * `actorId` is the Coordinator rejecting it, supplied by the route from the
+ * signed-in session (getCurrentActor) - never from the request body, same
+ * reasoning as approveEventRequest's actorId.
+ */
+export async function rejectEventRequest(
+  id: string,
+  input: unknown,
+  actorId: string,
+): Promise<RejectionOutcome> {
+  const parsedId = EventRequestIdSchema.safeParse(id);
+  if (!parsedId.success) throw new NotFoundError('Event request');
+
+  const parsedInput = RejectInputSchema.safeParse(input);
+  if (!parsedInput.success) {
+    throw new ValidationError(
+      'A reason is required to reject this request.',
+      parsedInput.error.flatten(),
+    );
+  }
+
+  const { data: existing, error: readError } = await fetchEventRequestById(parsedId.data);
+  if (readError) {
+    throw new ValidationError('The event request could not be read.', readError.message);
+  }
+  if (!existing) throw new NotFoundError('Event request');
+
+  const current = existing as unknown as EventRequestRow;
+  if (!canBeRejected(current.status)) {
+    throw new InvalidTransitionError(current.status, 'rejected');
+  }
+
+  const { data, error } = await markEventRequestRejected(
+    parsedId.data,
+    parsedInput.data.reason,
+    actorId,
+  );
+  if (error) {
+    throw new ValidationError('The event request could not be rejected.', error.message);
+  }
+  // The check above saw a submitted request, yet no row matched the `status =
+  // submitted` filter: another coordinator acted on it in between (approved
+  // it, or rejected it themselves) - same race requestClarification guards
+  // against, and the same reasoning for a ConflictError over
+  // InvalidTransitionError: this is new code, so it gets the clearer wording.
+  if (!data) throw new ConflictError('Someone else already acted on this request.');
+
+  return toRejectionOutcome(data as unknown as EventRequestRow);
 }

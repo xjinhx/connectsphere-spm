@@ -108,6 +108,7 @@ export type Database = {
           purpose: string | null
           reference: string
           registration_required: boolean | null
+          rejection_reason: string | null
           room_layout: string | null
           status: Database["public"]["Enums"]["event_request_status"]
           submitted_at: string | null
@@ -140,6 +141,7 @@ export type Database = {
           purpose?: string | null
           reference?: string
           registration_required?: boolean | null
+          rejection_reason?: string | null
           room_layout?: string | null
           status?: Database["public"]["Enums"]["event_request_status"]
           submitted_at?: string | null
@@ -172,6 +174,7 @@ export type Database = {
           purpose?: string | null
           reference?: string
           registration_required?: boolean | null
+          rejection_reason?: string | null
           room_layout?: string | null
           status?: Database["public"]["Enums"]["event_request_status"]
           submitted_at?: string | null
@@ -588,6 +591,7 @@ export type Database = {
         | "submitted"
         | "approved"
         | "clarification_requested"
+        | "rejected"
     }
     CompositeTypes: {
       [_ in never]: never
@@ -723,6 +727,7 @@ export const Constants = {
         "submitted",
         "approved",
         "clarification_requested",
+        "rejected",
       ],
     },
   },

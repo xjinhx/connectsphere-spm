@@ -228,7 +228,8 @@ export type EventRequestSaveInput = z.infer<typeof eventRequestSaveSchema>;
 // sprint and should extend this enum rather than replace it.
 // SCRUM-92 extended this with 'approved', matching the Postgres enum (see
 // supabase/migrations/20260912154742_event_request_approved_status.sql) so the
-// contract and the database agree. SCRUM-93 adds 'rejected' the same way.
+// contract and the database agree. SCRUM-93 adds 'rejected' the same way, via
+// supabase/migrations/20260920140000_event_request_rejected_status.sql.
 // SCRUM-90 extends this with 'clarification_requested', matching
 // supabase/migrations/20260914090000_event_request_clarification_requested_status.sql.
 export const EventRequestStatusEnum = z.enum([
@@ -236,6 +237,7 @@ export const EventRequestStatusEnum = z.enum([
   'submitted',
   'approved',
   'clarification_requested',
+  'rejected',
 ]);
 export type EventRequestStatus = z.infer<typeof EventRequestStatusEnum>;
 
@@ -245,6 +247,7 @@ export const EVENT_REQUEST_STATUS_LABELS: Record<EventRequestStatus, string> = {
   submitted: 'Submitted',
   approved: 'Approved',
   clarification_requested: 'Clarification Requested',
+  rejected: 'Rejected',
 };
 
 // ---------------------------------------------------------------------------

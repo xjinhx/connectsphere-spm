@@ -21,8 +21,8 @@ const COLUMNS =
   'event_request_equipment ( position, item, quantity ), ' +
   // SCRUM-81
   'registration_required, ' +
-  // SCRUM-92
-  'decision, decided_by, decided_at, ' +
+  // SCRUM-92 / SCRUM-93
+  'decision, decided_by, decided_at, rejection_reason, ' +
   // SCRUM-94
   'coordinator_id, assigned_by, assigned_at, ' +
   // SCRUM-90
@@ -77,6 +77,9 @@ export interface EventRequestRow {
   decision: Decision | null;
   decided_by: string | null;
   decided_at: string | null;
+  // SCRUM-93. Set exactly when decision = 'rejected'
+  // (event_request_rejection_reason_matches_decision).
+  rejection_reason: string | null;
   // SCRUM-94. All three are null together or set together
   // (event_request_assignment_complete).
   coordinator_id: string | null;
@@ -275,13 +278,38 @@ export async function markEventRequestApproved(id: string, actorId: string) {
     .maybeSingle();
 }
 
+// ---------------------------------------------------------------------------
+// SCRUM-93 — Reject a request
+// ---------------------------------------------------------------------------
+
+/**
+ * AC4 — flips a submitted request to rejected and records the decision, the
+ * reason and who made it in the same statement. decided_at is stamped by the
+ * database (set_decided_at), same as approval - the trigger fires on any
+ * write to decision, 'rejected' included.
+ *
+ * The `status` filter is the guard, same shape as markEventRequestApproved: a
+ * request that is not submitted matches no row and comes back empty, which is
+ * also what stops two coordinators deciding the same request at once.
+ */
+export async function markEventRequestRejected(id: string, reason: string, actorId: string) {
+  return db()
+    .from('event_request')
+    .update({ status: 'rejected', decision: 'rejected', decided_by: actorId, rejection_reason: reason })
+    .eq('id', id)
+    .eq('status', 'submitted')
+    .select(COLUMNS)
+    .maybeSingle();
+}
+
 /**
  * AC3 — an organiser's own requests, newest first.
  *
  * SCRUM-204 AC3 — plus, when the organiser belongs to a client organisation,
  * every non-draft request from a colleague in that same organisation (the
  * "not listed" half of canViewRequest() in domain/event-request/policy.ts —
- * a colleague's still-private draft never appears here).
+ * a colleague's still-private draft never appears here). A rejected request
+ * is not draft, so it is shared the same as any other decided request.
  */
 export async function listEventRequestsForOrganiser(
   supabase: SupabaseClient,

@@ -3,6 +3,7 @@ import { notFound } from 'next/navigation';
 import { ApproveRequestButton } from '@/components/event-request/ApproveRequestButton';
 import { EventRequestStatusBadge } from '@/components/event-request/EventRequestStatusBadge';
 import { ClarificationRounds } from '@/components/event-request/ClarificationRounds';
+import { RejectRequestForm } from '@/components/event-request/RejectRequestForm';
 import { RequestClarificationForm } from '@/components/event-request/RequestClarificationForm';
 import {
   describeAccessibility,
@@ -18,7 +19,7 @@ import {
   type ClarificationExchange,
 } from '@/domain/clarification/service';
 import { getReviewDetail, type ReviewDetail } from '@/domain/review/service';
-import { canBeApproved, canRequestClarification } from '@/domain/review/policy';
+import { canBeApproved, canBeRejected, canRequestClarification } from '@/domain/review/policy';
 import { ForbiddenError, NotFoundError } from '@/domain/shared/errors';
 import { isActionPermitted } from '@/domain/identity/permissions';
 import { getCurrentActor } from '@/lib/auth/currentActor';
@@ -206,6 +207,14 @@ export default async function ReviewEventRequestPage({
       {canRequestClarification(request.status) ? (
         <section className="mt-6 rounded-lg border border-[var(--border)] bg-[var(--surface)] p-4">
           <RequestClarificationForm requestId={request.id} />
+        </section>
+      ) : null}
+
+      {/* SCRUM-93 AC4 — the Coordinator's reject action, offered alongside
+          clarification whenever the request is open to a decision. */}
+      {canBeRejected(request.status) ? (
+        <section className="mt-6 rounded-lg border border-[var(--border)] bg-[var(--surface)] p-4">
+          <RejectRequestForm requestId={request.id} />
         </section>
       ) : null}
     </main>
