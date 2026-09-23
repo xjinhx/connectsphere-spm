@@ -12,6 +12,7 @@ import {
   type VenueDetail,
   type VenueFormOptions,
 } from '@/domain/venues/schema';
+import { capacityToSend } from './capacityInput';
 
 /**
  * Add and edit a venue. Shared by /venues/new and /venues/[id]/edit, because
@@ -48,15 +49,6 @@ function fieldErrorsFrom(details: unknown): Record<string, string[]> {
     }
   }
   return result;
-}
-
-/** Sends a number when the text parses as one, and the raw text when it does not,
- *  so the server produces the real validation message instead of the form guessing. */
-function numberOrRaw(value: string): number | string {
-  const trimmed = value.trim();
-  if (trimmed === '') return trimmed;
-  const parsed = Number(trimmed);
-  return Number.isFinite(parsed) ? parsed : trimmed;
 }
 
 function FieldError({ messages }: { messages: string[] | undefined }) {
@@ -118,11 +110,11 @@ export default function VenueForm({
     const payload = {
       name,
       locationId,
-      maxCapacity: numberOrRaw(maxCapacity),
+      maxCapacity: capacityToSend(maxCapacity),
       operatingSlots: slots,
       facilityIds,
       accessibilityFeatureIds: featureIds,
-      layouts: layouts.map((row) => ({ layout: row.layout, capacity: numberOrRaw(row.capacity) })),
+      layouts: layouts.map((row) => ({ layout: row.layout, capacity: capacityToSend(row.capacity) })),
     };
 
     try {
