@@ -148,10 +148,10 @@ owners switch them the next time they edit those files.
   (SCRUM-96 AC1).
 - **Status:** Active
 
-### D-07 — The coordinator isn't notified when a request is resubmitted
+### D-08 — The coordinator isn't notified when a request is resubmitted
 
 - **Kind:** Out-of-sprint stand-in
-- **Added by:** SCRUM-91 — PR pending
+- **Added by:** SCRUM-91 — PR #42
 - **Waiting on:** SCRUM-24 Notification System
 - **Where:** `src/domain/clarification/service.ts` — `respondToClarification()`
 - **To replace:** notify the assigned coordinator from

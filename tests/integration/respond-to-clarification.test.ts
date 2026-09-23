@@ -25,7 +25,7 @@ import type { Role } from '@/domain/identity/roles';
  *
  * Not covered here - verify manually or in a later sprint:
  *   AC1's "the assigned coordinator is notified" - there is no notification
- *        story this sprint (DUMMY(SCRUM-24) D-07). What is asserted is that the
+ *        story this sprint (DUMMY(SCRUM-24) D-08). What is asserted is that the
  *        coordinator who would be told is identified and still owns the event.
  */
 
@@ -213,7 +213,7 @@ describe('respondToClarification', () => {
     expect(outcome.status).toBe('submitted');
     expect(outcome.round.roundNumber).toBe(1);
     expect(outcome.round.response).toBe('Expected attendance is now 200');
-    // AC1's notification: who would be told, recorded rather than sent (D-07).
+    // AC1's notification: who would be told, recorded rather than sent (D-08).
     expect(outcome.coordinatorId).toBe(coordinatorId);
 
     const row = await readRow(id);

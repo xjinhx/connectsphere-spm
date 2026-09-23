@@ -114,7 +114,7 @@ export interface ClarificationResponseOutcome {
  * only the write is no longer routed through submitEventRequest, because that
  * function performs the status change this one has to make atomic.
  *
- * DUMMY(SCRUM-24) D-07: AC1 also says the assigned coordinator is notified. The
+ * DUMMY(SCRUM-24) D-08: AC1 also says the assigned coordinator is notified. The
  * Notification System (SCRUM-24) is not in this sprint, so nothing is sent: the
  * recorded answer against the event the coordinator already owns is the minimum
  * honest implementation, and coordinatorId is returned so the caller can see
