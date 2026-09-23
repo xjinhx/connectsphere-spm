@@ -25,7 +25,7 @@ import {
   ValidationError,
 } from '@/domain/shared/errors';
 import { isRole, type Role } from '@/domain/identity/roles';
-import type { EventRequestStatus } from '@/domain/event-request/schema';
+import { EventRequestStatusEnum, type EventRequestStatus } from '@/domain/event-request/schema';
 import {
   AssignCoordinatorInputSchema,
   EventRequestIdSchema,
@@ -408,7 +408,16 @@ export async function reassignCoordinator(
   // nothing to reassign is a state problem, the same person is a bad choice.
   const previousCoordinatorId = current.coordinator_id;
   if (previousCoordinatorId === null) {
-    throw new ConflictError('This event has no coordinator yet. Assign one instead of reassigning.');
+    // Point the manager at assigning only when SCRUM-94 would accept it. An
+    // event approved before anyone was assigned cannot be assigned, so "assign
+    // one instead" sent them to an action that refuses (found reviewing
+    // SCRUM-215; whether such an event should be assignable is for the team).
+    const status = EventRequestStatusEnum.safeParse(current.status);
+    throw new ConflictError(
+      status.success && canBeAssigned(status.data, null)
+        ? 'This event has no coordinator yet. Assign one instead of reassigning.'
+        : 'This event has no coordinator to reassign from, and only a submitted event can be assigned one.',
+    );
   }
   // The manager chose from a view that is out of date: someone else has
   // reassigned the event since. Refused before anything is written.

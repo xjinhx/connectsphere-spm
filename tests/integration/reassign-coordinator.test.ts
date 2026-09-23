@@ -7,7 +7,7 @@ import {
   reassignCoordinator,
   requireCurrentCoordinator,
 } from '@/domain/assignment/service';
-import { getReviewDetail } from '@/domain/review/service';
+import { approveEventRequest, getReviewDetail } from '@/domain/review/service';
 import type { Role } from '@/domain/identity/roles';
 import { ensureTestClientOrganisation } from './fixtures/clientOrganisation';
 
@@ -245,6 +245,25 @@ describe('reassignCoordinator: SCRUM-96 AC1 and AC2', () => {
 
     expect((await readRow(id)).coordinator_id).toBeNull();
     expect(await readHistory(id)).toHaveLength(0);
+  });
+
+  // Found reviewing SCRUM-215. A coordinator may approve an event nobody has
+  // been assigned to (SCRUM-89/213), and SCRUM-94 only assigns submitted
+  // events, so "assign one instead" pointed at an action that refuses.
+  it('does not tell the manager to assign an approved event, which cannot be assigned', async () => {
+    const id = await createSubmittedRequest();
+    await approveEventRequest(id, { actorId: coordinatorC.id });
+
+    await expect(
+      reassignCoordinator(id, {
+        coordinatorId: coordinatorB.id,
+        fromCoordinatorId: coordinatorA.id,
+        actorId: manager.id,
+      }),
+    ).rejects.toMatchObject({
+      code: 'CONFLICT',
+      message: 'This event has no coordinator to reassign from, and only a submitted event can be assigned one.',
+    });
   });
 
   it('refuses reassigning to the coordinator who already holds it', async () => {
