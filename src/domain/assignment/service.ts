@@ -5,7 +5,7 @@ import {
   listUnassignedSubmittedEventRequests,
   type EventRequestRow,
 } from '@/lib/supabase/eventRequests';
-import { fetchProfileSummary } from '@/lib/supabase/profiles';
+import { fetchProfileSummary, listCoordinatorProfiles } from '@/lib/supabase/profiles';
 import {
   fetchAccountEmail,
   fetchContactProfiles,
@@ -284,6 +284,41 @@ export async function listUnassignedEvents(): Promise<UnassignedEvent[]> {
     proposedDate: row.proposed_date,
     submittedAt: row.submitted_at,
   }));
+}
+
+// ---------------------------------------------------------------------------
+// Who an event can be assigned to
+// ---------------------------------------------------------------------------
+
+/** One choice in the picker an Operations Manager assigns from. */
+export interface AssignableCoordinator {
+  id: string;
+  /** Null when the profile has no name recorded yet — shown as the id's stand-in. */
+  name: string | null;
+}
+
+/**
+ * The coordinators an event may be assigned to.
+ *
+ * The same rule the write applies, asked in advance: assignCoordinator refuses
+ * an account that is not an Event Coordinator (canReceiveAssignment), and this
+ * is the list of accounts that would pass it. Filtered through canReceiveAssignment
+ * rather than trusting the query, so the list and the refusal cannot disagree
+ * about who is eligible.
+ *
+ * No workload count is returned with each name. AC2 applies no limit
+ * (clarification #92), so a count here would suggest a cap that does not exist.
+ */
+export async function listAssignableCoordinators(): Promise<AssignableCoordinator[]> {
+  const { data, error } = await listCoordinatorProfiles();
+  if (error) {
+    throw new ValidationError('The coordinators could not be read.', error.message);
+  }
+
+  const rows = (data ?? []) as { id: string; full_name: string | null; roles: unknown }[];
+  return rows
+    .filter((row) => canReceiveAssignment(((row.roles as unknown[] | null) ?? []).filter(isRole)))
+    .map((row) => ({ id: row.id, name: row.full_name }));
 }
 
 // ---------------------------------------------------------------------------
