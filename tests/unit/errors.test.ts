@@ -13,4 +13,9 @@ describe('DomainError', () => {
     expect(error.code).toBe('NOT_FOUND');
     expect(error.message).toBe('Event was not found.');
   });
+
+  it('sets a digest encoding the code, so src/app/error.tsx can still tell errors apart after Next strips the message in production', () => {
+    const error = new DomainError('FORBIDDEN', 'nope');
+    expect((error as { digest?: string }).digest).toBe('DOMAIN_ERROR:FORBIDDEN');
+  });
 });
