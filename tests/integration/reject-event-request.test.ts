@@ -1,6 +1,7 @@
 import { describe, it, expect, beforeAll, afterAll } from 'vitest';
 import { createAdminClient } from '@/lib/supabase/admin';
 import { approveEventRequest, getRejectionView, rejectEventRequest } from '@/domain/review/service';
+import { ensureTestClientOrganisation } from './fixtures/clientOrganisation';
 
 /**
  * SCRUM-93 — Reject a request (US-7.3).
@@ -23,7 +24,8 @@ import { approveEventRequest, getRejectionView, rejectEventRequest } from '@/dom
 
 const supabase = createAdminClient();
 
-// No foreign key on this column yet: Client Organisations is its own story.
+// SCRUM-203's FK on client_organisation_id means CLIENT_ORGANISATION_ID below
+// must be a real row, not just a placeholder uuid (see beforeAll below).
 const CLIENT_ORGANISATION_ID = '22222222-2222-2222-2222-222222222222';
 
 let coordinatorId: string;
@@ -68,6 +70,8 @@ async function readRow(id: string) {
 }
 
 beforeAll(async () => {
+  await ensureTestClientOrganisation(supabase);
+
   const { data, error } = await supabase.auth.admin.createUser({
     email: `coordinator+${Date.now()}@connectsphere.example.com`,
     password: 'Password123!',

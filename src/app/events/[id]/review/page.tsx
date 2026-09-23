@@ -19,7 +19,7 @@ import {
   type ClarificationExchange,
 } from '@/domain/clarification/service';
 import { getReviewDetail, type ReviewDetail } from '@/domain/review/service';
-import { canBeApproved, canRequestClarification } from '@/domain/review/policy';
+import { canBeApproved, canBeRejected, canRequestClarification } from '@/domain/review/policy';
 import { ForbiddenError, NotFoundError } from '@/domain/shared/errors';
 import { isActionPermitted } from '@/domain/identity/permissions';
 import { getCurrentActor } from '@/lib/auth/currentActor';

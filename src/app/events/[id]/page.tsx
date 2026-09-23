@@ -15,7 +15,7 @@ import {
   describeTimeSlots,
 } from '@/domain/event-request/policy';
 import { getEventRequest } from '@/domain/event-request/service';
-import { getApprovalView, getClarificationView } from '@/domain/review/service';
+import { getApprovalView, getClarificationView, getRejectionView } from '@/domain/review/service';
 import { formatSingaporeDate, formatSingaporeDateTime } from '@/domain/shared/dates';
 import { getCurrentActor } from '@/lib/auth/currentActor';
 
@@ -76,9 +76,13 @@ export default async function EventRequestPage({
   // decision date and the statement, and neither is on the request the page
   // already holds. It applies no ownership rule of its own (AC3 says "anyone"),
   // so who reaches this page is decided by getEventRequest above, as before.
-  const [clarification, approval] = await Promise.all([
+  // SCRUM-93 AC4/AC6 — the rejection reason and date, if this request has
+  // been rejected. Same reasoning as the clarification/approval reads above:
+  // a separate read rather than a field on `request` itself.
+  const [clarification, approval, rejection] = await Promise.all([
     getClarificationView(id),
     getApprovalView(id),
+    getRejectionView(id),
   ]);
 
   return (
