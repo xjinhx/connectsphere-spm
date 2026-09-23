@@ -238,10 +238,14 @@ export async function createVenue(input: unknown): Promise<VenueDetail> {
 // Updating (SCRUM-120, SCRUM-117 AC3, SCRUM-118)
 // -----------------------------------------------------------------------------
 
-/** The answer for an editor whose form is older than the venue. */
+/**
+ * The answer for an editor whose form is older than the venue. It does not
+ * say who changed it: a save of their own that went through but whose reply
+ * never arrived looks exactly the same, and retrying it lands here.
+ */
 function venueChangedError(): ConflictError {
   return new ConflictError(
-    'This venue was changed by someone else after you opened it. Reload the page to see the latest version, then make your changes again.',
+    'This venue has changed since you opened this form. Reload the page to see the latest version before changing it again.',
     { reason: 'venue_changed' },
   );
 }
