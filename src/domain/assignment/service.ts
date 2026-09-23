@@ -450,12 +450,16 @@ export async function reassignCoordinator(
 }
 
 /**
- * SCRUM-96 AC4 — for any read that shows a coordinator an event's planning
- * information. Throws unless the caller is the event's current coordinator, so
- * a coordinator reassigned away is denied before anything is returned.
+ * SCRUM-96 AC4 — throws unless the caller is the event's current coordinator,
+ * so a coordinator reassigned away is denied before anything is returned.
  *
- * Nothing on main shows a coordinator an event's details yet. SCRUM-89's
- * review read is the first, and it should call this.
+ * No route calls this. Where AC4 is enforced: getCoordinatorView below (GET
+ * /coordinator), and SCRUM-89's review read and SCRUM-213's approve through
+ * canReviewDetail. Those deliberately use canReviewDetail instead of this,
+ * because review access also allows an event with no coordinator yet, which
+ * this refuses (see review/service.ts). Use this only for a read that must
+ * refuse unassigned events too, and never as the only gate before a write:
+ * put the coordinator in the UPDATE's filter, as SCRUM-213 does.
  */
 export async function requireCurrentCoordinator(eventRequestId: string, actorUserId: string): Promise<void> {
   const event = await readEventAssignment(eventRequestId);

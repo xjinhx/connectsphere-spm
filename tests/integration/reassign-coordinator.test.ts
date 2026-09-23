@@ -7,6 +7,7 @@ import {
   reassignCoordinator,
   requireCurrentCoordinator,
 } from '@/domain/assignment/service';
+import { getReviewDetail } from '@/domain/review/service';
 import type { Role } from '@/domain/identity/roles';
 import { ensureTestClientOrganisation } from './fixtures/clientOrganisation';
 
@@ -29,8 +30,9 @@ import { ensureTestClientOrganisation } from './fixtures/clientOrganisation';
  *   SCRUM-96 AC1 "both are notified": no notification story this sprint, so
  *        nothing is sent. Flag for re-execution once the Notification System
  *        exists.
- *   SCRUM-96 AC4 through SCRUM-89's review read: that read is not on main yet.
- *        requireCurrentCoordinator is the rule it should call, tested below.
+ *   SCRUM-96 AC4 through the clarification routes: their access check is on
+ *        Dylan's unmerged branch. Re-run AC4 by hand once it merges. The
+ *        review read (SCRUM-89) is covered below.
  *   The HTTP routes: the middleware needs a signed-in session, so those are
  *        covered by the manual test.
  */
@@ -422,6 +424,9 @@ describe('access for a coordinator reassigned away: SCRUM-96 AC4', () => {
       code: 'FORBIDDEN',
     });
     await expect(getCoordinatorView(id, coordinatorA)).rejects.toMatchObject({ code: 'FORBIDDEN' });
+    // SCRUM-89's review read, the page a coordinator actually opens: the check
+    // lives in its canReviewDetail, called here only to prove AC4 holds there.
+    await expect(getReviewDetail(id, coordinatorA.id)).rejects.toMatchObject({ code: 'FORBIDDEN' });
   });
 
   it('allows the coordinator who now holds the event', async () => {
@@ -434,6 +439,7 @@ describe('access for a coordinator reassigned away: SCRUM-96 AC4', () => {
 
     await expect(requireCurrentCoordinator(id, coordinatorB.id)).resolves.toBeUndefined();
     expect((await getCoordinatorView(id, coordinatorB)).current?.id).toBe(coordinatorB.id);
+    expect((await getReviewDetail(id, coordinatorB.id)).id).toBe(id);
   });
 });
 
