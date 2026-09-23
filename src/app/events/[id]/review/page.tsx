@@ -1,5 +1,6 @@
 import Link from 'next/link';
 import { notFound } from 'next/navigation';
+import { ApproveRequestButton } from '@/components/event-request/ApproveRequestButton';
 import { EventRequestStatusBadge } from '@/components/event-request/EventRequestStatusBadge';
 import { ClarificationRounds } from '@/components/event-request/ClarificationRounds';
 import { RejectRequestForm } from '@/components/event-request/RejectRequestForm';
@@ -18,7 +19,7 @@ import {
   type ClarificationExchange,
 } from '@/domain/clarification/service';
 import { getReviewDetail, type ReviewDetail } from '@/domain/review/service';
-import { canBeRejected, canRequestClarification } from '@/domain/review/policy';
+import { canBeApproved, canRequestClarification } from '@/domain/review/policy';
 import { ForbiddenError, NotFoundError } from '@/domain/shared/errors';
 import { isActionPermitted } from '@/domain/identity/permissions';
 import { getCurrentActor } from '@/lib/auth/currentActor';
@@ -183,6 +184,25 @@ export default async function ReviewEventRequestPage({
           <Row label="Submitted" value={formatSingaporeDateTime(request.submittedAt)} />
         ) : null}
       </dl>
+
+      {/* SCRUM-92 AC1 — "given I am reviewing a submitted request, when I
+          approve it". This page is what the card means by reviewing it.
+
+          Gated on canBeApproved, SCRUM-92's own rule, so the page offers the
+          action exactly when the service would allow it and the screen can
+          never present a button the API refuses. Who may approve is already
+          settled by the time anything renders: the role check at the top of
+          this page, and getReviewDetail, which refuses a coordinator the event
+          has been reassigned away from (SCRUM-213).
+
+          Added to SCRUM-89's page rather than a page of its own, the same way
+          SCRUM-90's clarification form below already is. Nothing above this
+          changed. */}
+      {canBeApproved(request.status) ? (
+        <section className="mt-6 rounded-lg border border-[var(--border)] bg-[var(--surface)] p-4">
+          <ApproveRequestButton requestId={request.id} />
+        </section>
+      ) : null}
 
       {canRequestClarification(request.status) ? (
         <section className="mt-6 rounded-lg border border-[var(--border)] bg-[var(--surface)] p-4">
