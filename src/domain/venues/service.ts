@@ -344,12 +344,12 @@ export type AffectedBooking = {
  * SCRUM-120 AC2: a capacity cut below a confirmed booking must list the
  * affected bookings and be confirmed before it is applied.
  *
- * TODO(SCRUM-148): there is no bookings table in Sprint 1, so nothing can be
+ * DUMMY(SCRUM-148) D-04: there is no bookings table in Sprint 1, so nothing can be
  * affected yet and this always returns an empty list. When bookings land, this
  * takes the venue id and the proposed maximum capacity, and updateVenue must
  * refuse unless UpdateVenueInput.confirmAffectedBookings is true.
  *
- * TODO(EP-20): SCRUM-120 AC4 then notifies the coordinator assigned to each
+ * DUMMY(SCRUM-24) D-05: SCRUM-120 AC4 then notifies the coordinator assigned to each
  * affected event. No notification system exists in Sprint 1.
  *
  * Until both land, SCRUM-120 AC2, AC3 and AC4 stay unverifiable and the ticket

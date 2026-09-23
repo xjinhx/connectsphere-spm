@@ -41,9 +41,9 @@ D-02's check really shows "nothing is committed", so it counts. D-04's check
 has no bookings to find, so it proves nothing, and that AC stays in Merged -
 Pending Verification.
 
-D-01 to D-05 existed before the `DUMMY(...)` marker did. D-02 and D-03 have
-been switched to it; the others still carry their original comments, and their
-owners switch them the next time they edit those files.
+D-01 to D-05 existed before the `DUMMY(...)` marker did. D-02 to D-05 have
+been switched to it; D-01 still carries its original comments, and its owners
+switch them the next time they edit those files.
 
 ---
 
@@ -111,9 +111,9 @@ owners switch them the next time they edit those files.
 - **Waiting on:** SCRUM-148 Approve a booking request
 - **Where:**
   - `src/domain/venues/service.ts` — `findAffectedFutureBookings()` returns
-    `[]` (`TODO(SCRUM-148)`)
+    `[]` (`DUMMY(SCRUM-148) D-04`)
   - `src/app/api/venues/[id]/route.ts` — the venue update handler
-    (`TODO(SCRUM-148)`)
+    (`DUMMY(SCRUM-148) D-04`)
 - **To replace:** `findAffectedFutureBookings()` takes the venue id and the
   proposed maximum capacity and returns the confirmed future bookings above
   it; `updateVenue` refuses unless `confirmAffectedBookings` is true; re-test
@@ -125,10 +125,9 @@ owners switch them the next time they edit those files.
 
 - **Kind:** Out-of-sprint stand-in
 - **Added by:** SCRUM-120 — commit `80dd30e` (PR #13)
-- **Waiting on:** SCRUM-24 Notification System (the code comment calls it
-  EP-20) — and D-04 first, since there are no affected events to notify about
-  until then
-- **Where:** `src/domain/venues/service.ts` — `TODO(EP-20)` on
+- **Waiting on:** SCRUM-24 Notification System — and D-04 first, since there
+  are no affected events to notify about until then
+- **Where:** `src/domain/venues/service.ts` — `DUMMY(SCRUM-24) D-05` on
   `findAffectedFutureBookings()`
 - **To replace:** after a confirmed capacity cut, notify the coordinator
   assigned to each affected event (`event_request.coordinator_id`, from
