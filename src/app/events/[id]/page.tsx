@@ -3,6 +3,7 @@ import CoordinatorPanel from '@/components/assignment/CoordinatorPanel';
 import { EventRequestStatusBadge } from '@/components/event-request/EventRequestStatusBadge';
 import { SubmitEventRequestButton } from '@/components/event-request/SubmitEventRequestButton';
 import {
+  canEditRequest,
   describeAccessibility,
   describeEquipment,
   describePreferredLocation,
@@ -10,11 +11,11 @@ import {
   describeRoomLayout,
   describeTechnicalSupport,
   describeTimeSlots,
-  isEditable,
 } from '@/domain/event-request/policy';
 import { getEventRequest } from '@/domain/event-request/service';
 import { getClarificationView } from '@/domain/review/service';
 import { formatSingaporeDate, formatSingaporeDateTime } from '@/domain/shared/dates';
+import { getCurrentActor } from '@/lib/auth/currentActor';
 
 export const dynamic = 'force-dynamic';
 
@@ -35,9 +36,12 @@ export default async function EventRequestPage({
   params: Promise<{ id: string }>;
 }) {
   const { id } = await params;
-  const request = await getEventRequest(id);
+  const [actor, request] = await Promise.all([getCurrentActor(), getEventRequest(id)]);
   // SCRUM-82 AC2/AC4 — one rule decides every action shown on this page.
-  const editable = isEditable(request.status);
+  // SCRUM-204 AC3 — and only the owner ever gets them: a colleague viewing a
+  // shared, still-editable (e.g. Clarification Requested) request sees the
+  // read-only notice below instead, never the edit actions.
+  const editable = canEditRequest(request, actor.userId);
   // US-7.2 AC1/AC3 — the clarification note, if a coordinator has raised one.
   // A separate read (getClarificationView) rather than a field on `request`
   // itself — see the comment on ClarificationView in domain/review/service.ts.
@@ -131,8 +135,11 @@ export default async function EventRequestPage({
         ) : null}
       </dl>
 
-      {/* SCRUM-98: who the organiser's coordinator is (panel owned by SCRUM-96/98). */}
-      <CoordinatorPanel eventRequestId={request.id} />
+      {/* SCRUM-98: who the organiser's coordinator is (panel owned by SCRUM-96/98).
+          SCRUM-204 AC3 — canViewCoordinatorDetails (SCRUM-96/98's own rule,
+          not touched here) does not grant a colleague access to this, so it
+          is only rendered for the owner viewing their own request. */}
+      {request.organiserId === actor.userId && <CoordinatorPanel eventRequestId={request.id} />}
 
       {/* SCRUM-82 AC4: a submitted request is read-only - no edit, save or
           delete is offered. Only a draft gets an action. */}
@@ -156,6 +163,13 @@ export default async function EventRequestPage({
               </Link>
             </div>
           </>
+        ) : request.organiserId !== actor.userId ? (
+          // SCRUM-204 AC3 — shared with the organisation, view-only: only its
+          // owner can act on it, whatever its status.
+          <p className="rounded-md border border-[var(--border)] bg-[var(--surface)] px-3 py-2 text-sm text-[var(--text-muted)]">
+            This request belongs to a colleague in your organisation. You can view it, but only
+            its owner can change or submit it.
+          </p>
         ) : (
           <p className="rounded-md border border-[var(--border)] bg-[var(--surface)] px-3 py-2 text-sm text-[var(--text-muted)]">
             This request has been submitted and is now read-only. It can be changed again only

@@ -52,6 +52,24 @@ export function isPastDate(date: ISODate, today: ISODate = todayInSingapore()): 
   return date < today;
 }
 
+/**
+ * The Singapore wall-clock hour (0-23) an instant falls in.
+ *
+ * Exists for comparing "now" against a time slot's end hour (SCRUM-77's
+ * TIME_SLOT_HOURS) - the same server-clock-vs-Singapore problem todayInSingapore()
+ * solves for calendar dates, one level down.
+ */
+export function currentHourInSingapore(now: Date = new Date()): number {
+  const hour = new Intl.DateTimeFormat('en-CA', {
+    timeZone: SINGAPORE_TIME_ZONE,
+    hour: '2-digit',
+    hourCycle: 'h23',
+  })
+    .formatToParts(now)
+    .find((part) => part.type === 'hour')?.value;
+  return Number(hour ?? 0);
+}
+
 /** e.g. "17 Sep 2026". */
 export function formatSingaporeDate(date: ISODate): string {
   // Anchored at Singapore midnight, so formatting it back in Singapore returns
