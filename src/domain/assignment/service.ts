@@ -10,11 +10,12 @@ import {
   fetchAccountEmail,
   fetchContactProfiles,
   fetchEventAssignment,
-  listCoordinatorHistory,
+  fetchEventAssignmentWithHistory,
   reassignEventCoordinator,
   type ContactProfileRow,
   type CoordinatorHistoryRow,
   type EventAssignmentRow,
+  type EventAssignmentWithHistoryRow,
 } from '@/lib/supabase/assignments';
 import {
   ConflictError,
@@ -492,15 +493,25 @@ async function readAccountEmail(accountId: string): Promise<string | null> {
  * SCRUM-98 AC3 — after a reassignment, `current` is the new coordinator,
  * because it is read from the event's current owner every time.
  *
- * Access is decided before any coordinator detail is read: the organiser who
- * owns the event, its current coordinator, or an Event Operations Manager.
- * A coordinator reassigned away is refused (SCRUM-96 AC4).
+ * Access is decided before any coordinator's details are read or anything is
+ * returned: the organiser who owns the event, its current coordinator, or an
+ * Event Operations Manager. A coordinator reassigned away is refused
+ * (SCRUM-96 AC4).
+ *
+ * The coordinator and the history are read together, so they always agree
+ * (found reviewing SCRUM-215; see fetchEventAssignmentWithHistory).
  */
 export async function getCoordinatorView(
   eventRequestId: string,
   actor: { userId: string; roles: readonly Role[] },
 ): Promise<CoordinatorView> {
-  const event = await readEventAssignment(eventRequestId);
+  const parsedId = EventRequestIdSchema.safeParse(eventRequestId);
+  if (!parsedId.success) throw new NotFoundError('Event request');
+
+  const { data, error } = await fetchEventAssignmentWithHistory(parsedId.data);
+  if (error) throw new ValidationError('The event request could not be read.', error.message);
+  if (!data) throw new NotFoundError('Event request');
+  const event = data as unknown as EventAssignmentWithHistoryRow;
 
   if (
     !canViewCoordinatorDetails(
@@ -511,11 +522,7 @@ export async function getCoordinatorView(
     throw new ForbiddenError('You do not have access to this event.');
   }
 
-  const { data: historyData, error: historyError } = await listCoordinatorHistory(event.id);
-  if (historyError) {
-    throw new ValidationError('The assignment history could not be read.', historyError.message);
-  }
-  const historyRows = (historyData ?? []) as unknown as CoordinatorHistoryRow[];
+  const historyRows: CoordinatorHistoryRow[] = event.event_request_coordinator_history ?? [];
 
   const people = await readContactProfiles([
     ...(event.coordinator_id ? [event.coordinator_id] : []),

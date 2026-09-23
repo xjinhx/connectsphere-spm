@@ -83,15 +83,28 @@ export async function reassignEventCoordinator(
     .maybeSingle();
 }
 
-/** SCRUM-96 AC3. Oldest replacement first. */
-export async function listCoordinatorHistory(eventRequestId: string) {
+const HISTORY_COLUMNS =
+  'coordinator_id, assigned_by, assigned_at, replaced_at, replaced_by, replaced_by_coordinator_id';
+
+/** An event's current assignment with every assignment it replaced (SCRUM-96 AC3). */
+export interface EventAssignmentWithHistoryRow extends EventAssignmentRow {
+  event_request_coordinator_history: CoordinatorHistoryRow[];
+}
+
+/**
+ * SCRUM-96 AC3 and SCRUM-98: the event's current coordinator and its history,
+ * oldest replacement first, in one request. PostgREST runs it as one
+ * statement, so both come from the same moment. Read as two requests, a
+ * reassignment committing between them showed the new coordinator's history
+ * row beside the old coordinator (found reviewing SCRUM-215).
+ */
+export async function fetchEventAssignmentWithHistory(eventRequestId: string) {
   return db()
-    .from('event_request_coordinator_history')
-    .select(
-      'coordinator_id, assigned_by, assigned_at, replaced_at, replaced_by, replaced_by_coordinator_id',
-    )
-    .eq('event_request_id', eventRequestId)
-    .order('replaced_at', { ascending: true });
+    .from('event_request')
+    .select(`${ASSIGNMENT_COLUMNS}, event_request_coordinator_history ( ${HISTORY_COLUMNS} )`)
+    .eq('id', eventRequestId)
+    .order('replaced_at', { referencedTable: 'event_request_coordinator_history', ascending: true })
+    .maybeSingle();
 }
 
 /** SCRUM-98 AC1: names and contact numbers for one or more accounts in one read. */
