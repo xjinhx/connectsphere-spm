@@ -64,7 +64,9 @@ export async function fetchEventAssignment(eventRequestId: string) {
  * The coordinator_id filter is the guard: the swap only happens if the event
  * is still held by the coordinator the manager saw. If someone else reassigned
  * it in between, no row matches and nothing changes, so two managers acting at
- * once cannot both win or overwrite each other silently.
+ * once cannot both win or overwrite each other silently. That holds only if
+ * `fromCoordinatorId` is the one the manager's request named, not one read
+ * again just before this call (SCRUM-215).
  */
 export async function reassignEventCoordinator(
   eventRequestId: string,

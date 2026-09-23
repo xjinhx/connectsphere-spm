@@ -4,6 +4,7 @@ import {
   canViewCoordinatorDetails,
   isCurrentCoordinator,
 } from '@/domain/assignment/policy';
+import { ReassignCoordinatorInputSchema } from '@/domain/assignment/schema';
 import type { Role } from '@/domain/identity/roles';
 
 /**
@@ -85,5 +86,24 @@ describe('canViewCoordinatorDetails: SCRUM-96 AC3 and AC4, SCRUM-98', () => {
 
   it('refuses an attendee', () => {
     expect(canViewCoordinatorDetails(assignedToB, as(STRANGER, ['attendee']))).toBe(false);
+  });
+});
+
+// SCRUM-215: a reassignment names the coordinator it replaces, so the update
+// can refuse one made from a view that has gone out of date.
+describe('ReassignCoordinatorInputSchema: SCRUM-215', () => {
+  const valid = { coordinatorId: COORDINATOR_B, fromCoordinatorId: COORDINATOR_A, actorId: MANAGER };
+
+  it('accepts the new coordinator, the one being replaced, and the manager', () => {
+    expect(ReassignCoordinatorInputSchema.safeParse(valid).success).toBe(true);
+  });
+
+  it('refuses a reassignment that does not say which coordinator it replaces', () => {
+    const { fromCoordinatorId: _omitted, ...withoutFrom } = valid;
+    expect(ReassignCoordinatorInputSchema.safeParse(withoutFrom).success).toBe(false);
+  });
+
+  it('refuses a replaced coordinator id that is not a uuid', () => {
+    expect(ReassignCoordinatorInputSchema.safeParse({ ...valid, fromCoordinatorId: 'jane' }).success).toBe(false);
   });
 });

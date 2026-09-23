@@ -25,7 +25,11 @@ import {
 } from '@/domain/shared/errors';
 import { isRole, type Role } from '@/domain/identity/roles';
 import type { EventRequestStatus } from '@/domain/event-request/schema';
-import { AssignCoordinatorInputSchema, EventRequestIdSchema } from './schema';
+import {
+  AssignCoordinatorInputSchema,
+  EventRequestIdSchema,
+  ReassignCoordinatorInputSchema,
+} from './schema';
 import {
   canBeAssigned,
   canBeReassigned,
@@ -339,6 +343,20 @@ async function readEventAssignment(eventRequestId: string): Promise<EventAssignm
 }
 
 /**
+ * SCRUM-215 — the answer for a manager whose reassignment lost to someone
+ * else's. Names who holds the event now, the way alreadyAssignedError does for
+ * SCRUM-94 AC5, so they can decide whether to try again from the current state.
+ */
+async function reassignedMeanwhileError(coordinatorId: string | null): Promise<ConflictError> {
+  const holder = coordinatorId ? await readProfile(coordinatorId) : null;
+  const name = holder?.full_name ?? 'another coordinator';
+  return new ConflictError(
+    `This event has been reassigned to ${name} since you loaded it. Reload and try again.`,
+    { coordinatorId, coordinatorName: holder?.full_name ?? null },
+  );
+}
+
+/**
  * SCRUM-96 AC1 — the new coordinator replaces the previous one.
  * SCRUM-96 AC2 — effective immediately, with no approval or acceptance step.
  *
@@ -358,6 +376,13 @@ async function readEventAssignment(eventRequestId: string): Promise<EventAssignm
  * SCRUM-24 lands, raise both notifications from here, where
  * previousCoordinatorId and coordinatorId are both to hand. See
  * docs/dummies.md.
+ *
+ * SCRUM-215: two managers reassigning at once. Each says which coordinator
+ * they are moving the event away from (`fromCoordinatorId`, the one they saw),
+ * and the update only goes ahead while the event is still held by that
+ * coordinator. Whoever acts second is refused, whether their request overlaps
+ * the first or arrives after it, rather than silently replacing a
+ * reassignment they never saw.
  */
 export async function reassignCoordinator(
   eventRequestId: string,
@@ -365,11 +390,11 @@ export async function reassignCoordinator(
 ): Promise<ReassignmentOutcome> {
   const current = await readEventAssignment(eventRequestId);
 
-  const parsedInput = AssignCoordinatorInputSchema.safeParse(input);
+  const parsedInput = ReassignCoordinatorInputSchema.safeParse(input);
   if (!parsedInput.success) {
     throw new ValidationError('The reassignment is not valid.', parsedInput.error.flatten());
   }
-  const { coordinatorId, actorId } = parsedInput.data;
+  const { coordinatorId, actorId, fromCoordinatorId } = parsedInput.data;
 
   // Same target rule as SCRUM-94: the new owner has to be an Event Coordinator.
   const target = await readProfile(coordinatorId);
@@ -384,25 +409,29 @@ export async function reassignCoordinator(
   if (previousCoordinatorId === null) {
     throw new ConflictError('This event has no coordinator yet. Assign one instead of reassigning.');
   }
+  // The manager chose from a view that is out of date: someone else has
+  // reassigned the event since. Refused before anything is written.
+  if (previousCoordinatorId !== fromCoordinatorId) {
+    throw await reassignedMeanwhileError(previousCoordinatorId);
+  }
   if (!canBeReassigned(previousCoordinatorId, coordinatorId)) {
     throw new ValidationError('This event is already assigned to that coordinator.');
   }
 
   const { data, error } = await reassignEventCoordinator(
     current.id,
-    previousCoordinatorId,
+    fromCoordinatorId,
     coordinatorId,
     actorId,
   );
   if (error) {
     throw new ValidationError('The coordinator could not be reassigned.', error.message);
   }
-  // The guard matched no row: someone changed the coordinator between our read
+  // The guard matched no row: someone reassigned the event between our read
   // and this update. Nothing was written, so say so rather than overwrite them.
   if (!data) {
-    throw new ConflictError(
-      "This event's coordinator was changed by someone else. Reload and try again.",
-    );
+    const latest = await readEventAssignment(current.id);
+    throw await reassignedMeanwhileError(latest.coordinator_id);
   }
 
   const row = data as unknown as EventAssignmentRow;
