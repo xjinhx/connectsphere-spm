@@ -558,7 +558,32 @@ export type Database = {
       [_ in never]: never
     }
     Functions: {
-      [_ in never]: never
+      create_venue: {
+        Args: {
+          p_accessibility_feature_ids: string[]
+          p_facility_ids: string[]
+          p_layouts: Json
+          p_location_id: string
+          p_max_capacity: number
+          p_name: string
+          p_operating_slots: string[]
+        }
+        Returns: string
+      }
+      update_venue: {
+        Args: {
+          p_accessibility_feature_ids?: string[]
+          p_expected_updated_at: string
+          p_facility_ids?: string[]
+          p_layouts?: Json
+          p_location_id?: string
+          p_max_capacity?: number
+          p_name?: string
+          p_operating_slots?: string[]
+          p_venue_id: string
+        }
+        Returns: string
+      }
     }
     Enums: {
       event_request_status:

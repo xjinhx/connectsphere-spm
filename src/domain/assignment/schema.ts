@@ -23,3 +23,18 @@ export type AssignCoordinatorInput = z.infer<typeof AssignCoordinatorInputSchema
 // would surface as a 500 for what is really just a bad link, so it is checked
 // before any query runs. Same reasoning as domain/review/schema.ts.
 export const EventRequestIdSchema = z.string().uuid();
+
+// SCRUM-96 — reassign. The same two fields as assigning, plus the coordinator
+// the manager is moving the event away from: the one they saw when they chose
+// (the `current.id` that GET /coordinator returned). SCRUM-215: the service
+// used to re-read the coordinator itself, so its guard only covered the
+// milliseconds between its own read and write. A manager acting on a page that
+// had gone stale would silently overwrite a reassignment made in the meantime.
+// Sending what they saw lets the update refuse that, whatever the timing.
+// It compares who holds the event, not a version: if the event was moved away
+// and back to the same coordinator in between, the request goes through, since
+// what the manager saw is true again. Every step stays in the history.
+export const ReassignCoordinatorInputSchema = AssignCoordinatorInputSchema.extend({
+  fromCoordinatorId: z.string().uuid(),
+});
+export type ReassignCoordinatorInput = z.infer<typeof ReassignCoordinatorInputSchema>;
