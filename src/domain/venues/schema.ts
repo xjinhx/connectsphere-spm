@@ -59,6 +59,13 @@ export const VENUE_NAME_MAX_LENGTH = 100;
 
 export const VenueIdSchema = z.string().uuid('Venue id must be a valid id.');
 
+/**
+ * The largest value the integer capacity columns can hold. Anything above it
+ * used to pass here and then fail in Postgres with a generic error that the
+ * form could not pin on the field. Not a business limit: none has been agreed.
+ */
+export const CAPACITY_COLUMN_MAX = 2_147_483_647;
+
 /** SCRUM-116 AC3: a positive whole number. Rejects "abc", 150.5, 0 and -1. */
 const MaxCapacitySchema = z
   .number({
@@ -66,7 +73,8 @@ const MaxCapacitySchema = z
     invalid_type_error: 'Maximum capacity must be a whole number.',
   })
   .int('Maximum capacity must be a whole number.')
-  .positive('Maximum capacity must be greater than 0.');
+  .positive('Maximum capacity must be greater than 0.')
+  .max(CAPACITY_COLUMN_MAX, 'Maximum capacity is too large.');
 
 const LayoutCapacitySchema = z
   .number({
@@ -74,7 +82,8 @@ const LayoutCapacitySchema = z
     invalid_type_error: 'Layout capacity must be a whole number.',
   })
   .int('Layout capacity must be a whole number.')
-  .positive('Layout capacity must be greater than 0.');
+  .positive('Layout capacity must be greater than 0.')
+  .max(CAPACITY_COLUMN_MAX, 'Layout capacity is too large.');
 
 const VenueNameSchema = z
   .string({ required_error: 'Venue name is required.' })

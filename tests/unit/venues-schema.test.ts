@@ -4,6 +4,7 @@ import {
   UpdateVenueInputSchema,
   VenueListQuerySchema,
   OPERATING_SLOTS,
+  CAPACITY_COLUMN_MAX,
 } from '@/domain/venues/schema';
 
 /**
@@ -67,6 +68,17 @@ describe('CreateVenueInputSchema: SCRUM-116 AC3 maximum capacity', () => {
   it('US-11.1-TC04 accepts a capacity of 1', () => {
     const result = CreateVenueInputSchema.safeParse({ ...validVenue(), maxCapacity: 1 });
     expect(result.success).toBe(true);
+  });
+
+  // Found reviewing SCRUM-215: this passed here and failed in Postgres with a
+  // message the form could not pin on the capacity field.
+  it('flags a capacity too large for the database column on the field', () => {
+    const tooBig = CreateVenueInputSchema.safeParse({ ...validVenue(), maxCapacity: CAPACITY_COLUMN_MAX + 1 });
+    expect(tooBig.success).toBe(false);
+    expect(tooBig.success ? {} : tooBig.error.flatten().fieldErrors).toHaveProperty('maxCapacity', [
+      'Maximum capacity is too large.',
+    ]);
+    expect(CreateVenueInputSchema.safeParse({ ...validVenue(), maxCapacity: CAPACITY_COLUMN_MAX }).success).toBe(true);
   });
 });
 
@@ -163,6 +175,14 @@ describe('CreateVenueInputSchema: SCRUM-118 AC1 layouts', () => {
       layouts: [{ layout: 'theatre', capacity: 0 }],
     });
     expect(messagesFrom(result)).toContain('Layout capacity must be greater than 0.');
+  });
+
+  it('rejects a layout capacity too large for the database column', () => {
+    const result = CreateVenueInputSchema.safeParse({
+      ...validVenue(),
+      layouts: [{ layout: 'theatre', capacity: CAPACITY_COLUMN_MAX + 1 }],
+    });
+    expect(messagesFrom(result)).toContain('Layout capacity is too large.');
   });
 
   it('rejects a layout that is not on the supported list', () => {
