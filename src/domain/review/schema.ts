@@ -2,8 +2,9 @@ import { z } from 'zod';
 
 // Mirrors the database rule on the decision column. Lower case, matching the
 // team's convention for stored values and the event_request_status enum.
-// SCRUM-93 adds 'rejected' alongside its own migration.
-export const DecisionSchema = z.enum(['approved']);
+// SCRUM-93 added 'rejected' alongside its own migration
+// (20260920140100_event_request_rejection_decision.sql).
+export const DecisionSchema = z.enum(['approved', 'rejected']);
 export type Decision = z.infer<typeof DecisionSchema>;
 
 // The approving coordinator's id. The approve route fills it from the signed-in
@@ -39,3 +40,22 @@ export const RequestClarificationInputSchema = z.object({
     .min(1, 'A note describing what is needed is required'),
 });
 export type RequestClarificationInput = z.infer<typeof RequestClarificationInputSchema>;
+
+// ---------------------------------------------------------------------------
+// SCRUM-93 — Reject a request
+// ---------------------------------------------------------------------------
+
+/**
+ * AC5 — "Given I attempt to reject a request without entering a reason, when
+ * I submit, then the rejection is blocked and I am told a reason is
+ * required." Trimmed before the length check, same reasoning as
+ * RequestClarificationInputSchema: a reason of only whitespace is refused the
+ * same as an empty one.
+ */
+export const RejectInputSchema = z.object({
+  reason: z
+    .string({ required_error: 'A reason is required to reject this request' })
+    .trim()
+    .min(1, 'A reason is required to reject this request'),
+});
+export type RejectInput = z.infer<typeof RejectInputSchema>;

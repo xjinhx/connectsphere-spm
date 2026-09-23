@@ -16,6 +16,21 @@ export function canBeApproved(status: EventRequestStatus): boolean {
 }
 
 // ---------------------------------------------------------------------------
+// SCRUM-93 — Reject a request
+// ---------------------------------------------------------------------------
+
+/**
+ * AC4 describes rejecting "a submitted request", and nothing else - same
+ * reasoning as canBeApproved above: the rule is a readable statement here,
+ * and the database enforces the same thing inside the update itself (see
+ * markEventRequestRejected), which is what makes two coordinators deciding
+ * the same request at the same moment safe.
+ */
+export function canBeRejected(status: EventRequestStatus): boolean {
+  return status === 'submitted';
+}
+
+// ---------------------------------------------------------------------------
 // AC2 / AC3 — what an approval commits ConnectSphere to
 // ---------------------------------------------------------------------------
 

@@ -1,6 +1,7 @@
 import { describe, it, expect } from 'vitest';
 import {
   canBeApproved,
+  canBeRejected,
   canRequestClarification,
   canReviewDetail,
   isAwaitingReview,
@@ -20,6 +21,11 @@ const COORDINATOR_B = '22222222-2222-2222-2222-222222222222';
  *        test with a real database proves it.
  *   Two coordinators approving at once — the `.eq('status','submitted')` filter
  *        is what decides it; not reachable without a database.
+ *
+ * SCRUM-93 — Reject a request (US-7.3 AC4/AC5). Same reasoning applies to
+ * canBeRejected below - see tests/integration/reject-event-request.test.ts for
+ * what a unit test can't reach: the reason/decision/timestamp landing on the
+ * row, and two coordinators deciding the same request at once.
  */
 
 describe('canBeApproved', () => {
@@ -36,6 +42,30 @@ describe('canBeApproved', () => {
   // twice is refused rather than silently re-stamping the first decision.
   it('refuses a request that is already approved', () => {
     expect(canBeApproved('approved')).toBe(false);
+  });
+});
+
+/**
+ * SCRUM-93 — Reject a request (US-7.3).
+ * AC text is from the Jira card, which is authoritative.
+ */
+describe('canBeRejected', () => {
+  // AC4: "Given I am reviewing a submitted request, when I reject it..."
+  it('allows a submitted request to be rejected', () => {
+    expect(canBeRejected('submitted')).toBe(true);
+  });
+
+  it('refuses a draft, which has not been submitted for review yet', () => {
+    expect(canBeRejected('draft')).toBe(false);
+  });
+
+  // Negative coverage: a request already decided cannot be decided again.
+  it('refuses a request that has already been approved', () => {
+    expect(canBeRejected('approved')).toBe(false);
+  });
+
+  it('refuses a request that has already been rejected', () => {
+    expect(canBeRejected('rejected')).toBe(false);
   });
 });
 

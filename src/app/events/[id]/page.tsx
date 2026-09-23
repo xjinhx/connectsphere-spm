@@ -15,7 +15,7 @@ import {
   describeTimeSlots,
 } from '@/domain/event-request/policy';
 import { getEventRequest } from '@/domain/event-request/service';
-import { getApprovalView, getClarificationView } from '@/domain/review/service';
+import { getApprovalView, getClarificationView, getRejectionView } from '@/domain/review/service';
 import { formatSingaporeDate, formatSingaporeDateTime } from '@/domain/shared/dates';
 import { getCurrentActor } from '@/lib/auth/currentActor';
 
@@ -78,9 +78,13 @@ export default async function EventRequestPage({
   // already holds. Both take `actor` (SCRUM-72 AC2) — an Attendee-only account
   // is refused internal planning data even here, though getEventRequest above
   // already keeps anyone but the owning organiser from reaching this line.
-  const [clarification, approval] = await Promise.all([
+  // SCRUM-93 AC4/AC6 — the rejection reason and date, if this request has
+  // been rejected. Same reasoning as the clarification/approval reads above:
+  // a separate read rather than a field on `request` itself.
+  const [clarification, approval, rejection] = await Promise.all([
     getClarificationView(id, actor),
     getApprovalView(id, actor),
+    getRejectionView(id),
   ]);
 
   return (
@@ -141,6 +145,21 @@ export default async function EventRequestPage({
           {clarification.clarificationRequestedAt ? (
             <p className="mt-1 text-xs text-[var(--text-muted)]">
               Requested {formatSingaporeDateTime(clarification.clarificationRequestedAt)}
+            </p>
+          ) : null}
+        </div>
+      ) : null}
+
+      {/* SCRUM-93 AC4/AC6 — the reason and date, shown as soon as the
+          request has been rejected. Separate read (getRejectionView), same
+          reasoning as the clarification banner above. */}
+      {rejection.rejectionReason ? (
+        <div className="mt-4 rounded-md border border-[var(--danger)] bg-red-50 px-3 py-2 text-sm">
+          <p className="font-medium text-[var(--danger)]">This request was rejected</p>
+          <p className="mt-1 whitespace-pre-wrap">{rejection.rejectionReason}</p>
+          {rejection.decidedAt ? (
+            <p className="mt-1 text-xs text-[var(--text-muted)]">
+              Rejected {formatSingaporeDateTime(rejection.decidedAt)}
             </p>
           ) : null}
         </div>
@@ -245,10 +264,21 @@ export default async function EventRequestPage({
           </>
         ) : request.organiserId !== actor.userId ? (
           // SCRUM-204 AC3 — shared with the organisation, view-only: only its
-          // owner can act on it, whatever its status.
+          // owner can act on it, whatever its status. Checked before the
+          // rejected-specific branch below, since AC3 applies "whatever its
+          // status" - a colleague viewing a rejected request gets this
+          // generic notice too, not SCRUM-93's rejection-specific one.
           <p className="rounded-md border border-[var(--border)] bg-[var(--surface)] px-3 py-2 text-sm text-[var(--text-muted)]">
             This request belongs to a colleague in your organisation. You can view it, but only
             its owner can change or submit it.
+          </p>
+        ) : request.status === 'rejected' ? (
+          // SCRUM-93 AC6 — a rejected request cannot be edited or resubmitted,
+          // and the organiser is told a new request must be raised instead
+          // (the "Create another request" link below does that).
+          <p className="rounded-md border border-[var(--border)] bg-[var(--surface)] px-3 py-2 text-sm text-[var(--text-muted)]">
+            This request has been rejected and cannot be edited or resubmitted. Raise a new
+            request instead.
           </p>
         ) : (
           <p className="rounded-md border border-[var(--border)] bg-[var(--surface)] px-3 py-2 text-sm text-[var(--text-muted)]">
