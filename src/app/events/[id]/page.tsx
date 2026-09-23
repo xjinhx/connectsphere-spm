@@ -15,7 +15,7 @@ import {
   describeTimeSlots,
 } from '@/domain/event-request/policy';
 import { getEventRequest } from '@/domain/event-request/service';
-import { getClarificationView } from '@/domain/review/service';
+import { getApprovalView, getClarificationView } from '@/domain/review/service';
 import { formatSingaporeDate, formatSingaporeDateTime } from '@/domain/shared/dates';
 import { getCurrentActor } from '@/lib/auth/currentActor';
 
@@ -67,7 +67,19 @@ export default async function EventRequestPage({
   // US-7.2 AC1/AC3 — the clarification note, if a coordinator has raised one.
   // A separate read (getClarificationView) rather than a field on `request`
   // itself — see the comment on ClarificationView in domain/review/service.ts.
-  const clarification = await getClarificationView(id);
+  // SCRUM-92 AC2 — "when the Event Organiser views it, the approval outcome and
+  // date are shown together with a statement that no venue, equipment or
+  // registration arrangement is yet committed". Read alongside the clarification
+  // rather than after it: neither depends on the other.
+  //
+  // getApprovalView rather than request.status, because AC2 asks for the
+  // decision date and the statement, and neither is on the request the page
+  // already holds. It applies no ownership rule of its own (AC3 says "anyone"),
+  // so who reaches this page is decided by getEventRequest above, as before.
+  const [clarification, approval] = await Promise.all([
+    getClarificationView(id),
+    getApprovalView(id),
+  ]);
 
   return (
     <main className="mx-auto max-w-2xl px-4 py-8">
@@ -81,6 +93,34 @@ export default async function EventRequestPage({
       </div>
       {/* AC2: the unique reference the database assigned on save. */}
       <p className="mt-1 font-mono text-sm text-[var(--text-muted)]">{request.reference}</p>
+
+      {/* SCRUM-92 AC2: the outcome, the date, and the statement — the three
+          things the card asks the Organiser be shown, in that order.
+
+          AC3: "its status is not Confirmed and no venue or equipment is shown
+          as committed". The badge above says Approved and this says plainly
+          that nothing is committed yet, so an approval cannot be mistaken for a
+          booking. Nothing on this page claims a venue or equipment either.
+
+          Matched on 'approved' rather than on decision being set: SCRUM-93 adds
+          'rejected' to the same column, and a rejected request must not be
+          announced here as approved. That story owns how a rejection reads. */}
+      {approval.decision === 'approved' ? (
+        <div className="mt-4 rounded-md border border-green-200 bg-green-50 px-3 py-2 text-sm">
+          <p className="font-medium text-green-700">Approved</p>
+          {/* AC2's "date". Stamped by the database (set_decided_at), and shown
+              in Singapore time like every other time on this page. */}
+          {approval.decidedAt ? (
+            <p className="mt-1 text-xs text-[var(--text-muted)]">
+              Approved {formatSingaporeDateTime(approval.decidedAt)}
+            </p>
+          ) : null}
+          {/* The statement comes from the domain (COMMITMENT_STATEMENT), not
+              written out again here, so the page and the API cannot drift into
+              telling the Organiser two different things. */}
+          <p className="mt-2">{approval.commitmentStatement}</p>
+        </div>
+      ) : null}
 
       {/* US-7.2 AC1/AC3: what the Coordinator needs, shown as soon as one has
           asked for it. Replying to it is SCRUM-91, and the form that does so is
