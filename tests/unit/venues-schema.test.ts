@@ -4,6 +4,7 @@ import {
   UpdateVenueInputSchema,
   VenueListQuerySchema,
   OPERATING_SLOTS,
+  CAPACITY_COLUMN_MAX,
 } from '@/domain/venues/schema';
 
 /**
@@ -67,6 +68,17 @@ describe('CreateVenueInputSchema: SCRUM-116 AC3 maximum capacity', () => {
   it('US-11.1-TC04 accepts a capacity of 1', () => {
     const result = CreateVenueInputSchema.safeParse({ ...validVenue(), maxCapacity: 1 });
     expect(result.success).toBe(true);
+  });
+
+  // Found reviewing SCRUM-215: this passed here and failed in Postgres with a
+  // message the form could not pin on the capacity field.
+  it('flags a capacity too large for the database column on the field', () => {
+    const tooBig = CreateVenueInputSchema.safeParse({ ...validVenue(), maxCapacity: CAPACITY_COLUMN_MAX + 1 });
+    expect(tooBig.success).toBe(false);
+    expect(tooBig.success ? {} : tooBig.error.flatten().fieldErrors).toHaveProperty('maxCapacity', [
+      'Maximum capacity is too large.',
+    ]);
+    expect(CreateVenueInputSchema.safeParse({ ...validVenue(), maxCapacity: CAPACITY_COLUMN_MAX }).success).toBe(true);
   });
 });
 
@@ -165,6 +177,14 @@ describe('CreateVenueInputSchema: SCRUM-118 AC1 layouts', () => {
     expect(messagesFrom(result)).toContain('Layout capacity must be greater than 0.');
   });
 
+  it('rejects a layout capacity too large for the database column', () => {
+    const result = CreateVenueInputSchema.safeParse({
+      ...validVenue(),
+      layouts: [{ layout: 'theatre', capacity: CAPACITY_COLUMN_MAX + 1 }],
+    });
+    expect(messagesFrom(result)).toContain('Layout capacity is too large.');
+  });
+
   it('rejects a layout that is not on the supported list', () => {
     const result = CreateVenueInputSchema.safeParse({
       ...validVenue(),
@@ -175,13 +195,18 @@ describe('CreateVenueInputSchema: SCRUM-118 AC1 layouts', () => {
 });
 
 describe('UpdateVenueInputSchema: SCRUM-120 AC1 and SCRUM-117 AC3', () => {
+  // The updatedAt the edit form was loaded with; every update carries one.
+  const LOADED_AT = '2026-09-23T06:30:00.123456+00:00';
+  const edit = (changes: Record<string, unknown>) =>
+    UpdateVenueInputSchema.safeParse({ expectedUpdatedAt: LOADED_AT, ...changes });
+
   it('SCRUM-120 AC1 accepts a capacity change on its own', () => {
-    const result = UpdateVenueInputSchema.safeParse({ maxCapacity: 250 });
+    const result = edit({ maxCapacity: 250 });
     expect(result.success).toBe(true);
   });
 
   it('leaves an omitted list undefined so it is not overwritten', () => {
-    const result = UpdateVenueInputSchema.safeParse({ maxCapacity: 250 });
+    const result = edit({ maxCapacity: 250 });
     expect(result.success).toBe(true);
     if (result.success) {
       expect(result.data.facilityIds).toBeUndefined();
@@ -192,7 +217,7 @@ describe('UpdateVenueInputSchema: SCRUM-120 AC1 and SCRUM-117 AC3', () => {
   // SCRUM-117 AC3: a removed facility is no longer part of the venue record.
   // Sending the list without it is how removal is expressed.
   it('SCRUM-117 AC3 treats an empty list as "remove them all"', () => {
-    const result = UpdateVenueInputSchema.safeParse({ facilityIds: [] });
+    const result = edit({ facilityIds: [] });
     expect(result.success).toBe(true);
     if (result.success) {
       expect(result.data.facilityIds).toEqual([]);
@@ -200,7 +225,7 @@ describe('UpdateVenueInputSchema: SCRUM-120 AC1 and SCRUM-117 AC3', () => {
   });
 
   it('refuses an update that changes nothing', () => {
-    const result = UpdateVenueInputSchema.safeParse({});
+    const result = edit({});
     expect(result.success).toBe(false);
     if (!result.success) {
       expect(result.error.issues.map((issue) => issue.message)).toContain('Nothing to update.');
@@ -208,8 +233,24 @@ describe('UpdateVenueInputSchema: SCRUM-120 AC1 and SCRUM-117 AC3', () => {
   });
 
   it('refuses a confirmation flag with no actual change', () => {
-    const result = UpdateVenueInputSchema.safeParse({ confirmAffectedBookings: true });
+    const result = edit({ confirmAffectedBookings: true });
     expect(result.success).toBe(false);
+  });
+
+  // Found reviewing SCRUM-215: without the version the form was loaded with,
+  // a save from an out-of-date form silently undid a newer one.
+  it('refuses an update that does not say which version of the venue it was made from', () => {
+    const result = UpdateVenueInputSchema.safeParse({ maxCapacity: 250 });
+    expect(result.success).toBe(false);
+    if (!result.success) {
+      expect(result.error.flatten().fieldErrors).toHaveProperty('expectedUpdatedAt');
+    }
+  });
+
+  it('accepts the version exactly as the venue page returns it, and refuses anything else', () => {
+    expect(edit({ maxCapacity: 250 }).success).toBe(true);
+    expect(edit({ maxCapacity: 250, expectedUpdatedAt: '2026-09-23T06:30:00Z' }).success).toBe(true);
+    expect(edit({ maxCapacity: 250, expectedUpdatedAt: 'yesterday' }).success).toBe(false);
   });
 });
 

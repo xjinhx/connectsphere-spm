@@ -26,6 +26,13 @@ export class DomainError extends Error {
     this.name = 'DomainError';
     this.code = code;
     this.details = details;
+    // Next.js strips `message` from errors thrown during Server Component
+    // rendering before they reach a client error boundary in production, but
+    // it preserves a `digest` set before it generates its own - see
+    // node_modules/next/dist/server/app-render/create-error-handler.js
+    // ("If the error already has a digest, respect the original digest").
+    // src/app/error.tsx reads this to render the right message per code.
+    (this as { digest?: string }).digest = `DOMAIN_ERROR:${code}`;
   }
 }
 

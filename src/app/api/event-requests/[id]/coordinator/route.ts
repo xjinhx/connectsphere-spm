@@ -37,8 +37,10 @@ export async function POST(req: NextRequest, { params }: { params: Promise<{ id:
  * SCRUM-96 AC1 and AC2 — reassign the event to another coordinator.
  *
  * Same access rule as assigning: `coordinator_assignment`, checked before
- * anything is read. As with POST, the manager recorded is whoever is signed in;
- * the body carries only the new coordinator.
+ * anything is read. As with POST, the manager recorded is whoever is signed in.
+ * The body carries the new coordinator and the one being replaced, as the
+ * manager saw it (`current.id` from GET below); if the event has been
+ * reassigned since, the answer is 409 and nothing changes (SCRUM-215).
  */
 export async function PATCH(req: NextRequest, { params }: { params: Promise<{ id: string }> }) {
   try {
@@ -46,10 +48,19 @@ export async function PATCH(req: NextRequest, { params }: { params: Promise<{ id
     const actor = await getCurrentActor();
     assertPermission(actor.roles, 'coordinator_assignment');
 
-    const body = await req.json().catch(() => ({}));
-    const coordinatorId = (body as { coordinatorId?: unknown }).coordinatorId;
+    // A body of `null` is valid JSON, so the catch does not replace it, and
+    // reading a field off it would throw and answer 500. Anything that is not
+    // an object becomes {}, and the schema answers 400 for the missing fields.
+    const raw: unknown = await req.json().catch(() => ({}));
+    const body = typeof raw === 'object' && raw !== null ? raw : {};
+    const { coordinatorId, fromCoordinatorId } = body as {
+      coordinatorId?: unknown;
+      fromCoordinatorId?: unknown;
+    };
 
-    return NextResponse.json(await reassignCoordinator(id, { coordinatorId, actorId: actor.userId }));
+    return NextResponse.json(
+      await reassignCoordinator(id, { coordinatorId, fromCoordinatorId, actorId: actor.userId }),
+    );
   } catch (error) {
     return handleApiError(error);
   }

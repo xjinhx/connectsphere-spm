@@ -368,14 +368,21 @@ export function isEditable(status: EventRequestStatus): boolean {
 /**
  * SCRUM-82 AC1 — a draft becomes submitted.
  *
- * SCRUM-90 AC2 adds the second way in: a request returned for clarification is
- * editable again (see isEditable above), and "without leaving the system"
- * (US-7.2) only holds if the Organiser can then send it back. Widened here
- * rather than left at 'draft' because the two halves have to agree — offering
- * an edit the resubmit would refuse is what this rule previously did.
+ * Narrowed back to 'draft' only (bug fix, 2026-09-22). It briefly accepted
+ * 'clarification_requested' too, on the reasoning that "without leaving the
+ * system" (US-7.2) needs some way back to submitted — but this plain endpoint
+ * has no way to require an answer to the coordinator's question first, so an
+ * organiser could resubmit through it with the clarification still
+ * unanswered. SCRUM-91's dedicated response flow is the real way back
+ * (src/domain/clarification/service.ts's respondToClarification, PR #42):
+ * it records the answer and flips the status in one database write via its
+ * own trigger, entirely independent of this function, so narrowing this rule
+ * does not affect it. The bug and this fix are both called out directly in
+ * that PR's own migration comments
+ * (supabase/migrations/20260919090000_event_request_clarification_round.sql).
  */
 export function canBeSubmitted(status: EventRequestStatus): boolean {
-  return status === 'draft' || status === 'clarification_requested';
+  return status === 'draft';
 }
 
 // ---------------------------------------------------------------------------
@@ -411,6 +418,36 @@ export function isOwnRequest(
   actorUserId: string,
 ): boolean {
   return request.organiserId === actorUserId;
+}
+
+/**
+ * SCRUM-204 AC3 — the other half of the sharing boundary isOwnRequest()
+ * describes: once a request has left draft, a colleague in the same client
+ * organisation may open it (view-only, see canEditRequest below). The owner
+ * may always open their own, at any status, including a still-private draft.
+ */
+export function canViewRequest(
+  request: { organiserId: string; clientOrganisationId: string | null; status: EventRequestStatus },
+  actor: { userId: string; clientOrganisationId: string | null },
+): boolean {
+  if (isOwnRequest(request, actor.userId)) return true;
+  if (request.status === 'draft') return false;
+  return (
+    request.clientOrganisationId !== null &&
+    request.clientOrganisationId === actor.clientOrganisationId
+  );
+}
+
+/**
+ * SCRUM-204 AC3 — sharing a submitted (or clarification-requested) request
+ * with the organisation is view-only: only the organiser who owns it may
+ * edit, resubmit, or resume it, whatever isEditable(status) says on its own.
+ */
+export function canEditRequest(
+  request: { organiserId: string; status: EventRequestStatus },
+  actorUserId: string,
+): boolean {
+  return isOwnRequest(request, actorUserId) && isEditable(request.status);
 }
 
 /**

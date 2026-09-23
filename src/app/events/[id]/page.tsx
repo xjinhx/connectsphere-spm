@@ -1,8 +1,11 @@
 import Link from 'next/link';
 import CoordinatorPanel from '@/components/assignment/CoordinatorPanel';
+import { ClarificationResponseForm } from '@/components/event-request/ClarificationResponseForm';
 import { EventRequestStatusBadge } from '@/components/event-request/EventRequestStatusBadge';
 import { SubmitEventRequestButton } from '@/components/event-request/SubmitEventRequestButton';
 import {
+  canBeSubmitted,
+  canEditRequest,
   describeAccessibility,
   describeEquipment,
   describePreferredLocation,
@@ -10,10 +13,9 @@ import {
   describeRoomLayout,
   describeTechnicalSupport,
   describeTimeSlots,
-  isEditable,
 } from '@/domain/event-request/policy';
 import { getEventRequest } from '@/domain/event-request/service';
-import { getClarificationView } from '@/domain/review/service';
+import { getApprovalView, getClarificationView } from '@/domain/review/service';
 import { formatSingaporeDate, formatSingaporeDateTime } from '@/domain/shared/dates';
 import { getCurrentActor } from '@/lib/auth/currentActor';
 
@@ -36,16 +38,50 @@ export default async function EventRequestPage({
   params: Promise<{ id: string }>;
 }) {
   const { id } = await params;
-  const request = await getEventRequest(id);
+  const [actor, request] = await Promise.all([getCurrentActor(), getEventRequest(id)]);
   // SCRUM-82 AC2/AC4 — one rule decides every action shown on this page.
-  const editable = isEditable(request.status);
+  // SCRUM-204 AC3 — and only the owner ever gets them: a colleague viewing a
+  // shared, still-editable (e.g. Clarification Requested) request sees the
+  // read-only notice below instead, never the edit actions.
+  const editable = canEditRequest(request, actor.userId);
+  // SCRUM-91 AC1 — a coordinator has asked something and is waiting for an
+  // answer. Taken from the status rather than from "is there an open round",
+  // because this decides what the page offers, and the page should not need a
+  // second read to know what the badge beside the title already says.
+  //
+  // Built on `editable`, not on the status alone: SCRUM-204 AC3 shares a
+  // request in Clarification Requested with the whole client organisation, and
+  // a colleague must not be offered the box that answers it. Only the organiser
+  // who owns the request may reply - the same rule respondToClarification
+  // enforces, so the page cannot offer an action the API would refuse.
+  const awaitingResponse = editable && request.status === 'clarification_requested';
+  // Bug fix, 2026-09-22 — a clarification-requested request is editable
+  // again (SCRUM-90 AC2), but resubmitting it through the plain Submit button
+  // is exactly the bug this branch fixes (canBeSubmitted no longer accepts
+  // it, see policy.ts): once awaitingResponse is true, SCRUM-91's response
+  // form above is the only way back, so this flag never even gets consulted
+  // for that status. Kept as its own flag for the draft case, so "editable"
+  // and "submittable" can disagree there too without the Submit button
+  // offering an action that would just error.
+  const submittable = canBeSubmitted(request.status);
   // US-7.2 AC1/AC3 — the clarification note, if a coordinator has raised one.
   // A separate read (getClarificationView) rather than a field on `request`
   // itself — see the comment on ClarificationView in domain/review/service.ts.
-  // getEventRequest above already refused anyone but the owning organiser, so
-  // the actor reaching this line is never an Attendee-only account.
-  const actor = await getCurrentActor();
-  const clarification = await getClarificationView(id, actor);
+  //
+  // SCRUM-92 AC2 — "when the Event Organiser views it, the approval outcome and
+  // date are shown together with a statement that no venue, equipment or
+  // registration arrangement is yet committed". Read alongside the clarification
+  // rather than after it: neither depends on the other.
+  //
+  // getApprovalView rather than request.status, because AC2 asks for the
+  // decision date and the statement, and neither is on the request the page
+  // already holds. Both take `actor` (SCRUM-72 AC2) — an Attendee-only account
+  // is refused internal planning data even here, though getEventRequest above
+  // already keeps anyone but the owning organiser from reaching this line.
+  const [clarification, approval] = await Promise.all([
+    getClarificationView(id, actor),
+    getApprovalView(id, actor),
+  ]);
 
   return (
     <main className="mx-auto max-w-2xl px-4 py-8">
@@ -60,9 +96,37 @@ export default async function EventRequestPage({
       {/* AC2: the unique reference the database assigned on save. */}
       <p className="mt-1 font-mono text-sm text-[var(--text-muted)]">{request.reference}</p>
 
+      {/* SCRUM-92 AC2: the outcome, the date, and the statement — the three
+          things the card asks the Organiser be shown, in that order.
+
+          AC3: "its status is not Confirmed and no venue or equipment is shown
+          as committed". The badge above says Approved and this says plainly
+          that nothing is committed yet, so an approval cannot be mistaken for a
+          booking. Nothing on this page claims a venue or equipment either.
+
+          Matched on 'approved' rather than on decision being set: SCRUM-93 adds
+          'rejected' to the same column, and a rejected request must not be
+          announced here as approved. That story owns how a rejection reads. */}
+      {approval.decision === 'approved' ? (
+        <div className="mt-4 rounded-md border border-green-200 bg-green-50 px-3 py-2 text-sm">
+          <p className="font-medium text-green-700">Approved</p>
+          {/* AC2's "date". Stamped by the database (set_decided_at), and shown
+              in Singapore time like every other time on this page. */}
+          {approval.decidedAt ? (
+            <p className="mt-1 text-xs text-[var(--text-muted)]">
+              Approved {formatSingaporeDateTime(approval.decidedAt)}
+            </p>
+          ) : null}
+          {/* The statement comes from the domain (COMMITMENT_STATEMENT), not
+              written out again here, so the page and the API cannot drift into
+              telling the Organiser two different things. */}
+          <p className="mt-2">{approval.commitmentStatement}</p>
+        </div>
+      ) : null}
+
       {/* US-7.2 AC1/AC3: what the Coordinator needs, shown as soon as one has
-          asked for it. No response is offered here — replying to it (US-7.2
-          AC2) is a separate, unbuilt story (SCRUM-91). */}
+          asked for it. Replying to it is SCRUM-91, and the form that does so is
+          in the actions section below. */}
       {clarification.clarificationNote ? (
         <div className="mt-4 rounded-md border border-[var(--warning)] bg-amber-50 px-3 py-2 text-sm">
           {/* The note is kept on the record after it has been addressed (AC3),
@@ -135,22 +199,41 @@ export default async function EventRequestPage({
         ) : null}
       </dl>
 
-      {/* SCRUM-98: who the organiser's coordinator is (panel owned by SCRUM-96/98). */}
-      <CoordinatorPanel eventRequestId={request.id} />
+      {/* SCRUM-98: who the organiser's coordinator is (panel owned by SCRUM-96/98).
+          SCRUM-204 AC3 — canViewCoordinatorDetails (SCRUM-96/98's own rule,
+          not touched here) does not grant a colleague access to this, so it
+          is only rendered for the owner viewing their own request. */}
+      {request.organiserId === actor.userId && <CoordinatorPanel eventRequestId={request.id} />}
 
       {/* SCRUM-82 AC4: a submitted request is read-only - no edit, save or
-          delete is offered. Only a draft gets an action. */}
+          delete is offered. Only a draft gets an action.
+
+          SCRUM-91 AC1: a request returned for clarification is editable too
+          (isEditable, SCRUM-90 AC2), but it is not a draft and it is not
+          resubmitted the same way - it goes back with an answer. It therefore
+          gets its own branch, above the draft one, rather than falling through
+          to a Submit button that would send the coordinator's question back
+          unanswered. */}
       <section className="mt-6">
-        {editable ? (
+        {awaitingResponse ? (
+          <div className="rounded-lg border border-[var(--border)] bg-[var(--surface)] p-4">
+            <ClarificationResponseForm requestId={request.id} />
+          </div>
+        ) : editable ? (
           <>
-            {/* SCRUM-84 AC2: an explicit statement that a draft has not yet
-                reached ConnectSphere, distinct from the submitted read-only
-                notice below. */}
-            <p className="mb-3 rounded-md border border-[var(--border)] bg-[var(--surface)] px-3 py-2 text-sm text-[var(--text-muted)]">
-              This is a draft. ConnectSphere has not yet received it — save your changes or submit when ready.
-            </p>
+            {submittable ? (
+              // SCRUM-84 AC2: an explicit statement that a draft has not yet
+              // reached ConnectSphere, distinct from the submitted read-only
+              // notice below.
+              <p className="mb-3 rounded-md border border-[var(--border)] bg-[var(--surface)] px-3 py-2 text-sm text-[var(--text-muted)]">
+                This is a draft. ConnectSphere has not yet received it — save your changes or submit when ready.
+              </p>
+            ) : null}
             <div className="flex flex-wrap items-center gap-3">
-              <SubmitEventRequestButton requestId={request.id} />
+              {/* Bug fix, 2026-09-22 — no longer offered while a clarification
+                  is open: resubmitting here would error, since canBeSubmitted
+                  no longer accepts clarification_requested (see policy.ts). */}
+              {submittable ? <SubmitEventRequestButton requestId={request.id} /> : null}
               {/* SCRUM-85 AC3 — the way back into a saved draft. */}
               <Link
                 href={`/events/${request.id}/edit`}
@@ -160,6 +243,13 @@ export default async function EventRequestPage({
               </Link>
             </div>
           </>
+        ) : request.organiserId !== actor.userId ? (
+          // SCRUM-204 AC3 — shared with the organisation, view-only: only its
+          // owner can act on it, whatever its status.
+          <p className="rounded-md border border-[var(--border)] bg-[var(--surface)] px-3 py-2 text-sm text-[var(--text-muted)]">
+            This request belongs to a colleague in your organisation. You can view it, but only
+            its owner can change or submit it.
+          </p>
         ) : (
           <p className="rounded-md border border-[var(--border)] bg-[var(--surface)] px-3 py-2 text-sm text-[var(--text-muted)]">
             This request has been submitted and is now read-only. It can be changed again only

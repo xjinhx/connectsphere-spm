@@ -52,6 +52,36 @@ export type Database = {
         }
         Relationships: []
       }
+      client_organisations: {
+        Row: {
+          contact_email: string | null
+          contact_name: string | null
+          contact_phone: string | null
+          created_at: string
+          id: string
+          name: string
+          updated_at: string
+        }
+        Insert: {
+          contact_email?: string | null
+          contact_name?: string | null
+          contact_phone?: string | null
+          created_at?: string
+          id?: string
+          name: string
+          updated_at?: string
+        }
+        Update: {
+          contact_email?: string | null
+          contact_name?: string | null
+          contact_phone?: string | null
+          created_at?: string
+          id?: string
+          name?: string
+          updated_at?: string
+        }
+        Relationships: []
+      }
       event_request: {
         Row: {
           accessibility_notes: string | null
@@ -151,6 +181,13 @@ export type Database = {
         }
         Relationships: [
           {
+            foreignKeyName: "event_request_client_organisation_id_fkey"
+            columns: ["client_organisation_id"]
+            isOneToOne: false
+            referencedRelation: "client_organisations"
+            referencedColumns: ["id"]
+          },
+          {
             foreignKeyName: "event_request_preferred_location_id_fkey"
             columns: ["preferred_location_id"]
             isOneToOne: false
@@ -182,6 +219,91 @@ export type Database = {
           },
           {
             foreignKeyName: "event_request_accessibility_features_event_request_id_fkey"
+            columns: ["event_request_id"]
+            isOneToOne: false
+            referencedRelation: "event_request"
+            referencedColumns: ["id"]
+          },
+        ]
+      }
+      event_request_clarification_round: {
+        Row: {
+          event_request_id: string
+          id: string
+          note: string
+          requested_at: string
+          requested_by: string
+          responded_at: string | null
+          responded_by: string | null
+          response: string | null
+          round_number: number
+        }
+        Insert: {
+          event_request_id: string
+          id?: string
+          note: string
+          requested_at: string
+          requested_by: string
+          responded_at?: string | null
+          responded_by?: string | null
+          response?: string | null
+          round_number: number
+        }
+        Update: {
+          event_request_id?: string
+          id?: string
+          note?: string
+          requested_at?: string
+          requested_by?: string
+          responded_at?: string | null
+          responded_by?: string | null
+          response?: string | null
+          round_number?: number
+        }
+        Relationships: [
+          {
+            foreignKeyName: "event_request_clarification_round_event_request_id_fkey"
+            columns: ["event_request_id"]
+            isOneToOne: false
+            referencedRelation: "event_request"
+            referencedColumns: ["id"]
+          },
+        ]
+      }
+      event_request_coordinator_history: {
+        Row: {
+          assigned_at: string
+          assigned_by: string
+          coordinator_id: string
+          event_request_id: string
+          id: string
+          replaced_at: string
+          replaced_by: string
+          replaced_by_coordinator_id: string
+        }
+        Insert: {
+          assigned_at: string
+          assigned_by: string
+          coordinator_id: string
+          event_request_id: string
+          id?: string
+          replaced_at?: string
+          replaced_by: string
+          replaced_by_coordinator_id: string
+        }
+        Update: {
+          assigned_at?: string
+          assigned_by?: string
+          coordinator_id?: string
+          event_request_id?: string
+          id?: string
+          replaced_at?: string
+          replaced_by?: string
+          replaced_by_coordinator_id?: string
+        }
+        Relationships: [
+          {
+            foreignKeyName: "event_request_coordinator_history_event_request_id_fkey"
             columns: ["event_request_id"]
             isOneToOne: false
             referencedRelation: "event_request"
@@ -256,6 +378,8 @@ export type Database = {
       }
       profiles: {
         Row: {
+          client_organisation_id: string | null
+          contact_number: string | null
           created_at: string
           full_name: string | null
           id: string
@@ -263,6 +387,8 @@ export type Database = {
           updated_at: string
         }
         Insert: {
+          client_organisation_id?: string | null
+          contact_number?: string | null
           created_at?: string
           full_name?: string | null
           id: string
@@ -270,13 +396,23 @@ export type Database = {
           updated_at?: string
         }
         Update: {
+          client_organisation_id?: string | null
+          contact_number?: string | null
           created_at?: string
           full_name?: string | null
           id?: string
           roles?: string[]
           updated_at?: string
         }
-        Relationships: []
+        Relationships: [
+          {
+            foreignKeyName: "profiles_client_organisation_id_fkey"
+            columns: ["client_organisation_id"]
+            isOneToOne: false
+            referencedRelation: "client_organisations"
+            referencedColumns: ["id"]
+          },
+        ]
       }
       venue_accessibility_features: {
         Row: {
@@ -419,7 +555,32 @@ export type Database = {
       [_ in never]: never
     }
     Functions: {
-      [_ in never]: never
+      create_venue: {
+        Args: {
+          p_accessibility_feature_ids: string[]
+          p_facility_ids: string[]
+          p_layouts: Json
+          p_location_id: string
+          p_max_capacity: number
+          p_name: string
+          p_operating_slots: string[]
+        }
+        Returns: string
+      }
+      update_venue: {
+        Args: {
+          p_accessibility_feature_ids?: string[]
+          p_expected_updated_at: string
+          p_facility_ids?: string[]
+          p_layouts?: Json
+          p_location_id?: string
+          p_max_capacity?: number
+          p_name?: string
+          p_operating_slots?: string[]
+          p_venue_id: string
+        }
+        Returns: string
+      }
     }
     Enums: {
       event_request_status:

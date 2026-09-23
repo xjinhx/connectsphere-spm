@@ -1,17 +1,18 @@
 import { getCurrentActor } from '@/lib/auth/currentActor';
 import { assertPermission } from '@/domain/identity/policy';
 import { ForbiddenError } from '@/domain/shared/errors';
-import { listUnassignedEvents } from '@/domain/assignment/service';
+import { listAssignableCoordinators, listUnassignedEvents } from '@/domain/assignment/service';
+import { AssignCoordinatorForm } from '@/components/assignment/AssignCoordinatorForm';
 import { formatSingaporeDate, formatSingaporeDateTime } from '@/domain/shared/dates';
 
 /**
  * SCRUM-95 AC1 — submitted events with no coordinator yet: the pool an
  * Operations Manager works through to keep planning moving.
  *
- * Read-only for now. Assigning a coordinator from this page (SCRUM-94's
- * action, wired to the real POST /coordinator endpoint) is a follow-up -
- * no assign UI exists anywhere yet, so this ticket's scope is the list
- * itself, the same way SCRUM88 left "open full detail" to SCRUM-89.
+ * The list itself is this ticket. The Assign action in the last column is
+ * SCRUM-94's, added here afterwards as this comment anticipated: it posts to
+ * SCRUM-94's own POST /coordinator endpoint and nothing about the list above
+ * it changed. See AssignCoordinatorForm.
  */
 
 export const dynamic = 'force-dynamic';
@@ -35,7 +36,12 @@ export default async function EventOpsManagerAssignmentQueuePage() {
     throw error;
   }
 
-  const events = await listUnassignedEvents();
+  // Read together: one list of coordinators serves every row, rather than each
+  // row fetching the same names.
+  const [events, coordinators] = await Promise.all([
+    listUnassignedEvents(),
+    listAssignableCoordinators(),
+  ]);
 
   return (
     <main className="mx-auto max-w-4xl p-6">
@@ -69,6 +75,10 @@ export default async function EventOpsManagerAssignmentQueuePage() {
                 <th scope="col" className="p-3 font-medium">
                   Submitted
                 </th>
+                {/* SCRUM-94 AC1 — the assign action. */}
+                <th scope="col" className="p-3 font-medium">
+                  Coordinator
+                </th>
               </tr>
             </thead>
             <tbody>
@@ -81,6 +91,12 @@ export default async function EventOpsManagerAssignmentQueuePage() {
                   </td>
                   <td className="p-3">
                     {event.submittedAt ? formatSingaporeDateTime(event.submittedAt) : '—'}
+                  </td>
+                  <td className="p-3">
+                    <AssignCoordinatorForm
+                      eventRequestId={event.id}
+                      coordinators={coordinators}
+                    />
                   </td>
                 </tr>
               ))}

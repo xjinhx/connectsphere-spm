@@ -1,5 +1,6 @@
 import { describe, it, expect, beforeAll, afterAll } from 'vitest';
 import { createAdminClient } from '@/lib/supabase/admin';
+import { ensureTestClientOrganisation } from './fixtures/clientOrganisation';
 import { approveEventRequest } from '@/domain/review/service';
 import { markEventRequestApproved } from '@/lib/supabase/eventRequests';
 
@@ -24,7 +25,8 @@ import { markEventRequestApproved } from '@/lib/supabase/eventRequests';
 
 const supabase = createAdminClient();
 
-// No foreign key on this column yet: Client Organisations is its own story.
+// SCRUM-203 put a foreign key on this column, so the row has to exist
+// (ensureTestClientOrganisation, below).
 const CLIENT_ORGANISATION_ID = '22222222-2222-2222-2222-222222222222';
 
 let organiserId: string;
@@ -99,6 +101,9 @@ async function readRow(id: string) {
 }
 
 beforeAll(async () => {
+  // SCRUM-203's FK on client_organisation_id means CLIENT_ORGANISATION_ID
+  // below must be a real row, not just a placeholder uuid.
+  await ensureTestClientOrganisation(supabase);
   organiserId = await createAccount('Olivia Organiser', ['event_organiser']);
   caseyId = await createAccount('Casey Coordinator', ['coordinator']);
   weiId = await createAccount('Wei Coordinator', ['coordinator']);

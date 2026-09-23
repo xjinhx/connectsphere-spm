@@ -51,3 +51,13 @@ const ROLES_WITH_LEGITIMATE_PLANNING_ACCESS: Role[] = [
 export function isAttendeeOnly(userRoles: Role[]): boolean {
   return hasRole(userRoles, 'attendee') && !hasAnyRole(userRoles, ROLES_WITH_LEGITIMATE_PLANNING_ACCESS);
 }
+
+/**
+ * SCRUM-204 AC1 — client organisation membership only means something for an
+ * Event Organiser account. The actor's permission to act at all is checked
+ * separately via assertPermission(actorRoles, 'organisation_membership_management');
+ * this is the second half - whether the target account is eligible.
+ */
+export function canAssignOrganisation(targetRoles: Role[]): boolean {
+  return hasRole(targetRoles, 'event_organiser');
+}

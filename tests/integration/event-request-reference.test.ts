@@ -2,6 +2,7 @@ import { describe, it, expect, beforeAll, afterAll } from 'vitest';
 import { createAdminClient } from '@/lib/supabase/admin';
 import { insertEventRequest } from '@/lib/supabase/eventRequests';
 import { todayInSingapore } from '@/domain/shared/dates';
+import { ensureTestClientOrganisation } from './fixtures/clientOrganisation';
 
 /**
  * SCRUM-76 AC2 — a saved event request is given a unique reference number.
@@ -32,7 +33,8 @@ import { todayInSingapore } from '@/domain/shared/dates';
 
 const supabase = createAdminClient();
 
-// No foreign key on this column yet: Client Organisations is its own story.
+// SCRUM-203's FK on client_organisation_id means this must be a real row, not
+// just a placeholder uuid - ensureTestClientOrganisation() seeds it below.
 const CLIENT_ORGANISATION_ID = '22222222-2222-2222-2222-222222222222';
 
 /** EVT-<4-digit year>-<4-or-more-digit sequence>. */
@@ -72,6 +74,8 @@ async function createRequest(name: string): Promise<{ id: string; reference: str
 }
 
 beforeAll(async () => {
+  await ensureTestClientOrganisation(supabase);
+
   const { data, error } = await supabase.auth.admin.createUser({
     email: `organiser+${Date.now()}@connectsphere.example.com`,
     password: 'Password123!',

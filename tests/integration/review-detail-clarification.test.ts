@@ -7,6 +7,7 @@ import {
 } from '@/domain/review/service';
 import { isAwaitingReview } from '@/domain/review/policy';
 import { markEventRequestSubmitted } from '@/lib/supabase/eventRequests';
+import { ensureTestClientOrganisation } from './fixtures/clientOrganisation';
 
 /**
  * SCRUM-89 / SCRUM-90 — US-7.1 AC2 and US-7.2 AC1/AC3, from
@@ -91,6 +92,10 @@ async function createRequest(
 }
 
 beforeAll(async () => {
+  // SCRUM-203's FK on client_organisation_id means CLIENT_ORGANISATION_ID
+  // below must be a real row, not just a placeholder uuid.
+  await ensureTestClientOrganisation(supabase);
+
   const { data, error } = await supabase.auth.admin.createUser({
     email: `coordinator+clarify${Date.now()}@connectsphere.example.com`,
     password: 'Password123!',

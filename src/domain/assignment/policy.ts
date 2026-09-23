@@ -69,9 +69,9 @@ export function canBeReassigned(currentCoordinatorId: string | null, newCoordina
  *
  * Stated positively: a coordinator may see an event's planning information
  * only while they are its current coordinator. Being reassigned away is the
- * moment that stops being true. This is also the "assigned coordinator" rule
- * SCRUM-89 AC1 needs, so any read that shows a coordinator an event's details
- * should check it.
+ * moment that stops being true. canViewCoordinatorDetails below applies it.
+ * SCRUM-89's review read uses canReviewDetail instead, which also lets any
+ * coordinator open an event that has no coordinator yet.
  */
 export function isCurrentCoordinator(coordinatorId: string | null, actorUserId: string): boolean {
   return coordinatorId !== null && coordinatorId === actorUserId;

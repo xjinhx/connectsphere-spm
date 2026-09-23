@@ -41,9 +41,9 @@ D-02's check really shows "nothing is committed", so it counts. D-04's check
 has no bookings to find, so it proves nothing, and that AC stays in Merged -
 Pending Verification.
 
-D-01 to D-05 existed before the `DUMMY(...)` marker did. D-02 and D-03 have
-been switched to it; the others still carry their original comments, and their
-owners switch them the next time they edit those files.
+D-01 to D-05 existed before the `DUMMY(...)` marker did. D-02 to D-05 have
+been switched to it; D-01 still carries its original comments, and its owners
+switch them the next time they edit those files.
 
 ---
 
@@ -51,29 +51,29 @@ owners switch them the next time they edit those files.
 
 - **Kind:** Loosened rule
 - **Added by:** SCRUM-76 — commit `bee2e54` (PR #9)
-- **Waiting on:** SCRUM-203 Create and maintain a client organisation ·
-  SCRUM-204 Link an Event Organiser to a client organisation
+- **Waiting on:** SCRUM-88 Show client organisation on the assigned-events queue
 - **Where:**
-  - `src/lib/auth/currentActor.ts` — `clientOrganisation` is always `null`
-  - `src/domain/event-request/service.ts` — `requireOrganiser()` accepts a
-    missing organisation instead of refusing (the "Interim" comment)
-  - `src/components/event-request/EventRequestForm.tsx` — the organisation
-    can't be pre-filled
-  - `supabase/migrations/20260912000000_event_request_organisation_nullable.sql`
-    — `event_request.client_organisation_id` made nullable
   - `src/domain/assignment/service.ts` — `AssignedEvent` carries no client
     organisation field, so it cannot be shown on the assigned-events queue
     (SCRUM-88 AC1)
   - `src/app/assigned-events/page.tsx` — no client organisation column,
     since there is nothing to show
-- **To replace:** once organisers are linked to organisations (SCRUM-204),
-  read the organiser's organisation in `currentActor.ts`; make
-  `requireOrganiser()` refuse a missing organisation; add a new migration
-  restoring NOT NULL on `client_organisation_id` (old migrations are never
-  edited); re-test SCRUM-76's create flow.
-- **Status:** Active. The open `client-organisation` branch (SCRUM-203) adds
-  the foreign key but deliberately leaves NOT NULL — mark this Partly replaced
-  when it merges.
+- **To replace:** once SCRUM-88 adds a client organisation column to the
+  assigned-events queue, have `AssignedEvent` carry `client_organisation_id`/
+  `name` and render it on that page; re-test SCRUM-88's own ACs.
+- **Status:** Partly replaced. SCRUM-203 (`client_organisations` table) and
+  SCRUM-204 (linking an organiser to one, PR #22, merged into main) resolved
+  the event-request side: `currentActor.ts` now reads the actor's real
+  `clientOrganisation` (`null` only for internal staff or an organiser not
+  yet linked by a Coordinator — a real, permanent state per SCRUM-204 AC2,
+  not a gap), `event_request.client_organisation_id` is a real nullable FK,
+  and SCRUM-76's create flow (AC1) now pre-fills the organisation correctly
+  for a linked organiser. The original "refuse a missing organisation" /
+  "restore NOT NULL" plan below no longer applies — SCRUM-204 does not
+  guarantee every organiser is linked, so enforcing non-null would wrongly
+  block an organiser a Coordinator hasn't linked yet. What remains is the
+  assigned-events display gap (SCRUM-88), unrelated to event-request
+  creation.
 
 ### D-02 — "Nothing is committed" is hardcoded when a request is approved
 
@@ -107,9 +107,9 @@ owners switch them the next time they edit those files.
 - **Waiting on:** SCRUM-148 Approve a booking request
 - **Where:**
   - `src/domain/venues/service.ts` — `findAffectedFutureBookings()` returns
-    `[]` (`TODO(SCRUM-148)`)
+    `[]` (`DUMMY(SCRUM-148) D-04`)
   - `src/app/api/venues/[id]/route.ts` — the venue update handler
-    (`TODO(SCRUM-148)`)
+    (`DUMMY(SCRUM-148) D-04`)
 - **To replace:** `findAffectedFutureBookings()` takes the venue id and the
   proposed maximum capacity and returns the confirmed future bookings above
   it; `updateVenue` refuses unless `confirmAffectedBookings` is true; re-test
@@ -121,10 +121,9 @@ owners switch them the next time they edit those files.
 
 - **Kind:** Out-of-sprint stand-in
 - **Added by:** SCRUM-120 — commit `80dd30e` (PR #13)
-- **Waiting on:** SCRUM-24 Notification System (the code comment calls it
-  EP-20) — and D-04 first, since there are no affected events to notify about
-  until then
-- **Where:** `src/domain/venues/service.ts` — `TODO(EP-20)` on
+- **Waiting on:** SCRUM-24 Notification System — and D-04 first, since there
+  are no affected events to notify about until then
+- **Where:** `src/domain/venues/service.ts` — `DUMMY(SCRUM-24) D-05` on
   `findAffectedFutureBookings()`
 - **To replace:** after a confirmed capacity cut, notify the coordinator
   assigned to each affected event (`event_request.coordinator_id`, from
@@ -134,7 +133,7 @@ owners switch them the next time they edit those files.
 ### D-06 — Neither coordinator is notified when an event is reassigned
 
 - **Kind:** Out-of-sprint stand-in
-- **Added by:** SCRUM-96 — commit `b81d88c` (PR #4)
+- **Added by:** SCRUM-96 — commit `b81d88c` (PR #29)
 - **Waiting on:** SCRUM-24 Notification System
 - **Where:** `src/domain/assignment/service.ts` — `reassignCoordinator()`
 - **To replace:** notify both the previous and the new coordinator from
@@ -142,4 +141,17 @@ owners switch them the next time they edit those files.
   SCRUM-24's mechanism; the `event_request_coordinator_history` row written by
   the same update holds who, from whom, to whom and when. Re-run US-8.1-TC03
   (SCRUM-96 AC1).
+- **Status:** Active
+
+### D-08 — The coordinator isn't notified when a request is resubmitted
+
+- **Kind:** Out-of-sprint stand-in
+- **Added by:** SCRUM-91 — PR #42
+- **Waiting on:** SCRUM-24 Notification System
+- **Where:** `src/domain/clarification/service.ts` — `respondToClarification()`
+- **To replace:** notify the assigned coordinator from
+  `respondToClarification()`, straight after the round is closed, using
+  SCRUM-24's mechanism; the outcome already carries `coordinatorId`, and the
+  closed round holds the note that was asked, the answer and when it was given.
+  Re-run US-7.2-TC04 (SCRUM-91 AC1).
 - **Status:** Active

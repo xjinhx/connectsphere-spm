@@ -5,16 +5,17 @@ import {
   listUnassignedSubmittedEventRequests,
   type EventRequestRow,
 } from '@/lib/supabase/eventRequests';
-import { fetchProfileSummary } from '@/lib/supabase/profiles';
+import { fetchProfileSummary, listCoordinatorProfiles } from '@/lib/supabase/profiles';
 import {
   fetchAccountEmail,
   fetchContactProfiles,
   fetchEventAssignment,
-  listCoordinatorHistory,
+  fetchEventAssignmentWithHistory,
   reassignEventCoordinator,
   type ContactProfileRow,
   type CoordinatorHistoryRow,
   type EventAssignmentRow,
+  type EventAssignmentWithHistoryRow,
 } from '@/lib/supabase/assignments';
 import {
   ConflictError,
@@ -24,8 +25,12 @@ import {
   ValidationError,
 } from '@/domain/shared/errors';
 import { isRole, type Role } from '@/domain/identity/roles';
-import type { EventRequestStatus } from '@/domain/event-request/schema';
-import { AssignCoordinatorInputSchema, EventRequestIdSchema } from './schema';
+import { EventRequestStatusEnum, type EventRequestStatus } from '@/domain/event-request/schema';
+import {
+  AssignCoordinatorInputSchema,
+  EventRequestIdSchema,
+  ReassignCoordinatorInputSchema,
+} from './schema';
 import {
   canBeAssigned,
   canBeReassigned,
@@ -282,6 +287,41 @@ export async function listUnassignedEvents(): Promise<UnassignedEvent[]> {
 }
 
 // ---------------------------------------------------------------------------
+// Who an event can be assigned to
+// ---------------------------------------------------------------------------
+
+/** One choice in the picker an Operations Manager assigns from. */
+export interface AssignableCoordinator {
+  id: string;
+  /** Null when the profile has no name recorded yet — shown as the id's stand-in. */
+  name: string | null;
+}
+
+/**
+ * The coordinators an event may be assigned to.
+ *
+ * The same rule the write applies, asked in advance: assignCoordinator refuses
+ * an account that is not an Event Coordinator (canReceiveAssignment), and this
+ * is the list of accounts that would pass it. Filtered through canReceiveAssignment
+ * rather than trusting the query, so the list and the refusal cannot disagree
+ * about who is eligible.
+ *
+ * No workload count is returned with each name. AC2 applies no limit
+ * (clarification #92), so a count here would suggest a cap that does not exist.
+ */
+export async function listAssignableCoordinators(): Promise<AssignableCoordinator[]> {
+  const { data, error } = await listCoordinatorProfiles();
+  if (error) {
+    throw new ValidationError('The coordinators could not be read.', error.message);
+  }
+
+  const rows = (data ?? []) as { id: string; full_name: string | null; roles: unknown }[];
+  return rows
+    .filter((row) => canReceiveAssignment(((row.roles as unknown[] | null) ?? []).filter(isRole)))
+    .map((row) => ({ id: row.id, name: row.full_name }));
+}
+
+// ---------------------------------------------------------------------------
 // SCRUM-96 — Reassign an event to another coordinator
 // SCRUM-98 — See who my coordinator is
 // ---------------------------------------------------------------------------
@@ -339,6 +379,20 @@ async function readEventAssignment(eventRequestId: string): Promise<EventAssignm
 }
 
 /**
+ * SCRUM-215 — the answer for a manager whose reassignment lost to someone
+ * else's. Names who holds the event now, the way alreadyAssignedError does for
+ * SCRUM-94 AC5, so they can decide whether to try again from the current state.
+ */
+async function reassignedMeanwhileError(coordinatorId: string | null): Promise<ConflictError> {
+  const holder = coordinatorId ? await readProfile(coordinatorId) : null;
+  const name = holder?.full_name ?? 'another coordinator';
+  return new ConflictError(
+    `This event has been reassigned to ${name} since you loaded it. Reload and try again.`,
+    { coordinatorId, coordinatorName: holder?.full_name ?? null },
+  );
+}
+
+/**
  * SCRUM-96 AC1 — the new coordinator replaces the previous one.
  * SCRUM-96 AC2 — effective immediately, with no approval or acceptance step.
  *
@@ -358,6 +412,13 @@ async function readEventAssignment(eventRequestId: string): Promise<EventAssignm
  * SCRUM-24 lands, raise both notifications from here, where
  * previousCoordinatorId and coordinatorId are both to hand. See
  * docs/dummies.md.
+ *
+ * SCRUM-215: two managers reassigning at once. Each says which coordinator
+ * they are moving the event away from (`fromCoordinatorId`, the one they saw),
+ * and the update only goes ahead while the event is still held by that
+ * coordinator. Whoever acts second is refused, whether their request overlaps
+ * the first or arrives after it, rather than silently replacing a
+ * reassignment they never saw.
  */
 export async function reassignCoordinator(
   eventRequestId: string,
@@ -365,11 +426,11 @@ export async function reassignCoordinator(
 ): Promise<ReassignmentOutcome> {
   const current = await readEventAssignment(eventRequestId);
 
-  const parsedInput = AssignCoordinatorInputSchema.safeParse(input);
+  const parsedInput = ReassignCoordinatorInputSchema.safeParse(input);
   if (!parsedInput.success) {
     throw new ValidationError('The reassignment is not valid.', parsedInput.error.flatten());
   }
-  const { coordinatorId, actorId } = parsedInput.data;
+  const { coordinatorId, actorId, fromCoordinatorId } = parsedInput.data;
 
   // Same target rule as SCRUM-94: the new owner has to be an Event Coordinator.
   const target = await readProfile(coordinatorId);
@@ -382,7 +443,21 @@ export async function reassignCoordinator(
   // nothing to reassign is a state problem, the same person is a bad choice.
   const previousCoordinatorId = current.coordinator_id;
   if (previousCoordinatorId === null) {
-    throw new ConflictError('This event has no coordinator yet. Assign one instead of reassigning.');
+    // Point the manager at assigning only when SCRUM-94 would accept it. An
+    // event approved before anyone was assigned cannot be assigned, so "assign
+    // one instead" sent them to an action that refuses (found reviewing
+    // SCRUM-215; whether such an event should be assignable is for the team).
+    const status = EventRequestStatusEnum.safeParse(current.status);
+    throw new ConflictError(
+      status.success && canBeAssigned(status.data, null)
+        ? 'This event has no coordinator yet. Assign one instead of reassigning.'
+        : 'This event has no coordinator to reassign from, and only a submitted event can be assigned one.',
+    );
+  }
+  // The manager chose from a view that is out of date: someone else has
+  // reassigned the event since. Refused before anything is written.
+  if (previousCoordinatorId !== fromCoordinatorId) {
+    throw await reassignedMeanwhileError(previousCoordinatorId);
   }
   if (!canBeReassigned(previousCoordinatorId, coordinatorId)) {
     throw new ValidationError('This event is already assigned to that coordinator.');
@@ -390,19 +465,18 @@ export async function reassignCoordinator(
 
   const { data, error } = await reassignEventCoordinator(
     current.id,
-    previousCoordinatorId,
+    fromCoordinatorId,
     coordinatorId,
     actorId,
   );
   if (error) {
     throw new ValidationError('The coordinator could not be reassigned.', error.message);
   }
-  // The guard matched no row: someone changed the coordinator between our read
+  // The guard matched no row: someone reassigned the event between our read
   // and this update. Nothing was written, so say so rather than overwrite them.
   if (!data) {
-    throw new ConflictError(
-      "This event's coordinator was changed by someone else. Reload and try again.",
-    );
+    const latest = await readEventAssignment(current.id);
+    throw await reassignedMeanwhileError(latest.coordinator_id);
   }
 
   const row = data as unknown as EventAssignmentRow;
@@ -421,12 +495,16 @@ export async function reassignCoordinator(
 }
 
 /**
- * SCRUM-96 AC4 — for any read that shows a coordinator an event's planning
- * information. Throws unless the caller is the event's current coordinator, so
- * a coordinator reassigned away is denied before anything is returned.
+ * SCRUM-96 AC4 — throws unless the caller is the event's current coordinator,
+ * so a coordinator reassigned away is denied before anything is returned.
  *
- * Nothing on main shows a coordinator an event's details yet. SCRUM-89's
- * review read is the first, and it should call this.
+ * No route calls this. Where AC4 is enforced: getCoordinatorView below (GET
+ * /coordinator), and SCRUM-89's review read and SCRUM-213's approve through
+ * canReviewDetail. Those deliberately use canReviewDetail instead of this,
+ * because review access also allows an event with no coordinator yet, which
+ * this refuses (see review/service.ts). Use this only for a read that must
+ * refuse unassigned events too, and never as the only gate before a write:
+ * put the coordinator in the UPDATE's filter, as SCRUM-213 does.
  */
 export async function requireCurrentCoordinator(eventRequestId: string, actorUserId: string): Promise<void> {
   const event = await readEventAssignment(eventRequestId);
@@ -459,15 +537,25 @@ async function readAccountEmail(accountId: string): Promise<string | null> {
  * SCRUM-98 AC3 — after a reassignment, `current` is the new coordinator,
  * because it is read from the event's current owner every time.
  *
- * Access is decided before any coordinator detail is read: the organiser who
- * owns the event, its current coordinator, or an Event Operations Manager.
- * A coordinator reassigned away is refused (SCRUM-96 AC4).
+ * Access is decided before any coordinator's details are read or anything is
+ * returned: the organiser who owns the event, its current coordinator, or an
+ * Event Operations Manager. A coordinator reassigned away is refused
+ * (SCRUM-96 AC4).
+ *
+ * The coordinator and the history are read together, so they always agree
+ * (found reviewing SCRUM-215; see fetchEventAssignmentWithHistory).
  */
 export async function getCoordinatorView(
   eventRequestId: string,
   actor: { userId: string; roles: readonly Role[] },
 ): Promise<CoordinatorView> {
-  const event = await readEventAssignment(eventRequestId);
+  const parsedId = EventRequestIdSchema.safeParse(eventRequestId);
+  if (!parsedId.success) throw new NotFoundError('Event request');
+
+  const { data, error } = await fetchEventAssignmentWithHistory(parsedId.data);
+  if (error) throw new ValidationError('The event request could not be read.', error.message);
+  if (!data) throw new NotFoundError('Event request');
+  const event = data as unknown as EventAssignmentWithHistoryRow;
 
   if (
     !canViewCoordinatorDetails(
@@ -478,11 +566,7 @@ export async function getCoordinatorView(
     throw new ForbiddenError('You do not have access to this event.');
   }
 
-  const { data: historyData, error: historyError } = await listCoordinatorHistory(event.id);
-  if (historyError) {
-    throw new ValidationError('The assignment history could not be read.', historyError.message);
-  }
-  const historyRows = (historyData ?? []) as unknown as CoordinatorHistoryRow[];
+  const historyRows: CoordinatorHistoryRow[] = event.event_request_coordinator_history ?? [];
 
   const people = await readContactProfiles([
     ...(event.coordinator_id ? [event.coordinator_id] : []),
