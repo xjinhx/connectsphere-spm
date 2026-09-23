@@ -414,6 +414,36 @@ export function isOwnRequest(
 }
 
 /**
+ * SCRUM-204 AC3 — the other half of the sharing boundary isOwnRequest()
+ * describes: once a request has left draft, a colleague in the same client
+ * organisation may open it (view-only, see canEditRequest below). The owner
+ * may always open their own, at any status, including a still-private draft.
+ */
+export function canViewRequest(
+  request: { organiserId: string; clientOrganisationId: string | null; status: EventRequestStatus },
+  actor: { userId: string; clientOrganisationId: string | null },
+): boolean {
+  if (isOwnRequest(request, actor.userId)) return true;
+  if (request.status === 'draft') return false;
+  return (
+    request.clientOrganisationId !== null &&
+    request.clientOrganisationId === actor.clientOrganisationId
+  );
+}
+
+/**
+ * SCRUM-204 AC3 — sharing a submitted (or clarification-requested) request
+ * with the organisation is view-only: only the organiser who owns it may
+ * edit, resubmit, or resume it, whatever isEditable(status) says on its own.
+ */
+export function canEditRequest(
+  request: { organiserId: string; status: EventRequestStatus },
+  actorUserId: string,
+): boolean {
+  return isOwnRequest(request, actorUserId) && isEditable(request.status);
+}
+
+/**
  * AC3 (US-5.3-TC05) — what the event list says about a request's submission.
  * The instant is rendered in Singapore time, like every other date in the app.
  */

@@ -1,6 +1,8 @@
 import Link from 'next/link';
 import { EventRequestStatusBadge } from '@/components/event-request/EventRequestStatusBadge';
+import { OrganiserMembershipPanel } from '@/components/client-organisation/OrganiserMembershipPanel';
 import { getClientOrganisation } from '@/domain/client-organisation/service';
+import { listOrganisersForOrganisation } from '@/domain/identity/service';
 import { formatSingaporeDate } from '@/domain/shared/dates';
 
 export const dynamic = 'force-dynamic';
@@ -14,10 +16,15 @@ function Row({ label, value }: { label: string; value: string }) {
   );
 }
 
-/** SCRUM-203 AC3 — an organisation with the events recorded against it. */
+/**
+ * SCRUM-203 AC3 — an organisation with the events recorded against it.
+ * SCRUM-204 AC1 — plus the Event Organiser accounts linked to it, and a way
+ * to link or unlink one.
+ */
 export default async function ClientOrganisationPage({ params }: { params: Promise<{ id: string }> }) {
   const { id } = await params;
   const organisation = await getClientOrganisation(id);
+  const organisers = await listOrganisersForOrganisation(id);
 
   return (
     <main className="mx-auto max-w-2xl px-4 py-8">
@@ -65,6 +72,8 @@ export default async function ClientOrganisationPage({ params }: { params: Promi
           ))}
         </ul>
       )}
+
+      <OrganiserMembershipPanel organisationId={organisation.id} initialOrganisers={organisers} />
     </main>
   );
 }
