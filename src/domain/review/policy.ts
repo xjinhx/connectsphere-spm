@@ -168,17 +168,29 @@ export function isReviewable(status: EventRequestStatus): boolean {
  *     event-request's own reads apply);
  *   - a Coordinator, on exactly the terms the review read allows
  *     (canReviewDetail) — so a Coordinator reassigned away loses the note at
- *     the same moment they lose the request.
+ *     the same moment they lose the request;
+ *   - an Event Operations Manager, who decides who owns the event and so has
+ *     a reason to see an unanswered question about it.
  *
  * Everyone else is refused. The note is free text written by a Coordinator
  * about someone else's event, so "anyone with access" cannot sensibly mean
  * every account that happens to be logged in.
+ *
+ * The same set of people as SCRUM-91's canViewClarificationExchange, and
+ * deliberately so: that rule governs the full exchange on the same request,
+ * and its own comment reports this route as the wider hole it could not fix
+ * from that story. Two different answers to "may I read this clarification?"
+ * on one request would be the bug, not the fix. Written out here rather than
+ * imported, matching the reasoning that function gives for not delegating to
+ * SCRUM-98's near-identical rule: they agree today, and either story could
+ * narrow its own without the other being wrong.
  */
 export function canViewClarification(
   request: { organiserId: string; coordinatorId: string | null },
-  actor: { userId: string; isCoordinator: boolean },
+  actor: { userId: string; isCoordinator: boolean; isOperationsManager: boolean },
 ): boolean {
   if (request.organiserId === actor.userId) return true;
+  if (actor.isOperationsManager) return true;
   if (!actor.isCoordinator) return false;
   return canReviewDetail(request.coordinatorId, actor.userId);
 }

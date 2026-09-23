@@ -172,32 +172,39 @@ describe('canViewClarification', () => {
   const assigned = { organiserId: ORGANISER, coordinatorId: COORDINATOR_A };
   const unassigned = { organiserId: ORGANISER, coordinatorId: null };
 
+  const as = (userId: string, extra: { isCoordinator?: boolean; isOperationsManager?: boolean } = {}) => ({
+    userId,
+    isCoordinator: extra.isCoordinator ?? false,
+    isOperationsManager: extra.isOperationsManager ?? false,
+  });
+
   it('allows the organiser the request belongs to', () => {
-    expect(canViewClarification(assigned, { userId: ORGANISER, isCoordinator: false })).toBe(true);
+    expect(canViewClarification(assigned, as(ORGANISER))).toBe(true);
   });
 
   it('allows the coordinator it is assigned to', () => {
-    expect(canViewClarification(assigned, { userId: COORDINATOR_A, isCoordinator: true })).toBe(
-      true,
-    );
+    expect(canViewClarification(assigned, as(COORDINATOR_A, { isCoordinator: true }))).toBe(true);
   });
 
   // SCRUM-96 AC4 — reassigned away means the note goes with the event.
   it('refuses a coordinator it is assigned away from', () => {
-    expect(canViewClarification(assigned, { userId: COORDINATOR_B, isCoordinator: true })).toBe(
-      false,
-    );
+    expect(canViewClarification(assigned, as(COORDINATOR_B, { isCoordinator: true }))).toBe(false);
   });
 
   it('allows any coordinator while it is unassigned, matching the review rule', () => {
-    expect(canViewClarification(unassigned, { userId: COORDINATOR_B, isCoordinator: true })).toBe(
+    expect(canViewClarification(unassigned, as(COORDINATOR_B, { isCoordinator: true }))).toBe(true);
+  });
+
+  // Matches SCRUM-91's canViewClarificationExchange: the manager who decides
+  // who owns the event may see the question hanging over it, even on a request
+  // assigned to someone else.
+  it('allows an Event Operations Manager', () => {
+    expect(canViewClarification(assigned, as(COORDINATOR_B, { isOperationsManager: true }))).toBe(
       true,
     );
   });
 
-  it('refuses a signed-in account that is neither the organiser nor a coordinator', () => {
-    expect(canViewClarification(unassigned, { userId: COORDINATOR_B, isCoordinator: false })).toBe(
-      false,
-    );
+  it('refuses a signed-in account that is none of the three', () => {
+    expect(canViewClarification(unassigned, as(COORDINATOR_B))).toBe(false);
   });
 });

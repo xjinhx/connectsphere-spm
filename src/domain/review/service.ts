@@ -345,10 +345,11 @@ function toClarificationOutcome(row: EventRequestRow): ClarificationOutcome {
  * own comment on toEventRequest already decided against, to match how
  * SCRUM-92 kept its decision fields out of it too).
  *
- * DUMMY(SCRUM-91) D-07: the question is carried, a reply never is.
- * `response`/`respondedAt` are left out of this type entirely rather than
- * stubbed to null, so no caller can read a reply that does not exist. See
- * docs/dummies.md.
+ * Carries the question, not the reply. SCRUM-91 built the reply as its own
+ * module (domain/clarification/service.ts — getClarificationExchange returns
+ * every round), so this view is deliberately the narrow "what is outstanding
+ * right now" read the pages use beside it, not a second way to read the
+ * exchange.
  */
 export interface ClarificationView {
   id: string;
@@ -405,6 +406,9 @@ export async function getClarificationView(
       // The same permission the review route asserts, so "may review" means
       // one thing across both reads.
       isCoordinator: isActionPermitted(actor.roles, 'event_request_review'),
+      // Same permission SCRUM-91 reads for the exchange, so the two
+      // clarification reads cannot disagree about who an Operations Manager is.
+      isOperationsManager: isActionPermitted(actor.roles, 'coordinator_assignment'),
     },
   );
   if (!permitted) {
@@ -619,6 +623,8 @@ export async function rejectEventRequest(
   if (!data) throw new ConflictError('Someone else already acted on this request.');
 
   return toRejectionOutcome(data as unknown as EventRequestRow);
+}
+
 /**
  * Why a conditional clarification request matched no row.
  *
