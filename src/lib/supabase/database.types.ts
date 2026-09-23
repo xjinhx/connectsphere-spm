@@ -334,6 +334,7 @@ export type Database = {
       }
       profiles: {
         Row: {
+          client_organisation_id: string | null
           contact_number: string | null
           created_at: string
           full_name: string | null
@@ -342,6 +343,7 @@ export type Database = {
           updated_at: string
         }
         Insert: {
+          client_organisation_id?: string | null
           contact_number?: string | null
           created_at?: string
           full_name?: string | null
@@ -350,6 +352,7 @@ export type Database = {
           updated_at?: string
         }
         Update: {
+          client_organisation_id?: string | null
           contact_number?: string | null
           created_at?: string
           full_name?: string | null
@@ -357,7 +360,15 @@ export type Database = {
           roles?: string[]
           updated_at?: string
         }
-        Relationships: []
+        Relationships: [
+          {
+            foreignKeyName: "profiles_client_organisation_id_fkey"
+            columns: ["client_organisation_id"]
+            isOneToOne: false
+            referencedRelation: "client_organisations"
+            referencedColumns: ["id"]
+          },
+        ]
       }
       venue_accessibility_features: {
         Row: {
