@@ -1,9 +1,20 @@
 import { createServerClient } from '@supabase/ssr';
 import { NextResponse, type NextRequest } from 'next/server';
 import { publicEnv } from '@/lib/env';
+import { isSessionIdleExpired } from '@/domain/session/policy';
 
 /** Only the login page itself is reachable without a session. */
 const PUBLIC_PATHS = new Set(['/login']);
+
+/** SCRUM-75 AC2: last-activity marker used to detect a 30-minute idle session. */
+const LAST_ACTIVITY_COOKIE = 'csp_last_activity';
+
+function rejectUnauthenticated(request: NextRequest) {
+  if (request.nextUrl.pathname.startsWith('/api')) {
+    return NextResponse.json({ error: 'Unauthenticated' }, { status: 401 });
+  }
+  return NextResponse.redirect(new URL('/login', request.url));
+}
 
 export async function middleware(request: NextRequest) {
   let response = NextResponse.next({ request });
@@ -33,15 +44,36 @@ export async function middleware(request: NextRequest) {
     data: { user },
   } = await supabase.auth.getUser();
 
-  if (user || PUBLIC_PATHS.has(request.nextUrl.pathname)) {
-    return response;
+  if (!user) {
+    if (PUBLIC_PATHS.has(request.nextUrl.pathname)) {
+      return response;
+    }
+    return rejectUnauthenticated(request);
   }
 
-  if (request.nextUrl.pathname.startsWith('/api')) {
-    return NextResponse.json({ error: 'Unauthenticated' }, { status: 401 });
+  const lastActivityRaw = request.cookies.get(LAST_ACTIVITY_COOKIE)?.value;
+  const lastActivityAt = lastActivityRaw ? new Date(lastActivityRaw) : null;
+  const now = new Date();
+
+  if (lastActivityAt && !Number.isNaN(lastActivityAt.getTime()) && isSessionIdleExpired(lastActivityAt, now)) {
+    // Revoke the Supabase session server-side (not just the idle cookie) so a
+    // captured access/refresh token cannot be replayed after the idle cutoff.
+    await supabase.auth.signOut();
+    const rejection = rejectUnauthenticated(request);
+    for (const cookie of response.cookies.getAll()) {
+      rejection.cookies.set(cookie);
+    }
+    rejection.cookies.delete(LAST_ACTIVITY_COOKIE);
+    return rejection;
   }
 
-  return NextResponse.redirect(new URL('/login', request.url));
+  response.cookies.set(LAST_ACTIVITY_COOKIE, now.toISOString(), {
+    httpOnly: true,
+    sameSite: 'lax',
+    secure: process.env.NODE_ENV === 'production',
+    path: '/',
+  });
+  return response;
 }
 
 export const config = {
