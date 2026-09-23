@@ -1,6 +1,7 @@
 import { describe, it, expect, beforeAll, afterAll } from 'vitest';
 import { createAdminClient } from '@/lib/supabase/admin';
 import { approveEventRequest } from '@/domain/review/service';
+import { ensureTestClientOrganisation } from './fixtures/clientOrganisation';
 
 /**
  * SCRUM-92 — Approve a request so planning can proceed (US-7.3).
@@ -71,6 +72,10 @@ async function readRow(id: string) {
 }
 
 beforeAll(async () => {
+  // SCRUM-203's FK on client_organisation_id means CLIENT_ORGANISATION_ID
+  // below must be a real row, not just a placeholder uuid.
+  await ensureTestClientOrganisation(supabase);
+
   const { data, error } = await supabase.auth.admin.createUser({
     email: `coordinator+${Date.now()}@connectsphere.example.com`,
     password: 'Password123!',
