@@ -31,6 +31,9 @@ export const EventRequestIdSchema = z.string().uuid();
 // milliseconds between its own read and write. A manager acting on a page that
 // had gone stale would silently overwrite a reassignment made in the meantime.
 // Sending what they saw lets the update refuse that, whatever the timing.
+// It compares who holds the event, not a version: if the event was moved away
+// and back to the same coordinator in between, the request goes through, since
+// what the manager saw is true again. Every step stays in the history.
 export const ReassignCoordinatorInputSchema = AssignCoordinatorInputSchema.extend({
   fromCoordinatorId: z.string().uuid(),
 });
