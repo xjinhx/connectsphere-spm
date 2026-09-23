@@ -54,7 +54,7 @@ export async function PATCH(request: NextRequest, { params }: { params: Promise<
       throw new ValidationError('Request body must be valid JSON.');
     }
 
-    // TODO(SCRUM-148): when confirmed bookings exist, SCRUM-120 AC2 requires
+    // DUMMY(SCRUM-148) D-04: when confirmed bookings exist, SCRUM-120 AC2 requires
     // listing the affected bookings and refusing until the caller sends
     // confirmAffectedBookings. The field is already accepted by the schema.
     const venue = await updateVenue(venueId, body);

@@ -1,6 +1,6 @@
 import type { SupabaseClient } from '@supabase/supabase-js';
 import { createAdminClient } from './admin';
-import type { Database, TablesInsert, TablesUpdate } from './database.types';
+import type { Database } from './database.types';
 
 /**
  * Venue Catalogue queries (EP-08).
@@ -73,56 +73,70 @@ export async function fetchAccessibilityFeatureIdsIn(featureIds: string[]) {
 }
 
 // -----------------------------------------------------------------------------
-// Writing a venue (SCRUM-116, SCRUM-120)
+// Writing a venue (SCRUM-116, SCRUM-117, SCRUM-118, SCRUM-120)
+//
+// Each save is one call to a database function (migration
+// 20260923120000_venue_save_in_one_transaction.sql), so the venue and its
+// lists are written in one transaction: all of it lands or none of it does.
+// supabase-js has no transactions of its own. Found reviewing SCRUM-215: the
+// separate inserts and deletes that were here could leave a venue half-saved.
 // -----------------------------------------------------------------------------
 
-export async function insertVenue(venue: TablesInsert<'venues'>) {
-  return db().from('venues').insert(venue).select('id').single();
-}
+export type VenueLayoutRow = { layout: string; capacity: number };
 
-export async function updateVenueRow(venueId: string, patch: TablesUpdate<'venues'>) {
-  return db().from('venues').update(patch).eq('id', venueId);
+/** SCRUM-116 AC1 to AC4, SCRUM-117 AC1 and AC2, SCRUM-118 AC1. Returns the new venue's id. */
+export async function createVenueWithLists(venue: {
+  name: string;
+  locationId: string;
+  maxCapacity: number;
+  operatingSlots: string[];
+  facilityIds: string[];
+  accessibilityFeatureIds: string[];
+  layouts: VenueLayoutRow[];
+}) {
+  return db().rpc('create_venue', {
+    p_name: venue.name,
+    p_location_id: venue.locationId,
+    p_max_capacity: venue.maxCapacity,
+    p_operating_slots: venue.operatingSlots,
+    p_facility_ids: venue.facilityIds,
+    p_accessibility_feature_ids: venue.accessibilityFeatureIds,
+    p_layouts: venue.layouts,
+  });
 }
 
 /**
- * Only ever used to undo a create whose link rows failed. supabase-js has no
- * transactions, so this is the compensating action; the foreign keys cascade,
- * so any link rows that did land go with it.
+ * SCRUM-120 AC1, SCRUM-117 AC3, SCRUM-118. Only saves while the venue's
+ * updated_at is still `expectedUpdatedAt`, the version the editor loaded.
+ *
+ * A field left undefined is not sent and stays as it is. A list that is sent
+ * replaces the whole list, so an empty one removes them all (SCRUM-117 AC3).
+ * Resolves to 'updated', 'stale' or 'not_found'; the last two write nothing.
  */
-export async function deleteVenue(venueId: string) {
-  return db().from('venues').delete().eq('id', venueId);
-}
-
-// -----------------------------------------------------------------------------
-// Link rows (SCRUM-117 AC1 to AC3, SCRUM-118 AC1)
-//
-// Updates replace a list wholesale: delete every row for the venue, then insert
-// what was sent. That is what makes SCRUM-117 AC3 work, since a facility left
-// out of the list is a facility removed.
-// -----------------------------------------------------------------------------
-
-export async function insertVenueFacilities(rows: TablesInsert<'venue_facilities'>[]) {
-  return db().from('venue_facilities').insert(rows);
-}
-
-export async function deleteVenueFacilities(venueId: string) {
-  return db().from('venue_facilities').delete().eq('venue_id', venueId);
-}
-
-export async function insertVenueAccessibilityFeatures(
-  rows: TablesInsert<'venue_accessibility_features'>[],
+export async function saveVenueChanges(
+  venueId: string,
+  expectedUpdatedAt: string,
+  changes: {
+    name?: string;
+    locationId?: string;
+    maxCapacity?: number;
+    operatingSlots?: string[];
+    facilityIds?: string[];
+    accessibilityFeatureIds?: string[];
+    layouts?: VenueLayoutRow[];
+  },
 ) {
-  return db().from('venue_accessibility_features').insert(rows);
-}
-
-export async function deleteVenueAccessibilityFeatures(venueId: string) {
-  return db().from('venue_accessibility_features').delete().eq('venue_id', venueId);
-}
-
-export async function insertVenueLayouts(rows: TablesInsert<'venue_layouts'>[]) {
-  return db().from('venue_layouts').insert(rows);
-}
-
-export async function deleteVenueLayouts(venueId: string) {
-  return db().from('venue_layouts').delete().eq('venue_id', venueId);
+  return db().rpc('update_venue', {
+    p_venue_id: venueId,
+    p_expected_updated_at: expectedUpdatedAt,
+    ...(changes.name !== undefined && { p_name: changes.name }),
+    ...(changes.locationId !== undefined && { p_location_id: changes.locationId }),
+    ...(changes.maxCapacity !== undefined && { p_max_capacity: changes.maxCapacity }),
+    ...(changes.operatingSlots !== undefined && { p_operating_slots: changes.operatingSlots }),
+    ...(changes.facilityIds !== undefined && { p_facility_ids: changes.facilityIds }),
+    ...(changes.accessibilityFeatureIds !== undefined && {
+      p_accessibility_feature_ids: changes.accessibilityFeatureIds,
+    }),
+    ...(changes.layouts !== undefined && { p_layouts: changes.layouts }),
+  });
 }

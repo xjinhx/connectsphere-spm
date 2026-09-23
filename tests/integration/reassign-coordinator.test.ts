@@ -7,6 +7,7 @@ import {
   reassignCoordinator,
   requireCurrentCoordinator,
 } from '@/domain/assignment/service';
+import { approveEventRequest, getReviewDetail } from '@/domain/review/service';
 import type { Role } from '@/domain/identity/roles';
 import { ensureTestClientOrganisation } from './fixtures/clientOrganisation';
 
@@ -29,8 +30,9 @@ import { ensureTestClientOrganisation } from './fixtures/clientOrganisation';
  *   SCRUM-96 AC1 "both are notified": no notification story this sprint, so
  *        nothing is sent. Flag for re-execution once the Notification System
  *        exists.
- *   SCRUM-96 AC4 through SCRUM-89's review read: that read is not on main yet.
- *        requireCurrentCoordinator is the rule it should call, tested below.
+ *   SCRUM-96 AC4 through the clarification routes: their access check is on
+ *        Dylan's unmerged branch. Re-run AC4 by hand once it merges. The
+ *        review read (SCRUM-89) is covered below.
  *   The HTTP routes: the middleware needs a signed-in session, so those are
  *        covered by the manual test.
  */
@@ -173,7 +175,11 @@ describe('reassignCoordinator: SCRUM-96 AC1 and AC2', () => {
   it('US-8.1-TC03 replaces the previous coordinator with the new one', async () => {
     const id = await createSubmittedRequest(coordinatorA);
 
-    const outcome = await reassignCoordinator(id, { coordinatorId: coordinatorB.id, actorId: otherManager.id });
+    const outcome = await reassignCoordinator(id, {
+      coordinatorId: coordinatorB.id,
+      fromCoordinatorId: coordinatorA.id,
+      actorId: otherManager.id,
+    });
 
     expect(outcome.previousCoordinatorId).toBe(coordinatorA.id);
     expect(outcome.coordinatorId).toBe(coordinatorB.id);
@@ -189,7 +195,11 @@ describe('reassignCoordinator: SCRUM-96 AC1 and AC2', () => {
   it('moves the event out of the old queue and into the new one at once', async () => {
     const id = await createSubmittedRequest(coordinatorA);
 
-    await reassignCoordinator(id, { coordinatorId: coordinatorB.id, actorId: manager.id });
+    await reassignCoordinator(id, {
+      coordinatorId: coordinatorB.id,
+      fromCoordinatorId: coordinatorA.id,
+      actorId: manager.id,
+    });
 
     expect((await listMyAssignedEvents(coordinatorB.id)).map((e) => e.id)).toContain(id);
     expect((await listMyAssignedEvents(coordinatorA.id)).map((e) => e.id)).not.toContain(id);
@@ -199,7 +209,11 @@ describe('reassignCoordinator: SCRUM-96 AC1 and AC2', () => {
   it('creates no pending state: the event status is untouched', async () => {
     const id = await createSubmittedRequest(coordinatorA);
 
-    await reassignCoordinator(id, { coordinatorId: coordinatorB.id, actorId: manager.id });
+    await reassignCoordinator(id, {
+      coordinatorId: coordinatorB.id,
+      fromCoordinatorId: coordinatorA.id,
+      actorId: manager.id,
+    });
 
     expect((await readRow(id)).status).toBe('submitted');
   });
@@ -209,7 +223,11 @@ describe('reassignCoordinator: SCRUM-96 AC1 and AC2', () => {
     const firstAssignedAt = new Date((await readRow(id)).assigned_at as string).getTime();
     await new Promise((resolve) => setTimeout(resolve, 20));
 
-    const outcome = await reassignCoordinator(id, { coordinatorId: coordinatorB.id, actorId: manager.id });
+    const outcome = await reassignCoordinator(id, {
+      coordinatorId: coordinatorB.id,
+      fromCoordinatorId: coordinatorA.id,
+      actorId: manager.id,
+    });
 
     expect(new Date(outcome.assignedAt).getTime()).toBeGreaterThan(firstAssignedAt);
   });
@@ -218,18 +236,48 @@ describe('reassignCoordinator: SCRUM-96 AC1 and AC2', () => {
     const id = await createSubmittedRequest();
 
     await expect(
-      reassignCoordinator(id, { coordinatorId: coordinatorB.id, actorId: manager.id }),
-    ).rejects.toMatchObject({ code: 'CONFLICT' });
+      reassignCoordinator(id, {
+        coordinatorId: coordinatorB.id,
+        fromCoordinatorId: coordinatorA.id,
+        actorId: manager.id,
+      }),
+    ).rejects.toMatchObject({
+      code: 'CONFLICT',
+      message: 'This event has no coordinator yet. Assign one instead of reassigning.',
+    });
 
     expect((await readRow(id)).coordinator_id).toBeNull();
     expect(await readHistory(id)).toHaveLength(0);
+  });
+
+  // Found reviewing SCRUM-215. A coordinator may approve an event nobody has
+  // been assigned to (SCRUM-89/213), and SCRUM-94 only assigns submitted
+  // events, so "assign one instead" pointed at an action that refuses.
+  it('does not tell the manager to assign an approved event, which cannot be assigned', async () => {
+    const id = await createSubmittedRequest();
+    await approveEventRequest(id, { actorId: coordinatorC.id });
+
+    await expect(
+      reassignCoordinator(id, {
+        coordinatorId: coordinatorB.id,
+        fromCoordinatorId: coordinatorA.id,
+        actorId: manager.id,
+      }),
+    ).rejects.toMatchObject({
+      code: 'CONFLICT',
+      message: 'This event has no coordinator to reassign from, and only a submitted event can be assigned one.',
+    });
   });
 
   it('refuses reassigning to the coordinator who already holds it', async () => {
     const id = await createSubmittedRequest(coordinatorA);
 
     await expect(
-      reassignCoordinator(id, { coordinatorId: coordinatorA.id, actorId: manager.id }),
+      reassignCoordinator(id, {
+        coordinatorId: coordinatorA.id,
+        fromCoordinatorId: coordinatorA.id,
+        actorId: manager.id,
+      }),
     ).rejects.toMatchObject({ code: 'VALIDATION_ERROR' });
 
     expect(await readHistory(id)).toHaveLength(0);
@@ -239,7 +287,11 @@ describe('reassignCoordinator: SCRUM-96 AC1 and AC2', () => {
     const id = await createSubmittedRequest(coordinatorA);
 
     await expect(
-      reassignCoordinator(id, { coordinatorId: attendee.id, actorId: manager.id }),
+      reassignCoordinator(id, {
+        coordinatorId: attendee.id,
+        fromCoordinatorId: coordinatorA.id,
+        actorId: manager.id,
+      }),
     ).rejects.toMatchObject({ code: 'VALIDATION_ERROR' });
 
     expect((await readRow(id)).coordinator_id).toBe(coordinatorA.id);
@@ -249,20 +301,37 @@ describe('reassignCoordinator: SCRUM-96 AC1 and AC2', () => {
     await expect(
       reassignCoordinator('00000000-0000-0000-0000-000000000000', {
         coordinatorId: coordinatorB.id,
+        fromCoordinatorId: coordinatorA.id,
         actorId: manager.id,
       }),
     ).rejects.toMatchObject({ code: 'NOT_FOUND' });
     await expect(
-      reassignCoordinator('not-a-uuid', { coordinatorId: coordinatorB.id, actorId: manager.id }),
+      reassignCoordinator('not-a-uuid', {
+        coordinatorId: coordinatorB.id,
+        fromCoordinatorId: coordinatorA.id,
+        actorId: manager.id,
+      }),
     ).rejects.toMatchObject({ code: 'NOT_FOUND' });
   });
 
+  // SCRUM-215. Both managers saw Jane Tan. Whichever request lands second is
+  // refused however the two interleave: overlapping, the database guard stops
+  // it; one after the other, the service sees Jane is gone. The next test pins
+  // the second order down, since this one cannot choose which it gets.
   it('records exactly one reassignment when two managers reassign at once', async () => {
     const id = await createSubmittedRequest(coordinatorA);
 
     const results = await Promise.allSettled([
-      reassignCoordinator(id, { coordinatorId: coordinatorB.id, actorId: manager.id }),
-      reassignCoordinator(id, { coordinatorId: coordinatorC.id, actorId: otherManager.id }),
+      reassignCoordinator(id, {
+        coordinatorId: coordinatorB.id,
+        fromCoordinatorId: coordinatorA.id,
+        actorId: manager.id,
+      }),
+      reassignCoordinator(id, {
+        coordinatorId: coordinatorC.id,
+        fromCoordinatorId: coordinatorA.id,
+        actorId: otherManager.id,
+      }),
     ]);
 
     expect(results.filter((r) => r.status === 'fulfilled')).toHaveLength(1);
@@ -275,6 +344,43 @@ describe('reassignCoordinator: SCRUM-96 AC1 and AC2', () => {
     expect(history[0]?.coordinator_id).toBe(coordinatorA.id);
     expect([coordinatorB.id, coordinatorC.id]).toContain((await readRow(id)).coordinator_id);
   });
+
+  // SCRUM-215: the order that made the test above fail now and then. Before
+  // the fix the second manager's request re-read the event, found Wei Lin and
+  // replaced him, silently undoing a reassignment that manager never saw.
+  it('refuses a manager whose view is out of date, and names who holds the event now', async () => {
+    const id = await createSubmittedRequest(coordinatorA);
+    await reassignCoordinator(id, {
+      coordinatorId: coordinatorB.id,
+      fromCoordinatorId: coordinatorA.id,
+      actorId: manager.id,
+    });
+
+    await expect(
+      reassignCoordinator(id, {
+        coordinatorId: coordinatorC.id,
+        fromCoordinatorId: coordinatorA.id,
+        actorId: otherManager.id,
+      }),
+    ).rejects.toMatchObject({
+      code: 'CONFLICT',
+      details: { coordinatorId: coordinatorB.id, coordinatorName: 'Wei Lin' },
+    });
+
+    expect((await readRow(id)).coordinator_id).toBe(coordinatorB.id);
+    expect(await readHistory(id)).toHaveLength(1);
+  });
+
+  it('refuses a reassignment that does not say which coordinator it replaces', async () => {
+    const id = await createSubmittedRequest(coordinatorA);
+
+    await expect(
+      reassignCoordinator(id, { coordinatorId: coordinatorB.id, actorId: manager.id }),
+    ).rejects.toMatchObject({ code: 'VALIDATION_ERROR' });
+
+    expect((await readRow(id)).coordinator_id).toBe(coordinatorA.id);
+    expect(await readHistory(id)).toHaveLength(0);
+  });
 });
 
 describe('assignment history: SCRUM-96 AC3', () => {
@@ -282,7 +388,11 @@ describe('assignment history: SCRUM-96 AC3', () => {
     const id = await createSubmittedRequest(coordinatorA);
     const original = await readRow(id);
 
-    await reassignCoordinator(id, { coordinatorId: coordinatorB.id, actorId: otherManager.id });
+    await reassignCoordinator(id, {
+      coordinatorId: coordinatorB.id,
+      fromCoordinatorId: coordinatorA.id,
+      actorId: otherManager.id,
+    });
 
     const history = await readHistory(id);
     expect(history).toHaveLength(1);
@@ -300,8 +410,16 @@ describe('assignment history: SCRUM-96 AC3', () => {
   it('keeps every earlier assignment across repeated reassignments, oldest first', async () => {
     const id = await createSubmittedRequest(coordinatorA);
 
-    await reassignCoordinator(id, { coordinatorId: coordinatorB.id, actorId: manager.id });
-    await reassignCoordinator(id, { coordinatorId: coordinatorC.id, actorId: manager.id });
+    await reassignCoordinator(id, {
+      coordinatorId: coordinatorB.id,
+      fromCoordinatorId: coordinatorA.id,
+      actorId: manager.id,
+    });
+    await reassignCoordinator(id, {
+      coordinatorId: coordinatorC.id,
+      fromCoordinatorId: coordinatorB.id,
+      actorId: manager.id,
+    });
 
     const view = await getCoordinatorView(id, manager);
     expect(view.current?.id).toBe(coordinatorC.id);
@@ -318,20 +436,32 @@ describe('assignment history: SCRUM-96 AC3', () => {
 describe('access for a coordinator reassigned away: SCRUM-96 AC4', () => {
   it('denies the previous coordinator and returns no details', async () => {
     const id = await createSubmittedRequest(coordinatorA);
-    await reassignCoordinator(id, { coordinatorId: coordinatorB.id, actorId: manager.id });
+    await reassignCoordinator(id, {
+      coordinatorId: coordinatorB.id,
+      fromCoordinatorId: coordinatorA.id,
+      actorId: manager.id,
+    });
 
     await expect(requireCurrentCoordinator(id, coordinatorA.id)).rejects.toMatchObject({
       code: 'FORBIDDEN',
     });
     await expect(getCoordinatorView(id, coordinatorA)).rejects.toMatchObject({ code: 'FORBIDDEN' });
+    // SCRUM-89's review read, the page a coordinator actually opens: the check
+    // lives in its canReviewDetail, called here only to prove AC4 holds there.
+    await expect(getReviewDetail(id, coordinatorA.id)).rejects.toMatchObject({ code: 'FORBIDDEN' });
   });
 
   it('allows the coordinator who now holds the event', async () => {
     const id = await createSubmittedRequest(coordinatorA);
-    await reassignCoordinator(id, { coordinatorId: coordinatorB.id, actorId: manager.id });
+    await reassignCoordinator(id, {
+      coordinatorId: coordinatorB.id,
+      fromCoordinatorId: coordinatorA.id,
+      actorId: manager.id,
+    });
 
     await expect(requireCurrentCoordinator(id, coordinatorB.id)).resolves.toBeUndefined();
     expect((await getCoordinatorView(id, coordinatorB)).current?.id).toBe(coordinatorB.id);
+    expect((await getReviewDetail(id, coordinatorB.id)).id).toBe(id);
   });
 });
 
@@ -364,7 +494,11 @@ describe('getCoordinatorView: SCRUM-98', () => {
   // SCRUM-98 AC3, US-8.2-TC05
   it("US-8.2-TC05 shows the new coordinator's details after a reassignment", async () => {
     const id = await createSubmittedRequest(coordinatorA);
-    await reassignCoordinator(id, { coordinatorId: coordinatorB.id, actorId: manager.id });
+    await reassignCoordinator(id, {
+      coordinatorId: coordinatorB.id,
+      fromCoordinatorId: coordinatorA.id,
+      actorId: manager.id,
+    });
 
     const view = await getCoordinatorView(id, organiser);
 
