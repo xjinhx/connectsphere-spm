@@ -31,6 +31,12 @@ function formatSlots(slots: string[] | null): string {
  * coordinator's own events - so nothing here needs to filter by coordinator
  * id again.
  *
+ * Client organisation (AC1's remaining field) is null until an organiser
+ * has been linked to one (SCRUM-204) - shown as "—" rather than treated as
+ * an error, since an unlinked organiser is a real, permanent state, not a
+ * gap waiting to close (dummy D-01, narrowed to this page once SCRUM-203/
+ * 204 landed).
+ *
  * "Open the full detail" (AC2, US-7.1-TC02) links to /events/[id]/review —
  * SCRUM-89's page, built there rather than here.
  */
@@ -91,6 +97,9 @@ export default async function EventCoordinatorAssignedEventsPage() {
                   Reference
                 </th>
                 <th scope="col" className="p-3 font-medium">
+                  Client organisation
+                </th>
+                <th scope="col" className="p-3 font-medium">
                   Proposed date
                 </th>
                 <th scope="col" className="p-3 font-medium">
@@ -117,6 +126,7 @@ export default async function EventCoordinatorAssignedEventsPage() {
                 >
                   <td className="p-3 font-medium">{event.name}</td>
                   <td className="p-3 font-mono text-xs text-[var(--text-muted)]">{event.reference}</td>
+                  <td className="p-3">{event.clientOrganisation?.name ?? '—'}</td>
                   <td className="p-3">
                     {event.proposedDate ? formatSingaporeDate(event.proposedDate) : '—'}
                   </td>

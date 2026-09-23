@@ -16,6 +16,7 @@ const COLUMNS =
   'room_layout, accessibility_required, accessibility_notes, ' +
   'event_request_accessibility_features ( accessibility_features ( id, name ) ), ' +
   'preferred_location:locations ( id, name ), ' +
+  'client_organisation:client_organisations ( id, name ), ' +
   // SCRUM-80
   'equipment_required, technical_support_notes, ' +
   'event_request_equipment ( position, item, quantity ), ' +
@@ -66,6 +67,8 @@ export interface EventRequestRow {
   event_request_accessibility_features: { accessibility_features: ReferenceRow | null }[];
   /** Null is "no preference" (AC4). */
   preferred_location: ReferenceRow | null;
+  /** Null until an organiser has been linked to a client organisation. */
+  client_organisation: ReferenceRow | null;
   // SCRUM-80
   equipment_required: boolean | null;
   technical_support_notes: string | null;
