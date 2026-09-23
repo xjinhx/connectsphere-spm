@@ -56,6 +56,11 @@ function fieldErrorsFrom(details: unknown): Record<string, string[]> {
   return result;
 }
 
+/** The duplicate-name 409 names the venue; the changed-since-opened 409 does not. */
+function isNameConflict(details: unknown): boolean {
+  return typeof details === 'object' && details !== null && 'name' in details;
+}
+
 function FieldError({ messages }: { messages: string[] | undefined }) {
   if (!messages || messages.length === 0) return null;
   return (
@@ -128,6 +133,10 @@ export default function VenueForm({
       facilityIds,
       accessibilityFeatureIds: featureIds,
       layouts: layouts.map((row) => ({ layout: row.layout, capacity: capacityToSend(row.capacity) })),
+      // SCRUM-120: the version this form was loaded with, so a save from a
+      // form that has gone out of date is refused instead of undoing someone
+      // else's newer save.
+      ...(isEdit && { expectedUpdatedAt: venue.updatedAt }),
     };
 
     try {
@@ -144,8 +153,10 @@ export default function VenueForm({
         const perField = fieldErrorsFrom(error.details);
 
         // SCRUM-116 AC2: a duplicate name is a problem with the name field,
-        // so flag it there rather than only at the top of the form.
-        if (error.error === 'CONFLICT' && error.message) {
+        // so flag it there rather than only at the top of the form. The other
+        // 409, a venue changed since this form was opened, is about the whole
+        // form, so it stays at the top.
+        if (error.error === 'CONFLICT' && error.message && isNameConflict(error.details)) {
           perField.name = [error.message];
         }
 

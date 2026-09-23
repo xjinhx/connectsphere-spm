@@ -151,9 +151,20 @@ export type CreateVenueRequest = z.input<typeof CreateVenueInputSchema>;
  * venue's facilities. Here, a field that is left out is left unchanged, and a
  * list that is sent replaces the whole list (so removing Whiteboard means
  * sending the list without it).
+ *
+ * expectedUpdatedAt is the venue's updatedAt when the editor's form was
+ * loaded. The save only goes ahead while the venue still has it, so an edit
+ * from a form that has gone out of date is refused (409) instead of silently
+ * undoing the save made in between. Found reviewing SCRUM-215, the same kind
+ * of bug.
  */
 export const UpdateVenueInputSchema = z
   .object({
+    expectedUpdatedAt: z
+      .string({
+        required_error: 'expectedUpdatedAt is required: send the updatedAt of the venue you are editing.',
+      })
+      .datetime({ offset: true, message: 'expectedUpdatedAt must be the updatedAt the venue was loaded with.' }),
     name: VenueNameSchema.optional(),
     locationId: z.string().uuid('Location must be chosen from the list.').optional(),
     maxCapacity: MaxCapacitySchema.optional(),
@@ -168,7 +179,10 @@ export const UpdateVenueInputSchema = z
     confirmAffectedBookings: z.boolean().optional(),
   })
   .refine(
-    (input) => Object.entries(input).some(([key, value]) => key !== 'confirmAffectedBookings' && value !== undefined),
+    (input) =>
+      Object.entries(input).some(
+        ([key, value]) => key !== 'confirmAffectedBookings' && key !== 'expectedUpdatedAt' && value !== undefined,
+      ),
     'Nothing to update.',
   );
 export type UpdateVenueInput = z.infer<typeof UpdateVenueInputSchema>;
