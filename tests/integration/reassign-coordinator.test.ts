@@ -8,6 +8,7 @@ import {
   requireCurrentCoordinator,
 } from '@/domain/assignment/service';
 import type { Role } from '@/domain/identity/roles';
+import { ensureTestClientOrganisation } from './fixtures/clientOrganisation';
 
 /**
  * SCRUM-96 Reassign an event to another coordinator
@@ -133,6 +134,10 @@ async function readHistory(id: string) {
 }
 
 beforeAll(async () => {
+  // SCRUM-203's FK on client_organisation_id means CLIENT_ORGANISATION_ID
+  // below must be a real row, not just a placeholder uuid.
+  await ensureTestClientOrganisation(supabase);
+
   organiser = await createAccount('Olivia Organiser', ['event_organiser']);
   otherOrganiser = await createAccount('Oscar Organiser', ['event_organiser']);
   manager = await createAccount('Mia Manager', ['operations_manager']);

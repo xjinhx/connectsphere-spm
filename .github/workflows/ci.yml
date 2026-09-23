@@ -81,6 +81,7 @@ jobs:
   database:
     name: Migrations and integration tests
     runs-on: ubuntu-latest
+    timeout-minutes: 15
     steps:
       - uses: actions/checkout@v4
 
@@ -99,8 +100,16 @@ jobs:
       # Proves the committed migrations build the schema from nothing - which
       # is the whole reason they are committed rather than living only in the
       # cloud project. A fresh clone must be runnable (Deliverable #7).
+      # Transient Docker/container-start failures on GitHub-hosted
+      # runners are common and unrelated to code correctness. Retry a
+      # few times before treating this as a real failure.
       - name: Start local Supabase stack
-        run: supabase start
+        uses: nick-fields/retry@v3
+        with:
+          timeout_minutes: 2
+          max_attempts: 3
+          retry_wait_seconds: 15
+          command: supabase start
 
       - name: Verify migrations apply from scratch
         run: supabase db reset --no-seed

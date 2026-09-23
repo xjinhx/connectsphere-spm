@@ -65,12 +65,17 @@ describe('SCRUM-82 — Submit a completed event request', () => {
       expect(canBeSubmitted('submitted')).toBe(false);
     });
 
-    // SCRUM-90 AC2 — a request returned for clarification is editable again,
-    // so it has to be sendable again too. These two rules previously
-    // disagreed: the page offered the edit and the submit refused it.
-    it('lets a request returned for clarification be submitted again', () => {
+    // Bug fix, 2026-09-22 — this plain endpoint used to accept
+    // clarification_requested too (SCRUM-90 AC2 reasoning: a request
+    // returned for clarification is editable again, so "without leaving the
+    // system" needs a way back). But it has no way to require an answer to
+    // the coordinator's question first, so an organiser could resubmit here
+    // with the clarification still unanswered. The request stays editable
+    // (SCRUM-90 AC2 still holds) but the real way back to submitted is
+    // SCRUM-91's dedicated response flow, not this one.
+    it('keeps a clarification-requested request editable, but no longer resubmittable through the plain submit action', () => {
       expect(isEditable('clarification_requested')).toBe(true);
-      expect(canBeSubmitted('clarification_requested')).toBe(true);
+      expect(canBeSubmitted('clarification_requested')).toBe(false);
     });
 
     it('never lets an approved request be submitted', () => {

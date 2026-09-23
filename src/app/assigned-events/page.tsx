@@ -56,13 +56,23 @@ export default async function EventCoordinatorAssignedEventsPage() {
 
   return (
     <main className="mx-auto max-w-4xl p-6">
-      <div className="mb-6">
-        <h1 className="text-2xl font-semibold">Assigned events</h1>
-        <p className="mt-1 text-sm text-[var(--text-muted)]">
-          {awaitingCount === 0
-            ? 'Nothing awaiting your review right now.'
-            : `${awaitingCount} ${awaitingCount === 1 ? 'event needs' : 'events need'} your review.`}
-        </p>
+      <div className="mb-6 flex items-start justify-between gap-4">
+        <div>
+          <h1 className="text-2xl font-semibold">Assigned events</h1>
+          <p className="mt-1 text-sm text-[var(--text-muted)]">
+            {awaitingCount === 0
+              ? 'Nothing awaiting your review right now.'
+              : `${awaitingCount} ${awaitingCount === 1 ? 'event needs' : 'events need'} your review.`}
+          </p>
+        </div>
+        {/* SCRUM-203 — a way into the client organisations pages from the
+            Coordinator landing page. */}
+        <Link
+          href="/organisations"
+          className="inline-block w-fit rounded-md bg-[var(--brand)] px-4 py-2 text-sm font-medium text-white hover:bg-[var(--brand-dark)]"
+        >
+          Client organisations
+        </Link>
       </div>
 
       {events.length === 0 ? (

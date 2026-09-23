@@ -34,6 +34,7 @@ export const ACTIONS = [
   // SCRUM-90 — "As an Event Coordinator, I want to return a request to the
   // Event Organiser with a note describing what is unclear".
   'event_request_clarification',
+  'organisation_membership_management',
 ] as const;
 
 export type Action = (typeof ACTIONS)[number];
@@ -44,11 +45,17 @@ export function isAction(value: unknown): value is Action {
 
 export const ROLE_PERMISSIONS: Record<Role, readonly Action[]> = {
   event_organiser: ['event_request_creation'],
+  // SCRUM-204 — the story's persona is the Event Coordinator (matches
+  // client-organisation/policy.ts's canManageClientOrganisations, which
+  // already gives Coordinators sole ownership of the organisations
+  // themselves); organisation_membership_management is the matching
+  // permission for linking an Event Organiser account to one.
   coordinator: [
     'venue_catalogue_view',
     'event_request_approval',
     'event_request_review',
     'event_request_clarification',
+    'organisation_membership_management',
   ],
   operations_manager: ['venue_catalogue_view', 'coordinator_assignment', 'account_role_management'],
   venue_staff: ['venue_administration', 'venue_catalogue_view'],

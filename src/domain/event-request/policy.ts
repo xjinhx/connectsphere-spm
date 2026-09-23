@@ -2,6 +2,7 @@ import {
   eventRequestCoreSchema,
   MANDATORY_FIELD_LABELS,
   normaliseTimeSlots,
+  TIME_SLOT_HOURS,
   TIME_SLOT_LABELS,
   TIME_SLOT_ORDER,
   type EquipmentItem,
@@ -10,6 +11,7 @@ import {
   type TimeSlot,
 } from './schema';
 import {
+  currentHourInSingapore,
   formatSingaporeDateTime,
   isPastDate,
   todayInSingapore,
@@ -85,6 +87,37 @@ export function describeTimeSlots(slots: readonly TimeSlot[] | null): string {
   return normaliseTimeSlots(slots)
     .map((slot) => TIME_SLOT_LABELS[slot])
     .join(', ');
+}
+
+export const PAST_TIME_SLOT_MESSAGE =
+  'The selected time slot has already ended today. Choose a slot still ahead, or a later date.';
+
+/**
+ * AC5 (bug fix, ex-US-76-TC06) — SCRUM-76's date rule only judges the calendar
+ * day, so a proposed date of today is accepted at any hour. That is correct
+ * for AC4 ("no minimum lead time"), but it leaves a gap the date rule alone
+ * cannot close: a slot whose window has already closed today cannot still
+ * host the event, even though today itself is still a valid date.
+ *
+ * Only meaningful for TODAY. Any other future date has the whole day still
+ * ahead of it, and a past date is already refused by isProposedDateSubmittable()
+ * before this ever runs.
+ */
+export function hasTimeSlotEndedToday(slot: TimeSlot, now: Date = new Date()): boolean {
+  return currentHourInSingapore(now) >= TIME_SLOT_HOURS[slot].end;
+}
+
+/**
+ * True once every slot selected for today has already ended - none of them
+ * can still host the event that day. A mixed selection (say AM and PM, checked
+ * at 16:00) is not blocked: PM is still ahead, so the request is still
+ * submittable for it.
+ */
+export function haveAllTimeSlotsEndedToday(
+  slots: readonly TimeSlot[],
+  now: Date = new Date(),
+): boolean {
+  return slots.length > 0 && slots.every((slot) => hasTimeSlotEndedToday(slot, now));
 }
 
 // ---------------------------------------------------------------------------
@@ -247,10 +280,17 @@ export interface StoredEventRequestFields {
  * The mandatory set is eventRequestCoreSchema. A field is "incomplete" if the
  * schema refuses it, or - for the proposed date only - if it has already
  * passed (SCRUM-76 AC3: savable, but not submittable).
+ *
+ * `now` is optional and off by default: passing it also enables the
+ * same-day slot-lapsed check above (SCRUM-77 AC5). Existing callers that omit
+ * it keep the original date-only behaviour rather than becoming dependent on
+ * the wall clock at the moment they happen to run - submitEventRequest() is
+ * the one caller that should always supply the real current time.
  */
 export function incompleteFields(
   request: StoredEventRequestFields,
   today: ISODate = todayInSingapore(),
+  now?: Date,
 ): IncompleteField[] {
   const parsed = eventRequestCoreSchema.safeParse({
     name: request.name ?? undefined,
@@ -280,6 +320,18 @@ export function incompleteFields(
     problems.set('proposedDate', PAST_PROPOSED_DATE_MESSAGE);
   }
 
+  if (
+    now &&
+    !problems.has('timeSlots') &&
+    !problems.has('proposedDate') &&
+    request.proposedDate !== null &&
+    request.timeSlots !== null &&
+    toSingaporeISODate(new Date(request.proposedDate)) === today &&
+    haveAllTimeSlotsEndedToday(request.timeSlots as TimeSlot[], now)
+  ) {
+    problems.set('timeSlots', PAST_TIME_SLOT_MESSAGE);
+  }
+
   // Listed in the order the form shows them, not the order the issues arrived.
   return (Object.keys(MANDATORY_FIELD_LABELS) as MandatoryField[])
     .filter((field) => problems.has(field))
@@ -298,8 +350,9 @@ function isMandatoryField(value: unknown): value is MandatoryField {
 export function canSubmit(
   request: StoredEventRequestFields,
   today: ISODate = todayInSingapore(),
+  now?: Date,
 ): boolean {
-  return incompleteFields(request, today).length === 0;
+  return incompleteFields(request, today, now).length === 0;
 }
 
 /**
@@ -315,14 +368,21 @@ export function isEditable(status: EventRequestStatus): boolean {
 /**
  * SCRUM-82 AC1 — a draft becomes submitted.
  *
- * SCRUM-90 AC2 adds the second way in: a request returned for clarification is
- * editable again (see isEditable above), and "without leaving the system"
- * (US-7.2) only holds if the Organiser can then send it back. Widened here
- * rather than left at 'draft' because the two halves have to agree — offering
- * an edit the resubmit would refuse is what this rule previously did.
+ * Narrowed back to 'draft' only (bug fix, 2026-09-22). It briefly accepted
+ * 'clarification_requested' too, on the reasoning that "without leaving the
+ * system" (US-7.2) needs some way back to submitted — but this plain endpoint
+ * has no way to require an answer to the coordinator's question first, so an
+ * organiser could resubmit through it with the clarification still
+ * unanswered. SCRUM-91's dedicated response flow is the real way back
+ * (src/domain/clarification/service.ts's respondToClarification, PR #42):
+ * it records the answer and flips the status in one database write via its
+ * own trigger, entirely independent of this function, so narrowing this rule
+ * does not affect it. The bug and this fix are both called out directly in
+ * that PR's own migration comments
+ * (supabase/migrations/20260919090000_event_request_clarification_round.sql).
  */
 export function canBeSubmitted(status: EventRequestStatus): boolean {
-  return status === 'draft' || status === 'clarification_requested';
+  return status === 'draft';
 }
 
 // ---------------------------------------------------------------------------
@@ -358,6 +418,36 @@ export function isOwnRequest(
   actorUserId: string,
 ): boolean {
   return request.organiserId === actorUserId;
+}
+
+/**
+ * SCRUM-204 AC3 — the other half of the sharing boundary isOwnRequest()
+ * describes: once a request has left draft, a colleague in the same client
+ * organisation may open it (view-only, see canEditRequest below). The owner
+ * may always open their own, at any status, including a still-private draft.
+ */
+export function canViewRequest(
+  request: { organiserId: string; clientOrganisationId: string | null; status: EventRequestStatus },
+  actor: { userId: string; clientOrganisationId: string | null },
+): boolean {
+  if (isOwnRequest(request, actor.userId)) return true;
+  if (request.status === 'draft') return false;
+  return (
+    request.clientOrganisationId !== null &&
+    request.clientOrganisationId === actor.clientOrganisationId
+  );
+}
+
+/**
+ * SCRUM-204 AC3 — sharing a submitted (or clarification-requested) request
+ * with the organisation is view-only: only the organiser who owns it may
+ * edit, resubmit, or resume it, whatever isEditable(status) says on its own.
+ */
+export function canEditRequest(
+  request: { organiserId: string; status: EventRequestStatus },
+  actorUserId: string,
+): boolean {
+  return isOwnRequest(request, actorUserId) && isEditable(request.status);
 }
 
 /**

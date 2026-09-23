@@ -208,11 +208,18 @@ export async function deleteEventRequestEquipment(supabase: SupabaseClient, even
  * concurrent call matches no row and comes back empty rather than quietly
  * overwriting the first.
  *
- * SCRUM-90 AC2 — `clarification_requested` is accepted for the same reason
- * canBeSubmitted() accepts it: a request returned for clarification is edited
- * and sent back. Note set_submitted_at only stamps on draft -> submitted, so a
- * resubmission keeps its original submission time and therefore its place in
- * the coordinator's queue rather than going to the back of it.
+ * SCRUM-90 AC2 — `clarification_requested` is still accepted here even though
+ * canBeSubmitted() (domain/event-request/policy.ts) no longer allows it as of
+ * the 2026-09-22 bug fix: the real app never reaches this function for that
+ * status any more, since submitEventRequest() refuses it first. This filter is
+ * left wider on purpose so it keeps working as a direct write for whoever
+ * still calls it that way (e.g. tests/integration/review-detail-clarification.test.ts,
+ * which exercises this filter directly rather than the policy layer above it)
+ * and for SCRUM-91's own resubmission path, which writes status via its own
+ * database trigger and never calls this function at all. Note set_submitted_at
+ * only stamps on draft -> submitted, so a resubmission through here keeps its
+ * original submission time and therefore its place in the coordinator's queue
+ * rather than going to the back of it.
  */
 export async function markEventRequestSubmitted(supabase: SupabaseClient, id: string) {
   return supabase
@@ -258,6 +265,15 @@ export async function markEventRequestApproved(id: string, actorId: string) {
     .update({ status: 'approved', decision: 'approved', decided_by: actorId })
     .eq('id', id)
     .eq('status', 'submitted')
+    // SCRUM-213 — the same rule as canReviewDetail, applied inside the UPDATE.
+    // The service checks it first, but an Event Operations Manager can reassign
+    // the event between that check and this write; the filter is what makes the
+    // decision impossible rather than merely unlikely, the same pattern as
+    // assignCoordinatorToEventRequest (SCRUM-94).
+    //
+    // `is.null` is part of the condition because an event with no coordinator
+    // yet may still be approved - see the comment on approveEventRequest.
+    .or(`coordinator_id.is.null,coordinator_id.eq.${actorId}`)
     .select(COLUMNS)
     .maybeSingle();
 }
@@ -286,13 +302,27 @@ export async function markEventRequestRejected(id: string, reason: string, actor
     .maybeSingle();
 }
 
-/** AC3 — an organiser's own requests, newest first. */
-export async function listEventRequestsForOrganiser(supabase: SupabaseClient, organiserId: string) {
-  return supabase
-    .from('event_request')
-    .select(COLUMNS)
-    .eq('organiser_id', organiserId)
-    .order('created_at', { ascending: false });
+/**
+ * AC3 — an organiser's own requests, newest first.
+ *
+ * SCRUM-204 AC3 — plus, when the organiser belongs to a client organisation,
+ * every non-draft request from a colleague in that same organisation (the
+ * "not listed" half of canViewRequest() in domain/event-request/policy.ts —
+ * a colleague's still-private draft never appears here). A rejected request
+ * is not draft, so it is shared the same as any other decided request.
+ */
+export async function listEventRequestsForOrganiser(
+  supabase: SupabaseClient,
+  organiserId: string,
+  clientOrganisationId: string | null,
+) {
+  const query = supabase.from('event_request').select(COLUMNS);
+  const filtered = clientOrganisationId
+    ? query.or(
+        `organiser_id.eq.${organiserId},and(client_organisation_id.eq.${clientOrganisationId},status.neq.draft)`,
+      )
+    : query.eq('organiser_id', organiserId);
+  return filtered.order('created_at', { ascending: false });
 }
 
 /**
