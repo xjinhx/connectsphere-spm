@@ -31,6 +31,22 @@ export async function fetchProfileSummary(accountId: string) {
     .maybeSingle();
 }
 
+/**
+ * Every account holding the Event Coordinator role, for the picker an Event
+ * Operations Manager assigns from.
+ *
+ * `contains` rather than `eq`: roles is a text[] and an account can hold more
+ * than one, so this asks "is coordinator among them", not "is coordinator the
+ * only one". Ordered by name because that is the order they are shown in.
+ */
+export async function listCoordinatorProfiles() {
+  return createAdminClient()
+    .from('profiles')
+    .select('id, full_name, roles')
+    .contains('roles', ['coordinator'])
+    .order('full_name', { ascending: true });
+}
+
 /** SCRUM-204 — the caller's own profile, including organisation membership. */
 export async function fetchProfileWithOrganisation(supabase: SupabaseClient, accountId: string) {
   return supabase
