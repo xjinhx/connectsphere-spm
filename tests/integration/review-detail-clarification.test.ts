@@ -35,6 +35,13 @@ import { ensureTestClientOrganisation } from './fixtures/clientOrganisation';
 
 const supabase = createAdminClient();
 const CLIENT_ORGANISATION_ID = '22222222-2222-2222-2222-222222222222';
+/**
+ * SCRUM-72 AC2 narrows getClarificationView's "anyone" (US-7.2 AC1/AC3) to
+ * exclude an Attendee-only account. Any non-Attendee role exercises the
+ * original "anyone" grant; see the dedicated describe block below for the
+ * carve-out itself.
+ */
+const VIEWER = { roles: ['event_organiser'] as const };
 
 let coordinatorId: string;
 /** SCRUM-89 AC3's "another Event Coordinator". */
@@ -306,7 +313,7 @@ describe('resubmitting after a clarification', () => {
 
     await markEventRequestSubmitted(supabase, id);
 
-    const view = await getClarificationView(id);
+    const view = await getClarificationView(id, VIEWER);
     expect(view.status).toBe('submitted');
     expect(view.clarificationNote).toBe('Please confirm the venue');
   });
@@ -378,7 +385,7 @@ describe('getClarificationView', () => {
     const id = await createRequest('submitted');
     await requestClarification(id, { note: 'Please confirm the expected AV setup' }, coordinatorId);
 
-    const view = await getClarificationView(id);
+    const view = await getClarificationView(id, VIEWER);
 
     expect(view.clarificationNote).toBe('Please confirm the expected AV setup');
     expect(view.clarificationRequestedAt).not.toBeNull();
@@ -388,7 +395,7 @@ describe('getClarificationView', () => {
   it('shows no note for a request nobody has asked about', async () => {
     const id = await createRequest('submitted');
 
-    const view = await getClarificationView(id);
+    const view = await getClarificationView(id, VIEWER);
 
     expect(view.clarificationNote).toBeNull();
     expect(view.clarificationRequestedAt).toBeNull();
@@ -399,14 +406,38 @@ describe('getClarificationView', () => {
   it('does not claim to carry a response', async () => {
     const id = await createRequest('submitted');
 
-    const view = await getClarificationView(id);
+    const view = await getClarificationView(id, VIEWER);
 
     expect(view).not.toHaveProperty('response');
   });
 
   it('reports an unknown request as not found', async () => {
     await expect(
-      getClarificationView('99999999-9999-4999-8999-999999999999'),
+      getClarificationView('99999999-9999-4999-8999-999999999999', VIEWER),
     ).rejects.toMatchObject({ code: 'NOT_FOUND' });
+  });
+});
+
+// ---------------------------------------------------------------------------
+// SCRUM-72 AC1/AC2 — an Attendee-only account may not read the coordinator's
+// note by requesting it directly, narrowing US-7.2's "anyone" per customer
+// clarification #91.
+// ---------------------------------------------------------------------------
+describe('getClarificationView: SCRUM-72 AC1/AC2', () => {
+  it('refuses an Attendee-only account and returns no clarification note', async () => {
+    const id = await createRequest('submitted');
+    await requestClarification(id, { note: 'Please confirm the expected AV setup' }, coordinatorId);
+
+    await expect(getClarificationView(id, { roles: ['attendee'] })).rejects.toMatchObject({
+      code: 'FORBIDDEN',
+    });
+  });
+
+  it('still allows an account holding both Attendee and a planning role', async () => {
+    const id = await createRequest('submitted');
+    await requestClarification(id, { note: 'Please confirm the expected AV setup' }, coordinatorId);
+
+    const view = await getClarificationView(id, { roles: ['attendee', 'event_organiser'] });
+    expect(view.clarificationNote).toBe('Please confirm the expected AV setup');
   });
 });

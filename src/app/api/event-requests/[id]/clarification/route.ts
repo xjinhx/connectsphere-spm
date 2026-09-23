@@ -7,13 +7,17 @@ import { getCurrentActor } from '@/lib/auth/currentActor';
 /**
  * US-7.2 AC1/AC3 — read the clarification note on a request. Anyone signed in
  * may read it (Jira: "visible to the Organiser" / "anyone with access"), same
- * reasoning as the approval route — no role check, the middleware already
- * requires a session.
+ * reasoning as the approval route — no role check beyond SCRUM-72's
+ * Attendee carve-out, the middleware already requires a session.
+ *
+ * SCRUM-72 AC1/AC2 — the actor is fetched so getClarificationView can refuse
+ * an Attendee-only account requesting this directly.
  */
 export async function GET(_req: NextRequest, { params }: { params: Promise<{ id: string }> }) {
   try {
     const { id } = await params;
-    return NextResponse.json(await getClarificationView(id));
+    const actor = await getCurrentActor();
+    return NextResponse.json(await getClarificationView(id, actor));
   } catch (error) {
     return handleApiError(error);
   }
