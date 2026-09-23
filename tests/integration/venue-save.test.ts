@@ -129,15 +129,52 @@ describe('updateVenue: an edit is made from the version the editor loaded', () =
   it('two edits at once cannot together leave a layout above the maximum capacity', async () => {
     const venue = await createTestVenue('Write Skew Hall');
 
-    await Promise.allSettled([
+    const results = await Promise.allSettled([
       updateVenue(venue.id, { expectedUpdatedAt: venue.updatedAt, maxCapacity: 100 }),
       updateVenue(venue.id, { expectedUpdatedAt: venue.updatedAt, layouts: [{ layout: 'theatre', capacity: 200 }] }),
     ]);
+
+    // One is saved and the other refused because the venue changed, not for
+    // some other reason that would also leave the rule intact.
+    expect(results.filter((result) => result.status === 'fulfilled')).toHaveLength(1);
+    const rejected = results.filter((result) => result.status === 'rejected');
+    expect((rejected[0] as PromiseRejectedResult).reason).toMatchObject({
+      code: 'CONFLICT',
+      details: { reason: 'venue_changed' },
+    });
 
     const after = await getVenue(venue.id);
     for (const layout of after.layouts) {
       expect(layout.capacity).toBeLessThanOrEqual(after.maxCapacity);
     }
+  });
+
+  it('SCRUM-118 replaces the layouts with the list that was sent', async () => {
+    const venue = await createTestVenue('Layout Edit Hall');
+
+    const saved = await updateVenue(venue.id, {
+      expectedUpdatedAt: venue.updatedAt,
+      layouts: [
+        { layout: 'banquet', capacity: 80 },
+        { layout: 'theatre', capacity: 150 },
+      ],
+    });
+
+    expect([...saved.layouts].sort((a, b) => a.layout.localeCompare(b.layout))).toEqual([
+      { layout: 'banquet', capacity: 80 },
+      { layout: 'theatre', capacity: 150 },
+    ]);
+    expect(saved.facilities.map((facility) => facility.id)).toEqual([projectorId]);
+  });
+
+  it('SCRUM-117 AC3 an empty list removes them all, and a list left out is kept', async () => {
+    const venue = await createTestVenue('Empty List Hall');
+
+    const saved = await updateVenue(venue.id, { expectedUpdatedAt: venue.updatedAt, accessibilityFeatureIds: [] });
+
+    expect(saved.accessibilityFeatures).toEqual([]);
+    expect(saved.facilities.map((facility) => facility.id)).toEqual([projectorId]);
+    expect(saved.layouts).toEqual([{ layout: 'theatre', capacity: 100 }]);
   });
 
   it('reports an unknown venue as not found', async () => {
