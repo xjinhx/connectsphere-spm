@@ -1,7 +1,7 @@
 'use client';
 
 import { useRouter } from 'next/navigation';
-import { useState } from 'react';
+import { useRef, useState } from 'react';
 import {
   OPERATING_SLOTS,
   OPERATING_SLOT_LABELS,
@@ -31,7 +31,12 @@ import { capacityToSend } from './capacityInput';
  * make US-11.1-TC03 unexercisable by hand. Validation is the server's job.
  */
 
-type LayoutRow = { layout: RoomLayout; capacity: string };
+/**
+ * `key` identifies the row for React and never changes. Keying by the layout
+ * itself meant changing a row's layout remounted it, so a keyboard user lost
+ * focus on every change (found reviewing SCRUM-215).
+ */
+type LayoutRow = { key: number; layout: RoomLayout; capacity: string };
 
 type ApiErrorBody = { error?: string; message?: string; details?: unknown };
 
@@ -83,9 +88,13 @@ export default function VenueForm({
   const [featureIds, setFeatureIds] = useState<string[]>(
     venue ? venue.accessibilityFeatures.map((feature) => feature.id) : [],
   );
-  const [layouts, setLayouts] = useState<LayoutRow[]>(
-    venue ? venue.layouts.map((row) => ({ layout: row.layout, capacity: String(row.capacity) })) : [],
+  const [layouts, setLayouts] = useState<LayoutRow[]>(() =>
+    venue
+      ? venue.layouts.map((row, index) => ({ key: index, layout: row.layout, capacity: String(row.capacity) }))
+      : [],
   );
+  // Keys for rows added later start after the ones the venue loaded with.
+  const nextLayoutKey = useRef(venue ? venue.layouts.length : 0);
 
   const [fieldErrors, setFieldErrors] = useState<Record<string, string[]>>({});
   const [formError, setFormError] = useState<string | null>(null);
@@ -98,7 +107,11 @@ export default function VenueForm({
   function addLayout() {
     const used = new Set(layouts.map((row) => row.layout));
     const next = ROOM_LAYOUTS.find((layout) => !used.has(layout));
-    if (next) setLayouts([...layouts, { layout: next, capacity: '' }]);
+    if (next) {
+      const key = nextLayoutKey.current;
+      nextLayoutKey.current += 1;
+      setLayouts([...layouts, { key, layout: next, capacity: '' }]);
+    }
   }
 
   async function handleSubmit(event: React.FormEvent<HTMLFormElement>) {
@@ -276,7 +289,7 @@ export default function VenueForm({
         )}
         <div className="flex flex-col gap-2">
           {layouts.map((row, index) => (
-            <div key={row.layout} className="flex flex-wrap items-center gap-2">
+            <div key={row.key} className="flex flex-wrap items-center gap-2">
               <select
                 aria-label="Layout"
                 className="rounded border border-[var(--border)] bg-[var(--surface)] px-3 py-2 text-sm"
@@ -291,8 +304,14 @@ export default function VenueForm({
                   )
                 }
               >
+                {/* A layout another row already has is shown but not offered:
+                    each layout can only be added once per venue. */}
                 {ROOM_LAYOUTS.map((layout) => (
-                  <option key={layout} value={layout}>
+                  <option
+                    key={layout}
+                    value={layout}
+                    disabled={layout !== row.layout && layouts.some((other) => other.layout === layout)}
+                  >
                     {ROOM_LAYOUT_LABELS[layout]}
                   </option>
                 ))}
