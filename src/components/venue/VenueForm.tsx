@@ -138,16 +138,19 @@ export default function VenueForm({
 
         setFieldErrors(perField);
         setFormError(Object.keys(perField).length > 0 ? null : (error.message ?? 'The venue could not be saved.'));
+        setSaving(false);
         return;
       }
 
+      // Saved. The button stays on "Saving..." until the next page replaces
+      // this form: turning it back on here let a second click send the same
+      // request again while that page was still loading.
       const saved = body as { venue?: { id?: string } };
       const savedId = saved.venue?.id ?? venue?.id;
       router.push(savedId ? `/venues/${savedId}` : '/venues');
       router.refresh();
     } catch {
       setFormError('Could not reach the server. Check your connection and try again.');
-    } finally {
       setSaving(false);
     }
   }
