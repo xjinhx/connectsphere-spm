@@ -26,6 +26,7 @@ import {
   UpdateVenueInputSchema,
   VenueDetailSchema,
   VenueFormOptionsSchema,
+  VenueIdSchema,
   VenueSummarySchema,
   type VenueDetail,
   type VenueFormOptions,
@@ -87,8 +88,18 @@ export async function listVenues(includeRetired = false): Promise<VenueSummary[]
   );
 }
 
-/** SCRUM-121 AC2: the full venue page, including the turnaround values. */
+/**
+ * SCRUM-121 AC2: the full venue page, including the turnaround values.
+ *
+ * A malformed id is a venue that does not exist, not a database error: without
+ * this check Postgres rejects it (22P02) and the venue pages answered 500 for
+ * a mistyped link instead of showing not-found.
+ */
 export async function getVenue(venueId: string): Promise<VenueDetail> {
+  if (!VenueIdSchema.safeParse(venueId).success) {
+    throw new NotFoundError('Venue');
+  }
+
   const { data, error } = await fetchVenueDetail(venueId);
 
   if (error) {
