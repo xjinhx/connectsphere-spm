@@ -1,5 +1,6 @@
 import Link from 'next/link';
 import CoordinatorPanel from '@/components/assignment/CoordinatorPanel';
+import { ClarificationResponseForm } from '@/components/event-request/ClarificationResponseForm';
 import { EventRequestStatusBadge } from '@/components/event-request/EventRequestStatusBadge';
 import { SubmitEventRequestButton } from '@/components/event-request/SubmitEventRequestButton';
 import {
@@ -43,15 +44,25 @@ export default async function EventRequestPage({
   // shared, still-editable (e.g. Clarification Requested) request sees the
   // read-only notice below instead, never the edit actions.
   const editable = canEditRequest(request, actor.userId);
+  // SCRUM-91 AC1 — a coordinator has asked something and is waiting for an
+  // answer. Taken from the status rather than from "is there an open round",
+  // because this decides what the page offers, and the page should not need a
+  // second read to know what the badge beside the title already says.
+  //
+  // Built on `editable`, not on the status alone: SCRUM-204 AC3 shares a
+  // request in Clarification Requested with the whole client organisation, and
+  // a colleague must not be offered the box that answers it. Only the organiser
+  // who owns the request may reply - the same rule respondToClarification
+  // enforces, so the page cannot offer an action the API would refuse.
+  const awaitingResponse = editable && request.status === 'clarification_requested';
   // Bug fix, 2026-09-22 — a clarification-requested request is editable
-  // again (SCRUM-90 AC2) but is no longer resubmittable through this plain
-  // action (canBeSubmitted no longer accepts it, see policy.ts): resubmitting
-  // an unanswered clarification belongs to SCRUM-91's dedicated response
-  // flow, not this button. Kept as its own flag so "editable" and
-  // "submittable" can disagree without the Submit button offering an action
-  // that would just error. Nested inside the `editable` check above, so it
-  // only ever narrows an already-owned, already-editable request — it does
-  // not need its own ownership check.
+  // again (SCRUM-90 AC2), but resubmitting it through the plain Submit button
+  // is exactly the bug this branch fixes (canBeSubmitted no longer accepts
+  // it, see policy.ts): once awaitingResponse is true, SCRUM-91's response
+  // form above is the only way back, so this flag never even gets consulted
+  // for that status. Kept as its own flag for the draft case, so "editable"
+  // and "submittable" can disagree there too without the Submit button
+  // offering an action that would just error.
   const submittable = canBeSubmitted(request.status);
   // US-7.2 AC1/AC3 — the clarification note, if a coordinator has raised one.
   // A separate read (getClarificationView) rather than a field on `request`
@@ -72,8 +83,8 @@ export default async function EventRequestPage({
       <p className="mt-1 font-mono text-sm text-[var(--text-muted)]">{request.reference}</p>
 
       {/* US-7.2 AC1/AC3: what the Coordinator needs, shown as soon as one has
-          asked for it. No response is offered here — replying to it (US-7.2
-          AC2) is a separate, unbuilt story (SCRUM-91). */}
+          asked for it. Replying to it is SCRUM-91, and the form that does so is
+          in the actions section below. */}
       {clarification.clarificationNote ? (
         <div className="mt-4 rounded-md border border-[var(--warning)] bg-amber-50 px-3 py-2 text-sm">
           {/* The note is kept on the record after it has been addressed (AC3),
@@ -153,9 +164,20 @@ export default async function EventRequestPage({
       {request.organiserId === actor.userId && <CoordinatorPanel eventRequestId={request.id} />}
 
       {/* SCRUM-82 AC4: a submitted request is read-only - no edit, save or
-          delete is offered. Only a draft gets an action. */}
+          delete is offered. Only a draft gets an action.
+
+          SCRUM-91 AC1: a request returned for clarification is editable too
+          (isEditable, SCRUM-90 AC2), but it is not a draft and it is not
+          resubmitted the same way - it goes back with an answer. It therefore
+          gets its own branch, above the draft one, rather than falling through
+          to a Submit button that would send the coordinator's question back
+          unanswered. */}
       <section className="mt-6">
-        {editable ? (
+        {awaitingResponse ? (
+          <div className="rounded-lg border border-[var(--border)] bg-[var(--surface)] p-4">
+            <ClarificationResponseForm requestId={request.id} />
+          </div>
+        ) : editable ? (
           <>
             {submittable ? (
               // SCRUM-84 AC2: an explicit statement that a draft has not yet

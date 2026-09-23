@@ -226,6 +226,50 @@ export type Database = {
           },
         ]
       }
+      event_request_clarification_round: {
+        Row: {
+          event_request_id: string
+          id: string
+          note: string
+          requested_at: string
+          requested_by: string
+          responded_at: string | null
+          responded_by: string | null
+          response: string | null
+          round_number: number
+        }
+        Insert: {
+          event_request_id: string
+          id?: string
+          note: string
+          requested_at: string
+          requested_by: string
+          responded_at?: string | null
+          responded_by?: string | null
+          response?: string | null
+          round_number: number
+        }
+        Update: {
+          event_request_id?: string
+          id?: string
+          note?: string
+          requested_at?: string
+          requested_by?: string
+          responded_at?: string | null
+          responded_by?: string | null
+          response?: string | null
+          round_number?: number
+        }
+        Relationships: [
+          {
+            foreignKeyName: "event_request_clarification_round_event_request_id_fkey"
+            columns: ["event_request_id"]
+            isOneToOne: false
+            referencedRelation: "event_request"
+            referencedColumns: ["id"]
+          },
+        ]
+      }
       event_request_coordinator_history: {
         Row: {
           assigned_at: string
