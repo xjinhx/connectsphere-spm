@@ -241,7 +241,10 @@ describe('reassignCoordinator: SCRUM-96 AC1 and AC2', () => {
         fromCoordinatorId: coordinatorA.id,
         actorId: manager.id,
       }),
-    ).rejects.toMatchObject({ code: 'CONFLICT' });
+    ).rejects.toMatchObject({
+      code: 'CONFLICT',
+      message: 'This event has no coordinator yet. Assign one instead of reassigning.',
+    });
 
     expect((await readRow(id)).coordinator_id).toBeNull();
     expect(await readHistory(id)).toHaveLength(0);
