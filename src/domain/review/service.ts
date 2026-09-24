@@ -627,6 +627,16 @@ export async function rejectEventRequest(
   if (!existing) throw new NotFoundError('Event request');
 
   const current = existing as unknown as EventRequestRow;
+  // SCRUM-96 AC4 — a coordinator reassigned away from an event could still
+  // reject it, because the route's permission check is one every Coordinator
+  // holds. Mirrors approveEventRequest's SCRUM-213 check, including its order:
+  // checked before the status check so an InvalidTransitionError cannot tell
+  // them the event's current status. canReviewDetail, not
+  // requireCurrentCoordinator, so an event with no coordinator yet may still
+  // be rejected - same reasoning as approve.
+  if (!canReviewDetail(current.coordinator_id, actorId)) {
+    throw new ForbiddenError('This event request is assigned to another Event Coordinator.');
+  }
   if (!canBeRejected(current.status)) {
     throw new InvalidTransitionError(current.status, 'rejected');
   }
@@ -639,14 +649,35 @@ export async function rejectEventRequest(
   if (error) {
     throw new ValidationError('The event request could not be rejected.', error.message);
   }
-  // The check above saw a submitted request, yet no row matched the `status =
-  // submitted` filter: another coordinator acted on it in between (approved
-  // it, or rejected it themselves) - same race requestClarification guards
-  // against, and the same reasoning for a ConflictError over
-  // InvalidTransitionError: this is new code, so it gets the clearer wording.
-  if (!data) throw new ConflictError('Someone else already acted on this request.');
+  // The checks above saw a submitted request this Coordinator may act on, yet
+  // no row matched the filters. Two different things can have happened in
+  // between, and they need different answers - see rejectionRaceError.
+  if (!data) throw await rejectionRaceError(parsedId.data, actorId);
 
   return toRejectionOutcome(data as unknown as EventRequestRow);
+}
+
+/**
+ * Why a conditional rejection matched no row.
+ *
+ * Mirrors approvalRaceError (SCRUM-213) and clarificationRaceError rather than
+ * sharing them, for the same reason clarificationRaceError gives: another
+ * Coordinator acted first (a ConflictError, as before), or an Event Operations
+ * Manager reassigned the event out from under this one mid-request, which
+ * SCRUM-96 AC4 wants reported as a denial.
+ */
+async function rejectionRaceError(id: string, actorId: string): Promise<Error> {
+  const { data, error } = await fetchEventRequestById(id);
+  // A failed read is not a missing request - the row was read a moment ago.
+  if (error) return new ValidationError('The event request could not be read.', error.message);
+
+  const row = data as unknown as EventRequestRow | null;
+  if (!row) return new NotFoundError('Event request');
+
+  if (!canReviewDetail(row.coordinator_id, actorId)) {
+    return new ForbiddenError('This event request was reassigned to another Event Coordinator.');
+  }
+  return new ConflictError('Someone else already acted on this request.');
 }
 
 /**
