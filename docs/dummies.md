@@ -137,6 +137,12 @@ switch them the next time they edit those files.
   ```
   Edit the venue and set its maximum capacity to 99 (AC2: the booking is
   listed and must be confirmed) or to 100 (AC3: saves with no warning).
+- **Note for SCRUM-148:** a booking has no date or time slot of its own. It
+  takes both from its event request (`proposed_date`, `time_slots`), and
+  "future" is judged on the Singapore date (`todayInSingapore`). If SCRUM-148
+  gives a booking its own date or slot, `update_venue` and
+  `fetchConfirmedFutureBookings()` must read that instead. (Raised in review
+  of PR #61.)
 - **To replace:** SCRUM-148's approval flow writes `venue_booking` rows (and
   may widen `status` beyond `'confirmed'`). Nothing in SCRUM-120 changes;
   re-run `tests/integration/venue-capacity-cut.test.ts` and SCRUM-120 AC2 and
