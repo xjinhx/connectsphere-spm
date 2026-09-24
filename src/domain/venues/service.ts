@@ -2,6 +2,7 @@ import {
   createVenueWithLists,
   fetchAccessibilityFeatureIdsIn,
   fetchAccessibilityFeatures,
+  fetchConfirmedFutureBookings,
   fetchFacilities,
   fetchFacilityIdsIn,
   fetchLocationById,
@@ -11,8 +12,10 @@ import {
   saveVenueChanges,
 } from '@/lib/supabase/venues';
 import { ConflictError, NotFoundError, ValidationError, isUniqueViolation } from '@/domain/shared/errors';
-import { assertLayoutsWithinMaxCapacity } from './policy';
+import { todayInSingapore, type ISODate } from '@/domain/shared/dates';
+import { assertLayoutsWithinMaxCapacity, isAffectedByCapacity, isCapacityCut } from './policy';
 import {
+  AffectedBookingSchema,
   CreateVenueInputSchema,
   OPERATING_SLOTS,
   ROOM_LAYOUTS,
@@ -21,6 +24,8 @@ import {
   VenueFormOptionsSchema,
   VenueIdSchema,
   VenueSummarySchema,
+  type AffectedBooking,
+  type AffectedBookingsDetails,
   type VenueDetail,
   type VenueFormOptions,
   type VenueLayoutInput,
@@ -251,7 +256,21 @@ function venueChangedError(): ConflictError {
 }
 
 /**
- * SCRUM-120 AC1, SCRUM-117 AC3, SCRUM-118.
+ * SCRUM-120 AC2: the 409 that shows the editor which confirmed future bookings
+ * their cut affects and asks them to confirm it. `reason` tells the form this
+ * apart from the other two 409s (a duplicate name, a form out of date).
+ */
+function affectedBookingsError(maxCapacity: number, bookings: AffectedBooking[]): ConflictError {
+  const count = bookings.length === 1 ? '1 confirmed future booking' : `${bookings.length} confirmed future bookings`;
+  const details: AffectedBookingsDetails = { reason: 'affected_bookings', maxCapacity, bookings };
+  return new ConflictError(
+    `Lowering the maximum capacity to ${maxCapacity} puts ${count} over capacity. Confirm to apply the change; the coordinator of each affected event will be notified.`,
+    details,
+  );
+}
+
+/**
+ * SCRUM-120 AC1 to AC4, SCRUM-117 AC3, SCRUM-118.
  *
  * A field that was left out is left alone. A list that was sent replaces the
  * whole list, so removing a facility means sending the list without it.
@@ -265,16 +284,20 @@ function venueChangedError(): ConflictError {
  * check below true when the save lands: nothing can have changed since the
  * venue it checked was read.
  *
- * SCRUM-120 AC2, AC3 and AC4 are not implemented: they are written against a
- * confirmed future booking, and bookings are SCRUM-148, which is not in
- * Sprint 1. See findAffectedFutureBookings below.
+ * SCRUM-120 AC2 to AC4: a cut below a confirmed future booking's expected
+ * attendance is refused with the list of those bookings until the editor
+ * confirms it (AC2); a cut down to exactly the attendance is not a problem
+ * (AC3); a confirmed cut is saved together with a notice to each affected
+ * event's coordinator (AC4). The service checks first so it can show the list;
+ * update_venue checks again inside the save, so a booking confirmed in between
+ * is still caught, and the cut and its notices are one transaction.
  */
 export async function updateVenue(venueId: string, input: unknown): Promise<VenueDetail> {
   const parsed = UpdateVenueInputSchema.safeParse(input);
   if (!parsed.success) {
     throw new ValidationError('The venue could not be updated.', parsed.error.flatten());
   }
-  const { expectedUpdatedAt, ...changes } = parsed.data;
+  const { expectedUpdatedAt, confirmAffectedBookings = false, ...changes } = parsed.data;
 
   // Throws NotFoundError if the venue is not there.
   const current = await getVenue(venueId);
@@ -303,15 +326,34 @@ export async function updateVenue(venueId: string, input: unknown): Promise<Venu
     await assertAccessibilityFeaturesExist(changes.accessibilityFeatureIds);
   }
 
-  const { data: outcome, error } = await saveVenueChanges(current.id, expectedUpdatedAt, {
-    name: changes.name,
-    locationId: changes.locationId,
-    maxCapacity: changes.maxCapacity,
-    operatingSlots: changes.operatingSlots === undefined ? undefined : [...changes.operatingSlots],
-    facilityIds: changes.facilityIds,
-    accessibilityFeatureIds: changes.accessibilityFeatureIds,
-    layouts: changes.layouts,
-  });
+  // SCRUM-120 AC2 and AC3. Checked last, so an edit that is refused for
+  // another reason never asks the editor to confirm first. `today` is decided
+  // once and handed to the save too, so the list the editor is shown and the
+  // check inside update_venue judge "future" against the same Singapore date.
+  const today = todayInSingapore();
+  const proposedMaxCapacity = changes.maxCapacity;
+  const cutsCapacity = proposedMaxCapacity !== undefined && isCapacityCut(current.maxCapacity, proposedMaxCapacity);
+  if (cutsCapacity && !confirmAffectedBookings) {
+    const affected = await findAffectedFutureBookings(current.id, proposedMaxCapacity, today);
+    if (affected.length > 0) {
+      throw affectedBookingsError(proposedMaxCapacity, affected);
+    }
+  }
+
+  const { data: outcome, error } = await saveVenueChanges(
+    current.id,
+    expectedUpdatedAt,
+    {
+      name: changes.name,
+      locationId: changes.locationId,
+      maxCapacity: changes.maxCapacity,
+      operatingSlots: changes.operatingSlots === undefined ? undefined : [...changes.operatingSlots],
+      facilityIds: changes.facilityIds,
+      accessibilityFeatureIds: changes.accessibilityFeatureIds,
+      layouts: changes.layouts,
+    },
+    { confirmAffectedBookings, today },
+  );
 
   if (error) {
     if (isUniqueViolation(error)) {
@@ -325,6 +367,14 @@ export async function updateVenue(venueId: string, input: unknown): Promise<Venu
   if (outcome === 'not_found') {
     throw new NotFoundError('Venue');
   }
+  // A booking was confirmed between the check above and the save. Show the
+  // editor the list as it is now, so what they confirm is what is there.
+  if (outcome === 'affected_bookings' && cutsCapacity) {
+    const affected = await findAffectedFutureBookings(current.id, proposedMaxCapacity, today);
+    if (affected.length > 0) {
+      throw affectedBookingsError(proposedMaxCapacity, affected);
+    }
+  }
   if (outcome !== 'updated') {
     throw new ValidationError('The venue could not be updated.');
   }
@@ -333,32 +383,43 @@ export async function updateVenue(venueId: string, input: unknown): Promise<Venu
 }
 
 // -----------------------------------------------------------------------------
-// Blocked: SCRUM-120 AC2, AC3 and AC4
+// SCRUM-120 AC2: which confirmed future bookings a capacity cut affects
 // -----------------------------------------------------------------------------
 
-/** A confirmed future booking that a capacity reduction would affect. */
-export type AffectedBooking = {
-  eventId: string;
-  eventName: string;
-  expectedAttendance: number;
-  coordinatorId: string | null;
-};
-
 /**
- * SCRUM-120 AC2: a capacity cut below a confirmed booking must list the
- * affected bookings and be confirmed before it is applied.
+ * The confirmed bookings at this venue, for events on or after today, whose
+ * expected attendance is above `proposedMaxCapacity` (isAffectedByCapacity).
  *
- * DUMMY(SCRUM-148) D-04: there is no bookings table in Sprint 1, so nothing can be
- * affected yet and this always returns an empty list. When bookings land, this
- * takes the venue id and the proposed maximum capacity, and updateVenue must
- * refuse unless UpdateVenueInput.confirmAffectedBookings is true.
+ * DUMMY(SCRUM-148) D-04: the bookings come from venue_booking, a stand-in
+ * table nothing writes to in Sprint 1; testers add rows by hand. SCRUM-148's
+ * booking flow writes it for real, and this function does not change.
  *
- * DUMMY(SCRUM-24) D-05: SCRUM-120 AC4 then notifies the coordinator assigned to each
- * affected event. No notification system exists in Sprint 1.
- *
- * Until both land, SCRUM-120 AC2, AC3 and AC4 stay unverifiable and the ticket
- * belongs in Merged - Pending Verification, not Done.
+ * "Today" is Singapore's date, not the server's: the server runs in UTC, which
+ * is still on yesterday until 08:00 in Singapore, and would count an event
+ * that has already happened as a future booking.
  */
-export async function findAffectedFutureBookings(): Promise<AffectedBooking[]> {
-  return [];
+export async function findAffectedFutureBookings(
+  venueId: string,
+  proposedMaxCapacity: number,
+  today: ISODate = todayInSingapore(),
+): Promise<AffectedBooking[]> {
+  const { data, error } = await fetchConfirmedFutureBookings(venueId, today);
+
+  if (error || !data) {
+    throw new ValidationError("Could not check the venue's bookings.", error?.message);
+  }
+
+  return data
+    .map((row) => row.event_request)
+    .filter((event) => isAffectedByCapacity(event.expected_attendance, proposedMaxCapacity))
+    .map((event) =>
+      AffectedBookingSchema.parse({
+        eventId: event.id,
+        reference: event.reference,
+        eventName: event.name,
+        proposedDate: event.proposed_date,
+        expectedAttendance: event.expected_attendance,
+        coordinatorId: event.coordinator_id,
+      }),
+    );
 }

@@ -173,8 +173,9 @@ export const UpdateVenueInputSchema = z
     accessibilityFeatureIds: IdListSchema('accessibility feature').optional(),
     layouts: LayoutListSchema.optional(),
     /**
-     * SCRUM-120 AC2: the user has seen the future bookings a capacity cut
-     * affects and confirmed. Blocked until confirmed bookings (SCRUM-148) exist.
+     * SCRUM-120 AC2: the user has seen the confirmed future bookings a capacity
+     * cut affects and confirmed it. Without it, such a cut is refused with the
+     * list of those bookings (AffectedBookingsDetails).
      */
     confirmAffectedBookings: z.boolean().optional(),
   })
@@ -249,3 +250,26 @@ export const VenueDetailSchema = VenueSummarySchema.extend({
   updatedAt: z.string(),
 });
 export type VenueDetail = z.infer<typeof VenueDetailSchema>;
+
+/**
+ * SCRUM-120 AC2: a confirmed future booking that a capacity cut would affect.
+ * Sent back with the 409 that asks the editor to confirm, so the form can show
+ * which events they are about to put over capacity, and who coordinates each.
+ */
+export const AffectedBookingSchema = z.object({
+  eventId: z.string().uuid(),
+  reference: z.string(),
+  eventName: z.string(),
+  proposedDate: z.string(),
+  expectedAttendance: z.number().int(),
+  coordinatorId: z.string().uuid().nullable(),
+});
+export type AffectedBooking = z.infer<typeof AffectedBookingSchema>;
+
+/** The details of that 409. `reason` tells it apart from the other venue 409s. */
+export const AffectedBookingsDetailsSchema = z.object({
+  reason: z.literal('affected_bookings'),
+  maxCapacity: z.number().int(),
+  bookings: z.array(AffectedBookingSchema),
+});
+export type AffectedBookingsDetails = z.infer<typeof AffectedBookingsDetailsSchema>;

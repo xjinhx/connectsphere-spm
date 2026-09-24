@@ -106,34 +106,70 @@ switch them the next time they edit those files.
   re-run US-8.1-TC02 (SCRUM-94 AC1).
 - **Status:** Active
 
-### D-04 — The bookings a capacity cut would affect are always an empty list
+### D-04 — Confirmed bookings are a stand-in table filled by hand
 
-- **Kind:** Stand-in code
-- **Added by:** SCRUM-120 — commit `80dd30e` (PR #13)
+- **Kind:** Stand-in code (a shared table created early, with nothing yet
+  writing to it)
+- **Added by:** SCRUM-120 — commit `80dd30e` (PR #13), as an always-empty
+  list; reworked into the `venue_booking` table by SCRUM-120 AC2 to AC4
+  (branch `venue-capacity-cut-warning`)
 - **Waiting on:** SCRUM-148 Approve a booking request
 - **Where:**
-  - `src/domain/venues/service.ts` — `findAffectedFutureBookings()` returns
-    `[]` (`DUMMY(SCRUM-148) D-04`)
-  - `src/app/api/venues/[id]/route.ts` — the venue update handler
+  - `supabase/migrations/20260924170000_venue_capacity_cut_affected_bookings.sql`
+    — the `venue_booking` table (`DUMMY(SCRUM-148) D-04`), and the check in
+    `update_venue`
+  - `src/lib/supabase/venues.ts` — `fetchConfirmedFutureBookings()`
     (`DUMMY(SCRUM-148) D-04`)
-- **To replace:** `findAffectedFutureBookings()` takes the venue id and the
-  proposed maximum capacity and returns the confirmed future bookings above
-  it; `updateVenue` refuses unless `confirmAffectedBookings` is true; re-test
-  SCRUM-120 AC2 and AC3.
-- **Status:** Active. Its ACs can't be tested against this stand-in — there is
-  nothing to find — so they stay in Merged - Pending Verification.
+  - `src/domain/venues/service.ts` — `findAffectedFutureBookings()`
+    (`DUMMY(SCRUM-148) D-04`)
+- **What is real and what is faked:** the capacity check, the list of affected
+  bookings, the confirm step and the refusal inside the save are SCRUM-120's
+  real code. Only the bookings themselves are faked: nothing in Sprint 1
+  creates a booking, so a tester adds `venue_booking` rows by hand (below).
+  That makes AC2 and AC3 testable against real rows, where the old empty list
+  had nothing to run against.
+- **To test by hand:** in Studio (`http://localhost:54323`), pick a submitted
+  event request with a future `proposed_date` and an `expected_attendance`
+  (say 100), then run:
+  ```sql
+  insert into venue_booking (venue_id, event_request_id)
+  values ('<venue id>', '<event request id>');
+  ```
+  Edit the venue and set its maximum capacity to 99 (AC2: the booking is
+  listed and must be confirmed) or to 100 (AC3: saves with no warning).
+- **Note for SCRUM-148:** a booking has no date or time slot of its own. It
+  takes both from its event request (`proposed_date`, `time_slots`), and
+  "future" is judged on the Singapore date (`todayInSingapore`). If SCRUM-148
+  gives a booking its own date or slot, `update_venue` and
+  `fetchConfirmedFutureBookings()` must read that instead. (Raised in review
+  of PR #61.)
+- **To replace:** SCRUM-148's approval flow writes `venue_booking` rows (and
+  may widen `status` beyond `'confirmed'`). Nothing in SCRUM-120 changes;
+  re-run `tests/integration/venue-capacity-cut.test.ts` and SCRUM-120 AC2 and
+  AC3 by hand against a booking made through that flow, then remove the
+  markers.
+- **Status:** Active
 
-### D-05 — A capacity cut doesn't notify the affected coordinators
+### D-05 — A capacity cut's "notification" is only a stored notice
 
 - **Kind:** Out-of-sprint stand-in
-- **Added by:** SCRUM-120 — commit `80dd30e` (PR #13)
-- **Waiting on:** SCRUM-24 Notification System — and D-04 first, since there
-  are no affected events to notify about until then
-- **Where:** `src/domain/venues/service.ts` — `DUMMY(SCRUM-24) D-05` on
-  `findAffectedFutureBookings()`
-- **To replace:** after a confirmed capacity cut, notify the coordinator
-  assigned to each affected event (`event_request.coordinator_id`, from
-  SCRUM-94); re-test SCRUM-120 AC4.
+- **Added by:** SCRUM-120 — commit `80dd30e` (PR #13), as a marker only;
+  implemented as the `venue_capacity_notice` record by SCRUM-120 AC4 (branch
+  `venue-capacity-cut-warning`)
+- **Waiting on:** SCRUM-24 Notification System
+- **Where:**
+  `supabase/migrations/20260924170000_venue_capacity_cut_affected_bookings.sql`
+  — the `venue_capacity_notice` table and the insert in `update_venue`
+  (`DUMMY(SCRUM-24) D-05`)
+- **What it does:** a confirmed cut writes one `venue_capacity_notice` row per
+  affected event, addressed to its coordinator (`coordinator_id`, null when
+  none is assigned yet), holding the old and new capacity and the event's
+  expected attendance. It is written in the same transaction as the cut. This
+  is the minimum honest notification CLAUDE.md asks for, the same as D-03
+  (SCRUM-94) and D-06 (SCRUM-96).
+- **To replace:** send each notice to its coordinator using SCRUM-24's
+  mechanism; the row already holds everything the message needs. Re-run
+  SCRUM-120 AC4.
 - **Status:** Active
 
 ### D-06 — Neither coordinator is notified when an event is reassigned

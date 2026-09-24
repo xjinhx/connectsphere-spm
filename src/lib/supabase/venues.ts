@@ -111,7 +111,14 @@ export async function createVenueWithLists(venue: {
  *
  * A field left undefined is not sent and stays as it is. A list that is sent
  * replaces the whole list, so an empty one removes them all (SCRUM-117 AC3).
- * Resolves to 'updated', 'stale' or 'not_found'; the last two write nothing.
+ * Resolves to 'updated', 'stale', 'not_found' or 'affected_bookings'; the last
+ * three write nothing.
+ *
+ * SCRUM-120 AC2 to AC4: a capacity cut that affects a confirmed future booking
+ * resolves to 'affected_bookings' unless `confirmAffectedBookings` is true, in
+ * which case the cut is saved together with a notice per affected event.
+ * `today` is the Singapore date (YYYY-MM-DD) "future" is judged against; left
+ * out, the function works out the Singapore date itself.
  */
 export async function saveVenueChanges(
   venueId: string,
@@ -125,6 +132,7 @@ export async function saveVenueChanges(
     accessibilityFeatureIds?: string[];
     layouts?: VenueLayoutRow[];
   },
+  { confirmAffectedBookings = false, today }: { confirmAffectedBookings?: boolean; today?: string } = {},
 ) {
   return db().rpc('update_venue', {
     p_venue_id: venueId,
@@ -138,5 +146,27 @@ export async function saveVenueChanges(
       p_accessibility_feature_ids: changes.accessibilityFeatureIds,
     }),
     ...(changes.layouts !== undefined && { p_layouts: changes.layouts }),
+    p_confirm_affected_bookings: confirmAffectedBookings,
+    ...(today !== undefined && { p_today: today }),
   });
+}
+
+/**
+ * SCRUM-120 AC2: a venue's confirmed bookings for events on or after `today`
+ * (a Singapore date, YYYY-MM-DD), with what the check needs from each event.
+ *
+ * DUMMY(SCRUM-148) D-04: venue_booking is a stand-in that nothing writes to in
+ * Sprint 1; testers add rows by hand. SCRUM-148's flow writes it for real.
+ *
+ * !inner makes the date filter drop the booking, not just blank the event.
+ */
+export async function fetchConfirmedFutureBookings(venueId: string, today: string) {
+  return db()
+    .from('venue_booking')
+    .select(
+      'event_request:event_request_id!inner (id, reference, name, proposed_date, expected_attendance, coordinator_id)',
+    )
+    .eq('venue_id', venueId)
+    .eq('status', 'confirmed')
+    .gte('event_request.proposed_date', today);
 }
