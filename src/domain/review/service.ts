@@ -457,17 +457,22 @@ export async function requestClarification(
   if (!existing) throw new NotFoundError('Event request');
 
   const current = existing as unknown as EventRequestRow;
-  if (!canRequestClarification(current.status)) {
-    throw new InvalidTransitionError(current.status, 'clarification_requested');
-  }
   // Raising a clarification is an act of reviewing the request, so it takes
   // the same per-event rule the review read takes (canReviewDetail). Without
   // it the route's role check was the only gate, and every Coordinator holds
   // that role: a Coordinator reassigned away could still move someone else's
   // event to Clarification Requested and send its Organiser a note, which
   // SCRUM-96 AC4 refuses. Reported by SCRUM-96's owner against merged code.
+  //
+  // Checked before the status check on purpose, as approveEventRequest does:
+  // AC4 returns "no planning information", and an InvalidTransitionError
+  // names the current status ("cannot move from approved"). Raised in review
+  // of PR #57.
   if (!canReviewDetail(current.coordinator_id, actorId)) {
     throw new ForbiddenError('This event request is assigned to another Event Coordinator.');
+  }
+  if (!canRequestClarification(current.status)) {
+    throw new InvalidTransitionError(current.status, 'clarification_requested');
   }
 
   // The check above is a read; the assignment can change between it and the

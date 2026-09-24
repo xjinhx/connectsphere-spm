@@ -1,6 +1,7 @@
 import { describe, it, expect, beforeAll, afterAll } from 'vitest';
 import { createAdminClient } from '@/lib/supabase/admin';
 import {
+  approveEventRequest,
   getClarificationView,
   getReviewDetail,
   requestClarification,
@@ -374,6 +375,26 @@ describe('requestClarification', () => {
 
     expect(data).not.toBeNull();
     expect((await readRow(id)).status).toBe('clarification_requested');
+  });
+
+  // SCRUM-96 AC4 — "access is denied and no planning information is
+  // returned". A Coordinator reassigned away must get the same 403 whatever
+  // the event's status is now. With the status check first they got a 409
+  // naming it ("cannot move from approved"), learning the event was approved.
+  // Raised in review of PR #57.
+  it('refuses a reassigned-away coordinator without revealing the status', async () => {
+    const id = await createRequest('submitted');
+    await assignTo(id, unrelatedCoordinatorId);
+    await assignTo(id, otherCoordinatorId);
+    await approveEventRequest(id, { actorId: otherCoordinatorId });
+
+    await expect(
+      requestClarification(id, { note: 'Please confirm attendance.' }, unrelatedCoordinatorId),
+    ).rejects.toMatchObject({
+      code: 'FORBIDDEN',
+      message: 'This event request is assigned to another Event Coordinator.',
+    });
+    expect((await readRow(id)).status).toBe('approved');
   });
 
   it('takes the request out of the awaiting-review queue', async () => {
