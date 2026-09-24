@@ -29,6 +29,8 @@ const supabase = createAdminClient();
 const CLIENT_ORGANISATION_ID = '22222222-2222-2222-2222-222222222222';
 
 let coordinatorId: string;
+/** The coordinator an event is reassigned to (SCRUM-96 AC4). */
+let otherCoordinatorId: string;
 const createdRequestIds: string[] = [];
 
 async function createEventRequest(status: 'draft' | 'submitted'): Promise<string> {
@@ -59,6 +61,19 @@ async function createEventRequest(status: 'draft' | 'submitted'): Promise<string
   return id;
 }
 
+/**
+ * Assignment goes through an update, not the insert, same as
+ * review-detail-clarification.test.ts: assigned_at is stamped by the
+ * set_assigned_at trigger on update only.
+ */
+async function assignTo(id: string, assignee: string): Promise<void> {
+  const { error } = await supabase
+    .from('event_request')
+    .update({ coordinator_id: assignee, assigned_by: assignee })
+    .eq('id', id);
+  if (error) throw new Error(`could not assign test request: ${error.message}`);
+}
+
 async function readRow(id: string) {
   const { data, error } = await supabase
     .from('event_request')
@@ -81,6 +96,18 @@ beforeAll(async () => {
     throw new Error(`could not create test coordinator: ${error?.message ?? 'no user returned'}`);
   }
   coordinatorId = data.user.id;
+
+  const { data: other, error: otherError } = await supabase.auth.admin.createUser({
+    email: `coordinator+rejectother${Date.now()}@connectsphere.example.com`,
+    password: 'Password123!',
+    email_confirm: true,
+  });
+  if (otherError || !other.user) {
+    throw new Error(
+      `could not create second test coordinator: ${otherError?.message ?? 'no user returned'}`,
+    );
+  }
+  otherCoordinatorId = other.user.id;
 });
 
 afterAll(async () => {
@@ -90,6 +117,9 @@ afterAll(async () => {
     await supabase.from('event_request').delete().eq('id', id);
   }
   if (coordinatorId) await supabase.auth.admin.deleteUser(coordinatorId);
+  // Also ON DELETE RESTRICT via coordinator_id/assigned_by, so this must
+  // follow the requests above.
+  if (otherCoordinatorId) await supabase.auth.admin.deleteUser(otherCoordinatorId);
 });
 
 describe('rejectEventRequest', () => {
@@ -179,6 +209,38 @@ describe('rejectEventRequest', () => {
     expect(row.status).toBe('approved');
     expect(row.decision).toBe('approved');
     expect(row.rejection_reason).toBeNull();
+  });
+
+  // SCRUM-96 AC4 — the coordinator an event was taken away from cannot reject
+  // it. Mirrors SCRUM-213's approve fix.
+  it('refuses a coordinator the request was reassigned away from, leaving it unchanged', async () => {
+    const id = await createEventRequest('submitted');
+    await assignTo(id, coordinatorId);
+    await assignTo(id, otherCoordinatorId);
+
+    await expect(
+      rejectEventRequest(id, { reason: 'Venue capacity insufficient' }, coordinatorId),
+    ).rejects.toMatchObject({ code: 'FORBIDDEN' });
+
+    const row = await readRow(id);
+    expect(row.status).toBe('submitted');
+    expect(row.decision).toBeNull();
+    expect(row.rejection_reason).toBeNull();
+  });
+
+  it('still lets the coordinator the request is assigned to reject it', async () => {
+    const id = await createEventRequest('submitted');
+    await assignTo(id, coordinatorId);
+    await assignTo(id, otherCoordinatorId);
+
+    const outcome = await rejectEventRequest(
+      id,
+      { reason: 'Venue capacity insufficient' },
+      otherCoordinatorId,
+    );
+
+    expect(outcome.status).toBe('rejected');
+    expect(outcome.decidedBy).toBe(otherCoordinatorId);
   });
 
   it('reports an unknown request as not found', async () => {

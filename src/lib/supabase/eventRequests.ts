@@ -301,6 +301,12 @@ export async function markEventRequestRejected(id: string, reason: string, actor
     .update({ status: 'rejected', decision: 'rejected', decided_by: actorId, rejection_reason: reason })
     .eq('id', id)
     .eq('status', 'submitted')
+    // SCRUM-96 AC4 — the same rule as canReviewDetail, applied inside the
+    // UPDATE, the pattern SCRUM-213 set on markEventRequestApproved above: an
+    // Event Operations Manager can reassign the event between the service's
+    // check and this write, and the filter makes the UPDATE miss rather than
+    // record a decision by a coordinator it was taken away from.
+    .or(`coordinator_id.is.null,coordinator_id.eq.${actorId}`)
     .select(COLUMNS)
     .maybeSingle();
 }
