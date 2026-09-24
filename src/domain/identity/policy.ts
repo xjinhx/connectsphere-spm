@@ -35,10 +35,12 @@ export function canAssignRoles(actorRoles: Role[], targetAccountId: string, acto
  * A few reads elsewhere in the codebase (getApprovalView, getClarificationView
  * in domain/review/service.ts) were built with no role check at all, because
  * their own Jira cards (SCRUM-92 AC3, SCRUM-90) say "anyone" may view them -
- * written before clarification #91 existed. This narrows "anyone" to exclude
- * an Attendee-only account without touching what those cards grant everyone
- * else: an account that also holds one of the roles below keeps the access
- * that role already earns it.
+ * written before clarification #91 existed. This is only the coarse first
+ * gate: it turns away an Attendee-only account. It does NOT mean every other
+ * role keeps access. Later fixes (SCRUM-89/90/220) narrow reads such as the
+ * clarification view further, to people connected to the request itself -
+ * its owning organiser, its assigned coordinator, and the operations manager -
+ * so check the read's own service function for the rule that applies.
  */
 const ROLES_WITH_LEGITIMATE_PLANNING_ACCESS: Role[] = [
   'event_organiser',
