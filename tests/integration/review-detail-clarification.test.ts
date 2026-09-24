@@ -357,14 +357,13 @@ describe('requestClarification', () => {
     expect((await readRow(id)).status).toBe('submitted');
   });
 
-  // The filter asks whether the actor may act on the row now, not whether it
-  // is unchanged since they read it. A request that was unassigned when read
-  // and assigned to this very Coordinator in between is still theirs to
-  // clarify - an earlier version of the guard compared against what was read
-  // and would have refused this.
-  it('still allows a coordinator the request was assigned to mid-request', async () => {
+  // The allowing half of the same filter: a row assigned to the actor is
+  // written. Without it, a filter that only matched unassigned rows would pass
+  // the refusal test above while refusing every assigned Coordinator. This
+  // does not stage a reassignment between the check and the write - it asks
+  // whether the actor may act on the row now, which is all the filter does.
+  it('allows the write when the request is assigned to the actor', async () => {
     const id = await createRequest('submitted');
-    // Read as unassigned; assigned to `other` before `other` writes.
     await assignTo(id, otherCoordinatorId);
 
     const { data } = await markEventRequestClarificationRequested(
@@ -523,13 +522,19 @@ describe('getClarificationView', () => {
 
   // The hole this replaced: "anyone with access" was read as any signed-in
   // account, so any user could read any request's note and status by id.
+  // The caller is another Organiser, not an Attendee: an Attendee-only account
+  // is refused by SCRUM-72's carve-out before canViewClarification runs, so it
+  // would pass with this rule removed. The message pins which refusal fired.
   it('refuses a signed-in user with no connection to the request', async () => {
     const id = await createRequest('submitted');
     await requestClarification(id, { note: 'Please confirm the venue' }, coordinatorId);
 
     await expect(
-      getClarificationView(id, { userId: otherCoordinatorId, roles: ['attendee'] }),
-    ).rejects.toMatchObject({ code: 'FORBIDDEN' });
+      getClarificationView(id, { userId: unrelatedCoordinatorId, roles: ['event_organiser'] }),
+    ).rejects.toMatchObject({
+      code: 'FORBIDDEN',
+      message: 'This event request belongs to someone else.',
+    });
   });
 
   // SCRUM-96 AC4 — a coordinator reassigned away loses the note with the event.
