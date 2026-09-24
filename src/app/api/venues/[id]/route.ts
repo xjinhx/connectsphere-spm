@@ -10,7 +10,7 @@ import { handleApiError } from '@/lib/api/handler';
  * /api/venues/[id]
  *
  * GET   SCRUM-121 AC2, the full venue page. Needs venue_catalogue_view.
- * PATCH SCRUM-120 AC1, SCRUM-117 AC3, SCRUM-118. Needs venue_administration.
+ * PATCH SCRUM-120 AC1 to AC4, SCRUM-117 AC3, SCRUM-118. Needs venue_administration.
  *
  * PATCH rather than PUT: a field left out is left unchanged. A list that is
  * sent replaces the whole list, which is how a facility gets removed.
@@ -54,9 +54,9 @@ export async function PATCH(request: NextRequest, { params }: { params: Promise<
       throw new ValidationError('Request body must be valid JSON.');
     }
 
-    // DUMMY(SCRUM-148) D-04: when confirmed bookings exist, SCRUM-120 AC2 requires
-    // listing the affected bookings and refusing until the caller sends
-    // confirmAffectedBookings. The field is already accepted by the schema.
+    // SCRUM-120 AC2: a capacity cut that affects a confirmed future booking is
+    // refused with 409 and the list of those bookings (details.reason
+    // 'affected_bookings') until the body also sends confirmAffectedBookings.
     const venue = await updateVenue(venueId, body);
     return NextResponse.json({ venue });
   } catch (error) {

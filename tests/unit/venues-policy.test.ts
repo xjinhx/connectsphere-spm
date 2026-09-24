@@ -4,6 +4,8 @@ import {
   assertLayoutsWithinMaxCapacity,
   canManageVenues,
   canViewVenueCatalogue,
+  isAffectedByCapacity,
+  isCapacityCut,
 } from '@/domain/venues/policy';
 import { ValidationError } from '@/domain/shared/errors';
 import type { Role } from '@/domain/identity/roles';
@@ -65,6 +67,39 @@ describe('assertLayoutsWithinMaxCapacity: SCRUM-118 AC3 and AC4', () => {
     expect(() => assertLayoutsWithinMaxCapacity(150, [{ layout: 'theatre', capacity: 200 }])).toThrow(
       ValidationError,
     );
+  });
+});
+
+describe('isCapacityCut: SCRUM-120 AC2', () => {
+  // Only a lower maximum can put a booking over capacity, so only a cut asks.
+  it('treats 100 lowered to 99 as a cut', () => {
+    expect(isCapacityCut(100, 99)).toBe(true);
+  });
+
+  it('does not treat saving the same maximum as a cut', () => {
+    expect(isCapacityCut(100, 100)).toBe(false);
+  });
+
+  it('does not treat raising the maximum as a cut', () => {
+    expect(isCapacityCut(100, 120)).toBe(false);
+  });
+});
+
+describe('isAffectedByCapacity: SCRUM-120 AC2 and AC3', () => {
+  // AC2: "a confirmed future booking whose expected attendance is 100 and I set
+  // the venue's maximum capacity to 99 ... that booking is shown to me"
+  it('SCRUM-120 AC2 treats a booking of 100 as affected by a maximum of 99', () => {
+    expect(isAffectedByCapacity(100, 99)).toBe(true);
+  });
+
+  // AC3: "... I set the venue's maximum capacity to 100 ... the change is
+  // applied with no warning"
+  it('SCRUM-120 AC3 does not treat a booking of 100 as affected by a maximum of 100', () => {
+    expect(isAffectedByCapacity(100, 100)).toBe(false);
+  });
+
+  it('does not treat a booking with no expected attendance as affected', () => {
+    expect(isAffectedByCapacity(null, 1)).toBe(false);
   });
 });
 
