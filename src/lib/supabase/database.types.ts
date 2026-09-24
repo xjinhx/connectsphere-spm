@@ -447,6 +447,93 @@ export type Database = {
           },
         ]
       }
+      venue_booking: {
+        Row: {
+          created_at: string
+          event_request_id: string
+          id: string
+          status: string
+          venue_id: string
+        }
+        Insert: {
+          created_at?: string
+          event_request_id: string
+          id?: string
+          status?: string
+          venue_id: string
+        }
+        Update: {
+          created_at?: string
+          event_request_id?: string
+          id?: string
+          status?: string
+          venue_id?: string
+        }
+        Relationships: [
+          {
+            foreignKeyName: "venue_booking_event_request_id_fkey"
+            columns: ["event_request_id"]
+            isOneToOne: false
+            referencedRelation: "event_request"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "venue_booking_venue_id_fkey"
+            columns: ["venue_id"]
+            isOneToOne: false
+            referencedRelation: "venues"
+            referencedColumns: ["id"]
+          },
+        ]
+      }
+      venue_capacity_notice: {
+        Row: {
+          coordinator_id: string | null
+          created_at: string
+          event_request_id: string
+          expected_attendance: number
+          id: string
+          new_capacity: number
+          previous_capacity: number
+          venue_id: string
+        }
+        Insert: {
+          coordinator_id?: string | null
+          created_at?: string
+          event_request_id: string
+          expected_attendance: number
+          id?: string
+          new_capacity: number
+          previous_capacity: number
+          venue_id: string
+        }
+        Update: {
+          coordinator_id?: string | null
+          created_at?: string
+          event_request_id?: string
+          expected_attendance?: number
+          id?: string
+          new_capacity?: number
+          previous_capacity?: number
+          venue_id?: string
+        }
+        Relationships: [
+          {
+            foreignKeyName: "venue_capacity_notice_event_request_id_fkey"
+            columns: ["event_request_id"]
+            isOneToOne: false
+            referencedRelation: "event_request"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "venue_capacity_notice_venue_id_fkey"
+            columns: ["venue_id"]
+            isOneToOne: false
+            referencedRelation: "venues"
+            referencedColumns: ["id"]
+          },
+        ]
+      }
       venue_facilities: {
         Row: {
           facility_id: string
@@ -573,6 +660,7 @@ export type Database = {
       update_venue: {
         Args: {
           p_accessibility_feature_ids?: string[]
+          p_confirm_affected_bookings?: boolean
           p_expected_updated_at: string
           p_facility_ids?: string[]
           p_layouts?: Json
@@ -580,6 +668,7 @@ export type Database = {
           p_max_capacity?: number
           p_name?: string
           p_operating_slots?: string[]
+          p_today?: string
           p_venue_id: string
         }
         Returns: string

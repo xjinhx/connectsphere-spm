@@ -15,10 +15,10 @@ import NoVenueAccess from '@/components/venue/NoVenueAccess';
  * The form is pre-filled with what the venue currently holds and submits the
  * full picture, so unticking a facility is what removes it (SCRUM-117 AC3).
  *
- * SCRUM-120 AC2, AC3 and AC4 are not implemented here: they need confirmed
- * bookings (SCRUM-148) and notifications (EP-20), neither in Sprint 1. A
- * capacity reduction currently saves with no affected-booking step, because
- * there are no bookings to affect.
+ * SCRUM-120 AC2: when a capacity cut affects confirmed future bookings, the
+ * form lists them and asks the editor to confirm before the cut is applied
+ * (VenueForm). The bookings are stand-in D-04 and the coordinator notice
+ * stand-in D-05 until SCRUM-148 and SCRUM-24 land (docs/dummies.md).
  *
  * Needs venue_administration, checked before the venue is read. The PATCH
  * route refuses anyone else with a 403 regardless.

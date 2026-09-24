@@ -43,6 +43,27 @@ export function assertLayoutsWithinMaxCapacity(maxCapacity: number, layouts: Ven
 }
 
 // -----------------------------------------------------------------------------
+// SCRUM-120 AC2 and AC3: which bookings a capacity cut affects
+//
+// update_venue (supabase/migrations/20260924170000_...) applies the same two
+// rules inside the save, so the check and the write agree.
+// -----------------------------------------------------------------------------
+
+/** Only a lower maximum can affect a booking. Raising it, or saving it unchanged, never asks. */
+export function isCapacityCut(currentMaxCapacity: number, proposedMaxCapacity: number): boolean {
+  return proposedMaxCapacity < currentMaxCapacity;
+}
+
+/**
+ * A booking is affected when its expected attendance is above the new maximum.
+ * Equal is not affected: 100 against 99 is (AC2), 100 against 100 is not (AC3).
+ * A booking with no expected attendance recorded cannot be over any maximum.
+ */
+export function isAffectedByCapacity(expectedAttendance: number | null, maxCapacity: number): boolean {
+  return expectedAttendance !== null && expectedAttendance > maxCapacity;
+}
+
+// -----------------------------------------------------------------------------
 // Permissions
 //
 // Both read from the team's permission matrix (SCRUM-69,
