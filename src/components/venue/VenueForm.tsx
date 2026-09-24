@@ -3,10 +3,12 @@
 import { useRouter } from 'next/navigation';
 import { useRef, useState } from 'react';
 import {
+  AffectedBookingsDetailsSchema,
   OPERATING_SLOTS,
   OPERATING_SLOT_LABELS,
   ROOM_LAYOUTS,
   ROOM_LAYOUT_LABELS,
+  type AffectedBookingsDetails,
   type OperatingSlot,
   type RoomLayout,
   type VenueDetail,
@@ -25,6 +27,8 @@ import { capacityToSend } from './capacityInput';
  * SCRUM-117 AC3 editing submits the full list, so unticking removes
  * SCRUM-118 AC1 layouts, each with its own capacity
  * SCRUM-120 AC1 editing saves changed values
+ * SCRUM-120 AC2 a capacity cut that affects confirmed future bookings lists
+ *               them and is only applied once the editor confirms
  *
  * Capacity inputs are type="text" with a numeric hint rather than
  * type="number". A number input makes it impossible to type "abc", which would
@@ -104,6 +108,9 @@ export default function VenueForm({
   const [fieldErrors, setFieldErrors] = useState<Record<string, string[]>>({});
   const [formError, setFormError] = useState<string | null>(null);
   const [saving, setSaving] = useState(false);
+  // SCRUM-120 AC2: the bookings a capacity cut would affect, shown until the
+  // editor confirms the cut or changes the form.
+  const [affected, setAffected] = useState<AffectedBookingsDetails | null>(null);
 
   function toggle<T>(list: T[], value: T): T[] {
     return list.includes(value) ? list.filter((item) => item !== value) : [...list, value];
@@ -121,9 +128,23 @@ export default function VenueForm({
 
   async function handleSubmit(event: React.FormEvent<HTMLFormElement>) {
     event.preventDefault();
+    await save(false);
+  }
+
+  /**
+   * SCRUM-120 AC2: confirm the cut the editor was shown. If the capacity has
+   * been changed since, it is a different cut with possibly different bookings,
+   * so it is sent unconfirmed and checked again rather than confirmed blind.
+   */
+  async function confirmCut() {
+    await save(affected !== null && capacityToSend(maxCapacity) === affected.maxCapacity);
+  }
+
+  async function save(confirmAffectedBookings: boolean) {
     setSaving(true);
     setFieldErrors({});
     setFormError(null);
+    setAffected(null);
 
     const payload = {
       name,
@@ -137,6 +158,7 @@ export default function VenueForm({
       // form that has gone out of date is refused instead of undoing someone
       // else's newer save.
       ...(isEdit && { expectedUpdatedAt: venue.updatedAt }),
+      ...(confirmAffectedBookings && { confirmAffectedBookings: true }),
     };
 
     try {
@@ -150,6 +172,15 @@ export default function VenueForm({
 
       if (!response.ok) {
         const error = body as ApiErrorBody;
+
+        // SCRUM-120 AC2: not an error in the form, a question for the editor.
+        const cut = AffectedBookingsDetailsSchema.safeParse(error.details);
+        if (error.error === 'CONFLICT' && cut.success) {
+          setAffected(cut.data);
+          setSaving(false);
+          return;
+        }
+
         const perField = fieldErrorsFrom(error.details);
 
         // SCRUM-116 AC2: a duplicate name is a problem with the name field,
@@ -358,6 +389,46 @@ export default function VenueForm({
         )}
         <FieldError messages={fieldErrors.layouts} />
       </fieldset>
+
+      {affected && (
+        <section
+          role="alert"
+          aria-labelledby="affected-bookings-heading"
+          className="rounded border border-[var(--danger)] p-4 text-sm"
+        >
+          <h2 id="affected-bookings-heading" className="font-semibold">
+            Lowering the maximum capacity to {affected.maxCapacity} affects{' '}
+            {affected.bookings.length === 1 ? '1 confirmed booking' : `${affected.bookings.length} confirmed bookings`}
+          </h2>
+          <p className="mt-1 text-[var(--text-muted)]">
+            Each of these events expects more attendees than the new maximum. If you confirm, the change is applied
+            and the coordinator assigned to each event is notified.
+          </p>
+          <ul className="mt-3 flex flex-col gap-2">
+            {affected.bookings.map((booking) => (
+              <li key={booking.eventId} className="rounded border border-[var(--border)] p-2">
+                <span className="font-medium">{booking.reference}</span> {booking.eventName}
+                <br />
+                {booking.proposedDate} · {booking.expectedAttendance} expected
+                {booking.coordinatorId === null && ' · no coordinator assigned yet'}
+              </li>
+            ))}
+          </ul>
+          <div className="mt-3 flex items-center gap-3">
+            <button
+              type="button"
+              onClick={confirmCut}
+              disabled={saving}
+              className="rounded bg-[var(--danger)] px-4 py-2 text-sm font-medium text-white disabled:opacity-60"
+            >
+              {saving ? 'Saving...' : 'Confirm and save'}
+            </button>
+            <button type="button" onClick={() => setAffected(null)} className="text-sm underline">
+              Go back and edit
+            </button>
+          </div>
+        </section>
+      )}
 
       <div className="flex items-center gap-3">
         <button
