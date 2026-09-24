@@ -12,6 +12,7 @@ import {
   saveVenueChanges,
 } from '@/lib/supabase/venues';
 import { ConflictError, NotFoundError, ValidationError, isUniqueViolation } from '@/domain/shared/errors';
+import { todayInSingapore, type ISODate } from '@/domain/shared/dates';
 import { assertLayoutsWithinMaxCapacity, isAffectedByCapacity, isCapacityCut } from './policy';
 import {
   AffectedBookingSchema,
@@ -326,11 +327,14 @@ export async function updateVenue(venueId: string, input: unknown): Promise<Venu
   }
 
   // SCRUM-120 AC2 and AC3. Checked last, so an edit that is refused for
-  // another reason never asks the editor to confirm first.
+  // another reason never asks the editor to confirm first. `today` is decided
+  // once and handed to the save too, so the list the editor is shown and the
+  // check inside update_venue judge "future" against the same Singapore date.
+  const today = todayInSingapore();
   const proposedMaxCapacity = changes.maxCapacity;
   const cutsCapacity = proposedMaxCapacity !== undefined && isCapacityCut(current.maxCapacity, proposedMaxCapacity);
   if (cutsCapacity && !confirmAffectedBookings) {
-    const affected = await findAffectedFutureBookings(current.id, proposedMaxCapacity);
+    const affected = await findAffectedFutureBookings(current.id, proposedMaxCapacity, today);
     if (affected.length > 0) {
       throw affectedBookingsError(proposedMaxCapacity, affected);
     }
@@ -348,7 +352,7 @@ export async function updateVenue(venueId: string, input: unknown): Promise<Venu
       accessibilityFeatureIds: changes.accessibilityFeatureIds,
       layouts: changes.layouts,
     },
-    confirmAffectedBookings,
+    { confirmAffectedBookings, today },
   );
 
   if (error) {
@@ -366,7 +370,7 @@ export async function updateVenue(venueId: string, input: unknown): Promise<Venu
   // A booking was confirmed between the check above and the save. Show the
   // editor the list as it is now, so what they confirm is what is there.
   if (outcome === 'affected_bookings' && cutsCapacity) {
-    const affected = await findAffectedFutureBookings(current.id, proposedMaxCapacity);
+    const affected = await findAffectedFutureBookings(current.id, proposedMaxCapacity, today);
     if (affected.length > 0) {
       throw affectedBookingsError(proposedMaxCapacity, affected);
     }
@@ -390,14 +394,15 @@ export async function updateVenue(venueId: string, input: unknown): Promise<Venu
  * table nothing writes to in Sprint 1; testers add rows by hand. SCRUM-148's
  * booking flow writes it for real, and this function does not change.
  *
- * "Today" is the UTC date, the same day boundary as current_date in
- * update_venue, so this list and the check inside the save agree.
+ * "Today" is Singapore's date, not the server's: the server runs in UTC, which
+ * is still on yesterday until 08:00 in Singapore, and would count an event
+ * that has already happened as a future booking.
  */
 export async function findAffectedFutureBookings(
   venueId: string,
   proposedMaxCapacity: number,
+  today: ISODate = todayInSingapore(),
 ): Promise<AffectedBooking[]> {
-  const today = new Date().toISOString().slice(0, 10);
   const { data, error } = await fetchConfirmedFutureBookings(venueId, today);
 
   if (error || !data) {
