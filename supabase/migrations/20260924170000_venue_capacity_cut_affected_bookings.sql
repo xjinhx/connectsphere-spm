@@ -96,9 +96,17 @@ alter table venue_capacity_notice enable row level security;
 -- -----------------------------------------------------------------------------
 -- update_venue, with SCRUM-120 AC2 to AC4
 --
--- Same as before, plus p_confirm_affected_bookings and one more outcome:
--- 'affected_bookings', returned when the cut affects a confirmed future booking
--- and was not confirmed. Like 'stale' and 'not_found', it has written nothing.
+-- Same as before, plus p_confirm_affected_bookings, p_today and one more
+-- outcome: 'affected_bookings', returned when the cut affects a confirmed
+-- future booking and was not confirmed. Like 'stale' and 'not_found', it has
+-- written nothing.
+--
+-- p_today is the Singapore date the service decided "future" against
+-- (todayInSingapore in src/domain/shared/dates.ts), so the list the editor is
+-- shown and this check use the same day even across midnight. Without it the
+-- Singapore date is worked out here. Never current_date: the database runs in
+-- UTC, which is still on yesterday until 08:00 in Singapore, so an event that
+-- has already happened would count as a future booking.
 --
 -- Dropped and recreated rather than replaced: a new argument makes a new
 -- function in Postgres, and leaving the old one would keep a way to cut the
@@ -116,7 +124,8 @@ create or replace function update_venue(
   p_facility_ids uuid[] default null,
   p_accessibility_feature_ids uuid[] default null,
   p_layouts jsonb default null,
-  p_confirm_affected_bookings boolean default false
+  p_confirm_affected_bookings boolean default false,
+  p_today date default null
 ) returns text
 language plpgsql
 set search_path = public
@@ -125,6 +134,7 @@ declare
   v_updated_at timestamptz;
   v_max_capacity integer;
   v_affected uuid[];
+  v_today date := coalesce(p_today, timezone('Asia/Singapore', now())::date);
 begin
   -- The lock makes a second save of this venue wait here until this one
   -- commits, and then see the updated_at this one wrote.
@@ -154,7 +164,7 @@ begin
     join event_request e on e.id = b.event_request_id
     where b.venue_id = p_venue_id
       and b.status = 'confirmed'
-      and e.proposed_date >= current_date
+      and e.proposed_date >= v_today
       and e.expected_attendance > p_max_capacity;
 
     if cardinality(v_affected) > 0 and not coalesce(p_confirm_affected_bookings, false) then
@@ -211,7 +221,7 @@ end;
 $$;
 
 -- Only the server may run it, as before.
-revoke all on function update_venue(uuid, timestamptz, text, uuid, integer, text[], uuid[], uuid[], jsonb, boolean)
+revoke all on function update_venue(uuid, timestamptz, text, uuid, integer, text[], uuid[], uuid[], jsonb, boolean, date)
   from public, anon, authenticated;
-grant execute on function update_venue(uuid, timestamptz, text, uuid, integer, text[], uuid[], uuid[], jsonb, boolean)
+grant execute on function update_venue(uuid, timestamptz, text, uuid, integer, text[], uuid[], uuid[], jsonb, boolean, date)
   to service_role;

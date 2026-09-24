@@ -117,6 +117,8 @@ export async function createVenueWithLists(venue: {
  * SCRUM-120 AC2 to AC4: a capacity cut that affects a confirmed future booking
  * resolves to 'affected_bookings' unless `confirmAffectedBookings` is true, in
  * which case the cut is saved together with a notice per affected event.
+ * `today` is the Singapore date (YYYY-MM-DD) "future" is judged against; left
+ * out, the function works out the Singapore date itself.
  */
 export async function saveVenueChanges(
   venueId: string,
@@ -130,7 +132,7 @@ export async function saveVenueChanges(
     accessibilityFeatureIds?: string[];
     layouts?: VenueLayoutRow[];
   },
-  confirmAffectedBookings = false,
+  { confirmAffectedBookings = false, today }: { confirmAffectedBookings?: boolean; today?: string } = {},
 ) {
   return db().rpc('update_venue', {
     p_venue_id: venueId,
@@ -145,12 +147,13 @@ export async function saveVenueChanges(
     }),
     ...(changes.layouts !== undefined && { p_layouts: changes.layouts }),
     p_confirm_affected_bookings: confirmAffectedBookings,
+    ...(today !== undefined && { p_today: today }),
   });
 }
 
 /**
  * SCRUM-120 AC2: a venue's confirmed bookings for events on or after `today`
- * (YYYY-MM-DD), with what the check needs from each event.
+ * (a Singapore date, YYYY-MM-DD), with what the check needs from each event.
  *
  * DUMMY(SCRUM-148) D-04: venue_booking is a stand-in that nothing writes to in
  * Sprint 1; testers add rows by hand. SCRUM-148's flow writes it for real.

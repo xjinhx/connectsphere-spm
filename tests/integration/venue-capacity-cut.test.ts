@@ -1,7 +1,8 @@
-import { afterAll, beforeAll, describe, expect, it } from 'vitest';
+import { afterAll, afterEach, beforeAll, describe, expect, it, vi } from 'vitest';
 import { createAdminClient } from '@/lib/supabase/admin';
 import { saveVenueChanges } from '@/lib/supabase/venues';
 import { createVenue, getVenue, updateVenue } from '@/domain/venues/service';
+import { todayInSingapore } from '@/domain/shared/dates';
 import { ensureTestClientOrganisation } from './fixtures/clientOrganisation';
 
 /**
@@ -21,6 +22,11 @@ import { ensureTestClientOrganisation } from './fixtures/clientOrganisation';
  * would) and the notification is stand-in D-05 (a venue_capacity_notice row).
  * See docs/dummies.md.
  *
+ * Test cases: US-11.4-TC02 (AC2), US-11.4-TC03 (AC3), US-11.4-TC04 (AC4).
+ *
+ * "Future" is a Singapore date (todayInSingapore), never the server's UTC one:
+ * until 08:00 in Singapore, UTC is still on yesterday.
+ *
  * Runs against the local Supabase stack. Postgres is the point: update_venue
  * repeats the check inside the save and writes the notices in the same
  * transaction as the cut. The admin client only arranges and reads rows.
@@ -36,9 +42,9 @@ let coordinatorId: string;
 const venueIds: string[] = [];
 const requestIds: string[] = [];
 
-/** A date `days` from today, as the YYYY-MM-DD the database compares. */
+/** The Singapore date `days` from today, as the YYYY-MM-DD the database compares. */
 function daysFromToday(days: number): string {
-  const date = new Date();
+  const date = new Date(`${todayInSingapore()}T00:00:00Z`);
   date.setUTCDate(date.getUTCDate() + days);
   return date.toISOString().slice(0, 10);
 }
@@ -118,6 +124,10 @@ beforeAll(async () => {
   coordinatorId = await createUser('coordinator');
 });
 
+afterEach(() => {
+  vi.useRealTimers();
+});
+
 afterAll(async () => {
   // Requests first: their bookings and notices cascade with them, a venue with
   // a booking cannot be deleted, and coordinator_id is ON DELETE RESTRICT.
@@ -129,7 +139,7 @@ afterAll(async () => {
 });
 
 describe('updateVenue: SCRUM-120 AC2, a cut below a confirmed future booking', () => {
-  it('SCRUM-120 AC2 shows the affected booking and saves nothing until confirmed', async () => {
+  it('US-11.4-TC02 SCRUM-120 AC2 shows the affected booking and saves nothing until confirmed', async () => {
     const venue = await createTestVenue('Cut Refused');
     const eventId = await bookEvent(venue.id, { attendance: 100, coordinator: coordinatorId });
 
@@ -146,7 +156,7 @@ describe('updateVenue: SCRUM-120 AC2, a cut below a confirmed future booking', (
     expect(await noticesFor(venue.id)).toEqual([]);
   });
 
-  it('SCRUM-120 AC2 applies the cut once the editor confirms it', async () => {
+  it('US-11.4-TC02 SCRUM-120 AC2 applies the cut once the editor confirms it', async () => {
     const venue = await createTestVenue('Cut Confirmed');
     await bookEvent(venue.id, { attendance: 100, coordinator: coordinatorId });
 
@@ -186,6 +196,47 @@ describe('updateVenue: SCRUM-120 AC2, a cut below a confirmed future booking', (
     expect(await noticesFor(venue.id)).toEqual([]);
   });
 
+  // Raised in review of PR #61. At 02:00 in Singapore the UTC date is still
+  // yesterday, so a UTC "today" counted yesterday's event as a future booking:
+  // the editor was asked to confirm and a notice was stored for an event that
+  // had already happened. Only Date is faked; the database clock is real, which
+  // is why the service hands update_venue the date it decided on.
+  it('at 02:00 in Singapore, does not count an event dated yesterday as a future booking', async () => {
+    const today = todayInSingapore();
+    const yesterday = daysFromToday(-1);
+    const venue = await createTestVenue('Cut At 2am SGT');
+    await bookEvent(venue.id, { attendance: 100, date: yesterday, coordinator: coordinatorId });
+
+    vi.useFakeTimers({ toFake: ['Date'] });
+    vi.setSystemTime(new Date(`${yesterday}T18:00:00Z`)); // 02:00 on `today` in Singapore
+    expect(todayInSingapore()).toBe(today);
+
+    const saved = await updateVenue(venue.id, { expectedUpdatedAt: venue.updatedAt, maxCapacity: 99 });
+
+    expect(saved.maxCapacity).toBe(99);
+    expect(await noticesFor(venue.id)).toEqual([]);
+  });
+
+  it('judges "future" inside the save against the Singapore date it is given', async () => {
+    const eventDate = daysFromToday(10);
+    const venue = await createTestVenue('Cut Given Today');
+    await bookEvent(venue.id, { attendance: 100, date: eventDate, coordinator: coordinatorId });
+
+    // On the event's own date it is still to come.
+    const onTheDay = await saveVenueChanges(venue.id, venue.updatedAt, { maxCapacity: 99 }, { today: eventDate });
+    expect(onTheDay.data).toBe('affected_bookings');
+
+    // The day after, it has happened and no longer counts.
+    const dayAfter = await saveVenueChanges(
+      venue.id,
+      venue.updatedAt,
+      { maxCapacity: 99 },
+      { today: daysFromToday(11) },
+    );
+    expect(dayAfter.data).toBe('updated');
+    expect(await noticesFor(venue.id)).toEqual([]);
+  });
+
   it('never asks when the maximum is raised', async () => {
     const venue = await createTestVenue('Capacity Raised');
     await bookEvent(venue.id, { attendance: 100, coordinator: coordinatorId });
@@ -197,7 +248,7 @@ describe('updateVenue: SCRUM-120 AC2, a cut below a confirmed future booking', (
 });
 
 describe('updateVenue: SCRUM-120 AC3, a cut down to exactly the expected attendance', () => {
-  it('SCRUM-120 AC3 applies a maximum of 100 against a booking of 100 with no warning', async () => {
+  it('US-11.4-TC03 SCRUM-120 AC3 applies a maximum of 100 against a booking of 100 with no warning', async () => {
     const venue = await createTestVenue('Cut To Attendance');
     await bookEvent(venue.id, { attendance: 100, coordinator: coordinatorId });
 
@@ -209,7 +260,7 @@ describe('updateVenue: SCRUM-120 AC3, a cut down to exactly the expected attenda
 });
 
 describe('updateVenue: SCRUM-120 AC4, the coordinator of each affected event is notified', () => {
-  it('SCRUM-120 AC4 records one notice per affected event, addressed to its coordinator', async () => {
+  it('US-11.4-TC04 SCRUM-120 AC4 records one notice per affected event, addressed to its coordinator', async () => {
     const venue = await createTestVenue('Cut Notifies');
     const assigned = await bookEvent(venue.id, { attendance: 120, coordinator: coordinatorId });
     const unassigned = await bookEvent(venue.id, { attendance: 150 });

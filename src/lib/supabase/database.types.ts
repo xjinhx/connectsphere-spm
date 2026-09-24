@@ -668,6 +668,7 @@ export type Database = {
           p_max_capacity?: number
           p_name?: string
           p_operating_slots?: string[]
+          p_today?: string
           p_venue_id: string
         }
         Returns: string
