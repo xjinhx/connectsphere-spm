@@ -13,8 +13,9 @@ import {
   ValidationError,
 } from '@/domain/shared/errors';
 import type { EventRequestStatus } from '@/domain/event-request/schema';
-import { toEventRequest, type EventRequest } from '@/domain/event-request/service';
+import { isActionPermitted } from '@/domain/identity/permissions';
 import type { Role } from '@/domain/identity/roles';
+import { toEventRequest, type EventRequest } from '@/domain/event-request/service';
 import { isAttendeeOnly } from '@/domain/identity/policy';
 import {
   ApproveInputSchema,
@@ -30,6 +31,8 @@ import {
   canBeRejected,
   canRequestClarification,
   canReviewDetail,
+  canViewClarification,
+  isReviewable,
   type Commitments,
 } from './policy';
 
@@ -280,6 +283,11 @@ export async function getReviewDetail(id: string, actorUserId: string): Promise<
   if (!data) throw new NotFoundError('Event request');
 
   const row = data as unknown as EventRequestRow;
+  // Checked before the assignment rule, and reported as not found: a draft is
+  // the Organiser's private working copy and carries no coordinator_id, so
+  // canReviewDetail would otherwise read it as "unassigned, open to any
+  // Coordinator". See isReviewable.
+  if (!isReviewable(row.status)) throw new NotFoundError('Event request');
   if (!canReviewDetail(row.coordinator_id, actorUserId)) {
     throw new ForbiddenError('This event request is assigned to another Event Coordinator.');
   }
@@ -337,10 +345,11 @@ function toClarificationOutcome(row: EventRequestRow): ClarificationOutcome {
  * own comment on toEventRequest already decided against, to match how
  * SCRUM-92 kept its decision fields out of it too).
  *
- * No response half: AC2 ("Organiser responds ... reply saved") is SCRUM-91,
- * a separate ticket not built on this branch. `response`/`respondedAt` are
- * left out entirely rather than stubbed to null, so nothing here claims to
- * answer AC2/AC3's "any response" half.
+ * Carries the question, not the reply. SCRUM-91 built the reply as its own
+ * module (domain/clarification/service.ts — getClarificationExchange returns
+ * every round), so this view is deliberately the narrow "what is outstanding
+ * right now" read the pages use beside it, not a second way to read the
+ * exchange.
  */
 export interface ClarificationView {
   id: string;
@@ -350,21 +359,31 @@ export interface ClarificationView {
 }
 
 /**
- * AC1/AC3 — the organiser (or anyone else with access to the request) reads
- * the clarification note without needing the Coordinator-only permission
- * `getReviewDetail` requires. Who may view: Jira says "the Organiser" (AC1)
- * and "anyone with access" (AC3), so no role/ownership check here beyond
- * SCRUM-72's carve-out below, same as getApprovalView — the middleware
- * already refuses this without a session.
+ * AC1/AC3 — the Organiser the request belongs to, a Coordinator entitled to
+ * review it, or an Event Operations Manager reads the clarification note.
  *
- * SCRUM-72 AC1/AC2 — the note this returns is exactly the "coordinator notes"
- * an Attendee must not get by requesting an event directly; an Attendee-only
- * account is refused before the note is read. See isAttendeeOnly's comment in
+ * "Anyone with access" (AC3) was previously read as any signed-in account,
+ * which made this the one route where a request's status and a Coordinator's
+ * free-text note about someone else's event could be read by id, by anybody.
+ * canViewClarification in policy.ts is what "with access" means now: the
+ * owning Organiser, a Coordinator on the same terms as the review read (so
+ * one reassigned away loses the note with the request), or the Operations
+ * Manager who decides who owns it. The same set of people as SCRUM-91's
+ * canViewClarificationExchange, so the two clarification reads cannot
+ * disagree about one request.
+ *
+ * SCRUM-72 AC1/AC2 — an Attendee-only account is refused first, before the
+ * row is read. canViewClarification would refuse them anyway (an Attendee is
+ * none of the three), but the check stays where SCRUM-72 put it: that card
+ * owns the wording an Attendee is given, and its AC is about the carve-out
+ * itself rather than about who else may read. See isAttendeeOnly's comment in
  * domain/identity/policy.ts.
+ *
+ * `actor` comes from getCurrentActor, never from the request.
  */
 export async function getClarificationView(
   id: string,
-  actor: { roles: readonly Role[] },
+  actor: { userId: string; roles: readonly Role[] },
 ): Promise<ClarificationView> {
   if (isAttendeeOnly([...actor.roles])) {
     throw new ForbiddenError('This information is not available to Attendees.');
@@ -380,6 +399,22 @@ export async function getClarificationView(
   if (!data) throw new NotFoundError('Event request');
 
   const row = data as unknown as EventRequestRow;
+  const permitted = canViewClarification(
+    { organiserId: row.organiser_id, coordinatorId: row.coordinator_id },
+    {
+      userId: actor.userId,
+      // The same permission the review route asserts, so "may review" means
+      // one thing across both reads.
+      isCoordinator: isActionPermitted(actor.roles, 'event_request_review'),
+      // Same permission SCRUM-91 reads for the exchange, so the two
+      // clarification reads cannot disagree about who an Operations Manager is.
+      isOperationsManager: isActionPermitted(actor.roles, 'coordinator_assignment'),
+    },
+  );
+  if (!permitted) {
+    throw new ForbiddenError('This event request belongs to someone else.');
+  }
+
   return {
     id: row.id,
     status: row.status,
@@ -422,10 +457,28 @@ export async function requestClarification(
   if (!existing) throw new NotFoundError('Event request');
 
   const current = existing as unknown as EventRequestRow;
+  // Raising a clarification is an act of reviewing the request, so it takes
+  // the same per-event rule the review read takes (canReviewDetail). Without
+  // it the route's role check was the only gate, and every Coordinator holds
+  // that role: a Coordinator reassigned away could still move someone else's
+  // event to Clarification Requested and send its Organiser a note, which
+  // SCRUM-96 AC4 refuses. Reported by SCRUM-96's owner against merged code.
+  //
+  // Checked before the status check on purpose, as approveEventRequest does:
+  // AC4 returns "no planning information", and an InvalidTransitionError
+  // names the current status ("cannot move from approved"). Raised in review
+  // of PR #57.
+  if (!canReviewDetail(current.coordinator_id, actorId)) {
+    throw new ForbiddenError('This event request is assigned to another Event Coordinator.');
+  }
   if (!canRequestClarification(current.status)) {
     throw new InvalidTransitionError(current.status, 'clarification_requested');
   }
 
+  // The check above is a read; the assignment can change between it and the
+  // write. The UPDATE carries the same rule (see
+  // markEventRequestClarificationRequested), so a reassignment landing in
+  // between makes it miss rather than be written over.
   const { data, error } = await markEventRequestClarificationRequested(
     parsedId.data,
     parsedInput.data.note,
@@ -434,20 +487,10 @@ export async function requestClarification(
   if (error) {
     throw new ValidationError('The clarification request could not be saved.', error.message);
   }
-  // The check above saw a submitted request, yet no row matched the `status =
-  // submitted` filter: another coordinator acted on it in between (approved
-  // it, or already asked their own question) - same race canBeApproved
-  // guards against for approval.
-  //
-  // A conflict, not an invalid transition. InvalidTransitionError would render
-  // as "An event cannot move from clarification_requested to
-  // clarification_requested", which describes neither what the caller asked
-  // for nor what happened: the request was never in clarification_requested
-  // for them. Raised in review of PR #32 - this is the first place the race
-  // reaches a Coordinator through a form they submit themselves, so the
-  // message has to say who lost. approveEventRequest above still carries the
-  // older wording; that is SCRUM-92's merged code, left for its owner.
-  if (!data) throw new ConflictError('Someone else already acted on this request.');
+  // The checks above saw a submitted request this Coordinator may act on, yet
+  // no row matched the filters. Two different things can have happened in
+  // between, and they need different answers - see clarificationRaceError.
+  if (!data) throw await clarificationRaceError(parsedId.data, actorId);
 
   return toClarificationOutcome(data as unknown as EventRequestRow);
 }
@@ -585,4 +628,34 @@ export async function rejectEventRequest(
   if (!data) throw new ConflictError('Someone else already acted on this request.');
 
   return toRejectionOutcome(data as unknown as EventRequestRow);
+}
+
+/**
+ * Why a conditional clarification request matched no row.
+ *
+ * Mirrors approvalRaceError (SCRUM-213) rather than sharing it: that function
+ * is SCRUM-92's, and folding both into one would mean editing it from this
+ * story. The shape is the same because the two races are the same - another
+ * Coordinator acted first, or an Event Operations Manager reassigned the
+ * event out from under this one mid-request - and SCRUM-96 AC4 wants the
+ * second reported as a denial, not a generic conflict.
+ *
+ * Raised in review of PR #32: the earlier single ConflictError said "someone
+ * else already acted", which is right for the first race and misleading for
+ * the second. This is the first place either race reaches a Coordinator
+ * through a form they submit themselves, so the message has to say what
+ * actually happened.
+ */
+async function clarificationRaceError(id: string, actorId: string): Promise<Error> {
+  const { data, error } = await fetchEventRequestById(id);
+  // A failed read is not a missing request - the row was read a moment ago.
+  if (error) return new ValidationError('The event request could not be read.', error.message);
+
+  const row = data as unknown as EventRequestRow | null;
+  if (!row) return new NotFoundError('Event request');
+
+  if (!canReviewDetail(row.coordinator_id, actorId)) {
+    return new ForbiddenError('This event request was reassigned to another Event Coordinator.');
+  }
+  return new ConflictError('Someone else already acted on this request.');
 }

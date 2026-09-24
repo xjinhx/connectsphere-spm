@@ -1,12 +1,16 @@
 import { describe, it, expect, beforeAll, afterAll } from 'vitest';
 import { createAdminClient } from '@/lib/supabase/admin';
 import {
+  approveEventRequest,
   getClarificationView,
   getReviewDetail,
   requestClarification,
 } from '@/domain/review/service';
 import { isAwaitingReview } from '@/domain/review/policy';
-import { markEventRequestSubmitted } from '@/lib/supabase/eventRequests';
+import {
+  markEventRequestClarificationRequested,
+  markEventRequestSubmitted,
+} from '@/lib/supabase/eventRequests';
 import { ensureTestClientOrganisation } from './fixtures/clientOrganisation';
 
 /**
@@ -15,7 +19,8 @@ import { ensureTestClientOrganisation } from './fixtures/clientOrganisation';
  *   US-7.1-TC02 — "Open the request from the queue" -> all submitted fields,
  *        including venue, equipment and registration requirements, are visible.
  *        (The attachments clause of that TC is not covered: no attachment
- *        feature exists in this codebase — see docs/SCRUM-89-90-summary.md.)
+ *        feature exists in this codebase, and none is in the current sprint's
+ *        scope; the review page says so rather than omitting the row.)
  *   US-7.1-TC03 — a request that has been clarified no longer counts as
  *        awaiting review.
  *   US-7.2-TC01 — a clarification message is saved with the event and is
@@ -35,18 +40,31 @@ import { ensureTestClientOrganisation } from './fixtures/clientOrganisation';
 
 const supabase = createAdminClient();
 const CLIENT_ORGANISATION_ID = '22222222-2222-2222-2222-222222222222';
-/**
- * SCRUM-72 AC2 narrows getClarificationView's "anyone" (US-7.2 AC1/AC3) to
- * exclude an Attendee-only account. Any non-Attendee role exercises the
- * original "anyone" grant; see the dedicated describe block below for the
- * carve-out itself.
- */
-const VIEWER = { roles: ['event_organiser'] as const };
 
 let coordinatorId: string;
 /** SCRUM-89 AC3's "another Event Coordinator". */
 let otherCoordinatorId: string;
+/** A third account, for "assigned to somebody who is not either of us". */
+let unrelatedCoordinatorId: string;
 const createdRequestIds: string[] = [];
+
+/**
+ * createRequest below puts every request under `coordinatorId` as its
+ * organiser, so this is the account that owns them.
+ */
+const asOwningOrganiser = () => ({ userId: coordinatorId, roles: ['event_organiser'] as const });
+const asCoordinator = (userId: string) => ({ userId, roles: ['coordinator'] as const });
+
+/** The stored row, for assertions about what a refused call did not change. */
+async function readRow(id: string): Promise<{ status: string; clarification_note: string | null }> {
+  const { data, error } = await supabase
+    .from('event_request')
+    .select('status, clarification_note')
+    .eq('id', id)
+    .single();
+  if (error) throw new Error(`could not read test request: ${error.message}`);
+  return data as { status: string; clarification_note: string | null };
+}
 
 /**
  * Assignment goes through an update, not the insert: assigned_at is stamped by
@@ -117,6 +135,18 @@ beforeAll(async () => {
     );
   }
   otherCoordinatorId = other.user.id;
+
+  const { data: third, error: thirdError } = await supabase.auth.admin.createUser({
+    email: `coordinator+unrelated${Date.now()}@connectsphere.example.com`,
+    password: 'Password123!',
+    email_confirm: true,
+  });
+  if (thirdError || !third.user) {
+    throw new Error(
+      `could not create third test coordinator: ${thirdError?.message ?? 'no user returned'}`,
+    );
+  }
+  unrelatedCoordinatorId = third.user.id;
 });
 
 afterAll(async () => {
@@ -128,6 +158,7 @@ afterAll(async () => {
   // Also ON DELETE RESTRICT via coordinator_id/assigned_by, so this must
   // follow the requests above.
   if (otherCoordinatorId) await supabase.auth.admin.deleteUser(otherCoordinatorId);
+  if (unrelatedCoordinatorId) await supabase.auth.admin.deleteUser(unrelatedCoordinatorId);
 });
 
 describe('getReviewDetail', () => {
@@ -201,6 +232,19 @@ describe('getReviewDetail', () => {
     expect(detail.purpose).toBe('Client launch');
   });
 
+  // A draft is the Organiser's private working copy and carries no
+  // coordinator_id, so the assignment rule alone read it as "unassigned,
+  // open to any Coordinator" - which let any Coordinator open any Organiser's
+  // unsubmitted draft through this route. Not found rather than forbidden: a
+  // Coordinator has no business learning the id exists.
+  it('treats an organiser\'s draft as not found, not as an unassigned request', async () => {
+    const id = await createRequest('draft', { purpose: 'Still being written' });
+
+    await expect(getReviewDetail(id, coordinatorId)).rejects.toMatchObject({
+      code: 'NOT_FOUND',
+    });
+  });
+
   it('reports a malformed id as not found rather than failing', async () => {
     await expect(getReviewDetail('not-a-uuid', coordinatorId)).rejects.toMatchObject({
       code: 'NOT_FOUND',
@@ -262,6 +306,97 @@ describe('requestClarification', () => {
   });
 
   // US-7.1-TC03 (AC3) — once clarified, it is no longer awaiting review.
+  // SCRUM-96 AC4, reported by that story's owner against merged code: the
+  // route's role check passes for every Coordinator, so without a per-event
+  // rule a Coordinator reassigned away could still move someone else's event
+  // to Clarification Requested and message its Organiser.
+  it('refuses a coordinator the request is assigned away from, leaving the status alone', async () => {
+    const id = await createRequest('submitted');
+    await assignTo(id, otherCoordinatorId);
+
+    await expect(
+      requestClarification(id, { note: 'Please confirm attendance.' }, unrelatedCoordinatorId),
+    ).rejects.toMatchObject({ code: 'FORBIDDEN' });
+
+    const row = await readRow(id);
+    expect(row.status).toBe('submitted');
+    expect(row.clarification_note).toBeNull();
+  });
+
+  it('allows the coordinator the request is actually assigned to', async () => {
+    const id = await createRequest('submitted');
+    await assignTo(id, otherCoordinatorId);
+
+    const outcome = await requestClarification(
+      id,
+      { note: 'Please confirm attendance.' },
+      otherCoordinatorId,
+    );
+
+    expect(outcome.status).toBe('clarification_requested');
+    expect(outcome.clarificationRequestedBy).toBe(otherCoordinatorId);
+  });
+
+  // The per-event check above is a read; this is the write refusing the same
+  // thing, so a reassignment landing between the two cannot be written over.
+  // Exercised at the database function directly: the service's own check
+  // would refuse first, so this is the only way to reach the filter.
+  it('refuses when the request is reassigned between the check and the write', async () => {
+    const id = await createRequest('submitted');
+    await assignTo(id, otherCoordinatorId);
+
+    // The row is assigned to `other`; the write is attempted as `unrelated`.
+    // The UPDATE's own coordinator filter misses, which is the state the
+    // service turns into a denial.
+    const { data } = await markEventRequestClarificationRequested(
+      id,
+      'Please confirm attendance.',
+      unrelatedCoordinatorId,
+    );
+
+    expect(data).toBeNull();
+    expect((await readRow(id)).status).toBe('submitted');
+  });
+
+  // The allowing half of the same filter: a row assigned to the actor is
+  // written. Without it, a filter that only matched unassigned rows would pass
+  // the refusal test above while refusing every assigned Coordinator. This
+  // does not stage a reassignment between the check and the write - it asks
+  // whether the actor may act on the row now, which is all the filter does.
+  it('allows the write when the request is assigned to the actor', async () => {
+    const id = await createRequest('submitted');
+    await assignTo(id, otherCoordinatorId);
+
+    const { data } = await markEventRequestClarificationRequested(
+      id,
+      'Please confirm attendance.',
+      otherCoordinatorId,
+    );
+
+    expect(data).not.toBeNull();
+    expect((await readRow(id)).status).toBe('clarification_requested');
+  });
+
+  // SCRUM-96 AC4 — "access is denied and no planning information is
+  // returned". A Coordinator reassigned away must get the same 403 whatever
+  // the event's status is now. With the status check first they got a 409
+  // naming it ("cannot move from approved"), learning the event was approved.
+  // Raised in review of PR #57.
+  it('refuses a reassigned-away coordinator without revealing the status', async () => {
+    const id = await createRequest('submitted');
+    await assignTo(id, unrelatedCoordinatorId);
+    await assignTo(id, otherCoordinatorId);
+    await approveEventRequest(id, { actorId: otherCoordinatorId });
+
+    await expect(
+      requestClarification(id, { note: 'Please confirm attendance.' }, unrelatedCoordinatorId),
+    ).rejects.toMatchObject({
+      code: 'FORBIDDEN',
+      message: 'This event request is assigned to another Event Coordinator.',
+    });
+    expect((await readRow(id)).status).toBe('approved');
+  });
+
   it('takes the request out of the awaiting-review queue', async () => {
     const id = await createRequest('submitted');
     expect(isAwaitingReview((await getReviewDetail(id, coordinatorId)).status)).toBe(true);
@@ -313,17 +448,19 @@ describe('resubmitting after a clarification', () => {
 
     await markEventRequestSubmitted(supabase, id);
 
-    const view = await getClarificationView(id, VIEWER);
+    const view = await getClarificationView(id, asOwningOrganiser());
     expect(view.status).toBe('submitted');
     expect(view.clarificationNote).toBe('Please confirm the venue');
   });
 
   // Bug found via manual testing on 2026-09-16: a second clarification round
   // overwrote clarification_note correctly but left clarification_requested_at
-  // frozen at the first round's time, because set_clarification_requested_at
-  // originally only fired on a null -> not-null transition, and a resubmitted
-  // request's note is never cleared to null (see the test above). Fixed by
-  // firing on any change to the note's value instead.
+  // frozen at the first round's time. set_clarification_requested_at fired
+  // only on a null -> not-null transition, and a resubmitted request's note is
+  // never cleared to null (see the test above). A first fix compared the
+  // note's text, which still missed a Coordinator re-sending the identical
+  // question; the trigger now keys on the submitted -> clarification_requested
+  // status transition and ignores the note entirely.
   it('stamps a fresh timestamp on a second clarification, not just the first', async () => {
     const id = await createRequest('submitted');
     await requestClarification(id, { note: 'First question' }, coordinatorId);
@@ -380,22 +517,61 @@ describe('resubmitting after a clarification', () => {
 });
 
 describe('getClarificationView', () => {
-  // US-7.2-TC01 (AC1) "visible to the Organiser" / US-7.2-TC03 (AC3)
-  it('shows the note to a viewer who holds no review permission', async () => {
+  // US-7.2-TC01 (AC1) "visible to the Organiser"
+  it('shows the note to the organiser the request belongs to', async () => {
     const id = await createRequest('submitted');
     await requestClarification(id, { note: 'Please confirm the expected AV setup' }, coordinatorId);
 
-    const view = await getClarificationView(id, VIEWER);
+    const view = await getClarificationView(id, asOwningOrganiser());
 
     expect(view.clarificationNote).toBe('Please confirm the expected AV setup');
     expect(view.clarificationRequestedAt).not.toBeNull();
     expect(view.status).toBe('clarification_requested');
   });
 
+  // US-7.2-TC03 (AC3) "anyone with access" — a Coordinator entitled to review
+  // it is the other half of "with access".
+  it('shows the note to a coordinator entitled to review the request', async () => {
+    const id = await createRequest('submitted');
+    await assignTo(id, otherCoordinatorId);
+    await requestClarification(id, { note: 'Please confirm the venue' }, otherCoordinatorId);
+
+    const view = await getClarificationView(id, asCoordinator(otherCoordinatorId));
+
+    expect(view.clarificationNote).toBe('Please confirm the venue');
+  });
+
+  // The hole this replaced: "anyone with access" was read as any signed-in
+  // account, so any user could read any request's note and status by id.
+  // The caller is another Organiser, not an Attendee: an Attendee-only account
+  // is refused by SCRUM-72's carve-out before canViewClarification runs, so it
+  // would pass with this rule removed. The message pins which refusal fired.
+  it('refuses a signed-in user with no connection to the request', async () => {
+    const id = await createRequest('submitted');
+    await requestClarification(id, { note: 'Please confirm the venue' }, coordinatorId);
+
+    await expect(
+      getClarificationView(id, { userId: unrelatedCoordinatorId, roles: ['event_organiser'] }),
+    ).rejects.toMatchObject({
+      code: 'FORBIDDEN',
+      message: 'This event request belongs to someone else.',
+    });
+  });
+
+  // SCRUM-96 AC4 — a coordinator reassigned away loses the note with the event.
+  it('refuses a coordinator the request is assigned away from', async () => {
+    const id = await createRequest('submitted');
+    await assignTo(id, otherCoordinatorId);
+
+    await expect(
+      getClarificationView(id, asCoordinator(unrelatedCoordinatorId)),
+    ).rejects.toMatchObject({ code: 'FORBIDDEN' });
+  });
+
   it('shows no note for a request nobody has asked about', async () => {
     const id = await createRequest('submitted');
 
-    const view = await getClarificationView(id, VIEWER);
+    const view = await getClarificationView(id, asOwningOrganiser());
 
     expect(view.clarificationNote).toBeNull();
     expect(view.clarificationRequestedAt).toBeNull();
@@ -406,14 +582,14 @@ describe('getClarificationView', () => {
   it('does not claim to carry a response', async () => {
     const id = await createRequest('submitted');
 
-    const view = await getClarificationView(id, VIEWER);
+    const view = await getClarificationView(id, asOwningOrganiser());
 
     expect(view).not.toHaveProperty('response');
   });
 
   it('reports an unknown request as not found', async () => {
     await expect(
-      getClarificationView('99999999-9999-4999-8999-999999999999', VIEWER),
+      getClarificationView('99999999-9999-4999-8999-999999999999', asOwningOrganiser()),
     ).rejects.toMatchObject({ code: 'NOT_FOUND' });
   });
 });
@@ -428,16 +604,25 @@ describe('getClarificationView: SCRUM-72 AC1/AC2', () => {
     const id = await createRequest('submitted');
     await requestClarification(id, { note: 'Please confirm the expected AV setup' }, coordinatorId);
 
-    await expect(getClarificationView(id, { roles: ['attendee'] })).rejects.toMatchObject({
+    await expect(
+      getClarificationView(id, { userId: unrelatedCoordinatorId, roles: ['attendee'] }),
+    ).rejects.toMatchObject({
       code: 'FORBIDDEN',
     });
   });
 
+  // The account is the request's own organiser as well as an Attendee: the
+  // carve-out is about holding the Attendee role only, not about holding it at
+  // all. Given a userId here because canViewClarification (SCRUM-90) now also
+  // asks *which* organiser is reading — before that, roles alone were enough.
   it('still allows an account holding both Attendee and a planning role', async () => {
     const id = await createRequest('submitted');
     await requestClarification(id, { note: 'Please confirm the expected AV setup' }, coordinatorId);
 
-    const view = await getClarificationView(id, { roles: ['attendee', 'event_organiser'] });
+    const view = await getClarificationView(id, {
+      userId: coordinatorId,
+      roles: ['attendee', 'event_organiser'],
+    });
     expect(view.clarificationNote).toBe('Please confirm the expected AV setup');
   });
 });

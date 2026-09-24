@@ -78,6 +78,9 @@ export default async function EventRequestPage({
   // already holds. Both take `actor` (SCRUM-72 AC2) — an Attendee-only account
   // is refused internal planning data even here, though getEventRequest above
   // already keeps anyone but the owning organiser from reaching this line.
+  // getClarificationView also applies canViewClarification, which cannot fail
+  // here for the same reason, but the function is reachable through the API by
+  // anyone.
   // SCRUM-93 AC4/AC6 — the rejection reason and date, if this request has
   // been rejected. Same reasoning as the clarification/approval reads above:
   // a separate read rather than a field on `request` itself.
