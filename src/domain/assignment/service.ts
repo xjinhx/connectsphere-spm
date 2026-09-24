@@ -207,6 +207,8 @@ export interface AssignedEvent {
   submittedAt: string | null;
   timeSlots: string[] | null;
   assignedAt: string | null;
+  /** Null until the organiser has been linked to a client organisation. */
+  clientOrganisation: { id: string; name: string } | null;
 }
 
 /**
@@ -240,6 +242,7 @@ export async function listMyAssignedEvents(coordinatorId: string): Promise<Assig
     assignedAt: row.assigned_at,
     submittedAt: row.submitted_at,
     timeSlots: row.time_slots,
+    clientOrganisation: row.client_organisation,
   }));
 }
 

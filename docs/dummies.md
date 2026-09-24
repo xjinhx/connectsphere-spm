@@ -51,17 +51,17 @@ switch them the next time they edit those files.
 
 - **Kind:** Loosened rule
 - **Added by:** SCRUM-76 — commit `bee2e54` (PR #9)
-- **Waiting on:** SCRUM-88 Show client organisation on the assigned-events queue
+- **Waiting on:** ~~SCRUM-88 Show client organisation on the assigned-events queue~~ — resolved (PR #54)
 - **Where:**
-  - `src/domain/assignment/service.ts` — `AssignedEvent` carries no client
-    organisation field, so it cannot be shown on the assigned-events queue
-    (SCRUM-88 AC1)
-  - `src/app/assigned-events/page.tsx` — no client organisation column,
-    since there is nothing to show
-- **To replace:** once SCRUM-88 adds a client organisation column to the
+  - ~~`src/domain/assignment/service.ts` — `AssignedEvent` carried no~~
+    ~~client organisation field~~ — resolved (PR #54): now carries
+    `clientOrganisation`
+  - ~~`src/app/assigned-events/page.tsx` — no client organisation~~
+    ~~column~~ — resolved (PR #54): column added
+- **To replace:** ~~once SCRUM-88 adds a client organisation column to the
   assigned-events queue, have `AssignedEvent` carry `client_organisation_id`/
-  `name` and render it on that page; re-test SCRUM-88's own ACs.
-- **Status:** Partly replaced. SCRUM-203 (`client_organisations` table) and
+  `name` and render it on that page; re-test SCRUM-88's own ACs.~~ Done (PR #54).
+- **Status:** Replaced (SCRUM-88, PR #54). SCRUM-203 (`client_organisations` table) and
   SCRUM-204 (linking an organiser to one, PR #22, merged into main) resolved
   the event-request side: `currentActor.ts` now reads the actor's real
   `clientOrganisation` (`null` only for internal staff or an organiser not
@@ -74,6 +74,12 @@ switch them the next time they edit those files.
   block an organiser a Coordinator hasn't linked yet. What remains is the
   assigned-events display gap (SCRUM-88), unrelated to event-request
   creation.
+
+  SCRUM-88 has since added the client organisation column to the
+  assigned-events queue (`AssignedEvent.clientOrganisation`, rendered on
+  `assigned-events/page.tsx`, shown as "-" for an unlinked organiser).
+  Both locations listed above are resolved. All three of SCRUM-88's ACs
+  are manually verified end to end. D-01 is fully replaced.
 
 ### D-02 — "Nothing is committed" is hardcoded when a request is approved
 

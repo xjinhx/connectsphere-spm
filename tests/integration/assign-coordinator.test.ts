@@ -266,6 +266,12 @@ describe('listMyAssignedEvents', () => {
     const events = await listMyAssignedEvents(coordinatorId);
     const ids = events.map((event) => event.id);
 
+    const mineEvent = events.find((event) => event.id === mine);
+    expect(mineEvent?.clientOrganisation).toEqual({
+      id: CLIENT_ORGANISATION_ID,
+      name: 'Integration Test Organisation',
+    });
+
     expect(ids).toContain(mine);
     expect(ids).not.toContain(theirs);
     expect(events.every((event) => event.assignedAt !== null)).toBe(true);
