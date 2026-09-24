@@ -28,6 +28,7 @@ export default function LoginPage() {
     const roles = rolesResponse.ok ? ((await rolesResponse.json()).roles as unknown[]) : undefined;
 
     router.push(landingPathForRoles(roles));
+    router.refresh();
     return { ok: true };
   }
 
