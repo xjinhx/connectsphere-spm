@@ -5,11 +5,12 @@ import { getCurrentActor } from '@/lib/auth/currentActor';
 
 /**
  * SCRUM-92 AC2 / AC3 — the approval outcome, its date, and the statement that
- * nothing is yet committed. Readable by any signed-in user (Jira AC3:
- * "anyone"); the middleware refuses it without a session.
+ * nothing is yet committed. Readable by the request's owner, its coordinator
+ * and Operations Managers; everyone else gets 403 (canViewApproval, customer
+ * clarification #91). The middleware refuses it without a session.
  *
- * SCRUM-72 AC2 — the actor is fetched so getApprovalView can refuse an
- * Attendee-only account requesting this directly.
+ * The actor is fetched so getApprovalView can decide who is asking, including
+ * refusing an Attendee-only account (SCRUM-72 AC2).
  */
 export async function GET(_req: NextRequest, { params }: { params: Promise<{ id: string }> }) {
   try {

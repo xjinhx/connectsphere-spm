@@ -15,6 +15,7 @@ import {
   describeTimeSlots,
 } from '@/domain/event-request/policy';
 import { getEventRequest } from '@/domain/event-request/service';
+import { COMMITMENT_STATEMENT, NO_COMMITMENTS } from '@/domain/review/policy';
 import { getApprovalView, getClarificationView, getRejectionView } from '@/domain/review/service';
 import { formatSingaporeDate, formatSingaporeDateTime } from '@/domain/shared/dates';
 import { getCurrentActor } from '@/lib/auth/currentActor';
@@ -75,10 +76,10 @@ export default async function EventRequestPage({
   //
   // getApprovalView rather than request.status, because AC2 asks for the
   // decision date and the statement, and neither is on the request the page
-  // already holds. Takes `actor` (SCRUM-72 AC2) — an Attendee-only account is
-  // refused internal planning data even here. Stays unconditional below: its
-  // only check is the Attendee carve-out, which a same-organisation colleague
-  // (SCRUM-204 AC3, see isOwner below) always clears.
+  // already holds. Takes `actor`: canViewApproval allows only the owner, the
+  // request's coordinator and Operations Managers (customer clarification #91),
+  // so like the clarification and rejection reads it is guarded to the owner
+  // below. A colleague still sees the Approved badge, which is AC3's part.
   //
   // getEventRequest above does NOT keep this to the owning organiser alone:
   // SCRUM-204 AC3 lets a same-organisation colleague reach this line too,
@@ -88,24 +89,32 @@ export default async function EventRequestPage({
   // been rejected. Same reasoning as the clarification/approval reads above:
   // a separate read rather than a field on `request` itself.
   //
-  // getClarificationView and getRejectionView are NOT called unconditionally
-  // like getApprovalView: canViewClarification and canViewRejection are both
-  // deliberately narrower than "anyone signed in" (owner, eligible coordinator,
-  // or ops manager only - see their comments in review/policy.ts), so a
-  // same-organisation colleague who legitimately reaches this page would throw
-  // ForbiddenError and crash the whole page instead of seeing the "belongs to
-  // a colleague" notice below. Guarded to the owner, the only caller this page
-  // ever has that both functions are guaranteed to allow; everyone else gets
-  // an empty view - `clarification.clarificationNote`/`rejection.rejectionReason`
-  // are already null-checked below, so this reads exactly like an unanswered/
-  // undecided request to them, which is what the generic view-only notice
-  // already expects.
+  // getClarificationView, getApprovalView and getRejectionView are NOT called
+  // unconditionally: canViewClarification, canViewApproval and canViewRejection
+  // are all deliberately narrower than "anyone signed in" (owner, eligible
+  // coordinator, or ops manager only - see their comments in review/policy.ts),
+  // so a same-organisation colleague who legitimately reaches this page would
+  // throw ForbiddenError and crash the whole page instead of seeing the
+  // "belongs to a colleague" notice below. Guarded to the owner, the only caller
+  // this page ever has that all three are guaranteed to allow; everyone else
+  // gets an empty view - `clarification.clarificationNote`, `approval.decision`
+  // and `rejection.rejectionReason` are already null-checked below, so this
+  // reads exactly like an unanswered/undecided request to them, which is what
+  // the generic view-only notice already expects.
   const isOwner = request.organiserId === actor.userId;
   const emptyClarification = { id: request.id, status: request.status, clarificationNote: null, clarificationRequestedAt: null };
+  const emptyApproval = {
+    id: request.id,
+    status: request.status,
+    decision: null,
+    decidedAt: null,
+    commitments: { ...NO_COMMITMENTS },
+    commitmentStatement: COMMITMENT_STATEMENT,
+  };
   const emptyRejection = { id: request.id, status: request.status, rejectionReason: null, decidedAt: null };
   const [clarification, approval, rejection] = await Promise.all([
     isOwner ? getClarificationView(id, actor) : Promise.resolve(emptyClarification),
-    getApprovalView(id, actor),
+    isOwner ? getApprovalView(id, actor) : Promise.resolve(emptyApproval),
     isOwner ? getRejectionView(id, actor) : Promise.resolve(emptyRejection),
   ]);
 

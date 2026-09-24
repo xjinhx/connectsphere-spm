@@ -31,6 +31,7 @@ import {
   canBeRejected,
   canRequestClarification,
   canReviewDetail,
+  canViewApproval,
   canViewClarification,
   canViewRejection,
   isReviewable,
@@ -179,8 +180,8 @@ async function approvalRaceError(id: string, actorId: string): Promise<Error> {
  * What anyone viewing a request is told about its approval.
  *
  * AC2 asks for "the approval outcome and date" and the statement - not who made
- * the decision - so decided_by is deliberately left out of a view that any
- * signed-in user can read.
+ * the decision - so decided_by is deliberately left out of a view the organiser
+ * reads.
  */
 export interface ApprovalView {
   id: string;
@@ -199,20 +200,24 @@ export interface ApprovalView {
  * AC3 — anyone viewing an approved request sees it is not confirmed, and that
  * no venue or equipment is committed.
  *
- * Who may view: Jira AC3 says "anyone", so there is no ownership or role check
- * here beyond SCRUM-72's carve-out below; the middleware already refuses the
- * route without a signed-in session. This is a separate read from
- * event-request's getEventRequest, whose rule is that only the owning
- * organiser may read a request - widening that rule would mean changing
- * SCRUM-82's logic from this story.
+ * Who may view: the owner, the request's coordinator and Operations Managers
+ * (canViewApproval). This read used to answer anyone signed in, on the reading
+ * that AC3's "anyone" meant exactly that; customer clarification #91 ties
+ * access to role and relationship to the event, which is how the rejection and
+ * clarification reads beside it already work. Everyone else is refused with
+ * 403, after the row is read, because who may see it depends on who the
+ * request belongs to.
  *
- * SCRUM-72 AC2 — "anyone" stops short of an Attendee-only account requesting
- * this directly; see isAttendeeOnly's comment in domain/identity/policy.ts.
+ * SCRUM-72 AC2 — an Attendee-only account is refused before anything is read;
+ * see isAttendeeOnly's comment in domain/identity/policy.ts.
  *
  * The commitment flags and statement are returned for every request, decided
  * or not, because this sprint nothing can be committed against any request.
  */
-export async function getApprovalView(id: string, actor: { roles: readonly Role[] }): Promise<ApprovalView> {
+export async function getApprovalView(
+  id: string,
+  actor: { userId: string; roles: readonly Role[] },
+): Promise<ApprovalView> {
   if (isAttendeeOnly([...actor.roles])) {
     throw new ForbiddenError('This information is not available to Attendees.');
   }
@@ -227,6 +232,10 @@ export async function getApprovalView(id: string, actor: { roles: readonly Role[
   if (!data) throw new NotFoundError('Event request');
 
   const row = data as unknown as EventRequestRow;
+  if (!canViewApproval({ organiserId: row.organiser_id, coordinatorId: row.coordinator_id }, actor)) {
+    throw new ForbiddenError('This approval is not yours to read.');
+  }
+
   return {
     id: row.id,
     status: row.status,

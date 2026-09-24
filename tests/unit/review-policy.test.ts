@@ -4,6 +4,7 @@ import {
   canBeRejected,
   canRequestClarification,
   canReviewDetail,
+  canViewApproval,
   canViewClarification,
   canViewRejection,
   isAwaitingReview,
@@ -199,6 +200,57 @@ describe('canViewRejection', () => {
   // read a coordinator's rejection reason.
   it('refuses a same-organisation colleague organiser who does not own this request', () => {
     expect(canViewRejection(request, { userId: STRANGER, roles: ['event_organiser'] })).toBe(
+      false,
+    );
+  });
+});
+
+/**
+ * SCRUM-92 AC2/AC3, narrowed by customer clarification #91: the same people as
+ * canViewRejection above, so the approval and the rejection of one request are
+ * never visible to different sets of people.
+ */
+describe('canViewApproval', () => {
+  const request = { organiserId: ORGANISER, coordinatorId: COORDINATOR_A };
+
+  it('allows the organiser who owns the request', () => {
+    expect(canViewApproval(request, { userId: ORGANISER, roles: ['event_organiser'] })).toBe(true);
+  });
+
+  it('allows the coordinator the request is assigned to', () => {
+    expect(canViewApproval(request, { userId: COORDINATOR_A, roles: ['coordinator'] })).toBe(true);
+  });
+
+  it('refuses a coordinator the request is assigned away from', () => {
+    expect(canViewApproval(request, { userId: COORDINATOR_B, roles: ['coordinator'] })).toBe(false);
+  });
+
+  it('allows any coordinator while the request is not yet assigned', () => {
+    expect(
+      canViewApproval(
+        { organiserId: ORGANISER, coordinatorId: null },
+        { userId: COORDINATOR_B, roles: ['coordinator'] },
+      ),
+    ).toBe(true);
+  });
+
+  it('allows an Event Operations Manager, whichever coordinator it is assigned to', () => {
+    expect(
+      canViewApproval(request, { userId: OPS_MANAGER, roles: ['operations_manager'] }),
+    ).toBe(true);
+  });
+
+  // The bug as reported: any other signed-in account could read it by id.
+  it('refuses an organiser who does not own the request, colleague or not', () => {
+    expect(canViewApproval(request, { userId: STRANGER, roles: ['event_organiser'] })).toBe(false);
+  });
+
+  // Venue and equipment staff get a part in specific events once bookings and
+  // reservations exist (later sprints); until then, their role alone is not a
+  // relationship to this request.
+  it('refuses venue staff and technical support, who have no part in this request yet', () => {
+    expect(canViewApproval(request, { userId: STRANGER, roles: ['venue_staff'] })).toBe(false);
+    expect(canViewApproval(request, { userId: STRANGER, roles: ['technical_support'] })).toBe(
       false,
     );
   });

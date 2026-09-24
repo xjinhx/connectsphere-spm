@@ -97,6 +97,43 @@ export const NO_COMMITMENTS: Readonly<Commitments> = Object.freeze({
 export const COMMITMENT_STATEMENT =
   'No venue, equipment or registration arrangement is yet committed.';
 
+/**
+ * AC2/AC3 — who may read a request's approval outcome and date: the organiser
+ * who owns the request, its coordinator (or any coordinator while it has none
+ * yet), and the Event Operations Managers who assign coordinators.
+ *
+ * AC3 says "when anyone views the event", and this read first took that as
+ * anyone signed in. Customer clarification #91 settles it the other way:
+ * protected information, which covers "other non-public event details" such as
+ * an unpublished approval, is for users with the right "role and relationship
+ * to the event". So "anyone" means anyone with a part in this request, not
+ * anyone with an id.
+ *
+ * The same people as SCRUM-93's canViewRejection and SCRUM-90's
+ * canViewClarification, deliberately: three reads of one request's review
+ * outcome should not give three answers to "may I see this?". Written out here
+ * rather than borrowed, as those two do, so no story's rule changes from
+ * another story's code.
+ *
+ * A same-organisation colleague (SCRUM-204) is not included, matching those
+ * two. They can still open the request itself, where the status badge tells
+ * them it is Approved and not Confirmed, which is all AC3 asks them to see.
+ */
+export function canViewApproval(
+  event: { organiserId: string; coordinatorId: string | null },
+  actor: { userId: string; roles: readonly Role[] },
+): boolean {
+  const mayReview =
+    isActionPermitted(actor.roles, 'event_request_review') &&
+    (event.coordinatorId === null || event.coordinatorId === actor.userId);
+
+  return (
+    event.organiserId === actor.userId ||
+    mayReview ||
+    isActionPermitted(actor.roles, 'coordinator_assignment')
+  );
+}
+
 
 // ---------------------------------------------------------------------------
 // SCRUM-90 — Request clarification from the Event Organiser

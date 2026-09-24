@@ -15,16 +15,15 @@ import { ensureTestClientOrganisation } from './fixtures/clientOrganisation';
  *          then its status is not Confirmed and no venue or equipment is shown
  *          as committed."
  *
- * Who may view: Jira AC3 says "anyone", so getApprovalView applies no ownership
- * or role check of its own; the middleware refuses the route without a
- * signed-in session. The test sheet's TC06 wording ("any authorised user") is
- * drift from Jira.
+ * Who may view: the owner, the request's coordinator and Operations Managers
+ * (canViewApproval). This read first took AC3's "anyone" as anyone signed in;
+ * customer clarification #91 ties protected information to role and
+ * relationship to the event, so everyone else is now refused - see the last
+ * describe block. The tests above read as the owner.
  *
- * SCRUM-72 AC2 narrows "anyone" to exclude an Attendee-only account — see the
- * describe block at the bottom of this file and isAttendeeOnly's comment in
- * domain/identity/policy.ts. The tests above pass a non-Attendee actor
- * (`VIEWER`) precisely so they keep exercising SCRUM-92's "anyone" grant
- * rather than the SCRUM-72 carve-out.
+ * SCRUM-72 AC2 refuses an Attendee-only account before anything is read — see
+ * the SCRUM-72 describe block and isAttendeeOnly's comment in
+ * domain/identity/policy.ts.
  *
  * Runs against the local Supabase stack, like approve-event-request.test.ts.
  * The admin client below only arranges rows; the code under test never holds
@@ -39,10 +38,16 @@ import { ensureTestClientOrganisation } from './fixtures/clientOrganisation';
 
 const supabase = createAdminClient();
 const CLIENT_ORGANISATION_ID = '22222222-2222-2222-2222-222222222222';
-/** Any non-Attendee role exercises SCRUM-92's "anyone" grant. */
-const VIEWER = { roles: ['event_organiser'] as const };
+/**
+ * Someone with no part in any request made here. Only compared against the
+ * request's owner and coordinator, never looked up, so it need not exist.
+ */
+const STRANGER = '44444444-4444-4444-8444-444444444444';
 
 let coordinatorId: string;
+/** The account that owns every request made here (organiser_id below). */
+const owner = () => ({ userId: coordinatorId, roles: ['event_organiser'] as const });
+
 const createdRequestIds: string[] = [];
 
 async function createSubmittedRequest(): Promise<string> {
@@ -99,7 +104,7 @@ describe('getApprovalView', () => {
     const id = await createSubmittedRequest();
     const outcome = await approveEventRequest(id, { actorId: coordinatorId });
 
-    const view = await getApprovalView(id, VIEWER);
+    const view = await getApprovalView(id, owner());
 
     expect(view.decision).toBe('approved');
     // The date shown is the one recorded at approval, not a new one.
@@ -115,7 +120,7 @@ describe('getApprovalView', () => {
     const id = await createSubmittedRequest();
     await approveEventRequest(id, { actorId: coordinatorId });
 
-    const view = await getApprovalView(id, VIEWER);
+    const view = await getApprovalView(id, owner());
 
     expect(view.status).toBe('approved');
     expect(view.status).not.toBe('confirmed');
@@ -126,7 +131,7 @@ describe('getApprovalView', () => {
   it('shows no outcome or date for a request that has not been decided yet', async () => {
     const id = await createSubmittedRequest();
 
-    const view = await getApprovalView(id, VIEWER);
+    const view = await getApprovalView(id, owner());
 
     expect(view.status).toBe('submitted');
     expect(view.decision).toBeNull();
@@ -137,21 +142,21 @@ describe('getApprovalView', () => {
     const id = await createSubmittedRequest();
     await approveEventRequest(id, { actorId: coordinatorId });
 
-    const view = await getApprovalView(id, VIEWER);
+    const view = await getApprovalView(id, owner());
 
     expect(view).not.toHaveProperty('decidedBy');
   });
 
   it('reports an unknown request as not found', async () => {
     await expect(
-      getApprovalView('99999999-9999-4999-8999-999999999999', VIEWER),
+      getApprovalView('99999999-9999-4999-8999-999999999999', owner()),
     ).rejects.toMatchObject({
       code: 'NOT_FOUND',
     });
   });
 
   it('reports a malformed id as not found rather than failing', async () => {
-    await expect(getApprovalView('not-a-uuid', VIEWER)).rejects.toMatchObject({ code: 'NOT_FOUND' });
+    await expect(getApprovalView('not-a-uuid', owner())).rejects.toMatchObject({ code: 'NOT_FOUND' });
   });
 });
 
@@ -164,7 +169,7 @@ describe('getApprovalView: SCRUM-72 AC2', () => {
     const id = await createSubmittedRequest();
     await approveEventRequest(id, { actorId: coordinatorId });
 
-    await expect(getApprovalView(id, { roles: ['attendee'] })).rejects.toMatchObject({
+    await expect(getApprovalView(id, { userId: STRANGER, roles: ['attendee'] })).rejects.toMatchObject({
       code: 'FORBIDDEN',
     });
   });
@@ -173,7 +178,52 @@ describe('getApprovalView: SCRUM-72 AC2', () => {
     const id = await createSubmittedRequest();
     await approveEventRequest(id, { actorId: coordinatorId });
 
-    const view = await getApprovalView(id, { roles: ['attendee', 'coordinator'] });
+    const view = await getApprovalView(id, { userId: STRANGER, roles: ['attendee', 'coordinator'] });
+    expect(view.decision).toBe('approved');
+  });
+});
+
+// ---------------------------------------------------------------------------
+// Customer clarification #91 — access follows "role and relationship to the
+// event". This read used to answer anyone signed in; now only the owner, the
+// request's coordinator and Operations Managers get an answer.
+// ---------------------------------------------------------------------------
+describe('getApprovalView: only people with a part in the request', () => {
+  // The bug as reported: an organiser holding the id of someone else's request.
+  it('refuses an organiser who does not own the request', async () => {
+    const id = await createSubmittedRequest();
+    await approveEventRequest(id, { actorId: coordinatorId });
+
+    await expect(
+      getApprovalView(id, { userId: STRANGER, roles: ['event_organiser'] }),
+    ).rejects.toMatchObject({ code: 'FORBIDDEN' });
+  });
+
+  it('refuses a coordinator the request is assigned away from', async () => {
+    const id = await createSubmittedRequest();
+    const { error } = await supabase
+      .from('event_request')
+      .update({ coordinator_id: coordinatorId, assigned_by: coordinatorId })
+      .eq('id', id);
+    if (error) throw new Error(`could not assign test request: ${error.message}`);
+
+    await expect(
+      getApprovalView(id, { userId: STRANGER, roles: ['coordinator'] }),
+    ).rejects.toMatchObject({ code: 'FORBIDDEN' });
+  });
+
+  it('allows any coordinator while the request has no coordinator yet', async () => {
+    const id = await createSubmittedRequest();
+
+    const view = await getApprovalView(id, { userId: STRANGER, roles: ['coordinator'] });
+    expect(view.status).toBe('submitted');
+  });
+
+  it('allows an Event Operations Manager', async () => {
+    const id = await createSubmittedRequest();
+    await approveEventRequest(id, { actorId: coordinatorId });
+
+    const view = await getApprovalView(id, { userId: STRANGER, roles: ['operations_manager'] });
     expect(view.decision).toBe('approved');
   });
 });
