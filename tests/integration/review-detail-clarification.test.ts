@@ -283,12 +283,17 @@ describe('requestClarification', () => {
     expect(detail.clarificationNote).toBeNull();
   });
 
-  it('refuses a draft, which has not been submitted for review yet', async () => {
+  // Was INVALID_TRANSITION until the draft leak was fixed: a draft carries no
+  // coordinator_id, so the assignment rule passed it and the status rule then
+  // answered "cannot move from draft", which confirms the draft exists just as
+  // plainly as returning it would. Not found is the honest answer to a
+  // Coordinator who should not know the id is real.
+  it('reports a draft as not found rather than naming its status', async () => {
     const id = await createRequest('draft');
 
     await expect(
       requestClarification(id, { note: 'Anything' }, coordinatorId),
-    ).rejects.toMatchObject({ code: 'INVALID_TRANSITION' });
+    ).rejects.toMatchObject({ code: 'NOT_FOUND' });
   });
 
   // The `.eq('status','submitted')` filter is what makes this safe; a second
@@ -517,6 +522,29 @@ describe('resubmitting after a clarification', () => {
 });
 
 describe('getClarificationView', () => {
+  // A draft has no coordinator_id, so canViewClarification's "unassigned, open
+  // to any Coordinator" branch would otherwise let every Coordinator confirm
+  // the id exists.
+  it('reports an organiser\'s draft as not found to a coordinator', async () => {
+    const id = await createRequest('draft', { purpose: 'Still being written' });
+
+    await expect(
+      getClarificationView(id, asCoordinator(unrelatedCoordinatorId)),
+    ).rejects.toMatchObject({ code: 'NOT_FOUND' });
+  });
+
+  // The other half of that rule, and the reason it is not a blanket refusal
+  // like getReviewDetail's: the Organiser's own page calls this read for their
+  // own draft, so refusing the owner would break that page.
+  it('still shows the owning organiser their own draft', async () => {
+    const id = await createRequest('draft', { purpose: 'Still being written' });
+
+    const view = await getClarificationView(id, asOwningOrganiser());
+
+    expect(view.status).toBe('draft');
+    expect(view.clarificationNote).toBeNull();
+  });
+
   // US-7.2-TC01 (AC1) "visible to the Organiser"
   it('shows the note to the organiser the request belongs to', async () => {
     const id = await createRequest('submitted');

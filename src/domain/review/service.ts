@@ -12,6 +12,7 @@ import {
   NotFoundError,
   ValidationError,
 } from '@/domain/shared/errors';
+import { isOwnRequest } from '@/domain/event-request/policy';
 import type { EventRequestStatus } from '@/domain/event-request/schema';
 import { isActionPermitted } from '@/domain/identity/permissions';
 import type { Role } from '@/domain/identity/roles';
@@ -409,6 +410,20 @@ export async function getClarificationView(
   if (!data) throw new NotFoundError('Event request');
 
   const row = data as unknown as EventRequestRow;
+  // A draft is the Organiser's private working copy and carries no
+  // coordinator_id, so canViewClarification's "unassigned, open to any
+  // Coordinator" branch would otherwise let every Coordinator confirm the id
+  // exists. Only its owner may read it.
+  //
+  // Not a blanket refusal, unlike getReviewDetail's: this read is also what
+  // the Organiser's own page calls for their own draft (events/[id]/page.tsx
+  // calls it only when isOwner), so refusing the owner would break that page.
+  // Reported as not found rather than forbidden, so the refusal does not
+  // itself confirm the draft.
+  if (!isReviewable(row.status) && !isOwnRequest({ organiserId: row.organiser_id }, actor.userId)) {
+    throw new NotFoundError('Event request');
+  }
+
   const permitted = canViewClarification(
     { organiserId: row.organiser_id, coordinatorId: row.coordinator_id },
     {
@@ -467,6 +482,16 @@ export async function requestClarification(
   if (!existing) throw new NotFoundError('Event request');
 
   const current = existing as unknown as EventRequestRow;
+  // A draft has never been sent to anyone, so there is nothing to clarify and
+  // no Coordinator has any business learning the id exists. Checked before
+  // both the assignment and status rules below: a draft carries no
+  // coordinator_id, so canReviewDetail would pass it, and
+  // canRequestClarification would then answer with an InvalidTransitionError
+  // naming the status ("cannot move from draft"), which confirms the draft
+  // just as plainly as returning it would. Blanket rather than
+  // owner-exempt, unlike getClarificationView's: clarifying is a review
+  // action, and an Organiser has no reason to raise one on their own draft.
+  if (!isReviewable(current.status)) throw new NotFoundError('Event request');
   // Raising a clarification is an act of reviewing the request, so it takes
   // the same per-event rule the review read takes (canReviewDetail). Without
   // it the route's role check was the only gate, and every Coordinator holds

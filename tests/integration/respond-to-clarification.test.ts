@@ -396,6 +396,27 @@ describe('respondToClarification', () => {
 });
 
 describe('getClarificationExchange', () => {
+  // A draft carries no coordinator_id, so canViewClarificationExchange's "may
+  // review an unassigned request" branch would otherwise let every Coordinator
+  // confirm the id exists. Same rule as SCRUM-90's getClarificationView, so the
+  // two clarification reads cannot disagree about whether a draft is there.
+  it('reports an organiser\'s draft as not found to a coordinator', async () => {
+    const id = await createCompleteRequest();
+
+    await expect(
+      getClarificationExchange(id, asActor(coordinatorId, 'coordinator')),
+    ).rejects.toMatchObject({ code: 'NOT_FOUND' });
+  });
+
+  it('still shows the owning organiser their own draft', async () => {
+    const id = await createCompleteRequest();
+
+    const exchange = await getClarificationExchange(id, asActor(organiserId, 'event_organiser'));
+
+    expect(exchange.status).toBe('draft');
+    expect(exchange.rounds).toEqual([]);
+  });
+
   // Jira AC3 — a request with no clarification has no rounds, and that is not an error.
   it('returns an empty list for a request that was never returned', async () => {
     const id = await createCompleteRequest();

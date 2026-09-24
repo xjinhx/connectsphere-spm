@@ -6,6 +6,7 @@ import {
 } from '@/lib/supabase/clarificationRounds';
 import { fetchEventRequestById, type EventRequestRow } from '@/lib/supabase/eventRequests';
 import { incompleteFields, isOwnRequest } from '@/domain/event-request/policy';
+import { isReviewable } from '@/domain/review/policy';
 import type { EventRequestStatus } from '@/domain/event-request/schema';
 import type { Role } from '@/domain/identity/roles';
 import {
@@ -251,6 +252,21 @@ export async function getClarificationExchange(
   if (!parsedId.success) throw new NotFoundError('Event request');
 
   const request = await readRequest(parsedId.data);
+
+  // A draft is the Organiser's private working copy and carries no
+  // coordinator_id, so canViewClarificationExchange's "may review an
+  // unassigned request" branch would otherwise let every Coordinator confirm
+  // the id exists. Only its owner may read it.
+  //
+  // The same rule and the same wording as SCRUM-90's getClarificationView,
+  // deliberately: two reads of one request's clarification must not disagree
+  // about whether its draft exists, which is what made this worth one ticket
+  // across both stories rather than two. isReviewable is imported rather than
+  // restated, unlike the access rules in this module's policy.ts, because the
+  // two reads agreeing is the point here - a local copy could drift.
+  if (!isReviewable(request.status) && !isOwnRequest({ organiserId: request.organiser_id }, actor.userId)) {
+    throw new NotFoundError('Event request');
+  }
 
   if (
     !canViewClarificationExchange(
