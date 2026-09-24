@@ -75,19 +75,38 @@ export default async function EventRequestPage({
   //
   // getApprovalView rather than request.status, because AC2 asks for the
   // decision date and the statement, and neither is on the request the page
-  // already holds. Both take `actor` (SCRUM-72 AC2) — an Attendee-only account
-  // is refused internal planning data even here, though getEventRequest above
-  // already keeps anyone but the owning organiser from reaching this line.
-  // getClarificationView also applies canViewClarification, which cannot fail
-  // here for the same reason, but the function is reachable through the API by
-  // anyone.
+  // already holds. Takes `actor` (SCRUM-72 AC2) — an Attendee-only account is
+  // refused internal planning data even here. Stays unconditional below: its
+  // only check is the Attendee carve-out, which a same-organisation colleague
+  // (SCRUM-204 AC3, see isOwner below) always clears.
+  //
+  // getEventRequest above does NOT keep this to the owning organiser alone:
+  // SCRUM-204 AC3 lets a same-organisation colleague reach this line too,
+  // view-only (canViewRequest, event-request/policy.ts).
+  //
   // SCRUM-93 AC4/AC6 — the rejection reason and date, if this request has
   // been rejected. Same reasoning as the clarification/approval reads above:
   // a separate read rather than a field on `request` itself.
+  //
+  // getClarificationView and getRejectionView are NOT called unconditionally
+  // like getApprovalView: canViewClarification and canViewRejection are both
+  // deliberately narrower than "anyone signed in" (owner, eligible coordinator,
+  // or ops manager only - see their comments in review/policy.ts), so a
+  // same-organisation colleague who legitimately reaches this page would throw
+  // ForbiddenError and crash the whole page instead of seeing the "belongs to
+  // a colleague" notice below. Guarded to the owner, the only caller this page
+  // ever has that both functions are guaranteed to allow; everyone else gets
+  // an empty view - `clarification.clarificationNote`/`rejection.rejectionReason`
+  // are already null-checked below, so this reads exactly like an unanswered/
+  // undecided request to them, which is what the generic view-only notice
+  // already expects.
+  const isOwner = request.organiserId === actor.userId;
+  const emptyClarification = { id: request.id, status: request.status, clarificationNote: null, clarificationRequestedAt: null };
+  const emptyRejection = { id: request.id, status: request.status, rejectionReason: null, decidedAt: null };
   const [clarification, approval, rejection] = await Promise.all([
-    getClarificationView(id, actor),
+    isOwner ? getClarificationView(id, actor) : Promise.resolve(emptyClarification),
     getApprovalView(id, actor),
-    getRejectionView(id),
+    isOwner ? getRejectionView(id, actor) : Promise.resolve(emptyRejection),
   ]);
 
   return (

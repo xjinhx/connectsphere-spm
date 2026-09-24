@@ -1,4 +1,6 @@
 import type { EventRequestStatus } from '@/domain/event-request/schema';
+import { isActionPermitted } from '@/domain/identity/permissions';
+import type { Role } from '@/domain/identity/roles';
 
 /**
  * SCRUM-92 — Approve a request so planning can proceed.
@@ -28,6 +30,34 @@ export function canBeApproved(status: EventRequestStatus): boolean {
  */
 export function canBeRejected(status: EventRequestStatus): boolean {
   return status === 'submitted';
+}
+
+/**
+ * AC4/AC6 — who may read the rejection reason and date: the organiser who
+ * owns the request, its current coordinator, and the Event Operations
+ * Managers who assign coordinators. Not "anyone signed in", which is what
+ * this did first, copied from SCRUM-90's getClarificationView.
+ *
+ * Same rule as SCRUM-91's canViewClarificationExchange, for the same reason:
+ * a rejection reason is free text a coordinator wrote about this specific
+ * request, and a signed-in stranger with an id has no business reading it.
+ * getClarificationView carries the identical gap and is flagged there rather
+ * than fixed from here - see the comment on getClarificationExchange in
+ * domain/clarification/service.ts.
+ */
+export function canViewRejection(
+  event: { organiserId: string; coordinatorId: string | null },
+  actor: { userId: string; roles: readonly Role[] },
+): boolean {
+  const mayReview =
+    isActionPermitted(actor.roles, 'event_request_review') &&
+    (event.coordinatorId === null || event.coordinatorId === actor.userId);
+
+  return (
+    event.organiserId === actor.userId ||
+    mayReview ||
+    isActionPermitted(actor.roles, 'coordinator_assignment')
+  );
 }
 
 // ---------------------------------------------------------------------------

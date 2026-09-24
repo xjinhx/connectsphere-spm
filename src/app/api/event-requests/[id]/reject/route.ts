@@ -5,14 +5,15 @@ import { handleApiError } from '@/lib/api/handler';
 import { getCurrentActor } from '@/lib/auth/currentActor';
 
 /**
- * SCRUM-93 AC4/AC6 — read the rejection reason and date on a request. Anyone
- * signed in may read it, same reasoning as the clarification GET route - no
- * role check, the middleware already requires a session.
+ * SCRUM-93 AC4/AC6 — read the rejection reason and date on a request.
+ * Who may read: canViewRejection (review/policy.ts) - the owner, the
+ * assigned coordinator, or an Event Operations Manager, not anyone signed in.
  */
 export async function GET(_req: NextRequest, { params }: { params: Promise<{ id: string }> }) {
   try {
     const { id } = await params;
-    return NextResponse.json(await getRejectionView(id));
+    const actor = await getCurrentActor();
+    return NextResponse.json(await getRejectionView(id, actor));
   } catch (error) {
     return handleApiError(error);
   }

@@ -32,6 +32,7 @@ import {
   canRequestClarification,
   canReviewDetail,
   canViewClarification,
+  canViewRejection,
   isReviewable,
   type Commitments,
 } from './policy';
@@ -550,13 +551,22 @@ export interface RejectionView {
 }
 
 /**
- * AC4/AC6 — the organiser (or anyone else with access to the request) reads
- * the rejection reason and date without needing the Coordinator-only
- * permission getReviewDetail requires. Who may view: same reasoning as
- * getApprovalView/getClarificationView - no role/ownership check here, the
- * middleware already refuses this without a session.
+ * AC4/AC6 — the organiser who owns the request, its current coordinator, and
+ * the Event Operations Managers who assign coordinators read the rejection
+ * reason and date, without needing the Coordinator-only permission
+ * getReviewDetail requires (canViewRejection, review/policy.ts).
+ *
+ * Narrower than "anyone signed in", which is what this did first, copied
+ * from SCRUM-90's getClarificationView - a rejection reason is free text a
+ * coordinator wrote about this specific request. getClarificationView carries
+ * the identical gap; see the comment on getClarificationExchange in
+ * domain/clarification/service.ts for why it is flagged there rather than
+ * fixed from here.
  */
-export async function getRejectionView(id: string): Promise<RejectionView> {
+export async function getRejectionView(
+  id: string,
+  actor: { userId: string; roles: readonly Role[] },
+): Promise<RejectionView> {
   const parsedId = EventRequestIdSchema.safeParse(id);
   if (!parsedId.success) throw new NotFoundError('Event request');
 
@@ -567,6 +577,15 @@ export async function getRejectionView(id: string): Promise<RejectionView> {
   if (!data) throw new NotFoundError('Event request');
 
   const row = data as unknown as EventRequestRow;
+  if (
+    !canViewRejection(
+      { organiserId: row.organiser_id, coordinatorId: row.coordinator_id },
+      actor,
+    )
+  ) {
+    throw new ForbiddenError('This rejection is not yours to read.');
+  }
+
   return {
     id: row.id,
     status: row.status,

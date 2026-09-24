@@ -205,7 +205,9 @@ describe('getRejectionView', () => {
     const id = await createEventRequest('submitted');
     await rejectEventRequest(id, { reason: 'Venue capacity insufficient' }, coordinatorId);
 
-    const view = await getRejectionView(id);
+    // createEventRequest sets organiser_id to this same id, so ownership
+    // alone satisfies canViewRejection - roles are irrelevant here.
+    const view = await getRejectionView(id, { userId: coordinatorId, roles: [] });
 
     expect(view.status).toBe('rejected');
     expect(view.rejectionReason).toBe('Venue capacity insufficient');
@@ -215,7 +217,7 @@ describe('getRejectionView', () => {
   it('reports no rejection for a request that has not been decided', async () => {
     const id = await createEventRequest('submitted');
 
-    const view = await getRejectionView(id);
+    const view = await getRejectionView(id, { userId: coordinatorId, roles: [] });
 
     expect(view.rejectionReason).toBeNull();
     expect(view.decidedAt).toBeNull();
