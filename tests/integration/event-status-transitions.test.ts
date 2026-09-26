@@ -8,8 +8,9 @@ import { ensureTestClientOrganisation, TEST_CLIENT_ORGANISATION_ID } from './fix
 /**
  * SCRUM-103 — Prevent invalid status transitions.
  *
- * AC text is from the Jira card, which is authoritative. Runs against the local
- * Supabase stack (`npm run db:start` + `npm run db:reset`).
+ * AC text is from the Jira card, which is authoritative. Test case IDs match
+ * the SCRUM-103 sheet of the Sprint 2 test case workbook (TC-103-NN). Runs
+ * against the local Supabase stack (`npm run db:start` + `npm run db:reset`).
  *
  * tests/unit/event-status-policy.test.ts tests the rule. This tests what the
  * rule does to a stored event: a refused move leaves the status as it was
@@ -102,7 +103,7 @@ afterAll(async () => {
 });
 
 describe('SCRUM-103 AC1 — Draft cannot jump to Confirmed', () => {
-  it('T1: refuses draft -> confirmed and the event stays Draft', async () => {
+  it('TC-103-01: refuses draft -> confirmed and the event stays Draft', async () => {
     const id = await createDraftRequest();
 
     await expect(changeEventStatus(id, 'confirmed')).rejects.toMatchObject({ code: 'INVALID_TRANSITION' });
@@ -111,7 +112,7 @@ describe('SCRUM-103 AC1 — Draft cannot jump to Confirmed', () => {
 });
 
 describe('SCRUM-103 AC2 — Rejected cannot become Approved', () => {
-  it('T2: refuses rejected -> approved and the event stays Rejected', async () => {
+  it('TC-103-02: refuses rejected -> approved and the event stays Rejected', async () => {
     const id = await createSubmittedRequest();
     await rejectEventRequest(id, { reason: 'Venue capacity insufficient' }, coordinatorId);
 
@@ -121,9 +122,16 @@ describe('SCRUM-103 AC2 — Rejected cannot become Approved', () => {
 });
 
 describe('SCRUM-103 AC3 — Cancelled is final', () => {
-  it.each(['draft', 'submitted', 'approved', 'planning', 'confirmed', 'completed'] as const)(
-    'T3: refuses cancelled -> %s and the event stays Cancelled',
-    async (to) => {
+  it.each([
+    ['TC-103-03', 'draft'],
+    ['TC-103-04', 'submitted'],
+    ['TC-103-05', 'approved'],
+    ['TC-103-06', 'planning'],
+    ['TC-103-07', 'confirmed'],
+    ['TC-103-08', 'completed'],
+  ] as const)(
+    '%s: refuses cancelled -> %s and the event stays Cancelled',
+    async (_id, to) => {
       const id = await createSubmittedRequest();
       await changeEventStatus(id, 'cancelled');
 
@@ -134,7 +142,7 @@ describe('SCRUM-103 AC3 — Cancelled is final', () => {
 });
 
 describe('SCRUM-103 AC4 — Confirmed may go back to Planning', () => {
-  it('T4: moves a confirmed event back to Planning', async () => {
+  it('TC-103-09: moves a confirmed event back to Planning', async () => {
     const id = await createConfirmedRequest();
     expect(await readStatus(id)).toBe('confirmed');
 
