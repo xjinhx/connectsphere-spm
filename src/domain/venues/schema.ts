@@ -85,6 +85,13 @@ const LayoutCapacitySchema = z
   .positive('Layout capacity must be greater than 0.')
   .max(CAPACITY_COLUMN_MAX, 'Layout capacity is too large.');
 
+/** SCRUM-119 AC1: a whole number of minutes, 0 to 240 inclusive. */
+const MinutesFieldSchema = (label: string) =>
+  z
+    .number({ invalid_type_error: `${label} must be a whole number of minutes.` })
+    .int(`${label} must be a whole number of minutes.`)
+    .min(0, `${label} must be 0 minutes or more.`)
+    .max(240, `${label} must be 240 minutes or less.`);
 const VenueNameSchema = z
   .string({ required_error: 'Venue name is required.' })
   .trim()
@@ -126,8 +133,9 @@ const LayoutListSchema = z
  * Operating slots default to all three when omitted, so a venue created with
  * only a name, location and capacity (US-11.1-TC01) is still valid.
  *
- * Turnaround values (SCRUM-119) and retiring (SCRUM-122) are deliberately not
- * accepted here: those stories are not in Sprint 1.
+ * Turnaround values (SCRUM-119, accepted on update only — see
+ * UpdateVenueInputSchema) and retiring (SCRUM-122) are deliberately not
+ * accepted here.
  */
 export const CreateVenueInputSchema = z.object({
   name: VenueNameSchema,
@@ -172,12 +180,22 @@ export const UpdateVenueInputSchema = z
     facilityIds: IdListSchema('facility').optional(),
     accessibilityFeatureIds: IdListSchema('accessibility feature').optional(),
     layouts: LayoutListSchema.optional(),
+    setupMinutes: MinutesFieldSchema('Setup time').optional(),
+    teardownMinutes: MinutesFieldSchema('Teardown time').optional(),
+    turnaroundMinutes: MinutesFieldSchema('Turnaround time').optional(),
     /**
      * SCRUM-120 AC2: the user has seen the confirmed future bookings a capacity
      * cut affects and confirmed it. Without it, such a cut is refused with the
      * list of those bookings (AffectedBookingsDetails).
      */
     confirmAffectedBookings: z.boolean().optional(),
+    /**
+     * SCRUM-119 AC4: the user has seen the warning that a turnaround above
+     * the 60-minute slot gap will affect the adjacent slot, and confirmed it.
+     * Without it, such a value is refused with the warning
+     * (TurnaroundImpactDetails).
+     */
+    confirmTurnaroundImpact: z.boolean().optional(),
   })
   .refine(
     (input) =>
@@ -264,6 +282,7 @@ export const AffectedBookingSchema = z.object({
   expectedAttendance: z.number().int(),
   coordinatorId: z.string().uuid().nullable(),
 });
+
 export type AffectedBooking = z.infer<typeof AffectedBookingSchema>;
 
 /** The details of that 409. `reason` tells it apart from the other venue 409s. */
@@ -273,3 +292,16 @@ export const AffectedBookingsDetailsSchema = z.object({
   bookings: z.array(AffectedBookingSchema),
 });
 export type AffectedBookingsDetails = z.infer<typeof AffectedBookingsDetailsSchema>;
+
+/**
+ * SCRUM-119 AC4: the details of the 409 that warns a turnaround above the
+ * 60-minute slot gap will affect the adjacent slot, and asks the editor to
+ * confirm it. `reason` tells it apart from the other venue 409s, the same way
+ * AffectedBookingsDetailsSchema does.
+ */
+export const TurnaroundImpactDetailsSchema = z.object({
+  reason: z.literal('turnaround_impact'),
+  turnaroundMinutes: z.number().int(),
+  slotGapMinutes: z.number().int(),
+});
+export type TurnaroundImpactDetails = z.infer<typeof TurnaroundImpactDetailsSchema>;

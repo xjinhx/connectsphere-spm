@@ -668,7 +668,10 @@ export type Database = {
           p_max_capacity?: number
           p_name?: string
           p_operating_slots?: string[]
+          p_setup_minutes?: number
+          p_teardown_minutes?: number
           p_today?: string
+          p_turnaround_minutes?: number
           p_venue_id: string
         }
         Returns: string

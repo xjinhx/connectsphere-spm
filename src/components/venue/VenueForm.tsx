@@ -4,17 +4,19 @@ import { useRouter } from 'next/navigation';
 import { useRef, useState } from 'react';
 import {
   AffectedBookingsDetailsSchema,
+  TurnaroundImpactDetailsSchema,
   OPERATING_SLOTS,
   OPERATING_SLOT_LABELS,
   ROOM_LAYOUTS,
   ROOM_LAYOUT_LABELS,
   type AffectedBookingsDetails,
+  type TurnaroundImpactDetails,
   type OperatingSlot,
   type RoomLayout,
   type VenueDetail,
   type VenueFormOptions,
 } from '@/domain/venues/schema';
-import { capacityToSend } from './capacityInput';
+import { capacityToSend, minutesToSend } from './capacityInput';
 
 /**
  * Add and edit a venue. Shared by /venues/new and /venues/[id]/edit, because
@@ -88,6 +90,11 @@ export default function VenueForm({
   const [locationId, setLocationId] = useState(venue?.location.id ?? '');
   const [maxCapacity, setMaxCapacity] = useState(venue ? String(venue.maxCapacity) : '');
 
+  // SCRUM-119: blank when the venue has none recorded yet (nullable columns).
+  const [setupMinutes, setSetupMinutes] = useState(venue?.setupMinutes != null ? String(venue.setupMinutes) : '');
+  const [teardownMinutes, setTeardownMinutes] = useState(venue?.teardownMinutes != null ? String(venue.teardownMinutes) : '');
+  const [turnaroundMinutes, setTurnaroundMinutes] = useState(venue?.turnaroundMinutes != null ? String(venue.turnaroundMinutes) : '');
+
   // SCRUM-116 AC4: a new venue starts with all three slots selected.
   const [slots, setSlots] = useState<OperatingSlot[]>(venue ? venue.operatingSlots : [...OPERATING_SLOTS]);
 
@@ -111,6 +118,8 @@ export default function VenueForm({
   // SCRUM-120 AC2: the bookings a capacity cut would affect, shown until the
   // editor confirms the cut or changes the form.
   const [affected, setAffected] = useState<AffectedBookingsDetails | null>(null);
+  // SCRUM-119 AC4: shown until the editor confirms the turnaround, or changes the form.
+  const [turnaroundImpact, setTurnaroundImpact] = useState<TurnaroundImpactDetails | null>(null);
 
   function toggle<T>(list: T[], value: T): T[] {
     return list.includes(value) ? list.filter((item) => item !== value) : [...list, value];
@@ -128,7 +137,7 @@ export default function VenueForm({
 
   async function handleSubmit(event: React.FormEvent<HTMLFormElement>) {
     event.preventDefault();
-    await save(false);
+    await save(false, false);
   }
 
   /**
@@ -137,14 +146,28 @@ export default function VenueForm({
    * so it is sent unconfirmed and checked again rather than confirmed blind.
    */
   async function confirmCut() {
-    await save(affected !== null && capacityToSend(maxCapacity) === affected.maxCapacity);
+    await save(affected !== null && capacityToSend(maxCapacity) === affected.maxCapacity, false);
   }
 
-  async function save(confirmAffectedBookings: boolean) {
+  /**
+   * SCRUM-119 AC4: confirm the turnaround the editor was shown. If it has
+   * been changed since, it's a different value and possibly a different
+   * verdict, so it is sent unconfirmed and checked again rather than
+   * confirmed blind.
+   */
+  async function confirmTurnaround() {
+    await save(
+      false,
+      turnaroundImpact !== null && minutesToSend(turnaroundMinutes) === turnaroundImpact.turnaroundMinutes,
+    );
+  }
+
+  async function save(confirmAffectedBookings: boolean, confirmTurnaroundImpact: boolean) {
     setSaving(true);
     setFieldErrors({});
     setFormError(null);
     setAffected(null);
+    setTurnaroundImpact(null);
 
     const payload = {
       name,
@@ -154,11 +177,15 @@ export default function VenueForm({
       facilityIds,
       accessibilityFeatureIds: featureIds,
       layouts: layouts.map((row) => ({ layout: row.layout, capacity: capacityToSend(row.capacity) })),
+      setupMinutes: minutesToSend(setupMinutes),
+      teardownMinutes: minutesToSend(teardownMinutes),
+      turnaroundMinutes: minutesToSend(turnaroundMinutes),
       // SCRUM-120: the version this form was loaded with, so a save from a
       // form that has gone out of date is refused instead of undoing someone
       // else's newer save.
       ...(isEdit && { expectedUpdatedAt: venue.updatedAt }),
       ...(confirmAffectedBookings && { confirmAffectedBookings: true }),
+      ...(confirmTurnaroundImpact && { confirmTurnaroundImpact: true }),
     };
 
     try {
@@ -177,6 +204,14 @@ export default function VenueForm({
         const cut = AffectedBookingsDetailsSchema.safeParse(error.details);
         if (error.error === 'CONFLICT' && cut.success) {
           setAffected(cut.data);
+          setSaving(false);
+          return;
+        }
+
+        // SCRUM-119 AC4: same shape as the capacity-cut confirmation above.
+        const impact = TurnaroundImpactDetailsSchema.safeParse(error.details);
+        if (error.error === 'CONFLICT' && impact.success) {
+          setTurnaroundImpact(impact.data);
           setSaving(false);
           return;
         }
@@ -267,6 +302,49 @@ export default function VenueForm({
           onChange={(event) => setMaxCapacity(event.target.value)}
         />
         <FieldError messages={fieldErrors.maxCapacity} />
+      </div>
+
+      {/* SCRUM-119 AC1: whole minutes, 0 to 240; left blank means unchanged. */}
+      <div className="grid grid-cols-3 gap-4">
+        <div>
+          <label htmlFor="venue-setup" className="mb-1 block text-sm font-medium">
+            Setup (minutes)
+          </label>
+          <input
+            id="venue-setup"
+            className={inputClass}
+            inputMode="numeric"
+            value={setupMinutes}
+            onChange={(event) => setSetupMinutes(event.target.value)}
+          />
+          <FieldError messages={fieldErrors.setupMinutes} />
+        </div>
+        <div>
+          <label htmlFor="venue-teardown" className="mb-1 block text-sm font-medium">
+            Teardown (minutes)
+          </label>
+          <input
+            id="venue-teardown"
+            className={inputClass}
+            inputMode="numeric"
+            value={teardownMinutes}
+            onChange={(event) => setTeardownMinutes(event.target.value)}
+          />
+          <FieldError messages={fieldErrors.teardownMinutes} />
+        </div>
+        <div>
+          <label htmlFor="venue-turnaround" className="mb-1 block text-sm font-medium">
+            Turnaround (minutes)
+          </label>
+          <input
+            id="venue-turnaround"
+            className={inputClass}
+            inputMode="numeric"
+            value={turnaroundMinutes}
+            onChange={(event) => setTurnaroundMinutes(event.target.value)}
+          />
+          <FieldError messages={fieldErrors.turnaroundMinutes} />
+        </div>
       </div>
 
       <fieldset>
@@ -389,6 +467,27 @@ export default function VenueForm({
         )}
         <FieldError messages={fieldErrors.layouts} />
       </fieldset>
+
+      {turnaroundImpact && (
+        <section
+          role="alert"
+          aria-labelledby="turnaround-impact-heading"
+          className="rounded border border-[var(--danger)] p-4 text-sm"
+        >
+          <h2 id="turnaround-impact-heading" className="font-semibold">
+            A turnaround of {turnaroundImpact.turnaroundMinutes} minutes will affect the adjacent slot
+          </h2>
+          <p className="mt-1 text-[var(--text-muted)]">
+            This is longer than the {turnaroundImpact.slotGapMinutes}-minute gap between slots. Confirm to apply
+            it.
+          </p>
+          <div className="mt-3 flex items-center gap-3">
+            <button type="button" onClick={confirmTurnaround} disabled={saving} className="rounded border border-[var(--border)] px-3 py-1.5 text-sm font-medium">
+              Confirm and save
+            </button>
+          </div>
+        </section>
+      )}
 
       {affected && (
         <section

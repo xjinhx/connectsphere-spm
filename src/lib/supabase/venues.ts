@@ -131,6 +131,9 @@ export async function saveVenueChanges(
     facilityIds?: string[];
     accessibilityFeatureIds?: string[];
     layouts?: VenueLayoutRow[];
+    setupMinutes?: number;
+    teardownMinutes?: number;
+    turnaroundMinutes?: number;
   },
   { confirmAffectedBookings = false, today }: { confirmAffectedBookings?: boolean; today?: string } = {},
 ) {
@@ -142,6 +145,9 @@ export async function saveVenueChanges(
     ...(changes.maxCapacity !== undefined && { p_max_capacity: changes.maxCapacity }),
     ...(changes.operatingSlots !== undefined && { p_operating_slots: changes.operatingSlots }),
     ...(changes.facilityIds !== undefined && { p_facility_ids: changes.facilityIds }),
+    ...(changes.setupMinutes !== undefined && { p_setup_minutes: changes.setupMinutes }),
+    ...(changes.teardownMinutes !== undefined && { p_teardown_minutes: changes.teardownMinutes }),
+    ...(changes.turnaroundMinutes !== undefined && { p_turnaround_minutes: changes.turnaroundMinutes }),
     ...(changes.accessibilityFeatureIds !== undefined && {
       p_accessibility_feature_ids: changes.accessibilityFeatureIds,
     }),

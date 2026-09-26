@@ -6,6 +6,8 @@ import {
   canViewVenueCatalogue,
   isAffectedByCapacity,
   isCapacityCut,
+  SLOT_GAP_MINUTES,
+  turnaroundExceedsSlotGap,
 } from '@/domain/venues/policy';
 import { ValidationError } from '@/domain/shared/errors';
 import type { Role } from '@/domain/identity/roles';
@@ -138,5 +140,25 @@ describe('canViewVenueCatalogue: SCRUM-121', () => {
   // so Event Organisers and Attendees are not given catalogue access.
   it.each<Role>(['event_organiser', 'attendee'])('refuses external role %s', (role) => {
     expect(canViewVenueCatalogue([role])).toBe(false);
+  });
+});
+
+describe('turnaroundExceedsSlotGap: SCRUM-119 AC4', () => {
+  // TC-119-12: exactly at the boundary does not warn
+  it('TC-119-12 returns false when turnaround equals the slot gap', () => {
+    expect(turnaroundExceedsSlotGap(SLOT_GAP_MINUTES)).toBe(false);
+  });
+
+  // TC-119-10: just above the boundary warns
+  it('TC-119-10 returns true when turnaround is one minute over the slot gap', () => {
+    expect(turnaroundExceedsSlotGap(SLOT_GAP_MINUTES + 1)).toBe(true);
+  });
+
+  it('returns false when turnaround is well below the slot gap', () => {
+    expect(turnaroundExceedsSlotGap(30)).toBe(false);
+  });
+
+  it('SLOT_GAP_MINUTES is 60, the gap between every pair of operating slots (AM 07:00-12:00, PM 13:00-18:00, Night 19:00-24:00)', () => {
+    expect(SLOT_GAP_MINUTES).toBe(60);
   });
 });

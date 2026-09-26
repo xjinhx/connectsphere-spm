@@ -19,3 +19,17 @@ export function capacityToSend(value: string): number | string {
   // the text instead.
   return Number.isSafeInteger(parsed) ? parsed : trimmed;
 }
+
+/**
+ * SCRUM-119: what the venue form sends for setup, teardown or turnaround
+ * minutes. Unlike capacity, these are optional - a blank box means "leave
+ * this unchanged", not "clear it", so blank is sent as undefined rather
+ * than as text the server would reject.
+ */
+export function minutesToSend(value: string): number | string | undefined {
+  const trimmed = value.trim();
+  if (trimmed === '') return undefined;
+  if (!WHOLE_NUMBER.test(trimmed)) return trimmed;
+  const parsed = Number(trimmed);
+  return Number.isSafeInteger(parsed) ? parsed : trimmed;
+}

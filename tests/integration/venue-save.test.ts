@@ -255,3 +255,83 @@ describe('only the server can run the save functions', () => {
     expect((await getVenue(venue.id)).maxCapacity).toBe(200);
   });
 });
+
+describe('updateVenue: SCRUM-119 setup, teardown and turnaround requirements', () => {
+  it('TC-119-01 saves all three values and returns them', async () => {
+    const venue = await createTestVenue('Turnaround Hall');
+
+    const saved = await updateVenue(venue.id, {
+      expectedUpdatedAt: venue.updatedAt,
+      setupMinutes: 15,
+      teardownMinutes: 20,
+      turnaroundMinutes: 30,
+    });
+
+    expect(saved.setupMinutes).toBe(15);
+    expect(saved.teardownMinutes).toBe(20);
+    expect(saved.turnaroundMinutes).toBe(30);
+
+    const reread = await getVenue(venue.id);
+    expect(reread.setupMinutes).toBe(15);
+    expect(reread.teardownMinutes).toBe(20);
+    expect(reread.turnaroundMinutes).toBe(30);
+  });
+
+  it('TC-119-07 two venues keep independent turnaround values', async () => {
+    const venueA = await createTestVenue('Independent Hall A');
+    const venueB = await createTestVenue('Independent Hall B');
+
+    await updateVenue(venueA.id, { expectedUpdatedAt: venueA.updatedAt, turnaroundMinutes: 30 });
+    await updateVenue(venueB.id, { expectedUpdatedAt: venueB.updatedAt, turnaroundMinutes: 45 });
+
+    expect((await getVenue(venueA.id)).turnaroundMinutes).toBe(30);
+    expect((await getVenue(venueB.id)).turnaroundMinutes).toBe(45);
+  });
+
+  it('TC-119-09 a value can be changed independently of the others left unset', async () => {
+    const venue = await createTestVenue('Partial Update Hall');
+    await updateVenue(venue.id, {
+      expectedUpdatedAt: venue.updatedAt,
+      setupMinutes: 10,
+      teardownMinutes: 10,
+      turnaroundMinutes: 10,
+    });
+
+    const midway = await getVenue(venue.id);
+    const saved = await updateVenue(venue.id, { expectedUpdatedAt: midway.updatedAt, teardownMinutes: 45 });
+
+    expect(saved.setupMinutes).toBe(10);
+    expect(saved.teardownMinutes).toBe(45);
+    expect(saved.turnaroundMinutes).toBe(10);
+  });
+
+  it('TC-119-11 a turnaround above the slot gap is refused, then saved once confirmed', async () => {
+    const venue = await createTestVenue('Confirm Turnaround Hall');
+
+    await expect(
+      updateVenue(venue.id, { expectedUpdatedAt: venue.updatedAt, turnaroundMinutes: 90 }),
+    ).rejects.toMatchObject({
+      code: 'CONFLICT',
+      details: { reason: 'turnaround_impact', turnaroundMinutes: 90, slotGapMinutes: 60 },
+    });
+
+    // Refused, so nothing was written - confirm the value is still unset.
+    expect((await getVenue(venue.id)).turnaroundMinutes).toBeNull();
+
+    const saved = await updateVenue(venue.id, {
+      expectedUpdatedAt: venue.updatedAt,
+      turnaroundMinutes: 90,
+      confirmTurnaroundImpact: true,
+    });
+
+    expect(saved.turnaroundMinutes).toBe(90);
+  });
+
+  it('a turnaround exactly at the slot gap saves with no confirmation needed', async () => {
+    const venue = await createTestVenue('Exact Gap Hall');
+
+    const saved = await updateVenue(venue.id, { expectedUpdatedAt: venue.updatedAt, turnaroundMinutes: 60 });
+
+    expect(saved.turnaroundMinutes).toBe(60);
+  });
+});

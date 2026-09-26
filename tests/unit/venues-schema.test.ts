@@ -1,4 +1,5 @@
 import { describe, it, expect } from 'vitest';
+import { z } from 'zod';
 import {
   CreateVenueInputSchema,
   UpdateVenueInputSchema,
@@ -26,8 +27,8 @@ const validVenue = () => ({
   maxCapacity: 150,
 });
 
-const messagesFrom = (result: ReturnType<typeof CreateVenueInputSchema.safeParse>): string[] =>
-  result.success ? [] : result.error.issues.map((issue) => issue.message);
+const messagesFrom = (result: z.SafeParseReturnType<unknown, unknown>): string[] =>
+  result.success ? [] : result.error.issues.map((issue: z.ZodIssue) => issue.message);
 
 describe('CreateVenueInputSchema: SCRUM-116 AC1 name, location and capacity', () => {
   it('accepts a venue with only a name, location and capacity', () => {
@@ -251,6 +252,65 @@ describe('UpdateVenueInputSchema: SCRUM-120 AC1 and SCRUM-117 AC3', () => {
     expect(edit({ maxCapacity: 250 }).success).toBe(true);
     expect(edit({ maxCapacity: 250, expectedUpdatedAt: '2026-09-23T06:30:00Z' }).success).toBe(true);
     expect(edit({ maxCapacity: 250, expectedUpdatedAt: 'yesterday' }).success).toBe(false);
+  });
+});
+
+describe('UpdateVenueInputSchema: SCRUM-119 AC1 setup, teardown and turnaround minutes', () => {
+  const validUpdate = () => ({
+    expectedUpdatedAt: '2026-09-25T00:00:00.000Z',
+    setupMinutes: 15,
+    teardownMinutes: 20,
+    turnaroundMinutes: 30,
+  });
+
+  it('accepts valid setup, teardown and turnaround minutes', () => {
+    const result = UpdateVenueInputSchema.safeParse(validUpdate());
+    expect(result.success).toBe(true);
+  });
+
+  // TC-119-02: the lower boundary, 0, is accepted for each field
+  it('TC-119-02 accepts 0 minutes for each field', () => {
+    const result = UpdateVenueInputSchema.safeParse({
+      ...validUpdate(),
+      setupMinutes: 0,
+      teardownMinutes: 0,
+      turnaroundMinutes: 0,
+    });
+    expect(result.success).toBe(true);
+  });
+
+  // TC-119-03: the upper boundary, 240, is accepted for each field
+  it('TC-119-03 accepts 240 minutes for each field', () => {
+    const result = UpdateVenueInputSchema.safeParse({
+      ...validUpdate(),
+      setupMinutes: 240,
+      teardownMinutes: 240,
+      turnaroundMinutes: 240,
+    });
+    expect(result.success).toBe(true);
+  });
+
+  // TC-119-04: just below the lower boundary is refused
+  it('TC-119-04 rejects a negative turnaround', () => {
+    const result = UpdateVenueInputSchema.safeParse({ ...validUpdate(), turnaroundMinutes: -1 });
+    expect(messagesFrom(result)).toContain('Turnaround time must be 0 minutes or more.');
+  });
+
+  // TC-119-05: just above the upper boundary is refused
+  it('TC-119-05 rejects a setup time above 240', () => {
+    const result = UpdateVenueInputSchema.safeParse({ ...validUpdate(), setupMinutes: 241 });
+    expect(messagesFrom(result)).toContain('Setup time must be 240 minutes or less.');
+  });
+
+  // TC-119-06: a non-whole-number value is refused
+  it('TC-119-06 rejects a fractional teardown time', () => {
+    const result = UpdateVenueInputSchema.safeParse({ ...validUpdate(), teardownMinutes: 15.5 });
+    expect(messagesFrom(result)).toContain('Teardown time must be a whole number of minutes.');
+  });
+
+  it('rejects a non-numeric turnaround value', () => {
+    const result = UpdateVenueInputSchema.safeParse({ ...validUpdate(), turnaroundMinutes: 'abc' });
+    expect(messagesFrom(result)).toContain('Turnaround time must be a whole number of minutes.');
   });
 });
 
