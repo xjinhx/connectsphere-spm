@@ -35,6 +35,12 @@ export const ACTIONS = [
   // Event Organiser with a note describing what is unclear".
   'event_request_clarification',
   'organisation_membership_management',
+  // SCRUM-142 — "As an Event Coordinator, I want to request a specific venue
+  // for the slots my event needs". Enforcement at the route layer is
+  // deferred (this ticket stops at the domain layer, matching SCRUM-101's
+  // precedent); adding the action now so it exists for whoever wires the
+  // route to check it, per the contract-first workflow.
+  'venue_booking_request',
 ] as const;
 
 export type Action = (typeof ACTIONS)[number];
@@ -56,6 +62,7 @@ export const ROLE_PERMISSIONS: Record<Role, readonly Action[]> = {
     'event_request_review',
     'event_request_clarification',
     'organisation_membership_management',
+    'venue_booking_request',
   ],
   operations_manager: ['venue_catalogue_view', 'coordinator_assignment', 'account_role_management'],
   venue_staff: ['venue_administration', 'venue_catalogue_view'],
