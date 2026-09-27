@@ -18,9 +18,8 @@ function formatSlots(slots: string[] | null): string {
 }
 
 /**
- * SCRUM-88 AC1/AC3 — the Event Coordinator's review queue: every event
- * assigned to the signed-in coordinator, with the ones still awaiting a
- * decision made clear.
+ * SCRUM-88 AC1/AC3 — the Event Coordinator's review queue: the events
+ * assigned to the signed-in coordinator that are still awaiting a decision.
  *
  * The actual data comes from SCRUM-94's listMyAssignedEvents(), via
  * domain/assignment/service.ts - this page is the queue itself, per the
@@ -57,8 +56,14 @@ export default async function EventCoordinatorAssignedEventsPage() {
     );
   }
 
-  const events = await listMyAssignedEvents(actor.userId);
-  const awaitingCount = events.filter((event) => isAwaitingReview(event.status)).length;
+  // SCRUM-97 AC1 — "my review queue shows only those awaiting review". This
+  // page used to list every assigned event and highlight the awaiting ones;
+  // every assigned event, at any status, is now on /my-events instead.
+  // Awaiting review means submitted (isAwaitingReview), so Approved, Rejected
+  // and Clarification Requested are left out, as SCRUM-88 AC3 says, and so is
+  // every later status.
+  const assigned = await listMyAssignedEvents(actor.userId);
+  const events = assigned.filter((event) => isAwaitingReview(event.status));
 
   return (
     <main className="mx-auto max-w-4xl p-6">
@@ -66,9 +71,9 @@ export default async function EventCoordinatorAssignedEventsPage() {
         <div>
           <h1 className="text-2xl font-semibold">Assigned events</h1>
           <p className="mt-1 text-sm text-[var(--text-muted)]">
-            {awaitingCount === 0
+            {events.length === 0
               ? 'Nothing awaiting your review right now.'
-              : `${awaitingCount} ${awaitingCount === 1 ? 'event needs' : 'events need'} your review.`}
+              : `${events.length} ${events.length === 1 ? 'event needs' : 'events need'} your review.`}
           </p>
         </div>
         <div className="flex gap-2">
@@ -93,7 +98,9 @@ export default async function EventCoordinatorAssignedEventsPage() {
 
       {events.length === 0 ? (
         <p className="rounded border border-[var(--border)] bg-[var(--surface)] p-6 text-[var(--text-muted)]">
-          No events have been assigned to you yet.
+          {assigned.length === 0
+            ? 'No events have been assigned to you yet.'
+            : 'Your other assigned events are on My events.'}
         </p>
       ) : (
         <div className="overflow-x-auto rounded border border-[var(--border)] bg-[var(--surface)]">
@@ -128,12 +135,7 @@ export default async function EventCoordinatorAssignedEventsPage() {
             </thead>
             <tbody>
               {events.map((event) => (
-                <tr
-                  key={event.id}
-                  className={`border-b border-[var(--border)] last:border-b-0 ${
-                    isAwaitingReview(event.status) ? 'bg-blue-50/40' : ''
-                  }`}
-                >
+                <tr key={event.id} className="border-b border-[var(--border)] last:border-b-0">
                   <td className="p-3 font-medium">{event.name}</td>
                   <td className="p-3 font-mono text-xs text-[var(--text-muted)]">{event.reference}</td>
                   <td className="p-3">{event.clientOrganisation?.name ?? '—'}</td>
@@ -160,7 +162,7 @@ export default async function EventCoordinatorAssignedEventsPage() {
       )}
 
       <p className="mt-4 text-sm text-[var(--text-muted)]">
-        {events.length} {events.length === 1 ? 'event' : 'events'} assigned to you.
+        {assigned.length} {assigned.length === 1 ? 'event' : 'events'} assigned to you.
       </p>
     </main>
   );
