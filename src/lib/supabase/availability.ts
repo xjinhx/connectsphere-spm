@@ -57,6 +57,19 @@ export async function fetchUnavailableSlotsOn(venueId: string, date: string, slo
     .in('slot', [...slots]);
 }
 
+/**
+ * SCRUM-151 AC3: the event's affected bookings on or after `today`, a
+ * Singapore date (YYYY-MM-DD), from the affected_booking_slot view added by
+ * AC2. One row per affected slot, with the venue's name.
+ */
+export async function fetchAffectedBookingSlotsForEvent(eventRequestId: string, today: string) {
+  return db()
+    .from('affected_booking_slot')
+    .select('booking_id, venue_id, slot_date, slot, reason, venues ( name )')
+    .eq('event_request_id', eventRequestId)
+    .gte('slot_date', today);
+}
+
 /** The venue's unavailable slots on or after `today`, a Singapore date (YYYY-MM-DD). */
 export async function fetchUpcomingUnavailableSlots(venueId: string, today: string) {
   return db()

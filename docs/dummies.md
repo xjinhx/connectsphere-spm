@@ -226,3 +226,32 @@ switch them the next time they edit those files.
   one of them (or have SCRUM-193 list these rows); the row already holds
   everything the message needs. Re-run SCRUM-151 AC2.
 - **Status:** Active
+
+### D-10 — Releasing an affected booking is done by hand
+
+- **Kind:** Out-of-sprint stand-in
+- **Added by:** SCRUM-151 AC3 — branch `venue-unavailable-slots`
+- **Waiting on:** a new story, "Release an affected booking", raised for the
+  Product Backlog because no story releases a single booking. Until it has a
+  key, the markers use its epic's: SCRUM-17 Venue Booking Approval. SCRUM-105
+  (cancel an event) and SCRUM-153 (postpone one) also release bookings and
+  should reuse the same release.
+- **Where:** `src/domain/availability/service.ts` — `listAffectedBookings()`;
+  `src/components/venue/AffectedBookingsNotice.tsx` (both
+  `DUMMY(SCRUM-17) D-10`)
+- **What is real and what is faked:** the outstanding action is real. Each
+  affected booking is listed on the coordinator's event page for as long as it
+  is still confirmed on an unavailable slot, and drops off once it is not.
+  Only the release itself is missing: the page states the action instead of
+  offering a button. To see an entry clear, a tester removes the booking by
+  hand (the stand-in's status check only allows `'confirmed'`):
+  ```sql
+  delete from venue_booking where event_request_id = '<event id>' and venue_id = '<venue id>';
+  ```
+  "Replaced" is tested as booking the event at another venue, then removing
+  the old booking.
+- **To replace:** the new story adds the release action (with SCRUM-148, a
+  released status). `listAffectedBookings()` does not change, because it only
+  lists confirmed bookings. Add the action beside each entry in
+  `AffectedBookingsNotice`, re-run SCRUM-151 AC3, then remove the markers.
+- **Status:** Active

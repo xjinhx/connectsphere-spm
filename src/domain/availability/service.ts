@@ -1,4 +1,6 @@
+import { z } from 'zod';
 import {
+  fetchAffectedBookingSlotsForEvent,
   fetchUnavailableSlotsOn,
   fetchUpcomingUnavailableSlots,
   recordUnavailableSlots,
@@ -6,12 +8,14 @@ import {
 import { ConflictError, ValidationError, isUniqueViolation } from '@/domain/shared/errors';
 import { formatSingaporeDate, todayInSingapore, type ISODate } from '@/domain/shared/dates';
 import { getVenue } from '@/domain/venues/service';
-import { OPERATING_SLOTS, type OperatingSlot } from '@/domain/venues/schema';
+import { OPERATING_SLOTS, OperatingSlotSchema, type OperatingSlot } from '@/domain/venues/schema';
 import { findNonOperatingSlots } from './policy';
 import {
+  BookingOnUnavailableSlotSchema,
   MarkSlotsUnavailableInputSchema,
   SLOT_NAMES,
   UnavailableSlotSchema,
+  type BookingOnUnavailableSlot,
   type UnavailableSlot,
 } from './schema';
 
@@ -178,6 +182,75 @@ export async function findUnavailableSlots(
     throw new ValidationError("Could not check the venue's availability.", error?.message);
   }
   return data.map(toUnavailableSlot).sort(byDateThenSlot);
+}
+
+// -----------------------------------------------------------------------------
+// SCRUM-151 AC3: the coordinator's outstanding action
+// -----------------------------------------------------------------------------
+
+/**
+ * One row of the affected_booking_slot view. A view's columns all come back
+ * as nullable in the generated types, so each row is checked here rather than
+ * cast into shape.
+ */
+const AffectedBookingSlotRowSchema = z.object({
+  booking_id: z.string().uuid(),
+  venue_id: z.string().uuid(),
+  slot_date: z.string(),
+  slot: OperatingSlotSchema,
+  reason: z.string(),
+  venues: z.object({ name: z.string() }),
+});
+
+/**
+ * SCRUM-151 AC3: the event's affected bookings, each with its venue, date and
+ * withdrawn slots with their reasons, for the coordinator's event page to list
+ * as an outstanding action.
+ *
+ * Read from the affected_booking_slot view (AC2's flag), so a booking is
+ * listed for as long as it is still confirmed on an unavailable slot and drops
+ * off once it is released, which is also what replacing it ends with (book
+ * another venue or slot, then release this one): "until they release or
+ * replace it". Upcoming events only, on the Singapore date, like AC2's notices.
+ *
+ * DUMMY(SCRUM-17) D-10: nothing in the app releases a single booking yet, and
+ * no story in the backlog does (a new one is being raised). Testers remove the
+ * booking by hand to see the entry clear.
+ *
+ * No access check of its own: its only caller is the coordinator's review
+ * page, which calls it after getReviewDetail has refused anyone the request is
+ * not theirs to see (SCRUM-89 AC3). An API route exposing it would need one.
+ */
+export async function listAffectedBookings(
+  eventRequestId: string,
+  today: ISODate = todayInSingapore(),
+): Promise<BookingOnUnavailableSlot[]> {
+  const { data, error } = await fetchAffectedBookingSlotsForEvent(eventRequestId, today);
+  if (error || !data) {
+    throw new ValidationError("Could not check the event's venue bookings.", error?.message);
+  }
+
+  const byBooking = new Map<string, BookingOnUnavailableSlot>();
+  for (const row of data.map((raw) => AffectedBookingSlotRowSchema.parse(raw))) {
+    const booking = byBooking.get(row.booking_id) ?? {
+      bookingId: row.booking_id,
+      venueId: row.venue_id,
+      venueName: row.venues.name,
+      date: row.slot_date,
+      slots: [],
+    };
+    booking.slots.push({ slot: row.slot, reason: row.reason });
+    byBooking.set(row.booking_id, booking);
+  }
+
+  return [...byBooking.values()]
+    .map((booking) =>
+      BookingOnUnavailableSlotSchema.parse({
+        ...booking,
+        slots: [...booking.slots].sort((a, b) => OPERATING_SLOTS.indexOf(a.slot) - OPERATING_SLOTS.indexOf(b.slot)),
+      }),
+    )
+    .sort((a, b) => a.date.localeCompare(b.date) || a.venueName.localeCompare(b.venueName));
 }
 
 /**

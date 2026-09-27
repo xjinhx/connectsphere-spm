@@ -3,6 +3,7 @@ import { createAdminClient } from '@/lib/supabase/admin';
 import { createVenue } from '@/domain/venues/service';
 import {
   findUnavailableSlots,
+  listAffectedBookings,
   listUpcomingUnavailableSlots,
   markSlotsUnavailable,
 } from '@/domain/availability/service';
@@ -10,7 +11,7 @@ import { todayInSingapore } from '@/domain/shared/dates';
 import { ensureTestClientOrganisation } from './fixtures/clientOrganisation';
 
 /**
- * SCRUM-151 Withdraw venue availability when circumstances change: AC1, AC2.
+ * SCRUM-151 Withdraw venue availability when circumstances change: AC1 to AC3.
  *
  * AC1 (Jira, authoritative): "Given I select a venue, a date and the affected
  * slots and record a reason, when I save, then those slots are recorded as
@@ -18,6 +19,13 @@ import { ensureTestClientOrganisation } from './fixtures/clientOrganisation';
  * AC2: "Given an affected slot carries a confirmed booking for an upcoming
  * event, when I save the change, then the booking is flagged as affected and
  * the assigned Event Coordinator is notified with the reason."
+ * AC3: "Given a coordinator has been notified of an affected booking, when
+ * they open the event, then the affected booking is listed with an
+ * outstanding action until they release or replace it."
+ *
+ * Nothing releases a single booking yet (stand-in D-10), so these tests remove
+ * the booking by hand, as a tester would, and check "released" and "replaced"
+ * separately.
  *
  * "No longer offered" has no booking request or search to run through yet
  * (SCRUM-142, 154, 128 are this sprint's). What those stories will ask is
@@ -331,6 +339,84 @@ describe('affected bookings and their coordinators (SCRUM-151 AC2)', () => {
 
     // Only the first save's notice, about AM. PM was neither saved nor told.
     expect(await noticesFor(eventId)).toEqual([expect.objectContaining({ slots: ['am'], reason: 'Power outage' })]);
+  });
+});
+
+describe("the coordinator's outstanding action (SCRUM-151 AC3)", () => {
+  /** Stand-in D-10: removing the booking row by hand is how a tester "releases" it. */
+  async function releaseByHand(venueId: string, eventId: string) {
+    const { error } = await admin.from('venue_booking').delete().eq('venue_id', venueId).eq('event_request_id', eventId);
+    if (error) throw new Error(`could not release test booking: ${error.message}`);
+  }
+
+  it('lists an affected booking with its venue, date, and each withdrawn slot with its reason', async () => {
+    const venue = await createTestVenue('Hall N');
+    const date = daysFromToday(12);
+    const eventId = await bookEvent(venue.id, { date, slots: ['am', 'pm'], coordinator: coordinatorId });
+    await markSlotsUnavailable(venue.id, { date, slots: ['pm'], reason: 'Power outage' }, venueStaffId);
+    await markSlotsUnavailable(venue.id, { date, slots: ['am'], reason: 'Ceiling repair' }, venueStaffId);
+
+    const affected = await listAffectedBookings(eventId);
+
+    expect(affected).toEqual([
+      expect.objectContaining({
+        venueId: venue.id,
+        venueName: venue.name,
+        date,
+        slots: [
+          { slot: 'am', reason: 'Ceiling repair' },
+          { slot: 'pm', reason: 'Power outage' },
+        ],
+      }),
+    ]);
+  });
+
+  it('keeps listing it until the booking is released, then stops', async () => {
+    const venue = await createTestVenue('Hall O');
+    const date = daysFromToday(12);
+    const eventId = await bookEvent(venue.id, { date, slots: ['am'], coordinator: coordinatorId });
+    await markSlotsUnavailable(venue.id, { date, slots: ['am'], reason: 'Ceiling repair' }, venueStaffId);
+    expect(await listAffectedBookings(eventId)).toHaveLength(1);
+
+    await releaseByHand(venue.id, eventId);
+
+    expect(await listAffectedBookings(eventId)).toEqual([]);
+  });
+
+  it('keeps listing it until the booking is replaced: a new booking elsewhere, then the old one released', async () => {
+    const venue = await createTestVenue('Hall P');
+    const replacement = await createTestVenue('Hall Q');
+    const date = daysFromToday(12);
+    const eventId = await bookEvent(venue.id, { date, slots: ['am'], coordinator: coordinatorId });
+    await markSlotsUnavailable(venue.id, { date, slots: ['am'], reason: 'Ceiling repair' }, venueStaffId);
+
+    // The replacement alone does not clear it: the old booking is still held.
+    const { error } = await admin.from('venue_booking').insert({ venue_id: replacement.id, event_request_id: eventId });
+    if (error) throw new Error(`could not book the replacement: ${error.message}`);
+    expect((await listAffectedBookings(eventId)).map((booking) => booking.venueId)).toEqual([venue.id]);
+
+    await releaseByHand(venue.id, eventId);
+
+    // The old booking is gone, and the new one is not on an unavailable slot.
+    expect(await listAffectedBookings(eventId)).toEqual([]);
+  });
+
+  it('does not list a booking of an event that has already happened', async () => {
+    const venue = await createTestVenue('Hall R');
+    const yesterday = daysFromToday(-1);
+    const eventId = await bookEvent(venue.id, { date: yesterday, slots: ['am'], coordinator: coordinatorId });
+    await markSlotsUnavailable(venue.id, { date: yesterday, slots: ['am'], reason: 'Late record' }, venueStaffId);
+
+    expect(await listAffectedBookings(eventId)).toEqual([]);
+  });
+
+  it('lists nothing when none of the event\'s slots was withdrawn', async () => {
+    const venue = await createTestVenue('Hall S');
+    const date = daysFromToday(12);
+    const eventId = await bookEvent(venue.id, { date, slots: ['pm'], coordinator: coordinatorId });
+    await markSlotsUnavailable(venue.id, { date, slots: ['am'], reason: 'Ceiling repair' }, venueStaffId);
+
+    expect(await listAffectedBookings(eventId)).toEqual([]);
   });
 });
 

@@ -38,6 +38,20 @@ export const MarkSlotsUnavailableInputSchema = z.object({
 });
 export type MarkSlotsUnavailableInput = z.infer<typeof MarkSlotsUnavailableInputSchema>;
 
+/**
+ * SCRUM-151 AC3: an affected booking (CONTEXT.md) as the coordinator's event
+ * page lists it: which venue and date, and each of its slots that has been
+ * withdrawn, with the reason recorded for it.
+ */
+export const BookingOnUnavailableSlotSchema = z.object({
+  bookingId: z.string().uuid(),
+  venueId: z.string().uuid(),
+  venueName: z.string(),
+  date: z.string(),
+  slots: z.array(z.object({ slot: OperatingSlotSchema, reason: z.string() })).min(1),
+});
+export type BookingOnUnavailableSlot = z.infer<typeof BookingOnUnavailableSlotSchema>;
+
 /** One recorded unavailable slot, as the API and the venue page show it. */
 export const UnavailableSlotSchema = z.object({
   id: z.string().uuid(),
