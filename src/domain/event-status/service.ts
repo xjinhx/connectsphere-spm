@@ -7,15 +7,20 @@ import { canTransition } from './policy';
 /**
  * SCRUM-103 — Prevent invalid status transitions.
  *
- * The one way to move an event to a new status in Sprint 2. Orchestration
+ * Moves an event to a new status if the lifecycle allows it. Orchestration
  * only: the rule is canTransition (policy.ts), the query is
  * markEventRequestStatus (lib/supabase/eventRequests.ts).
  *
- * Who may make a move is not checked here. That belongs to the action making
- * it - SCRUM-101's "raise a booking request" is a coordinator's, for example -
- * and each action checks its own caller before calling this. This story's ACs
- * say "any user": the move is refused whoever asks, so there is nothing about
- * the caller to know.
+ * It checks only that the move is in the lifecycle. Who may make the move, and
+ * anything that must be true first, belongs to the action making it -
+ * SCRUM-101's "raise a booking request" is a coordinator's, for example - and
+ * each action checks those before calling this. This story's ACs say "any
+ * user": the move is refused whoever asks, so there is nothing about the
+ * caller to know.
+ *
+ * The Sprint 1 actions (submit, approve, reject, clarify, resubmit) do not call
+ * this: they write their own status through their own guarded updates, which
+ * also record what goes with it (a decision, a note, a submission time).
  *
  * No API route calls this. SCRUM-101's story is that nobody maintains status
  * by hand, so a "set status" endpoint would be the wrong thing to build; the

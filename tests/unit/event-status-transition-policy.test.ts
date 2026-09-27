@@ -55,7 +55,7 @@ describe('SCRUM-103 — the table itself', () => {
     }
   });
 
-  // The Sprint 1 actions must stay legal, or this story would break them.
+  // The Sprint 1 actions' moves are part of the lifecycle, so the table lists them.
   it.each([
     ['draft', 'submitted'],
     ['submitted', 'approved'],

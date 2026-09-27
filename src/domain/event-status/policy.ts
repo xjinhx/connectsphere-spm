@@ -12,13 +12,16 @@ import type { EventRequestStatus } from '@/domain/event-request/schema';
  * SCRUM-101's, not this story's. This table only says whether a move is
  * allowed at all.
  *
- * Moves the Sprint 1 actions already make, kept so they stay legal:
+ * Moves the Sprint 1 actions already make, listed so the table describes the
+ * whole lifecycle. Those actions write their own status, with their own checks,
+ * and do not call canTransition:
  *   draft -> submitted                       SCRUM-82 submit
  *   submitted -> approved | rejected         SCRUM-92 / SCRUM-93
  *   submitted -> clarification_requested     SCRUM-90
  *   clarification_requested -> submitted     SCRUM-91 resubmit
  *
- * Moves the Sprint 2 lifecycle adds (clarifications #67, #70, #80):
+ * Moves the Sprint 2 lifecycle adds. Apart from AC4's row, these are a
+ * proposal for the team, not on the card:
  *   approved -> planning                     SCRUM-101 AC3, first request raised
  *   planning -> confirmed                    arrangements in place
  *   confirmed -> planning                    AC4, a significant change
@@ -32,7 +35,7 @@ import type { EventRequestStatus } from '@/domain/event-request/schema';
  *   AC3  cancelled lists nothing, so it cannot move to any status.
  *   AC4  confirmed -> planning is listed.
  *
- * Proposal for the team, not on the card: a draft is not cancellable. It has
+ * Also a proposal: a draft is not cancellable. It has
  * not been sent to anyone, and event_request_submitted_at_matches_status only
  * lets a draft have no submitted_at, so a cancelled draft would need that
  * constraint changed. Rejected and completed are final, like cancelled.
