@@ -98,5 +98,11 @@ export async function submitVenueBookingRequest(
   // something else deleted it in between, not that creation failed.
   if (!created) throw new NotFoundError('Venue booking request');
 
+  // DUMMY(SCRUM-101) D-09: the event's status should move from Approved to
+  // Planning here (SCRUM-101 AC3), via canEnterPlanning()
+  // (src/domain/event-status/policy.ts) once that exists on this branch —
+  // SCRUM-101 hasn't merged to main yet. Left untouched for now; see
+  // docs/dummies.md.
+
   return toOutcome(created as unknown as VenueBookingRequestRow);
 }
