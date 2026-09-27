@@ -14,6 +14,7 @@ import {
   describeTechnicalSupport,
   describeTimeSlots,
 } from '@/domain/event-request/policy';
+import { EVENT_REQUEST_STATUS_DEFINITIONS } from '@/domain/event-request/schema';
 import { getEventRequest } from '@/domain/event-request/service';
 import { COMMITMENT_STATEMENT, NO_COMMITMENTS } from '@/domain/review/policy';
 import { getApprovalView, getClarificationView, getRejectionView } from '@/domain/review/service';
@@ -128,6 +129,11 @@ export default async function EventRequestPage({
         <h1 className="text-xl font-semibold">{request.name}</h1>
         <EventRequestStatusBadge status={request.status} />
       </div>
+      {/* SCRUM-99 AC1: the badge above is the current status; this is the
+          one-line definition held for it. */}
+      <p className="mt-1 text-sm text-[var(--text-muted)]">
+        {EVENT_REQUEST_STATUS_DEFINITIONS[request.status]}
+      </p>
       {/* AC2: the unique reference the database assigned on save. */}
       <p className="mt-1 font-mono text-sm text-[var(--text-muted)]">{request.reference}</p>
 
