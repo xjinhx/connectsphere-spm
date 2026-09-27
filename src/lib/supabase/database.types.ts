@@ -590,6 +590,44 @@ export type Database = {
           },
         ]
       }
+      venue_unavailable_slot: {
+        Row: {
+          id: string
+          reason: string
+          recorded_at: string
+          recorded_by: string
+          slot: string
+          slot_date: string
+          venue_id: string
+        }
+        Insert: {
+          id?: string
+          reason: string
+          recorded_at?: string
+          recorded_by: string
+          slot: string
+          slot_date: string
+          venue_id: string
+        }
+        Update: {
+          id?: string
+          reason?: string
+          recorded_at?: string
+          recorded_by?: string
+          slot?: string
+          slot_date?: string
+          venue_id?: string
+        }
+        Relationships: [
+          {
+            foreignKeyName: "venue_unavailable_slot_venue_id_fkey"
+            columns: ["venue_id"]
+            isOneToOne: false
+            referencedRelation: "venues"
+            referencedColumns: ["id"]
+          },
+        ]
+      }
       venues: {
         Row: {
           created_at: string
