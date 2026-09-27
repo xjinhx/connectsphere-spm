@@ -29,32 +29,53 @@ matrix — customer clarification #52 leaves user administration for the team
 to propose. Use that role; don't add another admin-style role without agreeing
 it with the team first.
 
-## Current sprint scope (Sprint 1)
+## Current sprint scope (Sprint 2, 24 Sep – 8 Oct 2026)
+
+**Sprint goal:** "Coordinators can book a venue for an approved event, and
+Venue Staff can approve or reject it without any double-booking."
 
 **Release 1 scope and current sprint scope are not the same thing.** Release
 1 is everything due by Week 12, covering ~20 functionality areas across all
 sprints. The current sprint is a subset of that. Build only what the current
 sprint covers.
 
-**In the current sprint:** Authentication, Account Roles / User Profile,
-Client Organisations, Event Request Creation, Draft Event Requests, Event
-Review & Approval, Coordinator Assignment, Venue Catalogue.
+**In the current sprint** (the Jira sprint board is the list of record; where
+an area has other stories in the backlog, only the ones named here are in):
 
-**In Release 1 but NOT in the current sprint — do not build:** Event Status
-Management, Venue Availability, Venue Search, Venue Suitability, Venue
-Booking Request, Venue Booking Approval, Booking Conflict Detection,
-Equipment Request / Availability / Reservation, Attendee Registration,
-Notification System.
+- Venue Booking Request (SCRUM-142, 143)
+- Venue Booking Approval (SCRUM-147, 148, 149, 150)
+- Booking Conflict Detection (SCRUM-154, 155)
+- Venue Availability (SCRUM-123, 151)
+- Venue Search (SCRUM-128)
+- Event Status Management (SCRUM-99, 101, 103)
+- Notification System (SCRUM-193, 198)
+- Coordinator Assignment (SCRUM-97)
+- Venue Catalogue (SCRUM-119)
 
-**Notification deserves specific mention.** Twilio SendGrid appears in the
-tech stack below and some story ACs reference a user being "notified", but
-there is no notification story in the current sprint. Do not add SendGrid
-calls, email triggers or a notification queue speculatively. Where an AC
-requires a notification, the minimum honest implementation is a record in
-the data layer, and the limitation should be noted — not an email pipeline.
+**Built in Sprint 1:** Authentication, Account Roles / User Profile, Client
+Organisations, Event Request Creation, Draft Event Requests, Event Review &
+Approval, Coordinator Assignment, Venue Catalogue. Fix bugs in them (see
+"Bugs"); extend them only through a story.
 
-**Where an AC depends on something outside the current sprint** — a
-Confirmed status, a venue booking, an equipment reservation — implement the
+**In Release 1 but NOT in the current sprint — do not build:** Venue
+Suitability, Equipment Request / Availability / Reservation, Attendee
+Registration.
+
+**Scrum Master:** Jinhong takes no user stories this sprint and reviews all
+PRs. If PRs pile up near the end of the sprint, whoever is free helps,
+coordinating with him.
+
+**Notification** is in this sprint, in-app only: SCRUM-193 (a notification
+list and unread count for any user) and SCRUM-198 (notify the Organiser about
+clarification, approval, rejection, confirmation and assignment), both Yee
+Teng's. Neither card mentions email, so Twilio SendGrid stays out: do not add
+SendGrid calls or email triggers. Where another story's AC says someone is
+notified, create the notification through SCRUM-193/198's mechanism once it
+is merged. Until then, record it and mark it as a dummy, as the Sprint 1
+notification dummies are (D-03, D-05, D-06, D-08).
+
+**Where an AC depends on something outside the current sprint** — an
+equipment reservation, an attendee registration — implement the
 minimum that satisfies the criterion honestly, record it as a dummy in
 `docs/dummies.md` (see "Dependencies on other people's stories" under Team),
 and do not build the absent feature just to make a test exercisable.
@@ -65,10 +86,11 @@ exercises the behaviour:
 - **It runs the behaviour → it counts.** e.g. SCRUM-92: an approved request
   really does show that nothing is committed. The AC is tested, and the dummy
   entry says to re-run it once bookings exist.
-- **It has nothing to run against → it doesn't count.** e.g. SCRUM-120's
-  "list the bookings a capacity cut would affect": with no bookings table
-  there can never be any, so the check proves nothing. That AC stays
-  untested, and the story stays in Merged - Pending Verification.
+- **It has nothing to run against → it doesn't count.** e.g. in Sprint 1,
+  before the stand-in `venue_booking` table existed, SCRUM-120's "list the
+  bookings a capacity cut would affect": with no bookings table there could
+  never be any, so the check proved nothing. That AC stayed untested, and the
+  story stayed in Merged - Pending Verification.
 
 This section is per-sprint and goes stale. If it has not been updated since
 the last sprint planning, check the current sprint board in Jira rather than
@@ -81,8 +103,9 @@ trusting this list, and flag it.
 - **Database:** Supabase (PostgreSQL)
 - **Shared contract:** TypeScript types + Zod schemas
 - **Email:** Twilio SendGrid — **not wired up in the current sprint**, see
-  "Current sprint scope (Sprint 1)" above
-- **Package manager:** pnpm (always use `pnpm`, never `npm`/`yarn`)
+  "Current sprint scope" above
+- **Package manager:** npm. CI and the README use it, and `package-lock.json`
+  is the only lockfile. Don't use pnpm or yarn.
 - **Language rules:** TypeScript strict mode — do not introduce `any` or
   unchecked possibly-undefined access
 - **Testing:** Vitest + React Testing Library + Playwright
@@ -133,7 +156,10 @@ called from `domain/`, not written directly there.
    this sheet, but the AC text they're testing against must match the
    Jira card, not the sheet, if the two disagree. See "Definition of
    Done" — automated tests are good practice here but are not, on their
-   own, what closes out a story for this team.
+   own, what closes out a story for this team. From Sprint 2, each
+   developer keeps their stories' test cases in their own Excel file (the
+   Week 4 template, one tab per story, numbered T1, T2…), consolidated into
+   one at sprint end; the v3 sheet keeps Sprint 1's IDs.
 
 ## Acceptance criteria: Jira is authoritative, not the spreadsheet
 
@@ -221,7 +247,7 @@ Note the automated-testing row: unit/integration tests are good practice and
 encouraged (and required where the story's dependencies allow it — see
 "Contract-first workflow"), but they are not what the team's DoD checks —
 **manual** testing against the actual acceptance criteria (as written in
-Jira) is what's required. Don't treat a green `pnpm test` run as equivalent
+Jira) is what's required. Don't treat a green `npm test` run as equivalent
 to a story being done.
 
 **Manual testing does not need a screen.** Testing a story through its
@@ -229,6 +255,13 @@ function or API — for example a request made with a signed-in session and
 checked against the stored row — counts as manual testing against its
 acceptance criteria. A backend-only story is not held back from Done just
 because no page shows it yet (professor consultation, 15 Sep 2026).
+
+**Sprint 2 working agreement: test before the PR.** Before raising a PR, run
+every automated and manual test case for the story and upload the evidence to
+the Jira ticket: screenshots pasted into a comment (not attached, so they can
+be annotated), each labelled with its AC and test case number (e.g. AC1 T1).
+This is a team agreement, not a DoD change — the table above stays as it is
+until the tracker's Definition of Done tab says otherwise.
 
 **Proposed additions — not yet agreed.** These are proposed for the team to
 vote on. Do not apply them as part of the DoD until the tracker's Definition
@@ -273,6 +306,8 @@ sign it is failing (professor consultation, 15 Sep 2026).
   No story points. This is tracking evidence: the examiners may ask what
   unexpected problems came up.
 - **Found in your own branch before the PR:** just fix it; no ticket.
+- **CI fails after a merge:** the developer who owns the story fixes it; the
+  Scrum Master flags it to them (Sprint 2 agreement).
 - **A major bug that needs the story rewritten** becomes a user story for the
   next sprint rather than a fix.
 - If a bug is fixed in a story that was already Done, be ready to explain,
@@ -285,7 +320,7 @@ sign it is failing (professor consultation, 15 Sep 2026).
 This project has **two separate Supabase instances** that are easy to
 conflate:
 
-1. **Local** (Docker, via the CLI) — `pnpm run db:start` / `db:stop` /
+1. **Local** (Docker, via the CLI) — `npm run db:start` / `db:stop` /
    `db:reset`. This is where day-to-day development and migrations have
    been happening. Studio UI at `http://localhost:54323`. Each developer's
    local instance is their own separate copy, built from the same
@@ -298,7 +333,7 @@ conflate:
 
 Migration files live in `supabase/migrations/`, applied in filename
 (timestamp) order. Check `src/lib/supabase/database.types.ts` — it's
-generated from the local schema via `pnpm run db:types` and should be
+generated from the local schema via `npm run db:types` and should be
 regenerated after any migration that changes the schema.
 
 Creating or changing tables doesn't need a user story of its own — any story
@@ -306,9 +341,9 @@ that needs a table or column may add it (see "Dependencies on other people's
 stories" under Team). The team plans an ER diagram and data dictionary; once
 they exist, update them in the same PR as the migration.
 
-To push a new migration to cloud once the team's agreed: `pnpm supabase
-login` → `pnpm supabase link --project-ref <ref>` → `pnpm supabase db push
---dry-run` to review → `pnpm supabase db push` to apply.
+To push a new migration to cloud once the team's agreed: `npx supabase
+login` → `npx supabase link --project-ref <ref>` → `npx supabase db push
+--dry-run` to review → `npx supabase db push` to apply.
 
 ## Git workflow
 
