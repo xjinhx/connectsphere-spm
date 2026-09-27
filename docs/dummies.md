@@ -213,6 +213,8 @@ switch them the next time they edit those files.
   - `tests/integration/event-status-transitions.test.ts` —
     `createConfirmedRequest()` moves approved -> planning with
     `changeEventStatus`, where the app will use SCRUM-101's action.
+  - `tests/integration/coordinator-my-events.test.ts` (SCRUM-97) —
+    `createAssignedEvent()` does the same for its Planning and Confirmed events.
   - Manual testing: TC-103-09 (and the SCRUM-97/99 cases that need a Planning
     or Confirmed event) set Planning with the SCRUM-103 harness,
     `tests/manual/change-event-status.test.ts`.
@@ -220,7 +222,8 @@ switch them the next time they edit those files.
   `EventRequestStatusEnum`, `EVENT_REQUEST_STATUS_LABELS` and the badge
   (merge whichever copy arrives second); leave the `IF NOT EXISTS` line in the
   migration (it is then a no-op, and removing it would change an applied
-  migration); switch `createConfirmedRequest()` to SCRUM-101's approved ->
-  planning function and set Planning through its action in the manual tests.
-  Re-run TC-103-01 to 09 (SCRUM-103 AC1-AC4).
+  migration); switch `createConfirmedRequest()` and `createAssignedEvent()` to
+  SCRUM-101's approved -> planning function and set Planning through its
+  action in the manual tests. Re-run TC-103-01 to 09 (SCRUM-103 AC1-AC4) and
+  TC-97-02 / TC-97-04 (SCRUM-97 AC1).
 - **Status:** Active

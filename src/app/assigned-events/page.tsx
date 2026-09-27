@@ -71,14 +71,24 @@ export default async function EventCoordinatorAssignedEventsPage() {
               : `${awaitingCount} ${awaitingCount === 1 ? 'event needs' : 'events need'} your review.`}
           </p>
         </div>
-        {/* SCRUM-203 — a way into the client organisations pages from the
-            Coordinator landing page. */}
-        <Link
-          href="/organisations"
-          className="inline-block w-fit rounded-md bg-[var(--brand)] px-4 py-2 text-sm font-medium text-white hover:bg-[var(--brand-dark)]"
-        >
-          Client organisations
-        </Link>
+        <div className="flex gap-2">
+          {/* SCRUM-97 — the way into the coordinator's full events list, at
+              any status, from their landing page. */}
+          <Link
+            href="/my-events"
+            className="inline-block w-fit rounded-md border border-[var(--border)] bg-[var(--surface)] px-4 py-2 text-sm font-medium hover:bg-slate-50"
+          >
+            My events
+          </Link>
+          {/* SCRUM-203 — a way into the client organisations pages from the
+              Coordinator landing page. */}
+          <Link
+            href="/organisations"
+            className="inline-block w-fit rounded-md bg-[var(--brand)] px-4 py-2 text-sm font-medium text-white hover:bg-[var(--brand-dark)]"
+          >
+            Client organisations
+          </Link>
+        </div>
       </div>
 
       {events.length === 0 ? (
