@@ -232,12 +232,28 @@ export type EventRequestSaveInput = z.infer<typeof eventRequestSaveSchema>;
 // supabase/migrations/20260920140000_event_request_rejected_status.sql.
 // SCRUM-90 extends this with 'clarification_requested', matching
 // supabase/migrations/20260914090000_event_request_clarification_requested_status.sql.
+//
+// SCRUM-101 (Event Status Management, Sprint 2) AC3/AC4 extends this with
+// 'planning', matching
+// supabase/migrations/20260927090000_event_request_lifecycle_statuses.sql —
+// the same value this file's own note above asked for. Confirmed, Completed,
+// Cancelled, Postponed and Withdrawn are not added: no story in this sprint's
+// board owns any of those transitions yet (SCRUM-101's own Jira card stops at
+// Planning). The same pattern SCRUM-92/93 used — add a value only once a
+// story actually needs it — applies here; whichever future story owns
+// Confirm/Complete/Cancel/Postpone/Withdraw should add its own value the same
+// way. The transition rule for the one value added here lives in
+// src/domain/event-status/policy.ts, not here — this file only owns the
+// shape. SCRUM-99 (see the current status) and SCRUM-103 (prevent invalid
+// transitions) are this epic's sibling tickets; extend event-status/ rather
+// than duplicate it if you're building either.
 export const EventRequestStatusEnum = z.enum([
   'draft',
   'submitted',
   'approved',
   'clarification_requested',
   'rejected',
+  'planning',
 ]);
 export type EventRequestStatus = z.infer<typeof EventRequestStatusEnum>;
 
@@ -248,6 +264,7 @@ export const EVENT_REQUEST_STATUS_LABELS: Record<EventRequestStatus, string> = {
   approved: 'Approved',
   clarification_requested: 'Clarification Requested',
   rejected: 'Rejected',
+  planning: 'Planning',
 };
 
 // ---------------------------------------------------------------------------
