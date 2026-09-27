@@ -18,32 +18,33 @@ function db(): SupabaseClient<Database> {
 
 const UNAVAILABLE_SLOT_SELECT = 'id, venue_id, slot_date, slot, reason, recorded_at';
 
-export type UnavailableSlotInsert = {
+/**
+ * SCRUM-151 AC1 and AC2: one call to the database function
+ * mark_slots_unavailable (migration 20260928110000_...), which records one
+ * row per slot and a notice for each affected booking's coordinator in a
+ * single transaction. supabase-js has no transactions of its own.
+ *
+ * If any of the slots is already unavailable (the unique constraint) the
+ * whole call fails and nothing is saved. Resolves to the number of notices
+ * written. `today` is the Singapore date (YYYY-MM-DD) "upcoming" is judged
+ * against; left out, the function works it out itself.
+ */
+export async function recordUnavailableSlots(input: {
   venueId: string;
   date: string;
-  slot: string;
+  slots: string[];
   reason: string;
   recordedBy: string;
-};
-
-/**
- * SCRUM-151 AC1: one row per ticked slot, in a single insert. Postgres runs a
- * statement as one unit, so if any of the slots is already unavailable (the
- * unique constraint) none of them is saved.
- */
-export async function insertUnavailableSlots(rows: UnavailableSlotInsert[]) {
-  return db()
-    .from('venue_unavailable_slot')
-    .insert(
-      rows.map((row) => ({
-        venue_id: row.venueId,
-        slot_date: row.date,
-        slot: row.slot,
-        reason: row.reason,
-        recorded_by: row.recordedBy,
-      })),
-    )
-    .select(UNAVAILABLE_SLOT_SELECT);
+  today?: string;
+}) {
+  return db().rpc('mark_slots_unavailable', {
+    p_venue_id: input.venueId,
+    p_slot_date: input.date,
+    p_slots: input.slots,
+    p_reason: input.reason,
+    p_recorded_by: input.recordedBy,
+    ...(input.today !== undefined && { p_today: input.today }),
+  });
 }
 
 /** The venue's unavailable slots on one date, among `slots`. */

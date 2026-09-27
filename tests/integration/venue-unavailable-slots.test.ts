@@ -7,30 +7,43 @@ import {
   markSlotsUnavailable,
 } from '@/domain/availability/service';
 import { todayInSingapore } from '@/domain/shared/dates';
+import { ensureTestClientOrganisation } from './fixtures/clientOrganisation';
 
 /**
- * SCRUM-151 Withdraw venue availability when circumstances change: AC1.
+ * SCRUM-151 Withdraw venue availability when circumstances change: AC1, AC2.
  *
  * AC1 (Jira, authoritative): "Given I select a venue, a date and the affected
  * slots and record a reason, when I save, then those slots are recorded as
  * unavailable and are no longer offered for new bookings."
+ * AC2: "Given an affected slot carries a confirmed booking for an upcoming
+ * event, when I save the change, then the booking is flagged as affected and
+ * the assigned Event Coordinator is notified with the reason."
  *
  * "No longer offered" has no booking request or search to run through yet
  * (SCRUM-142, 154, 128 are this sprint's). What those stories will ask is
  * findUnavailableSlots, so that is tested directly here, and the check is
  * re-run end to end once they call it.
  *
+ * AC2's bookings are stand-in D-04 (venue_booking, added by hand here as a
+ * tester would) and its notice is stand-in D-09 (a venue_unavailability_notice
+ * row). See docs/dummies.md.
+ *
  * Runs against the local Supabase stack: the unique constraint is what makes
- * a save with a slot already unavailable save nothing at all. The admin client
- * only arranges and reads rows.
+ * a save with a slot already unavailable save nothing at all, and
+ * mark_slots_unavailable writes the notices in the same transaction as the
+ * slots. The admin client only arranges and reads rows.
  */
 
 const admin = createAdminClient();
 const RUN = `${Date.now().toString(36)}${Math.random().toString(36).slice(2, 6)}`;
+const CLIENT_ORGANISATION_ID = '22222222-2222-2222-2222-222222222222';
 
 let locationId: string;
 let venueStaffId: string;
+let organiserId: string;
+let coordinatorId: string;
 const venueIds: string[] = [];
+const requestIds: string[] = [];
 
 /** The Singapore date `days` from today, as YYYY-MM-DD. */
 function daysFromToday(days: number): string {
@@ -55,7 +68,76 @@ async function rowsFor(venueId: string) {
   return data;
 }
 
+async function createUser(label: string): Promise<string> {
+  const { data, error } = await admin.auth.admin.createUser({
+    email: `${label}+unavailable${RUN}@connectsphere.example.com`,
+    password: 'Password123!',
+    email_confirm: true,
+  });
+  if (error || !data.user) throw new Error(`could not create test ${label}: ${error?.message ?? 'no user returned'}`);
+  return data.user.id;
+}
+
+/**
+ * A confirmed booking of an event into the venue, made by hand as a tester
+ * would (stand-in D-04). The booking has no date or slot of its own: both come
+ * from the event. The assignment is an update after the submission, because
+ * event_request_assignment_needs_submission refuses a coordinator on a draft.
+ */
+async function bookEvent(
+  venueId: string,
+  { date, slots, coordinator }: { date: string; slots: string[]; coordinator: string | null },
+): Promise<string> {
+  const { data, error } = await admin
+    .from('event_request')
+    .insert({
+      organiser_id: organiserId,
+      client_organisation_id: CLIENT_ORGANISATION_ID,
+      name: `Unavailable Slot Event ${RUN}`,
+      proposed_date: date,
+      time_slots: slots,
+    })
+    .select('id')
+    .single();
+  if (error || !data) throw new Error(`could not create test request: ${error?.message}`);
+  const id = data.id;
+  requestIds.push(id);
+
+  const { error: submitError } = await admin.from('event_request').update({ status: 'submitted' }).eq('id', id);
+  if (submitError) throw new Error(`could not submit test request: ${submitError.message}`);
+
+  if (coordinator) {
+    const { error: assignError } = await admin
+      .from('event_request')
+      .update({ coordinator_id: coordinator, assigned_by: coordinator })
+      .eq('id', id);
+    if (assignError) throw new Error(`could not assign test request: ${assignError.message}`);
+  }
+
+  const { error: bookError } = await admin.from('venue_booking').insert({ venue_id: venueId, event_request_id: id });
+  if (bookError) throw new Error(`could not book test request: ${bookError.message}`);
+  return id;
+}
+
+async function noticesFor(eventId: string) {
+  const { data, error } = await admin
+    .from('venue_unavailability_notice')
+    .select('coordinator_id, slot_date, slots, reason')
+    .eq('event_request_id', eventId);
+  if (error || !data) throw new Error(`could not read notices: ${error?.message}`);
+  return data;
+}
+
+/** AC2's flag: the slots on which the event's booking is affected. */
+async function affectedSlotsOf(eventId: string) {
+  const { data, error } = await admin.from('affected_booking_slot').select('slot').eq('event_request_id', eventId);
+  if (error || !data) throw new Error(`could not read affected bookings: ${error?.message}`);
+  return data.map((row) => row.slot).sort();
+}
+
 beforeAll(async () => {
+  await ensureTestClientOrganisation(admin);
+
   const { data: location, error } = await admin
     .from('locations')
     .insert({ name: `Unavailable Slots Location ${RUN}` })
@@ -64,22 +146,25 @@ beforeAll(async () => {
   if (error || !location) throw new Error(`could not create test location: ${error?.message}`);
   locationId = location.id;
 
-  const { data: user, error: userError } = await admin.auth.admin.createUser({
-    email: `venue-staff+unavailable${RUN}@connectsphere.example.com`,
-    password: 'Password123!',
-    email_confirm: true,
-  });
-  if (userError || !user.user) throw new Error(`could not create test venue staff: ${userError?.message}`);
-  venueStaffId = user.user.id;
+  venueStaffId = await createUser('venue-staff');
+  organiserId = await createUser('organiser');
+  coordinatorId = await createUser('coordinator');
 });
 
 afterAll(async () => {
-  // Venues first: their unavailable slots go with them (cascade), and
-  // recorded_by is ON DELETE RESTRICT, so the account can only go after.
+  // Requests first: their bookings and notices go with them (cascade), and
+  // venue_booking holds on to its venue (restrict). Then venues, whose
+  // unavailable slots go with them. Accounts last: recorded_by and the
+  // notices' coordinator_id are ON DELETE RESTRICT.
+  for (const id of requestIds) {
+    await admin.from('event_request').delete().eq('id', id);
+  }
   for (const id of venueIds) {
     await admin.from('venues').delete().eq('id', id);
   }
-  if (venueStaffId) await admin.auth.admin.deleteUser(venueStaffId);
+  for (const id of [venueStaffId, organiserId, coordinatorId]) {
+    if (id) await admin.auth.admin.deleteUser(id);
+  }
   if (locationId) await admin.from('locations').delete().eq('id', locationId);
 });
 
@@ -94,7 +179,7 @@ describe('markSlotsUnavailable (SCRUM-151 AC1)', () => {
       venueStaffId,
     );
 
-    expect(saved.map((entry) => entry.slot)).toEqual(['am', 'pm']);
+    expect(saved.unavailableSlots.map((entry) => entry.slot)).toEqual(['am', 'pm']);
     const rows = await rowsFor(venue.id);
     expect(rows).toHaveLength(2);
     for (const row of rows) {
@@ -168,6 +253,84 @@ describe('findUnavailableSlots: the check other stories ask (SCRUM-151 AC1, "no 
 
     expect(await findUnavailableSlots(venue.id, date, ['pm'])).toEqual([]);
     expect(await findUnavailableSlots(venue.id, daysFromToday(8))).toEqual([]);
+  });
+});
+
+describe('affected bookings and their coordinators (SCRUM-151 AC2)', () => {
+  it('flags a confirmed upcoming booking on a withdrawn slot, and notifies its coordinator with the reason', async () => {
+    const venue = await createTestVenue('Hall H');
+    const date = daysFromToday(10);
+    const eventId = await bookEvent(venue.id, { date, slots: ['am', 'pm'], coordinator: coordinatorId });
+
+    const outcome = await markSlotsUnavailable(venue.id, { date, slots: ['am'], reason: 'Ceiling repair' }, venueStaffId);
+
+    expect(outcome.notifiedBookings).toBe(1);
+    expect(await affectedSlotsOf(eventId)).toEqual(['am']);
+    expect(await noticesFor(eventId)).toEqual([
+      { coordinator_id: coordinatorId, slot_date: date, slots: ['am'], reason: 'Ceiling repair' },
+    ]);
+  });
+
+  it('sends one notice per booking, naming every withdrawn slot the event uses', async () => {
+    const venue = await createTestVenue('Hall I');
+    const date = daysFromToday(10);
+    const eventId = await bookEvent(venue.id, { date, slots: ['am', 'pm'], coordinator: coordinatorId });
+
+    await markSlotsUnavailable(venue.id, { date, slots: ['pm', 'am'], reason: 'Flooding' }, venueStaffId);
+
+    expect(await noticesFor(eventId)).toEqual([expect.objectContaining({ slots: ['am', 'pm'], reason: 'Flooding' })]);
+  });
+
+  it('leaves bookings on another slot or another date alone', async () => {
+    const venue = await createTestVenue('Hall J');
+    const date = daysFromToday(10);
+    const otherSlot = await bookEvent(venue.id, { date, slots: ['pm'], coordinator: coordinatorId });
+    const otherDate = await bookEvent(venue.id, { date: daysFromToday(11), slots: ['am'], coordinator: coordinatorId });
+
+    const outcome = await markSlotsUnavailable(venue.id, { date, slots: ['am'], reason: 'Ceiling repair' }, venueStaffId);
+
+    expect(outcome.notifiedBookings).toBe(0);
+    for (const eventId of [otherSlot, otherDate]) {
+      expect(await affectedSlotsOf(eventId)).toEqual([]);
+      expect(await noticesFor(eventId)).toEqual([]);
+    }
+  });
+
+  it('does not notify anyone about an event that has already happened', async () => {
+    const venue = await createTestVenue('Hall K');
+    const yesterday = daysFromToday(-1);
+    const eventId = await bookEvent(venue.id, { date: yesterday, slots: ['am'], coordinator: coordinatorId });
+
+    const outcome = await markSlotsUnavailable(venue.id, { date: yesterday, slots: ['am'], reason: 'Late record' }, venueStaffId);
+
+    expect(outcome.notifiedBookings).toBe(0);
+    expect(await noticesFor(eventId)).toEqual([]);
+  });
+
+  it('still flags a booking whose event has no coordinator, with nobody to notify', async () => {
+    const venue = await createTestVenue('Hall L');
+    const date = daysFromToday(10);
+    const eventId = await bookEvent(venue.id, { date, slots: ['am'], coordinator: null });
+
+    const outcome = await markSlotsUnavailable(venue.id, { date, slots: ['am'], reason: 'Ceiling repair' }, venueStaffId);
+
+    expect(outcome.notifiedBookings).toBe(0);
+    expect(await affectedSlotsOf(eventId)).toEqual(['am']);
+    expect(await noticesFor(eventId)).toEqual([]);
+  });
+
+  it('writes no notice when the save is refused for a slot already unavailable', async () => {
+    const venue = await createTestVenue('Hall M');
+    const date = daysFromToday(10);
+    const eventId = await bookEvent(venue.id, { date, slots: ['am', 'pm'], coordinator: coordinatorId });
+    await markSlotsUnavailable(venue.id, { date, slots: ['am'], reason: 'Power outage' }, venueStaffId);
+
+    await expect(
+      markSlotsUnavailable(venue.id, { date, slots: ['am', 'pm'], reason: 'Ceiling repair' }, venueStaffId),
+    ).rejects.toMatchObject({ code: 'CONFLICT' });
+
+    // Only the first save's notice, about AM. PM was neither saved nor told.
+    expect(await noticesFor(eventId)).toEqual([expect.objectContaining({ slots: ['am'], reason: 'Power outage' })]);
   });
 });
 

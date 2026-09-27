@@ -5,6 +5,17 @@ import { useRouter } from 'next/navigation';
 import { OPERATING_SLOT_LABELS, type OperatingSlot } from '@/domain/venues/schema';
 
 /**
+ * SCRUM-151 AC2: after a save, say how many affected bookings' coordinators
+ * were notified, so Venue Staff know nobody needs a separate call (customer
+ * clarification #54 asked exactly that).
+ */
+function savedMessage(notifiedBookings: number): string {
+  if (notifiedBookings === 0) return 'Saved.';
+  if (notifiedBookings === 1) return 'Saved. The coordinator of 1 affected booking has been notified.';
+  return `Saved. The coordinators of ${notifiedBookings} affected bookings have been notified.`;
+}
+
+/**
  * SCRUM-151 AC1: Venue Staff pick a date, tick the affected slots and record
  * why. Several slots can be ticked in one save. Only the slots this venue
  * operates are offered, because a slot it does not operate is never offered
@@ -27,6 +38,7 @@ export function MarkSlotsUnavailableForm({
   const [reason, setReason] = useState('');
   const [submitting, setSubmitting] = useState(false);
   const [error, setError] = useState<string | null>(null);
+  const [saved, setSaved] = useState<string | null>(null);
 
   function toggleSlot(slot: OperatingSlot) {
     setSlots((current) => (current.includes(slot) ? current.filter((s) => s !== slot) : [...current, slot]));
@@ -36,13 +48,16 @@ export function MarkSlotsUnavailableForm({
     event.preventDefault();
     setSubmitting(true);
     setError(null);
+    setSaved(null);
     try {
       const response = await fetch(`/api/venues/${venueId}/unavailable-slots`, {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify({ date, slots, reason }),
       });
-      const payload = (await response.json().catch(() => null)) as { message?: string } | null;
+      const payload = (await response.json().catch(() => null)) as
+        | { message?: string; notifiedBookings?: number }
+        | null;
 
       if (!response.ok) {
         throw new Error(payload?.message ?? 'The slots could not be marked unavailable.');
@@ -50,6 +65,7 @@ export function MarkSlotsUnavailableForm({
       setDate('');
       setSlots([]);
       setReason('');
+      setSaved(savedMessage(payload?.notifiedBookings ?? 0));
       router.refresh();
     } catch (caught) {
       setError(caught instanceof Error ? caught.message : 'The slots could not be marked unavailable.');
@@ -100,6 +116,11 @@ export function MarkSlotsUnavailableForm({
       {error ? (
         <p role="alert" className="text-sm text-[var(--danger)]">
           {error}
+        </p>
+      ) : null}
+      {saved ? (
+        <p role="status" className="text-sm text-[var(--success)]">
+          {saved}
         </p>
       ) : null}
 

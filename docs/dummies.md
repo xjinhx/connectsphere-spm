@@ -122,6 +122,10 @@ switch them the next time they edit those files.
     (`DUMMY(SCRUM-148) D-04`)
   - `src/domain/venues/service.ts` — `findAffectedFutureBookings()`
     (`DUMMY(SCRUM-148) D-04`)
+  - `supabase/migrations/20260928110000_venue_unavailable_slot_affected_bookings.sql`
+    — the `affected_booking_slot` view (`DUMMY(SCRUM-148) D-04`), added by
+    SCRUM-151 AC2: a confirmed booking on a slot Venue Staff have made
+    unavailable
 - **What is real and what is faked:** the capacity check, the list of affected
   bookings, the confirm step and the refusal inside the save are SCRUM-120's
   real code. Only the bookings themselves are faked: nothing in Sprint 1
@@ -140,14 +144,15 @@ switch them the next time they edit those files.
 - **Note for SCRUM-148:** a booking has no date or time slot of its own. It
   takes both from its event request (`proposed_date`, `time_slots`), and
   "future" is judged on the Singapore date (`todayInSingapore`). If SCRUM-148
-  gives a booking its own date or slot, `update_venue` and
-  `fetchConfirmedFutureBookings()` must read that instead. (Raised in review
-  of PR #61.)
+  gives a booking its own date or slot, `update_venue`,
+  `fetchConfirmedFutureBookings()` and the `affected_booking_slot` view
+  (SCRUM-151) must read that instead. (Raised in review of PR #61.)
 - **To replace:** SCRUM-148's approval flow writes `venue_booking` rows (and
   may widen `status` beyond `'confirmed'`). Nothing in SCRUM-120 changes;
   re-run `tests/integration/venue-capacity-cut.test.ts` and SCRUM-120 AC2 and
-  AC3 by hand against a booking made through that flow, then remove the
-  markers.
+  AC3 by hand against a booking made through that flow. Do the same for
+  SCRUM-151: `tests/integration/venue-unavailable-slots.test.ts` and AC2 and
+  AC3 by hand. Then remove the markers.
 - **Status:** Active
 
 ### D-05 — A capacity cut's "notification" is only a stored notice
@@ -196,4 +201,28 @@ switch them the next time they edit those files.
   SCRUM-24's mechanism; the outcome already carries `coordinatorId`, and the
   closed round holds the note that was asked, the answer and when it was given.
   Re-run US-7.2-TC04 (SCRUM-91 AC1).
+- **Status:** Active
+
+### D-09 — An affected booking's "notification" is only a stored notice
+
+- **Kind:** Stand-in code (SCRUM-193's in-app notification list is in this
+  sprint but not built yet)
+- **Added by:** SCRUM-151 AC2 — branch `venue-unavailable-slots`
+- **Waiting on:** SCRUM-193 View my notifications in the application
+- **Where:**
+  `supabase/migrations/20260928110000_venue_unavailable_slot_affected_bookings.sql`
+  — the `venue_unavailability_notice` table and the insert in
+  `mark_slots_unavailable` (`DUMMY(SCRUM-193) D-09`);
+  `src/domain/availability/service.ts` — `markSlotsUnavailable()`
+  (`DUMMY(SCRUM-193) D-09`)
+- **What it does:** marking slots unavailable writes one
+  `venue_unavailability_notice` row per affected booking of an upcoming event,
+  addressed to the event's assigned coordinator, holding the date, the
+  withdrawn slots the event uses and the reason. It is written in the same
+  transaction as the slots. No coordinator assigned means no notice; the
+  booking still shows as affected (`affected_booking_slot`). The same minimum
+  honest notification as D-05 (SCRUM-120).
+- **To replace:** once SCRUM-193's notifications exist, write each notice as
+  one of them (or have SCRUM-193 list these rows); the row already holds
+  everything the message needs. Re-run SCRUM-151 AC2.
 - **Status:** Active

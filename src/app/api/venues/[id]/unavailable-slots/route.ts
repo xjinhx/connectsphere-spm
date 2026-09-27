@@ -10,9 +10,12 @@ import { handleApiError } from '@/lib/api/handler';
  *
  * SCRUM-151 AC1: Venue Staff mark one or more slots of a venue unavailable on
  * one date, with a reason. Body: { date: 'YYYY-MM-DD', slots: ['am', 'pm'], reason }.
+ * SCRUM-151 AC2: the coordinator of each affected confirmed booking is
+ * notified in the same save.
  *
- * 201 with the recorded slots. 409 if one of them is already unavailable, in
- * which case nothing is saved. 404 for a venue that does not exist.
+ * 201 with { unavailableSlots, notifiedBookings }. 409 if one of the slots is
+ * already unavailable, in which case nothing is saved and nobody is notified.
+ * 404 for a venue that does not exist.
  *
  * Needs venue_administration, checked before anything else (SCRUM-69 AC3).
  */
@@ -30,8 +33,8 @@ export async function POST(request: NextRequest, { params }: { params: Promise<{
       throw new ValidationError('Request body must be valid JSON.');
     }
 
-    const unavailableSlots = await markSlotsUnavailable(id, body, actor.userId);
-    return NextResponse.json({ unavailableSlots }, { status: 201 });
+    const outcome = await markSlotsUnavailable(id, body, actor.userId);
+    return NextResponse.json(outcome, { status: 201 });
   } catch (error) {
     return handleApiError(error);
   }

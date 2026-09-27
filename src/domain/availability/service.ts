@@ -1,7 +1,7 @@
 import {
   fetchUnavailableSlotsOn,
   fetchUpcomingUnavailableSlots,
-  insertUnavailableSlots,
+  recordUnavailableSlots,
 } from '@/lib/supabase/availability';
 import { ConflictError, ValidationError, isUniqueViolation } from '@/domain/shared/errors';
 import { formatSingaporeDate, todayInSingapore, type ISODate } from '@/domain/shared/dates';
@@ -57,26 +57,42 @@ function slotNames(slots: readonly OperatingSlot[]): string {
 }
 
 // -----------------------------------------------------------------------------
-// SCRUM-151 AC1: record slots as unavailable
+// SCRUM-151 AC1 and AC2: record slots as unavailable, and tell the
+// coordinators whose confirmed bookings are on them
 // -----------------------------------------------------------------------------
+
+export type MarkSlotsUnavailableOutcome = {
+  /** AC1: the slots now recorded as unavailable. */
+  unavailableSlots: UnavailableSlot[];
+  /** AC2: affected bookings of upcoming events whose coordinator was notified. */
+  notifiedBookings: number;
+};
 
 /**
  * SCRUM-151 AC1: record the chosen slots of one venue on one date as
  * unavailable, each with the reason and who recorded it.
  *
- * All or nothing: the slots go in as one insert, so if one of them is already
- * unavailable none is saved, and the message names the ones that were.
+ * SCRUM-151 AC2: in the same save, every confirmed booking of an upcoming
+ * event on one of those slots becomes affected (the affected_booking_slot
+ * view), and its assigned coordinator is sent a notice with the reason.
+ * DUMMY(SCRUM-193) D-09: the notice is stored, not shown, until the in-app
+ * notification list exists.
+ *
+ * All or nothing: one database function writes the slots and the notices in
+ * one transaction, so if one slot is already unavailable nothing is saved and
+ * nobody is told, and the message names the slots that were.
  *
  * Who may do this is checked by the route: venue_administration, which is
  * Venue Staff's in SCRUM-69's matrix (customer clarification #54 makes
- * availability their job). The recorder is the signed-in account passed in by
- * the route, never an id from the request body.
+ * availability their job, and an availability change affecting an upcoming
+ * event "a notification scenario"). The recorder is the signed-in account
+ * passed in by the route, never an id from the request body.
  */
 export async function markSlotsUnavailable(
   venueId: string,
   input: unknown,
   actorId: string,
-): Promise<UnavailableSlot[]> {
+): Promise<MarkSlotsUnavailableOutcome> {
   const parsed = MarkSlotsUnavailableInputSchema.safeParse(input);
   if (!parsed.success) {
     throw new ValidationError(
@@ -97,9 +113,16 @@ export async function markSlotsUnavailable(
     );
   }
 
-  const { data, error } = await insertUnavailableSlots(
-    slots.map((slot) => ({ venueId: venue.id, date, slot, reason, recordedBy: actorId })),
-  );
+  // "Upcoming" is judged on Singapore's date, decided here and handed to the
+  // save, not on the database's UTC clock.
+  const { data: notifiedBookings, error } = await recordUnavailableSlots({
+    venueId: venue.id,
+    date,
+    slots: [...slots],
+    reason,
+    recordedBy: actorId,
+    today: todayInSingapore(),
+  });
 
   if (error) {
     if (isUniqueViolation(error)) {
@@ -108,7 +131,10 @@ export async function markSlotsUnavailable(
     throw new ValidationError('The slots could not be marked unavailable.', error.message);
   }
 
-  return (data ?? []).map(toUnavailableSlot).sort(byDateThenSlot);
+  return {
+    unavailableSlots: await findUnavailableSlots(venue.id, date, slots),
+    notifiedBookings: notifiedBookings ?? 0,
+  };
 }
 
 /** The 409 for a save that included a slot already unavailable. It names which. */
