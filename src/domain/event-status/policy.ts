@@ -33,9 +33,11 @@ import type { EventRequestStatus } from '@/domain/event-request/schema';
  * allowed to call it is entirely the caller's decision, not this function's.
  *
  * This is the transition rule only — it does not itself listen for a venue
- * booking request being raised. SCRUM-142/143's request-creation code should
- * call this (and the service-layer write it guards, once that exists) the
- * moment a request is created.
+ * booking request being raised. enterPlanning() (service.ts) is the write
+ * this guards; SCRUM-142/143's request-creation code should call that the
+ * moment a request is created (currently DUMMY(SCRUM-101) D-09 on
+ * src/domain/venue-booking/service.ts, branch `submit-venue-booking-req`,
+ * until that branch merges this one).
  */
 export function canEnterPlanning(status: EventRequestStatus): boolean {
   return status === 'approved' || status === 'planning';

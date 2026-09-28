@@ -442,3 +442,30 @@ export async function markEventRequestClarificationRequested(
     .select(COLUMNS)
     .maybeSingle();
 }
+
+// ---------------------------------------------------------------------------
+// SCRUM-101 AC3 — Approved -> Planning
+// ---------------------------------------------------------------------------
+
+/**
+ * AC3 — flips an approved event to planning. No decision fields to record:
+ * unlike approve/reject, this is not a human decision, it is a consequence of
+ * another action (a venue or equipment request being raised), so there is no
+ * actor to stamp.
+ *
+ * The `status` filter is the guard, same shape as markEventRequestApproved:
+ * a row that is not approved matches nothing and comes back empty. AC4's
+ * idempotent case (already planning) is deliberately not matched here either
+ * - src/domain/event-status/service.ts's enterPlanning() checks for that
+ * itself and treats it as success without writing, rather than this
+ * function silently writing a row that already has the value.
+ */
+export async function markEventRequestPlanning(id: string) {
+  return db()
+    .from('event_request')
+    .update({ status: 'planning' })
+    .eq('id', id)
+    .eq('status', 'approved')
+    .select(COLUMNS)
+    .maybeSingle();
+}
