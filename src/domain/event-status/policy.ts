@@ -20,8 +20,8 @@ import type { EventRequestStatus } from '@/domain/event-request/schema';
  *   submitted -> clarification_requested     SCRUM-90
  *   clarification_requested -> submitted     SCRUM-91 resubmit
  *
- * Moves the Sprint 2 lifecycle adds. Apart from AC4's row, these are a
- * proposal for the team, not on the card:
+ * Moves the Sprint 2 lifecycle adds. Apart from SCRUM-101 AC3's row and this
+ * story's AC4 row, these are a proposal for the team, not on any card:
  *   approved -> planning                     SCRUM-101 AC3, first request raised
  *   planning -> confirmed                    arrangements in place
  *   confirmed -> planning                    AC4, a significant change

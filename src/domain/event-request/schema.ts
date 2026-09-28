@@ -236,7 +236,8 @@ export type EventRequestSaveInput = z.infer<typeof eventRequestSaveSchema>;
 // completed, cancelled - via
 // supabase/migrations/20260928120000_event_request_lifecycle_statuses.sql.
 // Planning is SCRUM-101's status (its own migration is not on main yet); it is
-// here now because SCRUM-103's ACs need it (dummy D-10, docs/dummies.md).
+// here now because SCRUM-103's ACs need it.
+// DUMMY(SCRUM-101) D-10: 'planning' added by SCRUM-103 until SCRUM-101 is on main.
 // Which moves between them are allowed lives in domain/event-status/policy.ts.
 export const EventRequestStatusEnum = z.enum([
   'draft',

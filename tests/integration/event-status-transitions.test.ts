@@ -69,6 +69,7 @@ async function createDraftRequest(): Promise<string> {
 async function createConfirmedRequest(): Promise<string> {
   const id = await createSubmittedRequest();
   await approveEventRequest(id, { actorId: coordinatorId });
+  // DUMMY(SCRUM-101) D-10: approved -> planning set directly; SCRUM-101's action will do it.
   await changeEventStatus(id, 'planning');
   await changeEventStatus(id, 'confirmed');
   return id;
