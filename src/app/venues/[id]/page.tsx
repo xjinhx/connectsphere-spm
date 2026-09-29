@@ -35,9 +35,6 @@ function Row({ label, children }: { label: string; children: React.ReactNode }) 
   );
 }
 
-function minutesOrDash(minutes: number | null): string {
-  return minutes === null ? 'Not recorded' : `${minutes} minutes`;
-}
 
 export default async function VenueDetailPage({ params }: { params: Promise<{ id: string }> }) {
   const actor = await getCurrentActor();
