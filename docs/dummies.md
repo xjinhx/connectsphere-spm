@@ -197,29 +197,3 @@ switch them the next time they edit those files.
   closed round holds the note that was asked, the answer and when it was given.
   Re-run US-7.2-TC04 (SCRUM-91 AC1).
 - **Status:** Active
-
-### D-09 — A submitted venue booking request does not move the event to Planning
-
-- **Kind:** Stand-in code (a call this ticket should make, to code that
-  doesn't exist on this branch yet)
-- **Added by:** SCRUM-142 — commit `38694b6` (branch `submit-venue-booking-req`,
-  not yet a PR)
-- **Waiting on:** SCRUM-101 Move an event through its statuses (branch
-  `move-event-status`, not yet merged to `main`)
-- **Where:** `src/domain/venue-booking/service.ts` —
-  `submitVenueBookingRequest()`, marked `DUMMY(SCRUM-101) D-09`
-- **What is real and what is faked:** the venue booking request and its
-  lines are written for real (AC1, AC3). The event's own status is left
-  untouched. SCRUM-101's AC3 says it should move from Approved to Planning
-  the moment the first venue or equipment request is raised, but
-  `canEnterPlanning()` (`src/domain/event-status/policy.ts`) does not exist
-  on this branch, since SCRUM-101 hasn't merged to `main` yet.
-- **To replace:** once SCRUM-101 merges to `main` and this branch merges
-  `main` in, call the status-transition function SCRUM-101 exposes right
-  after the request is successfully created, and change
-  `canCreateBookingRequest` (AC2, `src/domain/venue-booking/policy.ts`) to
-  call `canEnterPlanning` instead of checking `'approved'` alone — see the
-  comment already on that function. Add a test confirming the event's status
-  becomes Planning after a successful first submission, and remains Planning
-  (not re-triggered or refused) on a second one.
-- **Status:** Active

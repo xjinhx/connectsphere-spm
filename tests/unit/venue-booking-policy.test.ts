@@ -11,7 +11,12 @@ import { canCreateBookingRequest } from '@/domain/venue-booking/policy';
  * precedents that established the same rule for reject/reassign.
  */
 describe('canCreateBookingRequest', () => {
-  // AC1: "Given I am the assigned coordinator of an approved event..."
+  // AC1 (Jira, updated 29/9/2026): "Given I am the assigned coordinator of
+  // an event that is Approved or in Planning...". Only the Approved half is
+  // testable here — 'planning' isn't a valid EventRequestStatus on this
+  // branch until SCRUM-101 merges to main, so it can't even be typed into a
+  // test yet, let alone passed. See the note on canCreateBookingRequest
+  // itself (policy.ts) for what changes once that lands.
   it('allows a booking request on an approved event', () => {
     expect(canCreateBookingRequest('approved')).toBe(true);
   });
