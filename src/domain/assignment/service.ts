@@ -17,6 +17,7 @@ import {
   type EventAssignmentRow,
   type EventAssignmentWithHistoryRow,
 } from '@/lib/supabase/assignments';
+import { createNotification } from '@/domain/notification/service';
 import {
   ConflictError,
   ForbiddenError,
@@ -135,6 +136,19 @@ function toAssignmentOutcome(row: EventRequestRow, coordinatorName: string | nul
  * SCRUM-24 lands, raise the notification from here - the assignment has just
  * been recorded and the coordinator's id is to hand. See docs/dummies.md.
  */
+/**
+ * DUMMY(SCRUM-24) D-03 replacement: best-effort notification. The
+ * assignment above has already succeeded and been written; a notification
+ * failure here must never undo it or surface as an error to the caller.
+ */
+async function notifyBestEffort(notification: Parameters<typeof createNotification>[0]): Promise<void> {
+  try {
+    await createNotification(notification);
+  } catch (error) {
+    console.error('Could not create notification', notification.type, notification.eventRequestId, error);
+  }
+}
+
 export async function assignCoordinator(
   eventRequestId: string,
   input: unknown,
@@ -186,7 +200,18 @@ export async function assignCoordinator(
     throw new ConflictError('This event could not be assigned; its state has changed.');
   }
 
-  return toAssignmentOutcome(data as unknown as EventRequestRow, target.full_name);
+  const assignedRow = data as unknown as EventRequestRow;
+  // DUMMY(SCRUM-24) D-03 replacement: the newly assigned coordinator is
+  // notified. Best-effort: the assignment above already succeeded, so a
+  // notification failure must not undo it.
+  await notifyBestEffort({
+    recipientId: coordinatorId,
+    type: 'coordinator_assigned',
+    eventRequestId: assignedRow.id,
+    message: `You have been assigned to ${assignedRow.reference} (${assignedRow.name}).`,
+  });
+
+  return toAssignmentOutcome(assignedRow, target.full_name);
 }
 
 // ---------------------------------------------------------------------------

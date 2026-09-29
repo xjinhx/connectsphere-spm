@@ -99,12 +99,15 @@ switch them the next time they edit those files.
 
 - **Kind:** Out-of-sprint stand-in
 - **Added by:** SCRUM-94 — commit `bb942af` (PR #28)
-- **Waiting on:** SCRUM-24 Notification System
-- **Where:** `src/domain/assignment/service.ts` — `assignCoordinator()`
-- **To replace:** notify the assigned coordinator from `assignCoordinator()`,
-  straight after the assignment is recorded, using SCRUM-24's mechanism;
-  re-run US-8.1-TC02 (SCRUM-94 AC1).
-- **Status:** Active
+- **Waiting on:** ~~SCRUM-24 Notification System~~ — resolved (SCRUM-193/198)
+- **Where:** ~~`src/domain/assignment/service.ts` — `assignCoordinator()`~~
+  — resolved: now calls `createNotification` (`coordinator_assigned`)
+  straight after the assignment is recorded, best-effort via
+  `notifyBestEffort` so a notification failure cannot undo the assignment.
+- **To replace:** ~~notify the assigned coordinator from~~
+  ~~`assignCoordinator()`...~~ Done. Re-run US-8.1-TC02 (SCRUM-94 AC1)
+  against the notification now created.
+- **Status:** Replaced (SCRUM-193/198).
 
 ### D-04 — Confirmed bookings are a stand-in table filled by hand
 
@@ -196,4 +199,31 @@ switch them the next time they edit those files.
   SCRUM-24's mechanism; the outcome already carries `coordinatorId`, and the
   closed round holds the note that was asked, the answer and when it was given.
   Re-run US-7.2-TC04 (SCRUM-91 AC1).
+- **Status:** Active
+
+### D-09 — SCRUM-198 AC4 has no "event confirmed" notification to send
+
+- **Kind:** Out-of-sprint stand-in
+- **Added by:** SCRUM-198 — this PR
+- **Waiting on:** SCRUM-10 Event Status Management — specifically, whichever
+  story adds a Confirmed status. This sprint's SCRUM-101 (Move an event
+  through its statuses) stops at Planning by agreement with the product
+  owner (Telegram, 27 Sep 2026): "Confirm a planning event once its
+  arrangements are ready" is explicitly out of scope this sprint.
+- **Where:** `src/domain/notification/schema.ts` — `NOTIFICATION_TYPES`
+  includes `'event_confirmed'`, marked `DUMMY(SCRUM-10)`; no call site exists
+  anywhere, because there is no confirm action to call it from.
+- **What is real and what is faked:** the type is real (it will validate and
+  render correctly once used), the label is real
+  (`NotificationList.tsx`'s `TYPE_LABELS`). Nothing creates a notification of
+  this type. This differs from D-03/D-05/D-06/D-08, which all had a real
+  call site sending nothing; here there is no call site at all, since the
+  action it would follow does not exist yet.
+- **To replace:** once a story adds a Confirmed status (or similar) to
+  `event_request`, call `createNotification` with `type: 'event_confirmed'`
+  from wherever that status is recorded, addressed to the event's
+  organiser, stating the event is confirmed (SCRUM-198 AC4's wording). No
+  test currently exercises this type — the sheet's TC-198-04 stays Not
+  Executed / Blocked until then, per "Does a test against a dummy count?"
+  above: there is nothing to run against.
 - **Status:** Active
