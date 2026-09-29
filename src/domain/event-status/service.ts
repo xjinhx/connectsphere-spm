@@ -14,11 +14,14 @@ export interface PlanningOutcome {
  * SCRUM-101 AC3/AC4 — Approved -> Planning, when the first venue booking
  * request or equipment request is raised against the event.
  *
- * Meant to be called by SCRUM-142/143's request-creation code once a
- * request is successfully created — see DUMMY(SCRUM-101) D-09 on
- * src/domain/venue-booking/service.ts (branch `submit-venue-booking-req`),
- * which marks exactly where, until that branch merges this one and is
- * updated to call it for real.
+ * DUMMY(SCRUM-142) D-09: this function is real and integration-tested, but
+ * nothing calls it automatically yet — SCRUM-142's `venue_booking_request`
+ * table doesn't exist on this branch or on main. The intended connection is
+ * a database trigger on that table (after insert), owned by this ticket's
+ * own follow-up migration once the table exists, the same pattern as
+ * `set_decided_at`/`set_clarification_requested_at` elsewhere in this
+ * codebase — not SCRUM-142's application code calling this directly, which
+ * would make that ticket depend on this one existing. See docs/dummies.md.
  *
  * AC4's idempotency is handled here, not by the database filter alone: if
  * the event is already in Planning when this is called (a further request

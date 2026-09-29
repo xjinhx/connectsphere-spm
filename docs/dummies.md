@@ -197,3 +197,34 @@ switch them the next time they edit those files.
   closed round holds the note that was asked, the answer and when it was given.
   Re-run US-7.2-TC04 (SCRUM-91 AC1).
 - **Status:** Active
+
+### D-09 — Approved -> Planning is not yet triggered automatically
+
+- **Kind:** Stand-in code (the rule and the write both exist for real; only
+  the automatic trigger is missing)
+- **Added by:** SCRUM-101 — this commit
+- **Waiting on:** SCRUM-142 Submit a venue booking request for an event
+  (branch `submit-venue-booking-req`), for its `venue_booking_request`
+  table to exist so a trigger can reference it
+- **Where:** `src/domain/event-status/policy.ts` (`canEnterPlanning`) and
+  `src/domain/event-status/service.ts` (`enterPlanning`)
+- **What is real and what is faked:** the transition rule (AC3/AC4) and the
+  database write are both real and integration-tested against a real
+  database (`tests/integration/enter-planning.test.ts`) — calling
+  `enterPlanning(id)` directly genuinely moves an Approved event to
+  Planning. What's missing is the automatic connection: nothing currently
+  calls `enterPlanning()` when a venue booking request is actually raised,
+  because SCRUM-142's `venue_booking_request` table doesn't exist on this
+  branch or on `main` yet. This is deliberately not SCRUM-142's problem to
+  carry — that ticket's own ACs only cover creating the request, not the
+  event reacting to it — so the connection is tracked here instead.
+- **To replace:** once SCRUM-142 merges to `main` and this branch merges
+  `main` in, add a database trigger on `venue_booking_request` (after
+  insert) that calls into the Planning transition when the parent event is
+  Approved, the same pattern as `set_decided_at`/
+  `set_clarification_requested_at` elsewhere in this codebase — rather than
+  having SCRUM-142's application code call `enterPlanning()` directly,
+  which would require that ticket's code to know this one exists. Re-run
+  `enter-planning.test.ts`, and add a test that actually inserting a
+  `venue_booking_request` row fires the trigger.
+- **Status:** Active
