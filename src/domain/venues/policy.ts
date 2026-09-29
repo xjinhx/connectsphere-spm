@@ -64,22 +64,6 @@ export function isAffectedByCapacity(expectedAttendance: number | null, maxCapac
 }
 
 // -----------------------------------------------------------------------------
-// SCRUM-119 AC4: turnaround versus the slot gap
-// -----------------------------------------------------------------------------
-
-/**
- * The gap between adjacent operating slots. AM ends 12:00, PM starts 13:00;
- * PM ends 18:00, Night starts 19:00 (OPERATING_SLOT_LABELS, schema.ts) - 60
- * minutes either way, so this is a fixed constant, not derived per venue.
- */
-export const SLOT_GAP_MINUTES = 60;
-
-/** Strictly greater than the gap - 60 itself does not warn (AC4 boundary, TC-119-12). */
-export function turnaroundExceedsSlotGap(turnaroundMinutes: number): boolean {
-  return turnaroundMinutes > SLOT_GAP_MINUTES;
-}
-
-// -----------------------------------------------------------------------------
 // Permissions
 //
 // Both read from the team's permission matrix (SCRUM-69,

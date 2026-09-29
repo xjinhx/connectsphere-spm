@@ -13,13 +13,7 @@ import {
 } from '@/lib/supabase/venues';
 import { ConflictError, NotFoundError, ValidationError, isUniqueViolation } from '@/domain/shared/errors';
 import { todayInSingapore, type ISODate } from '@/domain/shared/dates';
-import {
-  assertLayoutsWithinMaxCapacity,
-  isAffectedByCapacity,
-  isCapacityCut,
-  SLOT_GAP_MINUTES,
-  turnaroundExceedsSlotGap,
-} from './policy';
+import { assertLayoutsWithinMaxCapacity, isAffectedByCapacity, isCapacityCut } from './policy';
 import {
   AffectedBookingSchema,
   CreateVenueInputSchema,
@@ -32,7 +26,6 @@ import {
   VenueSummarySchema,
   type AffectedBooking,
   type AffectedBookingsDetails,
-  type TurnaroundImpactDetails,
   type VenueDetail,
   type VenueFormOptions,
   type VenueLayoutInput,
@@ -126,9 +119,8 @@ export async function getVenue(venueId: string): Promise<VenueDetail> {
       link.accessibility_features ? [link.accessibility_features] : [],
     ),
     layouts: data.venue_layouts.map((row) => ({ layout: row.layout, capacity: row.capacity })),
-    setupMinutes: data.setup_minutes,
-    teardownMinutes: data.teardown_minutes,
-    turnaroundMinutes: data.turnaround_minutes,
+    needsSetupSlot: data.needs_setup_slot,
+    needsTurnaroundSlot: data.needs_turnaround_slot,
     createdAt: data.created_at,
     updatedAt: data.updated_at,
   });
@@ -276,24 +268,6 @@ function affectedBookingsError(maxCapacity: number, bookings: AffectedBooking[])
   );
 }
 
-/**
- * SCRUM-119 AC4: the 409 that warns the editor a turnaround above the
- * 60-minute slot gap will affect the adjacent slot, and asks them to confirm.
- * Unlike affectedBookingsError, this needs no re-check inside update_venue:
- * it depends only on the value being submitted, not on other rows that could
- * change between this check and the save.
- */
-function turnaroundImpactError(turnaroundMinutes: number): ConflictError {
-  const details: TurnaroundImpactDetails = {
-    reason: 'turnaround_impact',
-    turnaroundMinutes,
-    slotGapMinutes: SLOT_GAP_MINUTES,
-  };
-  return new ConflictError(
-    `A turnaround of ${turnaroundMinutes} minutes is longer than the ${SLOT_GAP_MINUTES}-minute gap between slots and will affect the adjacent slot. Confirm to apply it.`,
-    details,
-  );
-}
 
 /**
  * SCRUM-120 AC1 to AC4, SCRUM-117 AC3, SCRUM-118.
@@ -323,7 +297,7 @@ export async function updateVenue(venueId: string, input: unknown): Promise<Venu
   if (!parsed.success) {
     throw new ValidationError('The venue could not be updated.', parsed.error.flatten());
   }
-  const { expectedUpdatedAt, confirmAffectedBookings = false, confirmTurnaroundImpact = false, ...changes } = parsed.data;
+  const { expectedUpdatedAt, confirmAffectedBookings = false, ...changes } = parsed.data;
 
   // Throws NotFoundError if the venue is not there.
   const current = await getVenue(venueId);
@@ -366,19 +340,6 @@ export async function updateVenue(venueId: string, input: unknown): Promise<Venu
     }
   }
 
-  // SCRUM-119 AC4. Checked last, alongside the capacity-cut confirmation, so
-  // an edit refused for another reason never asks for this confirmation too.
-  // Unlike the capacity cut, nothing here depends on another row that could
-  // change in between, so there is no need to re-check after the save.
-  const proposedTurnaround = changes.turnaroundMinutes;
-  if (
-    proposedTurnaround !== undefined &&
-    turnaroundExceedsSlotGap(proposedTurnaround) &&
-    !confirmTurnaroundImpact
-  ) {
-    throw turnaroundImpactError(proposedTurnaround);
-  }
-
   const { data: outcome, error } = await saveVenueChanges(
     current.id,
     expectedUpdatedAt,
@@ -390,9 +351,8 @@ export async function updateVenue(venueId: string, input: unknown): Promise<Venu
       facilityIds: changes.facilityIds,
       accessibilityFeatureIds: changes.accessibilityFeatureIds,
       layouts: changes.layouts,
-      setupMinutes: changes.setupMinutes,
-      teardownMinutes: changes.teardownMinutes,
-      turnaroundMinutes: changes.turnaroundMinutes,
+      needsSetupSlot: changes.needsSetupSlot,
+      needsTurnaroundSlot: changes.needsTurnaroundSlot,
     },
     { confirmAffectedBookings, today },
   );

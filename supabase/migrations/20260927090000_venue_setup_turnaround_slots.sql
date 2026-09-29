@@ -1,26 +1,31 @@
 -- =============================================================================
--- SCRUM-119 Record setup, teardown and turnaround requirements
+-- SCRUM-119 (revised 2026-09-27): Record whether a venue needs setup and
+-- turnaround slots
 -- =============================================================================
--- setup_minutes, teardown_minutes and turnaround_minutes already exist on
--- venues, with their 0-240 check constraints, added early by
--- 20260911063000_create_venue_catalogue.sql for this story to fill in.
--- CreateVenueInputSchema deliberately excludes them (SCRUM-119 is edit-only,
--- per its AC1: "Given I am editing a venue"), so only update_venue needs them.
+-- Supersedes this story's first version, which recorded setup/teardown/
+-- turnaround as minutes (0-240) with a confirmation flow for a turnaround
+-- above the 60-minute slot gap. The product owner rewrote the story: teardown
+-- is folded into turnaround, and both are now yes/no flags rather than
+-- durations. SCRUM-148 applies the actual slot-blocking rule using these
+-- flags; this story only records them, so there is no threshold or
+-- confirmation logic here at all.
 --
--- AC4 (turnaround greater than the 60-minute slot gap needs confirmation) is
--- NOT checked here, unlike SCRUM-120's capacity-cut check. That one needs the
--- database because it depends on other rows (confirmed bookings) that could
--- change between the service's check and this save - a real race. AC4 only
--- depends on the value being submitted, against a fixed constant, so there is
--- nothing to race: the expectedUpdatedAt/stale check above already serialises
--- two edits to the same venue. The check lives entirely in
--- src/domain/venues/service.ts (turnaroundExceedsSlotGap, policy.ts).
---
--- Dropped and recreated, same reasoning as 20260924170000: a new argument
--- makes a new function in Postgres, and leaving the old one would keep a way
--- to write these fields that skips the app's validation.
+-- setup_minutes, teardown_minutes and turnaround_minutes are dropped: nothing
+-- on main ever wrote to them (the only branch that did was this story's own,
+-- unmerged), so there is no data to migrate.
 -- =============================================================================
 
+alter table venues
+  drop column if exists setup_minutes,
+  drop column if exists teardown_minutes,
+  drop column if exists turnaround_minutes,
+  add column needs_setup_slot boolean not null default false,
+  add column needs_turnaround_slot boolean not null default false;
+
+-- update_venue gains the two new parameters. Dropped and recreated, same
+-- reasoning as every other change to this function: a new argument makes a
+-- new function in Postgres, and leaving the old one would keep a way to
+-- write a venue that skips the app's validation.
 drop function if exists update_venue(
   uuid, timestamptz, text, uuid, integer, text[], uuid[], uuid[], jsonb, boolean, date
 );
@@ -37,9 +42,8 @@ create or replace function update_venue(
   p_layouts jsonb default null,
   p_confirm_affected_bookings boolean default false,
   p_today date default null,
-  p_setup_minutes integer default null,
-  p_teardown_minutes integer default null,
-  p_turnaround_minutes integer default null
+  p_needs_setup_slot boolean default null,
+  p_needs_turnaround_slot boolean default null
 ) returns text
 language plpgsql
 set search_path = public
@@ -89,9 +93,8 @@ begin
     location_id = coalesce(p_location_id, location_id),
     max_capacity = coalesce(p_max_capacity, max_capacity),
     operating_slots = coalesce(p_operating_slots, operating_slots),
-    setup_minutes = coalesce(p_setup_minutes, setup_minutes),
-    teardown_minutes = coalesce(p_teardown_minutes, teardown_minutes),
-    turnaround_minutes = coalesce(p_turnaround_minutes, turnaround_minutes),
+    needs_setup_slot = coalesce(p_needs_setup_slot, needs_setup_slot),
+    needs_turnaround_slot = coalesce(p_needs_turnaround_slot, needs_turnaround_slot),
     updated_at = greatest(clock_timestamp(), v_updated_at + interval '1 microsecond')
   where id = p_venue_id;
 
@@ -119,8 +122,8 @@ end;
 $$;
 
 revoke all on function update_venue(
-  uuid, timestamptz, text, uuid, integer, text[], uuid[], uuid[], jsonb, boolean, date, integer, integer, integer
+  uuid, timestamptz, text, uuid, integer, text[], uuid[], uuid[], jsonb, boolean, date, boolean, boolean
 ) from public, anon, authenticated;
 grant execute on function update_venue(
-  uuid, timestamptz, text, uuid, integer, text[], uuid[], uuid[], jsonb, boolean, date, integer, integer, integer
+  uuid, timestamptz, text, uuid, integer, text[], uuid[], uuid[], jsonb, boolean, date, boolean, boolean
 ) to service_role;

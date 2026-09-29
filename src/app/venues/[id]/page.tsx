@@ -130,9 +130,8 @@ export default async function VenueDetailPage({ params }: { params: Promise<{ id
             : venue.accessibilityFeatures.map((feature) => feature.name).join(', ')}
         </Row>
 
-        <Row label="Setup time">{minutesOrDash(venue.setupMinutes)}</Row>
-        <Row label="Teardown time">{minutesOrDash(venue.teardownMinutes)}</Row>
-        <Row label="Turnaround time">{minutesOrDash(venue.turnaroundMinutes)}</Row>
+        <Row label="Needs setup slot">{venue.needsSetupSlot ? 'Yes' : 'No'}</Row>
+        <Row label="Needs turnaround slot">{venue.needsTurnaroundSlot ? 'Yes' : 'No'}</Row>
       </dl>
     </main>
   );

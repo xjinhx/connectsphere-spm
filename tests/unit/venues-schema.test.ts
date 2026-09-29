@@ -255,62 +255,48 @@ describe('UpdateVenueInputSchema: SCRUM-120 AC1 and SCRUM-117 AC3', () => {
   });
 });
 
-describe('UpdateVenueInputSchema: SCRUM-119 AC1 setup, teardown and turnaround minutes', () => {
+describe('UpdateVenueInputSchema: SCRUM-119 (revised) setup and turnaround slot flags', () => {
   const validUpdate = () => ({
     expectedUpdatedAt: '2026-09-25T00:00:00.000Z',
-    setupMinutes: 15,
-    teardownMinutes: 20,
-    turnaroundMinutes: 30,
+    needsSetupSlot: true,
+    needsTurnaroundSlot: true,
   });
 
-  it('accepts valid setup, teardown and turnaround minutes', () => {
+  // TC-119-01: both flags true
+  it('TC-119-01 accepts both flags as true', () => {
     const result = UpdateVenueInputSchema.safeParse(validUpdate());
     expect(result.success).toBe(true);
   });
 
-  // TC-119-02: the lower boundary, 0, is accepted for each field
-  it('TC-119-02 accepts 0 minutes for each field', () => {
+  // TC-119-02: both flags false
+  it('TC-119-02 accepts both flags as false', () => {
     const result = UpdateVenueInputSchema.safeParse({
       ...validUpdate(),
-      setupMinutes: 0,
-      teardownMinutes: 0,
-      turnaroundMinutes: 0,
+      needsSetupSlot: false,
+      needsTurnaroundSlot: false,
     });
     expect(result.success).toBe(true);
   });
 
-  // TC-119-03: the upper boundary, 240, is accepted for each field
-  it('TC-119-03 accepts 240 minutes for each field', () => {
+  // TC-119-03: one true, one false - each flag is independent
+  it('TC-119-03 accepts one flag true and the other false', () => {
     const result = UpdateVenueInputSchema.safeParse({
       ...validUpdate(),
-      setupMinutes: 240,
-      teardownMinutes: 240,
-      turnaroundMinutes: 240,
+      needsSetupSlot: true,
+      needsTurnaroundSlot: false,
     });
     expect(result.success).toBe(true);
   });
 
-  // TC-119-04: just below the lower boundary is refused
-  it('TC-119-04 rejects a negative turnaround', () => {
-    const result = UpdateVenueInputSchema.safeParse({ ...validUpdate(), turnaroundMinutes: -1 });
-    expect(messagesFrom(result)).toContain('Turnaround time must be 0 minutes or more.');
+  // TC-119-04: a non-boolean value is refused
+  it('TC-119-04 rejects a non-boolean needsSetupSlot value', () => {
+    const result = UpdateVenueInputSchema.safeParse({ ...validUpdate(), needsSetupSlot: 'yes' });
+    expect(result.success).toBe(false);
   });
 
-  // TC-119-05: just above the upper boundary is refused
-  it('TC-119-05 rejects a setup time above 240', () => {
-    const result = UpdateVenueInputSchema.safeParse({ ...validUpdate(), setupMinutes: 241 });
-    expect(messagesFrom(result)).toContain('Setup time must be 240 minutes or less.');
-  });
-
-  // TC-119-06: a non-whole-number value is refused
-  it('TC-119-06 rejects a fractional teardown time', () => {
-    const result = UpdateVenueInputSchema.safeParse({ ...validUpdate(), teardownMinutes: 15.5 });
-    expect(messagesFrom(result)).toContain('Teardown time must be a whole number of minutes.');
-  });
-
-  it('rejects a non-numeric turnaround value', () => {
-    const result = UpdateVenueInputSchema.safeParse({ ...validUpdate(), turnaroundMinutes: 'abc' });
-    expect(messagesFrom(result)).toContain('Turnaround time must be a whole number of minutes.');
+  it('TC-119-04 rejects a non-boolean needsTurnaroundSlot value', () => {
+    const result = UpdateVenueInputSchema.safeParse({ ...validUpdate(), needsTurnaroundSlot: 'yes' });
+    expect(result.success).toBe(false);
   });
 });
 
