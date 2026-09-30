@@ -1,7 +1,7 @@
 import { ValidationError } from '@/domain/shared/errors';
 import { isActionPermitted } from '@/domain/identity/permissions';
 import type { Role } from '@/domain/identity/roles';
-import type { VenueLayoutInput } from './schema';
+import { OPERATING_SLOTS, type OperatingSlot, type VenueLayoutInput } from './schema';
 
 /**
  * Venue Catalogue business rules. Pure functions: no Supabase, no Next.js.
@@ -61,6 +61,54 @@ export function isCapacityCut(currentMaxCapacity: number, proposedMaxCapacity: n
  */
 export function isAffectedByCapacity(expectedAttendance: number | null, maxCapacity: number): boolean {
   return expectedAttendance !== null && expectedAttendance > maxCapacity;
+}
+
+// -----------------------------------------------------------------------------
+// SCRUM-128: is a venue free in the searched slots
+// -----------------------------------------------------------------------------
+
+/** A booked or withdrawn slot, read for one date. Slot text is as stored. */
+export type SlotCommitment = { venueId: string; slot: string };
+
+/**
+ * The slots each venue is committed in on the searched date.
+ *
+ * Committed means a confirmed booking (AC2, AC3) or a slot recorded as
+ * unavailable (AC4). A pending booking request is not a commitment — SCRUM-123
+ * AC8 says so outright — so it is never passed in here.
+ *
+ * AC3 is applied as the card writes it: a booking commits its own slots and no
+ * others, so an AM booking leaves the PM slot free. SCRUM-119 records whether a
+ * venue needs a setup or turnaround slot, but no card's acceptance criteria yet
+ * say a booking also commits its neighbours. Until one does, adding them here
+ * would contradict AC3; if one does, this is where they are added.
+ */
+export function committedSlotsByVenue(commitments: SlotCommitment[]): Map<string, Set<OperatingSlot>> {
+  const byVenue = new Map<string, Set<OperatingSlot>>();
+  for (const { venueId, slot } of commitments) {
+    const known = OPERATING_SLOTS.find((s) => s === slot);
+    if (!known) continue;
+    const slots = byVenue.get(venueId) ?? new Set<OperatingSlot>();
+    slots.add(known);
+    byVenue.set(venueId, slots);
+  }
+  return byVenue;
+}
+
+/**
+ * AC1: a venue is returned only if it is free in every one of the selected
+ * slots, and excluded if it is committed in any one of them.
+ *
+ * A slot the venue doesn't run (venues.operating_slots, SCRUM-116 AC4) is not
+ * free either: SCRUM-123 AC3 shows it as "outside operating hours and cannot be
+ * requested", and the story is to find venues "that could actually host it".
+ */
+export function isFreeInEverySlot(
+  operatingSlots: readonly string[],
+  searchedSlots: readonly OperatingSlot[],
+  committed: ReadonlySet<OperatingSlot> | undefined,
+): boolean {
+  return searchedSlots.every((slot) => operatingSlots.includes(slot) && !committed?.has(slot));
 }
 
 // -----------------------------------------------------------------------------

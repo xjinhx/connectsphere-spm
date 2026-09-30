@@ -174,3 +174,47 @@ export async function fetchConfirmedFutureBookings(venueId: string, today: strin
     .eq('status', 'confirmed')
     .gte('event_request.proposed_date', today);
 }
+
+// -----------------------------------------------------------------------------
+// SCRUM-128: searching by date and slot
+// -----------------------------------------------------------------------------
+
+/**
+ * SCRUM-128: every venue a search could return, with the slots each one runs.
+ * Retired venues are left out, the same default as the catalogue list
+ * (SCRUM-121 AC3): a retired venue can't host a new event.
+ */
+export async function fetchSearchableVenues() {
+  return db()
+    .from('venues')
+    .select('id, name, max_capacity, is_retired, operating_slots, locations ( id, name )')
+    .eq('is_retired', false)
+    .order('name');
+}
+
+/**
+ * SCRUM-128 AC2 and AC3: every confirmed booking on `date`, with the slots it
+ * takes.
+ *
+ * DUMMY(SCRUM-148) D-04: a booking has no date or slot of its own yet; both
+ * come from its event request (proposed_date, time_slots), as in
+ * fetchConfirmedFutureBookings. If SCRUM-148 gives a booking its own date or
+ * slot lines, read those here instead.
+ */
+export async function fetchConfirmedBookingsOn(date: string) {
+  return db()
+    .from('venue_booking')
+    .select('venue_id, event_request:event_request_id!inner (time_slots)')
+    .eq('status', 'confirmed')
+    .eq('event_request.proposed_date', date);
+}
+
+/**
+ * SCRUM-128 AC4: every slot recorded as unavailable on `date`.
+ *
+ * DUMMY(SCRUM-151) D-09: venue_unavailable_slot is a stand-in that nothing
+ * writes yet; testers add rows by hand. SCRUM-151's flow writes it for real.
+ */
+export async function fetchUnavailableSlotsOn(date: string) {
+  return db().from('venue_unavailable_slot').select('venue_id, slot').eq('date', date);
+}
