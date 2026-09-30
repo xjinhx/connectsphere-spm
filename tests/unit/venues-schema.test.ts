@@ -1,4 +1,5 @@
 import { describe, it, expect } from 'vitest';
+import { z } from 'zod';
 import {
   CreateVenueInputSchema,
   UpdateVenueInputSchema,
@@ -26,8 +27,8 @@ const validVenue = () => ({
   maxCapacity: 150,
 });
 
-const messagesFrom = (result: ReturnType<typeof CreateVenueInputSchema.safeParse>): string[] =>
-  result.success ? [] : result.error.issues.map((issue) => issue.message);
+const messagesFrom = (result: z.SafeParseReturnType<unknown, unknown>): string[] =>
+  result.success ? [] : result.error.issues.map((issue: z.ZodIssue) => issue.message);
 
 describe('CreateVenueInputSchema: SCRUM-116 AC1 name, location and capacity', () => {
   it('accepts a venue with only a name, location and capacity', () => {
@@ -251,6 +252,51 @@ describe('UpdateVenueInputSchema: SCRUM-120 AC1 and SCRUM-117 AC3', () => {
     expect(edit({ maxCapacity: 250 }).success).toBe(true);
     expect(edit({ maxCapacity: 250, expectedUpdatedAt: '2026-09-23T06:30:00Z' }).success).toBe(true);
     expect(edit({ maxCapacity: 250, expectedUpdatedAt: 'yesterday' }).success).toBe(false);
+  });
+});
+
+describe('UpdateVenueInputSchema: SCRUM-119 (revised) setup and turnaround slot flags', () => {
+  const validUpdate = () => ({
+    expectedUpdatedAt: '2026-09-25T00:00:00.000Z',
+    needsSetupSlot: true,
+    needsTurnaroundSlot: true,
+  });
+
+  // TC-119-01: both flags true
+  it('TC-119-01 accepts both flags as true', () => {
+    const result = UpdateVenueInputSchema.safeParse(validUpdate());
+    expect(result.success).toBe(true);
+  });
+
+  // TC-119-02: both flags false
+  it('TC-119-02 accepts both flags as false', () => {
+    const result = UpdateVenueInputSchema.safeParse({
+      ...validUpdate(),
+      needsSetupSlot: false,
+      needsTurnaroundSlot: false,
+    });
+    expect(result.success).toBe(true);
+  });
+
+  // TC-119-03: one true, one false - each flag is independent
+  it('TC-119-03 accepts one flag true and the other false', () => {
+    const result = UpdateVenueInputSchema.safeParse({
+      ...validUpdate(),
+      needsSetupSlot: true,
+      needsTurnaroundSlot: false,
+    });
+    expect(result.success).toBe(true);
+  });
+
+  // TC-119-04: a non-boolean value is refused
+  it('TC-119-04 rejects a non-boolean needsSetupSlot value', () => {
+    const result = UpdateVenueInputSchema.safeParse({ ...validUpdate(), needsSetupSlot: 'yes' });
+    expect(result.success).toBe(false);
+  });
+
+  it('TC-119-04 rejects a non-boolean needsTurnaroundSlot value', () => {
+    const result = UpdateVenueInputSchema.safeParse({ ...validUpdate(), needsTurnaroundSlot: 'yes' });
+    expect(result.success).toBe(false);
   });
 });
 

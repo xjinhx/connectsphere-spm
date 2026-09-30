@@ -23,7 +23,7 @@ const VENUE_SUMMARY_SELECT = 'id, name, max_capacity, is_retired, locations ( id
 
 /** SCRUM-121 AC2: the full venue page, including turnaround values. */
 const VENUE_DETAIL_SELECT =
-  'id, name, max_capacity, is_retired, operating_slots, setup_minutes, teardown_minutes, turnaround_minutes, created_at, updated_at, locations ( id, name ), venue_facilities ( facilities ( id, name ) ), venue_accessibility_features ( accessibility_features ( id, name ) ), venue_layouts ( layout, capacity )';
+  'id, name, max_capacity, is_retired, operating_slots, needs_setup_slot, needs_turnaround_slot, created_at, updated_at, locations ( id, name ), venue_facilities ( facilities ( id, name ) ), venue_accessibility_features ( accessibility_features ( id, name ) ), venue_layouts ( layout, capacity )';
 
 // -----------------------------------------------------------------------------
 // Reading the catalogue
@@ -131,6 +131,8 @@ export async function saveVenueChanges(
     facilityIds?: string[];
     accessibilityFeatureIds?: string[];
     layouts?: VenueLayoutRow[];
+    needsSetupSlot?: boolean;
+    needsTurnaroundSlot?: boolean;
   },
   { confirmAffectedBookings = false, today }: { confirmAffectedBookings?: boolean; today?: string } = {},
 ) {
@@ -142,6 +144,8 @@ export async function saveVenueChanges(
     ...(changes.maxCapacity !== undefined && { p_max_capacity: changes.maxCapacity }),
     ...(changes.operatingSlots !== undefined && { p_operating_slots: changes.operatingSlots }),
     ...(changes.facilityIds !== undefined && { p_facility_ids: changes.facilityIds }),
+    ...(changes.needsSetupSlot !== undefined && { p_needs_setup_slot: changes.needsSetupSlot }),
+    ...(changes.needsTurnaroundSlot !== undefined && { p_needs_turnaround_slot: changes.needsTurnaroundSlot }),
     ...(changes.accessibilityFeatureIds !== undefined && {
       p_accessibility_feature_ids: changes.accessibilityFeatureIds,
     }),
