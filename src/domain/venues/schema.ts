@@ -126,8 +126,9 @@ const LayoutListSchema = z
  * Operating slots default to all three when omitted, so a venue created with
  * only a name, location and capacity (US-11.1-TC01) is still valid.
  *
- * Turnaround values (SCRUM-119) and retiring (SCRUM-122) are deliberately not
- * accepted here: those stories are not in Sprint 1.
+ * The setup/turnaround slot flags (SCRUM-119, accepted on update only —
+ * see UpdateVenueInputSchema) and retiring (SCRUM-122) are deliberately
+ * not accepted here.
  */
 export const CreateVenueInputSchema = z.object({
   name: VenueNameSchema,
@@ -172,6 +173,14 @@ export const UpdateVenueInputSchema = z
     facilityIds: IdListSchema('facility').optional(),
     accessibilityFeatureIds: IdListSchema('accessibility feature').optional(),
     layouts: LayoutListSchema.optional(),
+    /**
+     * SCRUM-119 (revised): whether the venue needs a setup slot before an
+     * event and a turnaround slot after it. SCRUM-148 applies the actual
+     * adjacent-slot-blocking rule using these flags; this schema only
+     * carries them.
+     */
+    needsSetupSlot: z.boolean().optional(),
+    needsTurnaroundSlot: z.boolean().optional(),
     /**
      * SCRUM-120 AC2: the user has seen the confirmed future bookings a capacity
      * cut affects and confirmed it. Without it, such a cut is refused with the
@@ -243,9 +252,8 @@ export const VenueDetailSchema = VenueSummarySchema.extend({
   facilities: z.array(ReferenceItemSchema),
   accessibilityFeatures: z.array(ReferenceItemSchema),
   layouts: z.array(VenueLayoutSchema),
-  setupMinutes: z.number().int().nullable(),
-  teardownMinutes: z.number().int().nullable(),
-  turnaroundMinutes: z.number().int().nullable(),
+  needsSetupSlot: z.boolean(),
+  needsTurnaroundSlot: z.boolean(),
   createdAt: z.string(),
   updatedAt: z.string(),
 });
@@ -264,6 +272,7 @@ export const AffectedBookingSchema = z.object({
   expectedAttendance: z.number().int(),
   coordinatorId: z.string().uuid().nullable(),
 });
+
 export type AffectedBooking = z.infer<typeof AffectedBookingSchema>;
 
 /** The details of that 409. `reason` tells it apart from the other venue 409s. */

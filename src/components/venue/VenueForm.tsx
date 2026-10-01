@@ -88,6 +88,11 @@ export default function VenueForm({
   const [locationId, setLocationId] = useState(venue?.location.id ?? '');
   const [maxCapacity, setMaxCapacity] = useState(venue ? String(venue.maxCapacity) : '');
 
+  // SCRUM-119 (revised): whether the venue needs a setup slot and a
+  // turnaround slot. A new venue defaults to false for both.
+  const [needsSetupSlot, setNeedsSetupSlot] = useState(venue?.needsSetupSlot ?? false);
+  const [needsTurnaroundSlot, setNeedsTurnaroundSlot] = useState(venue?.needsTurnaroundSlot ?? false);
+
   // SCRUM-116 AC4: a new venue starts with all three slots selected.
   const [slots, setSlots] = useState<OperatingSlot[]>(venue ? venue.operatingSlots : [...OPERATING_SLOTS]);
 
@@ -154,6 +159,8 @@ export default function VenueForm({
       facilityIds,
       accessibilityFeatureIds: featureIds,
       layouts: layouts.map((row) => ({ layout: row.layout, capacity: capacityToSend(row.capacity) })),
+      needsSetupSlot,
+      needsTurnaroundSlot,
       // SCRUM-120: the version this form was loaded with, so a save from a
       // form that has gone out of date is refused instead of undoing someone
       // else's newer save.
@@ -268,6 +275,28 @@ export default function VenueForm({
         />
         <FieldError messages={fieldErrors.maxCapacity} />
       </div>
+
+      {/* SCRUM-119 (revised): whether an approved booking blocks the adjacent
+          slot before/after it. SCRUM-148 applies the actual rule. */}
+      <fieldset className="flex flex-col gap-2">
+        <legend className="mb-1 text-sm font-medium">Adjacent slot requirements</legend>
+        <label className="flex items-center gap-2 text-sm">
+          <input
+            type="checkbox"
+            checked={needsSetupSlot}
+            onChange={(event) => setNeedsSetupSlot(event.target.checked)}
+          />
+          Needs setup slot
+        </label>
+        <label className="flex items-center gap-2 text-sm">
+          <input
+            type="checkbox"
+            checked={needsTurnaroundSlot}
+            onChange={(event) => setNeedsTurnaroundSlot(event.target.checked)}
+          />
+          Needs turnaround slot
+        </label>
+      </fieldset>
 
       <fieldset>
         <legend className="mb-1 text-sm font-medium">Operating slots</legend>
