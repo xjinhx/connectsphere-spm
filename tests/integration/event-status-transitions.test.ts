@@ -12,7 +12,7 @@ import { ensureTestClientOrganisation, TEST_CLIENT_ORGANISATION_ID } from './fix
  * the SCRUM-103 sheet of the Sprint 2 test case workbook (TC-103-NN). Runs
  * against the local Supabase stack (`npm run db:start` + `npm run db:reset`).
  *
- * tests/unit/event-status-policy.test.ts tests the rule. This tests what the
+ * tests/unit/event-status-transition-policy.test.ts tests the rule. This tests what the
  * rule does to a stored event: a refused move leaves the status as it was
  * ("the transition is refused and the status is unchanged"), and an allowed
  * move is actually written.
