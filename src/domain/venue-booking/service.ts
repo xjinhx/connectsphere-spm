@@ -50,11 +50,6 @@ export async function submitVenueBookingRequest(
   const parsedId = EventRequestIdSchema.safeParse(eventRequestId);
   if (!parsedId.success) throw new NotFoundError('Event request');
 
-  const parsedInput = CreateVenueBookingRequestInputSchema.safeParse(input);
-  if (!parsedInput.success) {
-    throw new ValidationError('The venue booking request is not valid.', parsedInput.error.flatten());
-  }
-
   const { data: existing, error: readError } = await fetchEventRequestById(parsedId.data);
   if (readError) {
     throw new ValidationError('The event request could not be read.', readError.message);
@@ -74,6 +69,14 @@ export async function submitVenueBookingRequest(
   // AC2
   if (!canCreateBookingRequest(event.status)) {
     throw new ValidationError(EVENT_NOT_APPROVED_MESSAGE);
+  }
+
+  // AC5 — only reached for the assigned coordinator of an approved event, so
+  // an unapproved event is always told it must be approved first (AC2), never
+  // which fields are missing.
+  const parsedInput = CreateVenueBookingRequestInputSchema.safeParse(input);
+  if (!parsedInput.success) {
+    throw new ValidationError('The venue booking request is not valid.', parsedInput.error.flatten());
   }
 
   const { data: newRequestId, error: writeError } = await createVenueBookingRequest({
