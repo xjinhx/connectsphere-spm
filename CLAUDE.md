@@ -460,6 +460,9 @@ workflow") rather than assuming ownership of it.
 - `docs/architecture.md` — folder convention, current build status per layer.
 - `docs/dummies.md` — the register of every dummy: what each one fakes, where
   its `DUMMY(...)` markers are, what it waits on, and how to replace it.
+- `CONTEXT.md` — the team glossary: one word per concept (e.g. "unavailable
+  slot", not "blocked slot"). Use its terms in code; Jira still wins on what an
+  AC requires. Add a term when the team settles what a word means.
 - `ConnectSphere_Test_Cases_v3.xlsx` — test case IDs and the story-to-SCRUM
   mapping (sheet "User Stories & ACs" shows which SCRUM numbers are bundled
   into which consolidated story). Its AC text is being reconciled against
