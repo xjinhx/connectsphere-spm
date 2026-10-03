@@ -119,9 +119,8 @@ export async function getVenue(venueId: string): Promise<VenueDetail> {
       link.accessibility_features ? [link.accessibility_features] : [],
     ),
     layouts: data.venue_layouts.map((row) => ({ layout: row.layout, capacity: row.capacity })),
-    setupMinutes: data.setup_minutes,
-    teardownMinutes: data.teardown_minutes,
-    turnaroundMinutes: data.turnaround_minutes,
+    needsSetupSlot: data.needs_setup_slot,
+    needsTurnaroundSlot: data.needs_turnaround_slot,
     createdAt: data.created_at,
     updatedAt: data.updated_at,
   });
@@ -269,6 +268,7 @@ function affectedBookingsError(maxCapacity: number, bookings: AffectedBooking[])
   );
 }
 
+
 /**
  * SCRUM-120 AC1 to AC4, SCRUM-117 AC3, SCRUM-118.
  *
@@ -351,6 +351,8 @@ export async function updateVenue(venueId: string, input: unknown): Promise<Venu
       facilityIds: changes.facilityIds,
       accessibilityFeatureIds: changes.accessibilityFeatureIds,
       layouts: changes.layouts,
+      needsSetupSlot: changes.needsSetupSlot,
+      needsTurnaroundSlot: changes.needsTurnaroundSlot,
     },
     { confirmAffectedBookings, today },
   );

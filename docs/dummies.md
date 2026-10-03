@@ -201,7 +201,7 @@ switch them the next time they edit those files.
 ### D-10 — Planning is added and reached without SCRUM-101
 
 - **Kind:** Stand-in code
-- **Added by:** SCRUM-103 — PR #<n>
+- **Added by:** SCRUM-103 — PR #69
 - **Waiting on:** SCRUM-101 Move an event through its statuses as work is done
 - **Where:**
   - `supabase/migrations/20260928120000_event_request_lifecycle_statuses.sql`
