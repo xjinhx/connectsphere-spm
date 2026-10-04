@@ -47,7 +47,7 @@ describe('isFreeInEverySlot: SCRUM-128 AC1 to AC4', () => {
     expect(isFreeInEverySlot(ALL, ['pm'], committed('am'))).toBe(true);
   });
 
-  it('a slot the venue does not operate is not free', () => {
+  it('TC-128-14: a slot the venue does not operate is not free', () => {
     expect(isFreeInEverySlot(['am', 'pm'], ['night'], undefined)).toBe(false);
     expect(isFreeInEverySlot(['am', 'pm'], ['am', 'night'], undefined)).toBe(false);
     expect(isFreeInEverySlot(['am', 'pm'], ['am'], undefined)).toBe(true);

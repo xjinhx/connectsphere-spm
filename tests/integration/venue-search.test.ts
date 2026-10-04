@@ -138,7 +138,7 @@ describe('searchVenues: SCRUM-128 AC1, free in every selected slot', () => {
     expect(await found(['am', 'pm', 'night'])).not.toContain(venue);
   });
 
-  it('an event over two slots commits both of them', async () => {
+  it('TC-128-16 an event over two slots commits both of them', async () => {
     const venue = await createTestVenue('Booked AM and PM');
     await book(venue, ['am', 'pm']);
     expect(await found(['pm'])).not.toContain(venue);
@@ -151,13 +151,13 @@ describe('searchVenues: SCRUM-128 AC1, free in every selected slot', () => {
     expect(await found(['pm'])).toContain(venue);
   });
 
-  it('excludes a venue that does not operate a selected slot', async () => {
+  it('TC-128-14 excludes a venue that does not operate a selected slot', async () => {
     const venue = await createTestVenue('Closed at night', ['am', 'pm']);
     expect(await found(['night'])).not.toContain(venue);
     expect(await found(['am'])).toContain(venue);
   });
 
-  it('excludes a retired venue, the same default as the catalogue', async () => {
+  it('TC-128-15 excludes a retired venue, the same default as the catalogue', async () => {
     const venue = await createTestVenue('Retired');
     const { error } = await admin.from('venues').update({ is_retired: true }).eq('id', venue);
     if (error) throw new Error(`could not retire test venue: ${error.message}`);
