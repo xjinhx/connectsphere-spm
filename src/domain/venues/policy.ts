@@ -78,10 +78,12 @@ export type SlotCommitment = { venueId: string; slot: string };
  * AC8 says so outright — so it is never passed in here.
  *
  * AC3 is applied as the card writes it: a booking commits its own slots and no
- * others, so an AM booking leaves the PM slot free. SCRUM-119 records whether a
- * venue needs a setup or turnaround slot, but no card's acceptance criteria yet
- * say a booking also commits its neighbours. Until one does, adding them here
- * would contradict AC3; if one does, this is where they are added.
+ * others, so an AM booking leaves the PM slot free. That is the team's Week 7
+ * decision for this sprint ("build as carded"). The customer's W7-1 and W7-4
+ * changes — setup and turnaround time in minutes per venue, and tentative holds
+ * that expire — go to a follow-up story, "search counts setup/turnaround time
+ * and holds". It should get both from the single clash/occupancy function
+ * SCRUM-148 and SCRUM-154 are keeping, rather than add a copy of it here.
  */
 export function committedSlotsByVenue(commitments: SlotCommitment[]): Map<string, Set<OperatingSlot>> {
   const byVenue = new Map<string, Set<OperatingSlot>>();

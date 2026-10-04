@@ -233,8 +233,11 @@ switch them the next time they edit those files.
   ```
   Search that date for Night (AC4: the venue is gone), then for AM (it's back).
 - **To replace:** SCRUM-151's flow writes `venue_unavailable_slot` rows,
-  widening the table if it needs to (for example, who recorded it). Nothing in
-  SCRUM-128 changes if the four columns stay; re-run
+  widening the table if it needs to — for example, who recorded it, or a
+  reason category: the customer's Week 7 change W7-2 names maintenance,
+  equipment failure, renovation, safety and other, where `reason` here is free
+  text. Widen this table rather than add a second one. Nothing in SCRUM-128
+  changes if the four columns stay; re-run
   `tests/integration/venue-search.test.ts` and SCRUM-128 AC4 by hand against a
   slot withdrawn through that flow, then remove the markers.
 - **Status:** Active
