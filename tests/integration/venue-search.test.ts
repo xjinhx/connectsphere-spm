@@ -127,59 +127,59 @@ describe('searchVenues: SCRUM-128 AC1, free in every selected slot', () => {
     expect(await found(['am', 'pm'])).not.toContain(venue);
   });
 
-  it('TC-128-09 returns a venue free in all three slots', async () => {
+  it('TC-128-04 returns a venue free in all three slots', async () => {
     const venue = await createTestVenue('Free all day');
     expect(await found(['am', 'pm', 'night'])).toContain(venue);
   });
 
-  it('TC-128-10 excludes a venue committed in exactly one of three selected slots', async () => {
+  it('TC-128-05 excludes a venue committed in exactly one of three selected slots', async () => {
     const venue = await createTestVenue('Booked Night of three');
     await book(venue, ['night']);
     expect(await found(['am', 'pm', 'night'])).not.toContain(venue);
   });
 
-  it('TC-128-16 an event over two slots commits both of them', async () => {
-    const venue = await createTestVenue('Booked AM and PM');
-    await book(venue, ['am', 'pm']);
-    expect(await found(['pm'])).not.toContain(venue);
-    expect(await found(['night'])).toContain(venue);
-  });
-
-  it('TC-128-12 a booking on another date does not exclude the venue', async () => {
+  it('TC-128-06 a booking on another date does not exclude the venue', async () => {
     const venue = await createTestVenue('Booked day before');
     await book(venue, ['pm'], daysFromToday(59));
     expect(await found(['pm'])).toContain(venue);
   });
 
-  it('TC-128-14 excludes a venue that does not operate a selected slot', async () => {
+  it('TC-128-07 refuses a search with no slot selected', async () => {
+    await expect(searchVenues({ date: DATE, slots: [] })).rejects.toMatchObject({
+      code: 'VALIDATION_ERROR',
+      details: { fieldErrors: { slots: ['Select at least one slot.'] } },
+    });
+  });
+  it('TC-128-08 excludes a venue that does not operate a selected slot', async () => {
     const venue = await createTestVenue('Closed at night', ['am', 'pm']);
     expect(await found(['night'])).not.toContain(venue);
     expect(await found(['am'])).toContain(venue);
   });
 
-  it('TC-128-15 excludes a retired venue, the same default as the catalogue', async () => {
+  it('TC-128-09 excludes a retired venue, the same default as the catalogue', async () => {
     const venue = await createTestVenue('Retired');
     const { error } = await admin.from('venues').update({ is_retired: true }).eq('id', venue);
     if (error) throw new Error(`could not retire test venue: ${error.message}`);
     expect(await found(['am'])).not.toContain(venue);
   });
 
-  it('TC-128-13 refuses a search with no slot selected', async () => {
-    await expect(searchVenues({ date: DATE, slots: [] })).rejects.toMatchObject({
-      code: 'VALIDATION_ERROR',
-      details: { fieldErrors: { slots: ['Select at least one slot.'] } },
-    });
-  });
 });
 
 describe('searchVenues: SCRUM-128 AC2 and AC3, confirmed bookings', () => {
-  it('TC-128-04 excludes a venue with a confirmed booking in the searched slot (AC2)', async () => {
+  it('TC-128-10 excludes a venue with a confirmed booking in the searched slot (AC2)', async () => {
     const venue = await createTestVenue('Booked PM');
     await book(venue, ['pm']);
     expect(await found(['pm'])).not.toContain(venue);
   });
 
-  it('TC-128-05 returns a venue whose confirmed booking is in another slot (AC3)', async () => {
+  it('TC-128-11 an event over two slots commits both of them', async () => {
+    const venue = await createTestVenue('Booked AM and PM');
+    await book(venue, ['am', 'pm']);
+    expect(await found(['pm'])).not.toContain(venue);
+    expect(await found(['night'])).toContain(venue);
+  });
+
+  it('TC-128-12 returns a venue whose confirmed booking is in another slot (AC3)', async () => {
     const venue = await createTestVenue('Booked AM');
     await book(venue, ['am']);
     expect(await found(['pm'])).toContain(venue);
@@ -189,13 +189,13 @@ describe('searchVenues: SCRUM-128 AC2 and AC3, confirmed bookings', () => {
 });
 
 describe('searchVenues: SCRUM-128 AC4, a slot recorded as unavailable', () => {
-  it('TC-128-06 excludes a venue whose searched Night slot is unavailable (AC4)', async () => {
+  it('TC-128-13 excludes a venue whose searched Night slot is unavailable (AC4)', async () => {
     const venue = await createTestVenue('Night unavailable');
     await markUnavailable(venue, 'night');
     expect(await found(['night'])).not.toContain(venue);
   });
 
-  it('TC-128-07 returns the same venue for a slot that is not affected (AC1, AC4)', async () => {
+  it('TC-128-14 returns the same venue for a slot that is not affected (AC4)', async () => {
     const venue = await createTestVenue('Night unavailable, AM free');
     await markUnavailable(venue, 'night');
     expect(await found(['am'])).toContain(venue);
@@ -203,7 +203,7 @@ describe('searchVenues: SCRUM-128 AC4, a slot recorded as unavailable', () => {
 });
 
 describe('searchVenues: SCRUM-128 AC5, no booking horizon', () => {
-  it('TC-128-08 returns results for a date five years from today (AC5)', async () => {
+  it('TC-128-15 returns results for a date five years from today (AC5)', async () => {
     const venue = await createTestVenue('Five years ahead');
     const date = daysFromToday(5 * 365 + 1);
     const result = await searchVenues({ date, slots: ['am'] });
@@ -211,7 +211,7 @@ describe('searchVenues: SCRUM-128 AC5, no booking horizon', () => {
     expect(result.venues.map((v) => v.id)).toContain(venue);
   });
 
-  it("TC-128-11 returns results for today's date", async () => {
+  it("TC-128-16 returns results for today's date", async () => {
     const venue = await createTestVenue('Today');
     expect(await found(['pm'], todayInSingapore())).toContain(venue);
   });
