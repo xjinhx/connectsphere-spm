@@ -140,3 +140,4 @@ describe('canViewVenueCatalogue: SCRUM-121', () => {
     expect(canViewVenueCatalogue([role])).toBe(false);
   });
 });
+

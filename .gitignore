@@ -86,4 +86,5 @@ __pycache__/
 
 # ---- doc folders ----
 TEST_CASES_LOGIN.md
-TEST_CASES_LOGIN.tsvsupabase/snippets/
+TEST_CASES_LOGIN.tsv
+supabase/snippets/
