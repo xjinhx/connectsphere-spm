@@ -159,7 +159,7 @@ describe('SCRUM-97 AC1 — every event assigned to me, at any status', () => {
 });
 
 describe('SCRUM-97 AC2 — events assigned to other coordinators', () => {
-  it('TC-97-06: does not show an event assigned to another coordinator', async () => {
+  it('TC-97-05: does not show an event assigned to another coordinator', async () => {
     const id = await createAssignedEvent(coordinatorB, 'approved', '2026-12-07');
 
     expect(await myEventIds(coordinatorA)).not.toContain(id);
@@ -169,7 +169,7 @@ describe('SCRUM-97 AC2 — events assigned to other coordinators', () => {
 });
 
 describe('SCRUM-97 AC3 — an event reassigned away from me', () => {
-  it('TC-97-09: no longer shows an event once it has been reassigned to another coordinator', async () => {
+  it('TC-97-06: no longer shows an event once it has been reassigned to another coordinator', async () => {
     const id = await createAssignedEvent(coordinatorA, 'planning', '2026-12-14');
     expect(await myEventIds(coordinatorA)).toContain(id);
 
