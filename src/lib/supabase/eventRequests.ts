@@ -442,3 +442,26 @@ export async function markEventRequestClarificationRequested(
     .select(COLUMNS)
     .maybeSingle();
 }
+
+// ---------------------------------------------------------------------------
+// SCRUM-103 — Prevent invalid status transitions
+// ---------------------------------------------------------------------------
+
+/**
+ * Moves an event from `from` to `to`, and only if it is still in `from`.
+ *
+ * The `status` filter is the guard, the same shape as markEventRequestApproved:
+ * if something else changed the status after the service read it, no row
+ * matches and this comes back empty, so a move checked against the old status
+ * is never applied to a new one. Whether `from -> to` is allowed at all is
+ * decided before this is called, in domain/event-status/policy.ts.
+ */
+export async function markEventRequestStatus(id: string, from: EventRequestStatus, to: EventRequestStatus) {
+  return db()
+    .from('event_request')
+    .update({ status: to })
+    .eq('id', id)
+    .eq('status', from)
+    .select('id, status')
+    .maybeSingle();
+}

@@ -203,6 +203,33 @@ switch them the next time they edit those files.
   Re-run US-7.2-TC04 (SCRUM-91 AC1).
 - **Status:** Active
 
+### D-10 — Planning is added and reached without SCRUM-101
+
+- **Kind:** Stand-in code
+- **Added by:** SCRUM-103 — PR #69
+- **Waiting on:** SCRUM-101 Move an event through its statuses as work is done
+- **Where:**
+  - `supabase/migrations/20260928120000_event_request_lifecycle_statuses.sql`
+    — adds `'planning'` with `IF NOT EXISTS`. SCRUM-101's own migration
+    (`20260927090000_event_request_planning_status.sql`, branch
+    `move-event-status`) adds the same value and runs first on a fresh reset.
+  - `src/domain/event-request/schema.ts` — `'planning'` in
+    `EventRequestStatusEnum` and its label.
+  - `tests/integration/event-status-transitions.test.ts` —
+    `createConfirmedRequest()` moves approved -> planning with
+    `changeEventStatus`, where the app will use SCRUM-101's action.
+  - Manual testing: TC-103-09 (and the SCRUM-97/99 cases that need a Planning
+    or Confirmed event) set Planning with the SCRUM-103 harness,
+    `tests/manual/change-event-status.test.ts`.
+- **To replace:** once SCRUM-101 is on main: keep a single `'planning'` in
+  `EventRequestStatusEnum`, `EVENT_REQUEST_STATUS_LABELS` and the badge
+  (merge whichever copy arrives second); leave the `IF NOT EXISTS` line in the
+  migration (it is then a no-op, and removing it would change an applied
+  migration); switch `createConfirmedRequest()` to SCRUM-101's approved ->
+  planning function and set Planning through its action in the manual tests.
+  Re-run TC-103-01 to 09 (SCRUM-103 AC1-AC4).
+- **Status:** Active
+
 ### D-11 — An affected booking's "notification" is only a stored notice
 
 - **Kind:** Stand-in code (SCRUM-193's in-app notification list is in this

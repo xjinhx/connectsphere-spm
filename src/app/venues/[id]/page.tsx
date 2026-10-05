@@ -42,9 +42,6 @@ function Row({ label, children }: { label: string; children: React.ReactNode }) 
   );
 }
 
-function minutesOrDash(minutes: number | null): string {
-  return minutes === null ? 'Not recorded' : `${minutes} minutes`;
-}
 
 export default async function VenueDetailPage({ params }: { params: Promise<{ id: string }> }) {
   const actor = await getCurrentActor();
@@ -139,9 +136,8 @@ export default async function VenueDetailPage({ params }: { params: Promise<{ id
             : venue.accessibilityFeatures.map((feature) => feature.name).join(', ')}
         </Row>
 
-        <Row label="Setup time">{minutesOrDash(venue.setupMinutes)}</Row>
-        <Row label="Teardown time">{minutesOrDash(venue.teardownMinutes)}</Row>
-        <Row label="Turnaround time">{minutesOrDash(venue.turnaroundMinutes)}</Row>
+        <Row label="Needs setup slot">{venue.needsSetupSlot ? 'Yes' : 'No'}</Row>
+        <Row label="Needs turnaround slot">{venue.needsTurnaroundSlot ? 'Yes' : 'No'}</Row>
       </dl>
 
       {/* SCRUM-151 AC1: slots withdrawn on specific dates, from today on. */}

@@ -684,10 +684,9 @@ export type Database = {
           location_id: string
           max_capacity: number
           name: string
+          needs_setup_slot: boolean
+          needs_turnaround_slot: boolean
           operating_slots: string[]
-          setup_minutes: number | null
-          teardown_minutes: number | null
-          turnaround_minutes: number | null
           updated_at: string
         }
         Insert: {
@@ -697,10 +696,9 @@ export type Database = {
           location_id: string
           max_capacity: number
           name: string
+          needs_setup_slot?: boolean
+          needs_turnaround_slot?: boolean
           operating_slots?: string[]
-          setup_minutes?: number | null
-          teardown_minutes?: number | null
-          turnaround_minutes?: number | null
           updated_at?: string
         }
         Update: {
@@ -710,10 +708,9 @@ export type Database = {
           location_id?: string
           max_capacity?: number
           name?: string
+          needs_setup_slot?: boolean
+          needs_turnaround_slot?: boolean
           operating_slots?: string[]
-          setup_minutes?: number | null
-          teardown_minutes?: number | null
-          turnaround_minutes?: number | null
           updated_at?: string
         }
         Relationships: [
@@ -790,6 +787,8 @@ export type Database = {
           p_location_id?: string
           p_max_capacity?: number
           p_name?: string
+          p_needs_setup_slot?: boolean
+          p_needs_turnaround_slot?: boolean
           p_operating_slots?: string[]
           p_today?: string
           p_venue_id: string
@@ -804,6 +803,10 @@ export type Database = {
         | "approved"
         | "clarification_requested"
         | "rejected"
+        | "planning"
+        | "confirmed"
+        | "completed"
+        | "cancelled"
     }
     CompositeTypes: {
       [_ in never]: never
@@ -940,6 +943,10 @@ export const Constants = {
         "approved",
         "clarification_requested",
         "rejected",
+        "planning",
+        "confirmed",
+        "completed",
+        "cancelled",
       ],
     },
   },
