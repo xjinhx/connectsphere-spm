@@ -32,6 +32,10 @@ export function NotificationList({ initialNotifications }: { initialNotification
 
     try {
       await fetch(`/api/notifications/${notification.id}`, { method: 'PATCH' });
+      // Tell NotificationBell to refetch its count - marking read here
+      // doesn't navigate, so the bell's pathname-based effect never fires
+      // on its own.
+      window.dispatchEvent(new Event('notifications:changed'));
     } catch {
       // Leave it marked read locally; the next full page load will reconcile
       // with the server if this silently failed.

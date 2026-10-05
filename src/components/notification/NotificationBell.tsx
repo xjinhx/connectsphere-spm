@@ -29,8 +29,10 @@ export function NotificationBell() {
     }
 
     loadCount();
+    window.addEventListener('notifications:changed', loadCount);
     return () => {
       cancelled = true;
+      window.removeEventListener('notifications:changed', loadCount);
     };
   }, [pathname]);
 
