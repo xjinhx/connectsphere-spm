@@ -1,4 +1,5 @@
 import { z } from 'zod';
+import { isISODate } from '@/domain/shared/dates';
 import { TimeSlotEnum } from '@/domain/event-request/schema';
 
 // ---------------------------------------------------------------------------
@@ -27,10 +28,9 @@ export const CreateVenueBookingRequestInputSchema = z.object({
 });
 export type CreateVenueBookingRequestInput = z.infer<typeof CreateVenueBookingRequestInputSchema>;
 
-// Only 'pending' exists — this ticket only ever creates pending lines.
-// Deciding one is SCRUM-147-150's job (Venue Booking Approval), which may
-// widen this the same way SCRUM-92/93 widened event_request_status.
-export const VenueBookingRequestLineStatusEnum = z.enum(['pending']);
+// SCRUM-142 only ever creates pending lines. SCRUM-148 adds deciding one:
+// approved or rejected (20261005120000_venue_booking_decision.sql).
+export const VenueBookingRequestLineStatusEnum = z.enum(['pending', 'approved', 'rejected']);
 export type VenueBookingRequestLineStatus = z.infer<typeof VenueBookingRequestLineStatusEnum>;
 
 export interface VenueBookingRequestLine {
@@ -47,3 +47,82 @@ export interface VenueBookingRequestOutcome {
   venueId: string;
   lines: readonly VenueBookingRequestLine[];
 }
+
+// ---------------------------------------------------------------------------
+// SCRUM-148 — Approve a booking request
+// ---------------------------------------------------------------------------
+
+export const VenueBookingRequestIdSchema = z.string().uuid();
+
+/**
+ * AC1 and AC5: a request's status, worked out from its lines (requestStatusOf
+ * in policy.ts) rather than stored, so the request and its lines can never
+ * disagree.
+ */
+export const VenueBookingRequestStatusEnum = z.enum(['pending', 'approved', 'partially_approved', 'rejected']);
+export type VenueBookingRequestStatus = z.infer<typeof VenueBookingRequestStatusEnum>;
+
+/**
+ * AC5: one decision for each pending line. A rejected line needs a reason; an
+ * approved one doesn't take one.
+ */
+export const DecideVenueBookingRequestInputSchema = z.object({
+  decisions: z
+    .array(
+      z.object({
+        lineId: z.string().uuid('Each decision must name a line of this request.'),
+        decision: z.enum(['approve', 'reject']),
+        reason: z.string().optional(),
+      }),
+    )
+    .min(1, 'Decide at least one line.')
+    .refine((decisions) => new Set(decisions.map((d) => d.lineId)).size === decisions.length, 'Each line can only be decided once.')
+    .refine(
+      (decisions) => decisions.every((d) => d.decision === 'approve' || (d.reason ?? '').trim().length > 0),
+      'A reason is required for each rejected line.',
+    ),
+});
+export type DecideVenueBookingRequestInput = z.infer<typeof DecideVenueBookingRequestInputSchema>;
+
+/** AC1 and AC5: a line as decided: who decided, when, and why if rejected. */
+export interface DecidedVenueBookingRequestLine {
+  id: string;
+  date: string;
+  timeSlots: readonly string[];
+  status: VenueBookingRequestLineStatus;
+  decidedBy: string | null;
+  decidedAt: string | null;
+  rejectionReason: string | null;
+}
+
+/** A booking request with its status and decided lines. */
+export interface VenueBookingDecision {
+  id: string;
+  eventRequestId: string;
+  venueId: string;
+  /** AC2: the event's assigned coordinator, the one the decision is for. */
+  coordinatorId: string | null;
+  status: VenueBookingRequestStatus;
+  lines: readonly DecidedVenueBookingRequestLine[];
+}
+
+/**
+ * AC3 and AC4: the dates a venue's calendar covers. A range of whole days,
+ * from on or before to.
+ */
+export const VenueBookingRangeSchema = z
+  .object({
+    from: z.string({ required_error: 'from is required (YYYY-MM-DD).' }).refine(isISODate, 'from must be a date (YYYY-MM-DD).'),
+    to: z.string({ required_error: 'to is required (YYYY-MM-DD).' }).refine(isISODate, 'to must be a date (YYYY-MM-DD).'),
+  })
+  .refine((range) => range.from <= range.to, 'from must be on or before to.');
+
+/**
+ * AC3 and AC4: one booked slot as a viewer may see it. Venue Staff, the event's
+ * assigned coordinator and Event Operations Managers see a confirmed booking
+ * with its event; any other internal user sees only that the slot is committed,
+ * with no event, client or coordinator details.
+ */
+export type BookedSlot =
+  | { date: string; slot: string; state: 'confirmed'; event: { id: string; reference: string; name: string } }
+  | { date: string; slot: string; state: 'committed' };

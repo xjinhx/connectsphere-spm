@@ -389,12 +389,11 @@ export async function updateVenue(venueId: string, input: unknown): Promise<Venu
 // -----------------------------------------------------------------------------
 
 /**
- * The confirmed bookings at this venue, for events on or after today, whose
+ * The events with a confirmed booking at this venue on or after today whose
  * expected attendance is above `proposedMaxCapacity` (isAffectedByCapacity).
  *
- * DUMMY(SCRUM-148) D-04: the bookings come from venue_booking, a stand-in
- * table nothing writes to in Sprint 1; testers add rows by hand. SCRUM-148's
- * booking flow writes it for real, and this function does not change.
+ * Bookings are SCRUM-148's, one per venue, date and slot (D-04 replaced), so
+ * an event booked for several slots is listed once.
  *
  * "Today" is Singapore's date, not the server's: the server runs in UTC, which
  * is still on yesterday until 08:00 in Singapore, and would count an event
@@ -411,8 +410,9 @@ export async function findAffectedFutureBookings(
     throw new ValidationError("Could not check the venue's bookings.", error?.message);
   }
 
-  return data
-    .map((row) => row.event_request)
+  const events = [...new Map(data.map((row) => [row.event_request.id, row.event_request])).values()];
+
+  return events
     .filter((event) => isAffectedByCapacity(event.expected_attendance, proposedMaxCapacity))
     .map((event) =>
       AffectedBookingSchema.parse({
