@@ -265,6 +265,25 @@ export const EVENT_REQUEST_STATUS_LABELS: Record<EventRequestStatus, string> = {
   cancelled: 'Cancelled',
 };
 
+/**
+ * SCRUM-99 AC1 — the one-line definition shown with the status on the event
+ * page. The wording is a team proposal: the card cites no customer clarification.
+ * Written about the request, not to "you", because a colleague in the same
+ * organisation may view it too (SCRUM-204 AC3) but cannot answer a
+ * clarification or see a rejection reason.
+ */
+export const EVENT_REQUEST_STATUS_DEFINITIONS: Record<EventRequestStatus, string> = {
+  draft: 'Being prepared and not yet sent for review.',
+  submitted: "Sent for review and waiting for a coordinator's decision.",
+  approved: 'Approved, so planning can begin; no venue or equipment is committed yet.',
+  clarification_requested: 'The coordinator needs more information from the organiser before deciding.',
+  rejected: 'Not approved; it cannot be edited or resubmitted.',
+  planning: 'Venue and equipment arrangements are being made.',
+  confirmed: 'All essential arrangements are in place.',
+  completed: 'The event has taken place.',
+  cancelled: 'The event has been called off and will not go ahead.',
+};
+
 // ---------------------------------------------------------------------------
 // SCRUM-83 — Save an incomplete request as a draft
 // ---------------------------------------------------------------------------

@@ -44,27 +44,27 @@ insert into accessibility_features (name) values
 
 insert into venues
   (name, location_id, max_capacity, operating_slots,
-   setup_minutes, teardown_minutes, turnaround_minutes, is_retired)
+   needs_setup_slot, needs_turnaround_slot, is_retired)
 values
   ('Bugis Seminar Room',
    (select id from locations where name = 'Bugis'),
    200, array['am', 'pm'],
-   30, 30, 45, false),
+   true, true, false),
 
   ('Marina Bay Ballroom',
    (select id from locations where name = 'Marina Bay'),
    300, array['am', 'pm', 'night'],
-   60, 45, 90, false),
+   true, true, false),
 
   ('Jurong East Training Room',
    (select id from locations where name = 'Jurong East'),
    40, array['am', 'pm'],
-   15, 15, 30, false),
+   true, true, false),
 
   ('Bugis Old Annex',
    (select id from locations where name = 'Bugis'),
    80, array['am', 'pm'],
-   null, null, null, true);
+   false, false, true);
 
 
 -- Facilities per venue --------------------------------------------------------
