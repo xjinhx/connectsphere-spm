@@ -1,6 +1,8 @@
+import Link from 'next/link';
 import { getCurrentActor } from '@/lib/auth/currentActor';
 import { isActionPermitted } from '@/domain/identity/permissions';
 import { listPendingBookingQueue } from '@/domain/venue-booking/service';
+import { BOOKING_QUEUE_SORTS, toBookingQueueSort, type BookingQueueSort } from '@/domain/venue-booking/policy';
 import { describeTimeSlots } from '@/domain/event-request/policy';
 import { formatSingaporeDate, toSingaporeISODate } from '@/domain/shared/dates';
 
@@ -10,6 +12,8 @@ import { formatSingaporeDate, toSingaporeISODate } from '@/domain/shared/dates';
  * AC1 each pending request is listed with its venue, event, requested date and
  *     slots, and the date it was requested. One row per date-and-slots line,
  *     as each line is decided on its own (SCRUM-148 AC5).
+ * AC2 "Sort by requested event date" reloads the list with the soonest event
+ *     first (?sort=event-date). The default is the order requests arrived.
  * AC3 a decided line is not listed: only pending lines are read.
  * AC4 every Venue Staff member sees every venue's requests; nothing here
  *     filters by venue.
@@ -20,7 +24,16 @@ import { formatSingaporeDate, toSingaporeISODate } from '@/domain/shared/dates';
 
 export const dynamic = 'force-dynamic';
 
-export default async function VenueStaffBookingQueuePage() {
+const SORT_LABELS: Record<BookingQueueSort, string> = {
+  requested: 'Date requested',
+  'event-date': 'Requested event date',
+};
+
+export default async function VenueStaffBookingQueuePage({
+  searchParams,
+}: {
+  searchParams: Promise<{ sort?: string }>;
+}) {
   const actor = await getCurrentActor();
 
   if (!isActionPermitted(actor.roles, 'venue_booking_review')) {
@@ -34,7 +47,8 @@ export default async function VenueStaffBookingQueuePage() {
     );
   }
 
-  const entries = await listPendingBookingQueue();
+  const sort = toBookingQueueSort((await searchParams).sort);
+  const entries = await listPendingBookingQueue(sort);
 
   return (
     <main className="mx-auto max-w-5xl p-6">
@@ -42,6 +56,25 @@ export default async function VenueStaffBookingQueuePage() {
       <p className="mt-1 text-sm text-[var(--text-muted)]">
         Every venue booking request awaiting a decision, at every venue.
       </p>
+
+      <nav aria-label="Sort the queue" className="mt-4 flex flex-wrap items-center gap-2 text-sm">
+        <span className="text-[var(--text-muted)]">Sort by:</span>
+        {BOOKING_QUEUE_SORTS.map((option) =>
+          option === sort ? (
+            <span key={option} aria-current="true" className="rounded-md bg-[var(--brand)] px-3 py-1 font-medium text-white">
+              {SORT_LABELS[option]}
+            </span>
+          ) : (
+            <Link
+              key={option}
+              href={option === 'requested' ? '/booking-queue' : `/booking-queue?sort=${option}`}
+              className="rounded-md border border-[var(--border)] px-3 py-1 hover:bg-slate-50"
+            >
+              {SORT_LABELS[option]}
+            </Link>
+          ),
+        )}
+      </nav>
 
       {entries.length === 0 ? (
         <p className="mt-6 text-[var(--text-muted)]">No booking requests are waiting for a decision.</p>

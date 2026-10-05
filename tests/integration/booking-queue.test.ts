@@ -141,6 +141,25 @@ describe('SCRUM-147 AC1 — each pending request is listed with its details', ()
   });
 });
 
+describe('SCRUM-147 AC2 — sorting by requested event date', () => {
+  it('TC-147-04: puts the soonest event first across a year end, read from Postgres', async () => {
+    const venueId = await venue('Sort Room');
+    // Added in the sheet's order, so the arrival order is the reverse of the event-date order.
+    await raise('New Year Kickoff', venueId, [{ date: '2027-01-02', timeSlots: ['am'] }]);
+    await raise('Year-End Party', venueId, [{ date: '2026-12-30', timeSlots: ['night'] }]);
+    await raise('Team Workshop', venueId, [{ date: '2026-10-12', timeSlots: ['am', 'pm'] }]);
+
+    const mine = (await listPendingBookingQueue('event-date')).filter(
+      (entry) => entry.venueName === `Sort Room ${RUN}`,
+    );
+    expect(mine.map((entry) => entry.eventName)).toEqual([
+      `Team Workshop ${RUN}`,
+      `Year-End Party ${RUN}`,
+      `New Year Kickoff ${RUN}`,
+    ]);
+  });
+});
+
 describe('SCRUM-147 AC3 — a decided request is no longer listed (stand-in D-11)', () => {
   it('TC-147-05: an approved request leaves the queue; another stays', async () => {
     const venueId = await venue('Approve Room');
