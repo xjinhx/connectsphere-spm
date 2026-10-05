@@ -22,10 +22,14 @@ const STATUS_CLASS: Record<EventRequestStatus, string> = {
   // SCRUM-93 — same reasoning: red (--danger) so a rejected request cannot be
   // mistaken for approved.
   rejected: 'bg-red-50 text-[var(--danger)]',
-  // SCRUM-101 added the 'planning' status; same reasoning: the build enforces
-  // exhaustiveness, and indigo (distinct from the statuses above) is a first
-  // guess for whoever owns this component to revise.
+  // SCRUM-101 added 'planning' and SCRUM-103 the rest — same reasoning again.
+  // Planning (indigo) and Confirmed (a
+  // deeper green) follow on from approved; Completed and Cancelled are
+  // finished, so grey like draft.
   planning: 'bg-indigo-50 text-indigo-700',
+  confirmed: 'bg-green-100 text-green-800',
+  completed: 'bg-slate-100 text-slate-700',
+  cancelled: 'bg-slate-100 text-[var(--text-muted)] line-through',
 };
 
 export function EventRequestStatusBadge({ status }: { status: EventRequestStatus }) {

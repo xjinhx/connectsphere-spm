@@ -233,20 +233,13 @@ export type EventRequestSaveInput = z.infer<typeof eventRequestSaveSchema>;
 // SCRUM-90 extends this with 'clarification_requested', matching
 // supabase/migrations/20260914090000_event_request_clarification_requested_status.sql.
 //
-// SCRUM-101 (Event Status Management, Sprint 2) AC3/AC4 extends this with
-// 'planning', matching
-// supabase/migrations/20260927090000_event_request_lifecycle_statuses.sql —
-// the same value this file's own note above asked for. Confirmed, Completed,
-// Cancelled, Postponed and Withdrawn are not added: no story in this sprint's
-// board owns any of those transitions yet (SCRUM-101's own Jira card stops at
-// Planning). The same pattern SCRUM-92/93 used — add a value only once a
-// story actually needs it — applies here; whichever future story owns
-// Confirm/Complete/Cancel/Postpone/Withdraw should add its own value the same
-// way. The transition rule for the one value added here lives in
-// src/domain/event-status/policy.ts, not here — this file only owns the
-// shape. SCRUM-99 (see the current status) and SCRUM-103 (prevent invalid
-// transitions) are this epic's sibling tickets; extend event-status/ rather
-// than duplicate it if you're building either.
+// SCRUM-101 (Event Status Management, Sprint 2) AC3/AC4 adds 'planning',
+// matching supabase/migrations/20260927090000_event_request_planning_status.sql.
+// SCRUM-103 adds the rest of the lifecycle its ACs name - confirmed,
+// completed, cancelled (and planning, with IF NOT EXISTS) - via
+// supabase/migrations/20260928120000_event_request_lifecycle_statuses.sql.
+// DUMMY(SCRUM-101) D-10: 'planning' was added by SCRUM-103 until SCRUM-101 is on main.
+// Which moves between them are allowed lives in domain/event-status/policy.ts.
 export const EventRequestStatusEnum = z.enum([
   'draft',
   'submitted',
@@ -254,6 +247,9 @@ export const EventRequestStatusEnum = z.enum([
   'clarification_requested',
   'rejected',
   'planning',
+  'confirmed',
+  'completed',
+  'cancelled',
 ]);
 export type EventRequestStatus = z.infer<typeof EventRequestStatusEnum>;
 
@@ -265,6 +261,28 @@ export const EVENT_REQUEST_STATUS_LABELS: Record<EventRequestStatus, string> = {
   clarification_requested: 'Clarification Requested',
   rejected: 'Rejected',
   planning: 'Planning',
+  confirmed: 'Confirmed',
+  completed: 'Completed',
+  cancelled: 'Cancelled',
+};
+
+/**
+ * SCRUM-99 AC1 — the one-line definition shown with the status on the event
+ * page. The wording is a team proposal: the card cites no customer clarification.
+ * Written about the request, not to "you", because a colleague in the same
+ * organisation may view it too (SCRUM-204 AC3) but cannot answer a
+ * clarification or see a rejection reason.
+ */
+export const EVENT_REQUEST_STATUS_DEFINITIONS: Record<EventRequestStatus, string> = {
+  draft: 'Being prepared and not yet sent for review.',
+  submitted: "Sent for review and waiting for a coordinator's decision.",
+  approved: 'Approved, so planning can begin; no venue or equipment is committed yet.',
+  clarification_requested: 'The coordinator needs more information from the organiser before deciding.',
+  rejected: 'Not approved; it cannot be edited or resubmitted.',
+  planning: 'Venue and equipment arrangements are being made.',
+  confirmed: 'All essential arrangements are in place.',
+  completed: 'The event has taken place.',
+  cancelled: 'The event has been called off and will not go ahead.',
 };
 
 // ---------------------------------------------------------------------------
