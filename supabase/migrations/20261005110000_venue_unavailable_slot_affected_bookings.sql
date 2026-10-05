@@ -51,7 +51,7 @@ from venue_booking b
 join event_request e on e.id = b.event_request_id
 join venue_unavailable_slot u
   on u.venue_id = b.venue_id
- and u.slot_date = e.proposed_date
+ and u.date = e.proposed_date
  and u.slot = any (e.time_slots)
 where b.status = 'confirmed';
 
@@ -59,7 +59,7 @@ where b.status = 'confirmed';
 -- -----------------------------------------------------------------------------
 -- What the coordinator is told
 --
--- DUMMY(SCRUM-193) D-09: stored, not shown, until the in-app notification list
+-- DUMMY(SCRUM-193) D-11: stored, not shown, until the in-app notification list
 -- exists. The same stand-in as SCRUM-120's venue_capacity_notice (D-05).
 -- -----------------------------------------------------------------------------
 create table if not exists venue_unavailability_notice (
@@ -123,7 +123,7 @@ declare
 begin
   -- AC1: one row per slot. A slot that is already unavailable breaks the
   -- unique constraint, which aborts the whole function, so nothing is saved.
-  insert into venue_unavailable_slot (venue_id, slot_date, slot, reason, recorded_by)
+  insert into venue_unavailable_slot (venue_id, date, slot, reason, recorded_by)
   select p_venue_id, p_slot_date, s, p_reason, p_recorded_by
   from unnest(p_slots) as s;
 

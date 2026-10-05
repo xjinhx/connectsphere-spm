@@ -6,7 +6,7 @@ import { SLOT_NAMES, type BookingOnUnavailableSlot } from '@/domain/availability
  * listed with an outstanding action (CONTEXT.md) until the booking is released
  * or replaced. Renders nothing when no booking is affected.
  *
- * DUMMY(SCRUM-17) D-10: nothing in the app releases a single booking yet, so
+ * DUMMY(SCRUM-17) D-12: nothing in the app releases a single booking yet, so
  * the action is stated rather than offered as a button.
  */
 export function AffectedBookingsNotice({ bookings }: { bookings: BookingOnUnavailableSlot[] }) {

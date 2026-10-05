@@ -122,7 +122,7 @@ switch them the next time they edit those files.
     (`DUMMY(SCRUM-148) D-04`)
   - `src/domain/venues/service.ts` — `findAffectedFutureBookings()`
     (`DUMMY(SCRUM-148) D-04`)
-  - `supabase/migrations/20260928110000_venue_unavailable_slot_affected_bookings.sql`
+  - `supabase/migrations/20261005110000_venue_unavailable_slot_affected_bookings.sql`
     — the `affected_booking_slot` view (`DUMMY(SCRUM-148) D-04`), added by
     SCRUM-151 AC2: a confirmed booking on a slot Venue Staff have made
     unavailable
@@ -203,18 +203,18 @@ switch them the next time they edit those files.
   Re-run US-7.2-TC04 (SCRUM-91 AC1).
 - **Status:** Active
 
-### D-09 — An affected booking's "notification" is only a stored notice
+### D-11 — An affected booking's "notification" is only a stored notice
 
 - **Kind:** Stand-in code (SCRUM-193's in-app notification list is in this
   sprint but not built yet)
 - **Added by:** SCRUM-151 AC2 — branch `venue-unavailable-slots`
 - **Waiting on:** SCRUM-193 View my notifications in the application
 - **Where:**
-  `supabase/migrations/20260928110000_venue_unavailable_slot_affected_bookings.sql`
+  `supabase/migrations/20261005110000_venue_unavailable_slot_affected_bookings.sql`
   — the `venue_unavailability_notice` table and the insert in
-  `mark_slots_unavailable` (`DUMMY(SCRUM-193) D-09`);
+  `mark_slots_unavailable` (`DUMMY(SCRUM-193) D-11`);
   `src/domain/availability/service.ts` — `markSlotsUnavailable()`
-  (`DUMMY(SCRUM-193) D-09`)
+  (`DUMMY(SCRUM-193) D-11`)
 - **What it does:** marking slots unavailable writes one
   `venue_unavailability_notice` row per affected booking of an upcoming event,
   addressed to the event's assigned coordinator, holding the date, the
@@ -227,7 +227,7 @@ switch them the next time they edit those files.
   everything the message needs. Re-run SCRUM-151 AC2.
 - **Status:** Active
 
-### D-10 — Releasing an affected booking is done by hand
+### D-12 — Releasing an affected booking is done by hand
 
 - **Kind:** Out-of-sprint stand-in
 - **Added by:** SCRUM-151 AC3 — branch `venue-unavailable-slots`
@@ -238,7 +238,7 @@ switch them the next time they edit those files.
   should reuse the same release.
 - **Where:** `src/domain/availability/service.ts` — `listAffectedBookings()`;
   `src/components/venue/AffectedBookingsNotice.tsx` (both
-  `DUMMY(SCRUM-17) D-10`)
+  `DUMMY(SCRUM-17) D-12`)
 - **What is real and what is faked:** the outstanding action is real. Each
   affected booking is listed on the coordinator's event page for as long as it
   is still confirmed on an unavailable slot, and drops off once it is not.

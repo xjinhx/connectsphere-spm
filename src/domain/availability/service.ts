@@ -29,23 +29,24 @@ import {
  * policy.ts, and single-field rules live in schema.ts.
  */
 
+/** A venue_unavailable_slot row, in SCRUM-128's column names (the table is shared). */
 type UnavailableSlotRow = {
   id: string;
   venue_id: string;
-  slot_date: string;
+  date: string;
   slot: string;
   reason: string;
-  recorded_at: string;
+  created_at: string;
 };
 
 function toUnavailableSlot(row: UnavailableSlotRow): UnavailableSlot {
   return UnavailableSlotSchema.parse({
     id: row.id,
     venueId: row.venue_id,
-    date: row.slot_date,
+    date: row.date,
     slot: row.slot,
     reason: row.reason,
-    recordedAt: row.recorded_at,
+    recordedAt: row.created_at,
   });
 }
 
@@ -79,7 +80,7 @@ export type MarkSlotsUnavailableOutcome = {
  * SCRUM-151 AC2: in the same save, every confirmed booking of an upcoming
  * event on one of those slots becomes affected (the affected_booking_slot
  * view), and its assigned coordinator is sent a notice with the reason.
- * DUMMY(SCRUM-193) D-09: the notice is stored, not shown, until the in-app
+ * DUMMY(SCRUM-193) D-11: the notice is stored, not shown, until the in-app
  * notification list exists.
  *
  * All or nothing: one database function writes the slots and the notices in
@@ -213,7 +214,7 @@ const AffectedBookingSlotRowSchema = z.object({
  * another venue or slot, then release this one): "until they release or
  * replace it". Upcoming events only, on the Singapore date, like AC2's notices.
  *
- * DUMMY(SCRUM-17) D-10: nothing in the app releases a single booking yet, and
+ * DUMMY(SCRUM-17) D-12: nothing in the app releases a single booking yet, and
  * no story in the backlog does (a new one is being raised). Testers remove the
  * booking by hand to see the entry clear.
  *

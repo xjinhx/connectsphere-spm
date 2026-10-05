@@ -16,11 +16,16 @@ function db(): SupabaseClient<Database> {
   return createAdminClient();
 }
 
-const UNAVAILABLE_SLOT_SELECT = 'id, venue_id, slot_date, slot, reason, recorded_at';
+/**
+ * venue_unavailable_slot is shared with SCRUM-128's venue search, which created
+ * it as a stand-in for this story (dummy D-09). SCRUM-151 writes it and adds
+ * recorded_by; the other columns are SCRUM-128's names.
+ */
+const UNAVAILABLE_SLOT_SELECT = 'id, venue_id, date, slot, reason, created_at';
 
 /**
  * SCRUM-151 AC1 and AC2: one call to the database function
- * mark_slots_unavailable (migration 20260928110000_...), which records one
+ * mark_slots_unavailable (migration 20261005110000_...), which records one
  * row per slot and a notice for each affected booking's coordinator in a
  * single transaction. supabase-js has no transactions of its own.
  *
@@ -53,7 +58,7 @@ export async function fetchUnavailableSlotsOn(venueId: string, date: string, slo
     .from('venue_unavailable_slot')
     .select(UNAVAILABLE_SLOT_SELECT)
     .eq('venue_id', venueId)
-    .eq('slot_date', date)
+    .eq('date', date)
     .in('slot', [...slots]);
 }
 
@@ -76,5 +81,5 @@ export async function fetchUpcomingUnavailableSlots(venueId: string, today: stri
     .from('venue_unavailable_slot')
     .select(UNAVAILABLE_SLOT_SELECT)
     .eq('venue_id', venueId)
-    .gte('slot_date', today);
+    .gte('date', today);
 }

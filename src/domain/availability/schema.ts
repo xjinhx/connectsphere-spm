@@ -10,7 +10,7 @@ import { OperatingSlotSchema, type OperatingSlot } from '@/domain/venues/schema'
  * An unavailable slot (CONTEXT.md) is one slot at one venue on one date that
  * Venue Staff have withdrawn from use, with the reason recorded. Values mirror
  * the check constraints in
- * supabase/migrations/20260928100000_venue_unavailable_slot.sql.
+ * supabase/migrations/20261005100000_venue_unavailable_slot.sql.
  *
  * Slots reuse the venue catalogue's AM / PM / Night list (OperatingSlotSchema)
  * rather than a second copy of the same three values.

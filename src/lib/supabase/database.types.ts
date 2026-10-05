@@ -640,30 +640,30 @@ export type Database = {
       }
       venue_unavailable_slot: {
         Row: {
+          created_at: string
+          date: string
           id: string
           reason: string
-          recorded_at: string
-          recorded_by: string
+          recorded_by: string | null
           slot: string
-          slot_date: string
           venue_id: string
         }
         Insert: {
+          created_at?: string
+          date: string
           id?: string
           reason: string
-          recorded_at?: string
-          recorded_by: string
+          recorded_by?: string | null
           slot: string
-          slot_date: string
           venue_id: string
         }
         Update: {
+          created_at?: string
+          date?: string
           id?: string
           reason?: string
-          recorded_at?: string
-          recorded_by?: string
+          recorded_by?: string | null
           slot?: string
-          slot_date?: string
           venue_id?: string
         }
         Relationships: [

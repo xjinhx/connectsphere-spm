@@ -23,7 +23,7 @@ import { ensureTestClientOrganisation } from './fixtures/clientOrganisation';
  * they open the event, then the affected booking is listed with an
  * outstanding action until they release or replace it."
  *
- * Nothing releases a single booking yet (stand-in D-10), so these tests remove
+ * Nothing releases a single booking yet (stand-in D-12), so these tests remove
  * the booking by hand, as a tester would, and check "released" and "replaced"
  * separately.
  *
@@ -33,7 +33,7 @@ import { ensureTestClientOrganisation } from './fixtures/clientOrganisation';
  * re-run end to end once they call it.
  *
  * AC2's bookings are stand-in D-04 (venue_booking, added by hand here as a
- * tester would) and its notice is stand-in D-09 (a venue_unavailability_notice
+ * tester would) and its notice is stand-in D-11 (a venue_unavailability_notice
  * row). See docs/dummies.md.
  *
  * Runs against the local Supabase stack: the unique constraint is what makes
@@ -70,7 +70,7 @@ async function createTestVenue(label: string) {
 async function rowsFor(venueId: string) {
   const { data, error } = await admin
     .from('venue_unavailable_slot')
-    .select('slot_date, slot, reason, recorded_by')
+    .select('date, slot, reason, recorded_by')
     .eq('venue_id', venueId);
   if (error || !data) throw new Error(`could not read unavailable slots: ${error?.message}`);
   return data;
@@ -191,7 +191,7 @@ describe('markSlotsUnavailable (SCRUM-151 AC1)', () => {
     const rows = await rowsFor(venue.id);
     expect(rows).toHaveLength(2);
     for (const row of rows) {
-      expect(row).toMatchObject({ slot_date: date, reason: 'Ceiling repair', recorded_by: venueStaffId });
+      expect(row).toMatchObject({ date, reason: 'Ceiling repair', recorded_by: venueStaffId });
     }
   });
 
@@ -343,7 +343,7 @@ describe('affected bookings and their coordinators (SCRUM-151 AC2)', () => {
 });
 
 describe("the coordinator's outstanding action (SCRUM-151 AC3)", () => {
-  /** Stand-in D-10: removing the booking row by hand is how a tester "releases" it. */
+  /** Stand-in D-12: removing the booking row by hand is how a tester "releases" it. */
   async function releaseByHand(venueId: string, eventId: string) {
     const { error } = await admin.from('venue_booking').delete().eq('venue_id', venueId).eq('event_request_id', eventId);
     if (error) throw new Error(`could not release test booking: ${error.message}`);
