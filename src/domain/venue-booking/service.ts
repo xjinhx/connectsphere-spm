@@ -1,15 +1,19 @@
 import {
   CreateVenueBookingRequestInputSchema,
   EventRequestIdSchema,
+  type BookingQueueEntry,
   type VenueBookingRequestOutcome,
 } from './schema';
-import { canCreateBookingRequest } from './policy';
+import { canCreateBookingRequest, sortBookingQueue, type BookingQueueSort } from './policy';
 import { isCurrentCoordinator } from '@/domain/assignment/policy';
+import { TimeSlotEnum, type TimeSlot } from '@/domain/event-request/schema';
 import { fetchEventRequestById } from '@/lib/supabase/eventRequests';
 import type { EventRequestRow } from '@/lib/supabase/eventRequests';
 import {
   createVenueBookingRequest,
+  fetchPendingBookingLines,
   fetchVenueBookingRequestById,
+  type PendingBookingLineRow,
   type VenueBookingRequestRow,
 } from '@/lib/supabase/venueBookingRequests';
 import {
@@ -108,4 +112,44 @@ export async function submitVenueBookingRequest(
   // trigger on this table) once it can be written against a real one.
 
   return toOutcome(created as unknown as VenueBookingRequestRow);
+}
+
+// ---------------------------------------------------------------------------
+// SCRUM-147 — View the pending booking request queue
+// ---------------------------------------------------------------------------
+
+function toQueueEntry(row: PendingBookingLineRow): BookingQueueEntry {
+  const request = row.venue_booking_request;
+  // Postgres guarantees each line has a request, venue and event (NOT NULL
+  // foreign keys); the generated embed types cannot say so.
+  if (!request?.venues || !request.event_request) {
+    throw new ValidationError('A booking request line is missing its request, venue or event.', { lineId: row.id });
+  }
+  return {
+    lineId: row.id,
+    requestId: request.id,
+    venueName: request.venues.name,
+    eventName: request.event_request.name,
+    eventReference: request.event_request.reference,
+    date: row.date,
+    // The table's check constraint allows only these three values.
+    timeSlots: row.time_slots.filter((slot): slot is TimeSlot => TimeSlotEnum.safeParse(slot).success),
+    requestedAt: request.created_at,
+  };
+}
+
+/**
+ * SCRUM-147 AC1, AC3, AC4 — every pending line, at every venue, in the order
+ * `sort` asks for (sortBookingQueue, policy.ts).
+ *
+ * Who may see it (Venue Staff, venue_booking_review) is checked by the page
+ * before this is called, the same split as listVenues (SCRUM-121).
+ */
+export async function listPendingBookingQueue(sort: BookingQueueSort = 'requested'): Promise<BookingQueueEntry[]> {
+  const { data, error } = await fetchPendingBookingLines();
+  if (error || !data) {
+    throw new ValidationError('Could not load the booking request queue.', error?.message);
+  }
+  const entries = (data as unknown as PendingBookingLineRow[]).map(toQueueEntry);
+  return sortBookingQueue(entries, sort);
 }

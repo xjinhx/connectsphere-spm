@@ -41,6 +41,10 @@ export const ACTIONS = [
   // precedent); adding the action now so it exists for whoever wires the
   // route to check it, per the contract-first workflow.
   'venue_booking_request',
+  // SCRUM-147 — "As a Venue Staff member, I want to see all pending booking
+  // requests in one queue". AC4: every Venue Staff member sees every request,
+  // as Venue Staff are not scoped to particular venues (customer clarification #66).
+  'venue_booking_review',
 ] as const;
 
 export type Action = (typeof ACTIONS)[number];
@@ -65,7 +69,7 @@ export const ROLE_PERMISSIONS: Record<Role, readonly Action[]> = {
     'venue_booking_request',
   ],
   operations_manager: ['venue_catalogue_view', 'coordinator_assignment', 'account_role_management'],
-  venue_staff: ['venue_administration', 'venue_catalogue_view'],
+  venue_staff: ['venue_administration', 'venue_catalogue_view', 'venue_booking_review'],
   technical_support: ['venue_catalogue_view', 'equipment_administration'],
   attendee: [],
 };

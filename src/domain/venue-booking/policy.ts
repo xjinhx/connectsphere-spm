@@ -18,3 +18,26 @@ import type { EventRequestStatus } from '@/domain/event-request/schema';
 export function canCreateBookingRequest(status: EventRequestStatus): boolean {
   return status === 'approved' || status === 'planning';
 }
+
+// ---------------------------------------------------------------------------
+// SCRUM-147 — View the pending booking request queue
+// ---------------------------------------------------------------------------
+
+export const BOOKING_QUEUE_SORTS = ['requested'] as const;
+export type BookingQueueSort = (typeof BOOKING_QUEUE_SORTS)[number];
+
+/**
+ * The order the queue is shown in. 'requested': the oldest request first, so
+ * Venue Staff work through requests in the order they arrived.
+ *
+ * Returns a new array; the input is not reordered in place.
+ */
+export function sortBookingQueue<T extends { lineId: string; date: string; requestedAt: string }>(
+  entries: readonly T[],
+  sort: BookingQueueSort,
+): T[] {
+  const byRequested = (a: T, b: T) =>
+    Date.parse(a.requestedAt) - Date.parse(b.requestedAt) || a.lineId.localeCompare(b.lineId);
+  const order: Record<BookingQueueSort, (a: T, b: T) => number> = { requested: byRequested };
+  return [...entries].sort(order[sort]);
+}

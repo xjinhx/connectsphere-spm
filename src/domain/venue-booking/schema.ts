@@ -1,5 +1,5 @@
 import { z } from 'zod';
-import { TimeSlotEnum } from '@/domain/event-request/schema';
+import { TimeSlotEnum, type TimeSlot } from '@/domain/event-request/schema';
 
 // ---------------------------------------------------------------------------
 // SCRUM-142 — Submit a venue booking request for an event
@@ -46,4 +46,24 @@ export interface VenueBookingRequestOutcome {
   eventRequestId: string;
   venueId: string;
   lines: readonly VenueBookingRequestLine[];
+}
+
+// ---------------------------------------------------------------------------
+// SCRUM-147 — View the pending booking request queue
+// ---------------------------------------------------------------------------
+// One entry per pending line, not per request: each date-and-slots line is
+// decided on its own (SCRUM-148 AC5), so each one leaves the queue on its own.
+
+/** AC1 — one row of the queue: venue, event, requested date and slots, and when it was requested. */
+export interface BookingQueueEntry {
+  lineId: string;
+  requestId: string;
+  venueName: string;
+  eventName: string;
+  eventReference: string;
+  /** The requested date, YYYY-MM-DD. */
+  date: string;
+  timeSlots: readonly TimeSlot[];
+  /** When the request was made (timestamptz). */
+  requestedAt: string;
 }
