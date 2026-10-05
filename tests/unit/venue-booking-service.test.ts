@@ -127,8 +127,19 @@ describe('AC1: assigned coordinator, approved event', () => {
     expect(outcome.lines.every((line) => line.status === 'pending')).toBe(true);
   });
 
-  // SCRUM-142-TC02 is not here: 'planning' is not an EventRequestStatus on
-  // this branch until SCRUM-101 merges, so it cannot be arranged. See sheet.
+  // SCRUM-142-TC02
+  it('creates the request with status Pending when the event is in Planning', async () => {
+    mockEvent('planning');
+    mockWriteAndReadBack();
+
+    const outcome = await submitVenueBookingRequest(EVENT_ID, COORDINATOR_ID, {
+      venueId: VENUE_ID,
+      lines: [{ date: '2026-11-15', timeSlots: ['pm'] }],
+    });
+
+    expect(createVenueBookingRequest).toHaveBeenCalledOnce();
+    expect(outcome.lines.every((line) => line.status === 'pending')).toBe(true);
+  });
 });
 
 describe('AC2: event has not been approved', () => {

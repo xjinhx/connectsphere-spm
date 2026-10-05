@@ -12,14 +12,13 @@ import { canCreateBookingRequest } from '@/domain/venue-booking/policy';
  */
 describe('canCreateBookingRequest', () => {
   // AC1 (Jira, updated 29/9/2026): "Given I am the assigned coordinator of
-  // an event that is Approved or in Planning...". Only the Approved half is
-  // testable here — 'planning' isn't a valid EventRequestStatus on this
-  // branch until SCRUM-101 merges to main, so it can't even be typed into a
-  // test yet, let alone passed. See the note on canCreateBookingRequest
-  // itself (policy.ts) for what changes once that lands.
-  it('allows a booking request on an approved event', () => {
-    expect(canCreateBookingRequest('approved')).toBe(true);
-  });
+  // an event that is Approved or in Planning...".
+  it.each(['approved', 'planning'] as const)(
+    'allows a booking request on an event that is %s',
+    (status) => {
+      expect(canCreateBookingRequest(status)).toBe(true);
+    },
+  );
 
   // AC2: "Given an event has not been approved, when I attempt to create a
   // booking request, then the action is refused..."

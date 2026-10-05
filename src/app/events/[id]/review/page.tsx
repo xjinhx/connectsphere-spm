@@ -113,8 +113,7 @@ export default async function ReviewEventRequestPage({
   }
 
   // SCRUM-142 AC1/AC2 — a venue can only be requested once the event is
-  // Approved (or, once SCRUM-101 merges, still in Planning — see
-  // DUMMY(SCRUM-101) D-09 on submitVenueBookingRequest). Fetched only when
+  // Approved or in Planning. Fetched only when
   // the section will actually render, the same reasoning as gating every
   // other action below on its own policy function first.
   const venues = canCreateBookingRequest(request.status) ? await listVenues() : [];
