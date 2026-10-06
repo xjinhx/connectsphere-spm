@@ -22,7 +22,8 @@ const STATUS_CLASS: Record<EventRequestStatus, string> = {
   // SCRUM-93 — same reasoning: red (--danger) so a rejected request cannot be
   // mistaken for approved.
   rejected: 'bg-red-50 text-[var(--danger)]',
-  // SCRUM-103 — same reasoning again. Planning (indigo) and Confirmed (a
+  // SCRUM-101 added 'planning' and SCRUM-103 the rest — same reasoning again.
+  // Planning (indigo) and Confirmed (a
   // deeper green) follow on from approved; Completed and Cancelled are
   // finished, so grey like draft.
   planning: 'bg-indigo-50 text-indigo-700',

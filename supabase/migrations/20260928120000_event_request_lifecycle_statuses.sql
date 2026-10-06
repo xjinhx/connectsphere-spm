@@ -5,12 +5,11 @@
 -- Confirmed, Completed (AC1, AC3, AC4) and Cancelled (AC3). This adds them,
 -- and nothing else.
 --
--- Planning is SCRUM-101's status: its branch adds it in
--- 20260927090000_event_request_planning_status.sql, not yet on main. This
--- story needs it now, so it adds it too, with IF NOT EXISTS, and this file is
--- timestamped after SCRUM-101's so a fresh reset runs theirs first. Either can
--- merge first and a fresh reset still works.
--- DUMMY(SCRUM-101) D-10: 'planning' added here until SCRUM-101's migration is on main.
+-- Planning is SCRUM-101's status, added in
+-- 20260927090100_event_request_planning_status.sql. This story needs it too,
+-- so it adds it as well, with IF NOT EXISTS, and this file is timestamped
+-- after SCRUM-101's so a fresh reset runs theirs first. Both files use IF NOT
+-- EXISTS, so either can run on a database that already has the value.
 --
 -- Which moves between statuses are allowed is not stored here: it is the table
 -- in src/domain/event-status/policy.ts, applied by changeEventStatus

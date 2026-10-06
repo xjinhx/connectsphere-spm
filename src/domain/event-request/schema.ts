@@ -232,12 +232,12 @@ export type EventRequestSaveInput = z.infer<typeof eventRequestSaveSchema>;
 // supabase/migrations/20260920140000_event_request_rejected_status.sql.
 // SCRUM-90 extends this with 'clarification_requested', matching
 // supabase/migrations/20260914090000_event_request_clarification_requested_status.sql.
-// SCRUM-103 adds the rest of the lifecycle its ACs name - planning, confirmed,
-// completed, cancelled - via
+//
+// SCRUM-101 (Event Status Management, Sprint 2) AC3/AC4 adds 'planning',
+// matching supabase/migrations/20260927090100_event_request_planning_status.sql.
+// SCRUM-103 adds the rest of the lifecycle its ACs name - confirmed,
+// completed, cancelled (and planning, with IF NOT EXISTS) - via
 // supabase/migrations/20260928120000_event_request_lifecycle_statuses.sql.
-// Planning is SCRUM-101's status (its own migration is not on main yet); it is
-// here now because SCRUM-103's ACs need it.
-// DUMMY(SCRUM-101) D-10: 'planning' added by SCRUM-103 until SCRUM-101 is on main.
 // Which moves between them are allowed lives in domain/event-status/policy.ts.
 export const EventRequestStatusEnum = z.enum([
   'draft',

@@ -79,6 +79,12 @@ async function requestsFor(eventId: string) {
   return data;
 }
 
+async function statusOf(eventId: string): Promise<string> {
+  const { data, error } = await admin.from('event_request').select('status').eq('id', eventId).single();
+  if (error || !data) throw new Error(`could not read event status: ${error?.message}`);
+  return data.status as string;
+}
+
 beforeAll(async () => {
   await ensureTestClientOrganisation(admin);
   const { data, error } = await admin.from('locations').insert({ name: `VBR Location ${RUN}` }).select('id').single();
@@ -352,5 +358,50 @@ describe('SCRUM-154 against a real database', () => {
     await outcome;
 
     expect(await requestsFor(eventId)).toHaveLength(1);
+  });
+});
+
+/**
+ * SCRUM-101 AC3/AC4 — raising a venue booking request moves the event's own
+ * status, through the trigger in
+ * 20261006100000_event_request_enter_planning_on_booking_request.sql. Goes
+ * through submitVenueBookingRequest, not enterPlanning(): the point is that
+ * the real request is what moves the event.
+ */
+describe('SCRUM-101 — a venue booking request moves the event to Planning', () => {
+  const request = { venueId: '', lines: [{ date: '2026-11-15', timeSlots: ['pm'] }] };
+
+  // AC3
+  it('moves an Approved event to Planning on its first request', async () => {
+    const eventId = await createEvent('approved', coordinatorId);
+
+    await submitVenueBookingRequest(eventId, coordinatorId, { ...request, venueId });
+
+    expect(await statusOf(eventId)).toBe('planning');
+  });
+
+  // AC4
+  it('leaves an event already in Planning in Planning when a further request is raised', async () => {
+    const eventId = await createEvent('approved', coordinatorId);
+    await submitVenueBookingRequest(eventId, coordinatorId, { ...request, venueId });
+
+    await submitVenueBookingRequest(eventId, coordinatorId, {
+      venueId,
+      lines: [{ date: '2026-11-16', timeSlots: ['am'] }],
+    });
+
+    expect(await statusOf(eventId)).toBe('planning');
+    expect(await requestsFor(eventId)).toHaveLength(2);
+  });
+
+  // A refused request writes nothing, so it must not move the event either.
+  it('leaves the event Approved when the request is refused', async () => {
+    const eventId = await createEvent('approved', coordinatorId);
+
+    await expect(
+      submitVenueBookingRequest(eventId, otherCoordinatorId, { ...request, venueId }),
+    ).rejects.toMatchObject({ code: 'FORBIDDEN' });
+
+    expect(await statusOf(eventId)).toBe('approved');
   });
 });
