@@ -81,9 +81,8 @@ export type SlotCommitment = { venueId: string; slot: string };
  * others, so an AM booking leaves the PM slot free. That is the team's Week 7
  * decision for this sprint ("build as carded"). The customer's W7-1 and W7-4
  * changes — setup and turnaround time in minutes per venue, and tentative holds
- * that expire — go to a follow-up story, "search counts setup/turnaround time
- * and holds". It should get both from the single clash/occupancy function
- * SCRUM-148 and SCRUM-154 are keeping, rather than add a copy of it here.
+ * that expire — go to SCRUM-226 (turnaround) and SCRUM-227 (holds). They should
+ * use SCRUM-225's occupied time rather than add a copy of it here.
  */
 export function committedSlotsByVenue(commitments: SlotCommitment[]): Map<string, Set<OperatingSlot>> {
   const byVenue = new Map<string, Set<OperatingSlot>>();
