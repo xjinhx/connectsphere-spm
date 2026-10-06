@@ -109,7 +109,7 @@ export async function listVenues(includeRetired = false): Promise<VenueSummary[]
  * SCRUM-128 Search venues by date and slot.
  *
  * AC1: a venue is returned only if it is free in every selected slot.
- * AC2/AC3: a confirmed booking commits its own date and slot (SCRUM-148).
+ * AC2/AC3: a confirmed booking commits its slot (SCRUM-148's bookings).
  * AC4: a slot recorded as unavailable commits it (D-09 stand-in table).
  * AC5: any valid date, however far ahead — VenueSearchQuerySchema sets no limit.
  *

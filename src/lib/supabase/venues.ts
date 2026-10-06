@@ -192,9 +192,8 @@ export async function fetchSearchableVenues() {
 }
 
 /**
- * SCRUM-128 AC2 and AC3: every confirmed booking on `date`. A booking is one
- * venue's one slot on one date (SCRUM-148), so an event over two slots comes
- * back as two rows.
+ * SCRUM-128 AC2 and AC3: every confirmed booking on `date`, with the slot it
+ * takes. Each booking has its own date and slot (SCRUM-148).
  */
 export async function fetchConfirmedBookingsOn(date: string) {
   return db().from('venue_booking').select('venue_id, slot').eq('status', 'confirmed').eq('date', date);

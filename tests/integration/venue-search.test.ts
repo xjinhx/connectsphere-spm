@@ -15,10 +15,9 @@ import { ensureTestClientOrganisation } from './fixtures/clientOrganisation';
  * AC4 a Night slot recorded as unavailable excludes it from a Night search.
  * AC5 a date 5 years ahead returns results: no booking horizon.
  *
- * Bookings are real venue_booking rows (SCRUM-148), added here as an approval
- * would leave them; unavailable slots are stand-in D-09
- * (venue_unavailable_slot), added by hand as a tester would. See
- * docs/dummies.md.
+ * Bookings (venue_booking, one row per date and slot, SCRUM-148) and
+ * unavailable slots (stand-in D-09, venue_unavailable_slot) are added directly
+ * here rather than through their flows. See docs/dummies.md.
  *
  * Every test uses venues of its own and checks only those, because the search
  * reads the whole catalogue and other files add venues and bookings too.
@@ -50,7 +49,7 @@ async function createTestVenue(label: string, operatingSlots: OperatingSlot[] = 
   return venue.id;
 }
 
-/** A confirmed booking is one venue's one slot on one date (SCRUM-148): one row per slot. */
+/** A confirmed booking of each slot on `date`, for a submitted event request. */
 async function book(venueId: string, slots: OperatingSlot[], date = DATE) {
   const { data, error } = await admin
     .from('event_request')
@@ -58,6 +57,8 @@ async function book(venueId: string, slots: OperatingSlot[], date = DATE) {
       organiser_id: organiserId,
       client_organisation_id: CLIENT_ORGANISATION_ID,
       name: `Venue Search Event ${RUN}`,
+      proposed_date: date,
+      time_slots: slots,
     })
     .select('id')
     .single();

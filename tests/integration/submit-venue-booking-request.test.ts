@@ -281,6 +281,19 @@ describe('SCRUM-154 against a real database', () => {
     expect(await requestsFor(eventId)).toHaveLength(0);
   });
 
+  // TC-154-06 (AC3)
+  it('reports per-slot detail for a two-slot request too', async () => {
+    await bookSlot('2027-03-13', 'pm');
+
+    const { eventId, outcome } = await request('2027-03-13', 'am', 'pm');
+
+    await expect(outcome).rejects.toMatchObject({
+      code: 'CONFLICT',
+      details: { clashes: [{ date: '2027-03-13', committed: ['pm'], unavailable: [], available: ['am'] }] },
+    });
+    expect(await requestsFor(eventId)).toHaveLength(0);
+  });
+
   // TC-154-07, TC-154-08 (AC4)
   it.each(['am', 'pm'] as const)('refuses a slot recorded as unavailable (%s) and writes nothing', async (slot) => {
     const date = slot === 'am' ? '2027-03-04' : '2027-03-05';
