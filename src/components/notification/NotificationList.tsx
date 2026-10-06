@@ -1,5 +1,6 @@
 'use client';
 
+import Link from 'next/link';
 import { useState } from 'react';
 import type { Notification } from '@/domain/notification/schema';
 
@@ -50,10 +51,10 @@ export function NotificationList({ initialNotifications }: { initialNotification
     <ul className="mt-6 flex flex-col gap-2">
       {notifications.map((notification) => (
         <li key={notification.id}>
-          <button
-            type="button"
+          <Link
+            href={`/events/${notification.eventRequestId}`}
             onClick={() => openNotification(notification)}
-            className={`w-full rounded-md border px-4 py-3 text-left text-sm transition-colors ${
+            className={`block w-full rounded-md border px-4 py-3 text-left text-sm transition-colors ${
               notification.readAt === null
                 ? 'border-[var(--brand)] bg-[var(--surface)] font-medium'
                 : 'border-[var(--border)] text-[var(--text-muted)]'
@@ -66,7 +67,7 @@ export function NotificationList({ initialNotifications }: { initialNotification
             <span className="mt-1 block text-xs text-[var(--text-muted)]">
               {new Date(notification.createdAt).toLocaleString('en-SG')}
             </span>
-          </button>
+          </Link>
         </li>
       ))}
     </ul>
