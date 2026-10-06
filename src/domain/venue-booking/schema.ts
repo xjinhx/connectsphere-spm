@@ -29,7 +29,7 @@ export const CreateVenueBookingRequestInputSchema = z.object({
 export type CreateVenueBookingRequestInput = z.infer<typeof CreateVenueBookingRequestInputSchema>;
 
 // SCRUM-142 only ever creates pending lines. SCRUM-148 adds deciding one:
-// approved or rejected (20261006100000_venue_booking_decision.sql).
+// approved or rejected (20261006110000_venue_booking_decision.sql).
 export const VenueBookingRequestLineStatusEnum = z.enum(['pending', 'approved', 'rejected']);
 export type VenueBookingRequestLineStatus = z.infer<typeof VenueBookingRequestLineStatusEnum>;
 
