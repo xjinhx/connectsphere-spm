@@ -115,11 +115,29 @@ export async function markAsRead(notificationId: string, actorId: string): Promi
 }
 
 /**
- * SCRUM-198 (+ DUMMY(SCRUM-24) D-03, D-05, D-06, D-08 replacement). Called
- * from review/service.ts, assignment/service.ts and clarification/service.ts
- * (Step 8). Best-effort: the caller catches and logs failures rather than
- * letting a notification failure undo the decision it is about.
+ * SCRUM-198. Called from review/service.ts and assignment/service.ts via
+ * notifyBestEffort. Gives DUMMY(SCRUM-24) D-03, D-05, D-06 and D-08 a real
+ * table to write to; only D-03 is actually wired and Replaced by this PR
+ * (SCRUM-193/198) - D-05, D-06 and D-08 remain Active until their own
+ * stories call this. See docs/dummies.md.
  */
+/**
+ * Best-effort notification. The caller's own write (a review decision or
+ * an assignment) has already succeeded by the time this runs; a
+ * notification failure here must never undo it or surface as an error to
+ * the caller, so this catches and swallows rather than throwing.
+ *
+ * Shared by assignment/service.ts and review/service.ts - previously
+ * duplicated in each (xjinhx, PR #75 review).
+ */
+export async function notifyBestEffort(notification: Parameters<typeof createNotification>[0]): Promise<void> {
+  try {
+    await createNotification(notification);
+  } catch (error) {
+    console.error('Could not create notification', notification.type, notification.eventRequestId, error);
+  }
+}
+
 export async function createNotification(notification: {
   recipientId: string;
   type: NotificationType;

@@ -15,11 +15,12 @@ import { z } from 'zod';
 /**
  * SCRUM-198 AC1-3, AC5, plus AC4's type.
  *
- * DUMMY(SCRUM-10) D-09: 'event_confirmed' has no call site. AC4 needs an
- * event 'Confirmed' status this sprint's Event Status Management
- * (SCRUM-101) does not create (it stops at Planning, by agreement with the
- * product owner - see docs/dummies.md D-09). Wire the call site once a
- * story introduces that status.
+ * DUMMY(SCRUM-102) D-09: 'event_confirmed' has no call site. AC4 needs an
+ * event 'Confirmed' status this sprint's SCRUM-101 (Move an event through
+ * its statuses) does not create - it stops at Planning, by agreement with
+ * the product owner. SCRUM-102, the story after SCRUM-101 that is
+ * expected to add Confirm, is what this waits on (see docs/dummies.md
+ * D-09). Wire the call site once that story lands.
  */
 export const NOTIFICATION_TYPES = [
   'clarification_requested',

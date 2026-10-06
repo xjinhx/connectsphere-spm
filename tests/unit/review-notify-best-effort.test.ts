@@ -6,30 +6,39 @@ import { describe, it, expect, vi, beforeEach } from 'vitest';
  *
  * notifyBestEffort is the mechanism that guarantees this: every SCRUM-198
  * hook (approve, reject, clarify, assign) calls it AFTER the review decision
- * has already been written, and it catches and swallows any error from
- * createNotification rather than letting it propagate back to the caller.
- * This tests that guarantee directly and in isolation, by mocking
- * createNotification to throw - no real database write is forced to fail,
- * which would risk corrupting other test data or require breaking a foreign
- * key constraint that the schema deliberately enforces (organiser_id is
- * ON DELETE RESTRICT, so there is no safe way to force this failure through
- * the live app or database).
+ * has already been written, and it catches and swallows any error so it
+ * never propagates back to the caller.
+ *
+ * Mocked at the lowest honest layer - insertNotification, the actual
+ * Supabase write (src/lib/supabase/notifications.ts) - rather than at
+ * createNotification or notifyBestEffort themselves. Those two live in the
+ * same module and call each other directly by local binding, which neither
+ * vi.mock nor vi.spyOn can intercept from outside that module (confirmed:
+ * two earlier attempts at mocking createNotification both let the real
+ * call reach the live database instead of the mock). Mocking one layer
+ * down means createNotification's own validation still runs for real, and
+ * only the database write is faked - a more honest test of the real
+ * chain, not a narrower one.
+ *
+ * No real database write is forced to fail directly: organiser_id is
+ * ON DELETE RESTRICT, so there is no safe way to break that constraint
+ * through the live app without risking other test data.
  */
 
-vi.mock('@/domain/notification/service', () => ({
-  createNotification: vi.fn(),
+vi.mock('@/lib/supabase/notifications', () => ({
+  insertNotification: vi.fn(),
 }));
 
-import { createNotification } from '@/domain/notification/service';
-import { notifyBestEffort } from '@/domain/review/service';
+import { insertNotification } from '@/lib/supabase/notifications';
+import { notifyBestEffort } from '@/domain/notification/service';
 
 describe('notifyBestEffort (TC-198-07)', () => {
   beforeEach(() => {
-    vi.mocked(createNotification).mockReset();
+    vi.mocked(insertNotification).mockReset();
   });
 
-  it('resolves normally when createNotification succeeds', async () => {
-    vi.mocked(createNotification).mockResolvedValueOnce(undefined);
+  it('resolves normally when the write succeeds', async () => {
+    vi.mocked(insertNotification).mockResolvedValueOnce({ error: null } as never);
 
     await expect(
       notifyBestEffort({
@@ -41,8 +50,10 @@ describe('notifyBestEffort (TC-198-07)', () => {
     ).resolves.toBeUndefined();
   });
 
-  it('does not throw when createNotification rejects', async () => {
-    vi.mocked(createNotification).mockRejectedValueOnce(new Error('simulated DB write failure'));
+  it('does not throw when the write fails', async () => {
+    vi.mocked(insertNotification).mockResolvedValueOnce({
+      error: { message: 'simulated DB write failure' },
+    } as never);
 
     await expect(
       notifyBestEffort({
@@ -56,7 +67,9 @@ describe('notifyBestEffort (TC-198-07)', () => {
 
   it('logs the error rather than silently discarding it', async () => {
     const consoleSpy = vi.spyOn(console, 'error').mockImplementation(() => {});
-    vi.mocked(createNotification).mockRejectedValueOnce(new Error('simulated DB write failure'));
+    vi.mocked(insertNotification).mockResolvedValueOnce({
+      error: { message: 'simulated DB write failure' },
+    } as never);
 
     await notifyBestEffort({
       recipientId: 'organiser-1',

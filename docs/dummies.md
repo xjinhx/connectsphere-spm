@@ -205,13 +205,13 @@ switch them the next time they edit those files.
 
 - **Kind:** Out-of-sprint stand-in
 - **Added by:** SCRUM-198 — this PR
-- **Waiting on:** SCRUM-10 Event Status Management — specifically, whichever
-  story adds a Confirmed status. This sprint's SCRUM-101 (Move an event
-  through its statuses) stops at Planning by agreement with the product
-  owner (Telegram, 27 Sep 2026): "Confirm a planning event once its
-  arrangements are ready" is explicitly out of scope this sprint.
+- **Waiting on:** SCRUM-102 (after SCRUM-100) — whichever story adds a
+  Confirmed status. This sprint's SCRUM-101 (Move an event through its
+  statuses) stops at Planning by agreement with the product owner
+  (Telegram, 27 Sep 2026): "Confirm a planning event once its arrangements
+  are ready" is explicitly out of scope this sprint.
 - **Where:** `src/domain/notification/schema.ts` — `NOTIFICATION_TYPES`
-  includes `'event_confirmed'`, marked `DUMMY(SCRUM-10)`; no call site exists
+  includes `'event_confirmed'`, marked `DUMMY(SCRUM-102)`; no call site exists
   anywhere, because there is no confirm action to call it from.
 - **What is real and what is faked:** the type is real (it will validate and
   render correctly once used), the label is real

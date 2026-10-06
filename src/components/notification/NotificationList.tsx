@@ -10,7 +10,7 @@ const TYPE_LABELS: Record<string, string> = {
   request_rejected: 'Rejected',
   coordinator_assigned: 'Coordinator assigned',
   coordinator_named: 'Coordinator named',
-  // DUMMY(SCRUM-10) D-09: nothing creates this type yet - see docs/dummies.md.
+  // DUMMY(SCRUM-102) D-09: nothing creates this type yet - see docs/dummies.md.
   event_confirmed: 'Event confirmed',
 };
 

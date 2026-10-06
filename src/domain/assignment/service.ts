@@ -17,7 +17,7 @@ import {
   type EventAssignmentRow,
   type EventAssignmentWithHistoryRow,
 } from '@/lib/supabase/assignments';
-import { createNotification } from '@/domain/notification/service';
+import { notifyBestEffort } from '@/domain/notification/service';
 import {
   ConflictError,
   ForbiddenError,
@@ -124,31 +124,13 @@ function toAssignmentOutcome(row: EventRequestRow, coordinatorName: string | nul
 
 /**
  * AC1 — a submitted event with no coordinator gets one, and the assignment is
- * recorded with the manager who made it and the date.
+ * recorded with the manager who made it and the date. AC1 also says the
+ * assigned coordinator is notified - see the notifyBestEffort call below
+ * (formerly dummy D-03, now replaced; docs/dummies.md).
  *
  * AC2 — no workload limit is applied: nothing here counts how many events the
  * chosen coordinator already holds (clarification #92).
- *
- * DUMMY(SCRUM-24) D-03: AC1 also says the assigned coordinator is notified.
- * The Notification System (SCRUM-24) is not in this sprint, so nothing is sent:
- * the recorded assignment is the minimum honest implementation, and the
- * limitation is documented rather than papered over with an email call. When
- * SCRUM-24 lands, raise the notification from here - the assignment has just
- * been recorded and the coordinator's id is to hand. See docs/dummies.md.
  */
-/**
- * DUMMY(SCRUM-24) D-03 replacement: best-effort notification. The
- * assignment above has already succeeded and been written; a notification
- * failure here must never undo it or surface as an error to the caller.
- */
-async function notifyBestEffort(notification: Parameters<typeof createNotification>[0]): Promise<void> {
-  try {
-    await createNotification(notification);
-  } catch (error) {
-    console.error('Could not create notification', notification.type, notification.eventRequestId, error);
-  }
-}
-
 export async function assignCoordinator(
   eventRequestId: string,
   input: unknown,
@@ -201,9 +183,9 @@ export async function assignCoordinator(
   }
 
   const assignedRow = data as unknown as EventRequestRow;
-  // DUMMY(SCRUM-24) D-03 replacement: the newly assigned coordinator is
-  // notified. Best-effort: the assignment above already succeeded, so a
-  // notification failure must not undo it.
+  // Notifies the newly assigned coordinator - replaces dummy D-03, now
+  // Replaced (docs/dummies.md). Best-effort: the assignment above already
+  // succeeded, so a notification failure must not undo it.
   await notifyBestEffort({
     recipientId: coordinatorId,
     type: 'coordinator_assigned',

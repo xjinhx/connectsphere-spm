@@ -6,10 +6,11 @@
 -- one event request, read or unread. SCRUM-193 lists and marks them read;
 -- SCRUM-198 (and the dummies below) create them.
 --
--- Replaces DUMMY(SCRUM-24) D-03, D-05, D-06 partially, D-08: those stories
--- recorded the minimum honest stand-in (an assignment/notice row with no
--- delivery) until this table existed. See docs/dummies.md - replacing them
--- is this story's job per the dummy register's rule.
+-- Gives DUMMY(SCRUM-24) D-03, D-05, D-06 and D-08 - which all recorded the
+-- minimum honest stand-in (an assignment/notice row with no delivery) - a
+-- real table to send through. Only D-03 is actually replaced by this PR
+-- (SCRUM-193/198); D-05, D-06 and D-08 remain Active until their own
+-- stories wire a call to createNotification. See docs/dummies.md.
 --
 -- No channel preference, no email queue: SCRUM-24's Release-1 scope (Twilio
 -- SendGrid) is explicitly out of Sprint 2 (CLAUDE.md, "Notification"). This

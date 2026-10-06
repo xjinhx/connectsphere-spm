@@ -38,7 +38,7 @@ import {
   isReviewable,
   type Commitments,
 } from './policy';
-import { createNotification } from '@/domain/notification/service';
+import { notifyBestEffort } from '@/domain/notification/service';
 
 /**
  * SCRUM-92 — Approve a request so planning can proceed.
@@ -49,19 +49,6 @@ import { createNotification } from '@/domain/notification/service';
  * query itself.
  */
 
-/**
- * SCRUM-198: best-effort notification. The review decision above has already
- * succeeded and been written; a notification failure here must never undo it
- * or surface as an error to the caller, so this catches and swallows rather
- * than throwing.
- */
-export async function notifyBestEffort(notification: Parameters<typeof createNotification>[0]): Promise<void> {
-  try {
-    await createNotification(notification);
-  } catch (error) {
-    console.error('Could not create notification', notification.type, notification.eventRequestId, error);
-  }
-}
 
 // ---------------------------------------------------------------------------
 // AC1 — approve
