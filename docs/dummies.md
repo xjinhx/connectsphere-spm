@@ -130,7 +130,7 @@ switch them the next time they edit those files.
     (`DUMMY(SCRUM-148) D-04`)
   - Read by SCRUM-128 too: `src/lib/supabase/venues.ts` —
     `fetchConfirmedBookingsOn()`, and `src/domain/venues/service.ts` —
-    `searchVenues()` (`DUMMY(SCRUM-148) D-04`)
+    `searchVenues()` (markers removed, see Status)
 - **What is real and what is faked:** the capacity check, the list of affected
   bookings, the confirm step and the refusal inside the save are SCRUM-120's
   real code. Only the bookings themselves are faked: nothing in Sprint 1
@@ -168,8 +168,11 @@ switch them the next time they edit those files.
   date and count an event once. `venue-capacity-cut.test.ts` passes, its setup
   rows now carrying a date and slot. The TypeScript markers are removed; the
   comments in the 20260924170000 migration stay as history rather than editing
-  an applied migration. Still to switch to a booking's own date once on main
-  together: SCRUM-151's `affected_booking_slot` view and SCRUM-128's search.
+  an applied migration. SCRUM-128's search now reads a booking's own date and
+  slot (`fetchConfirmedBookingsOn()`), and `venue-search.test.ts` books one row
+  per slot (switched on `venue-block-booking`, SCRUM-154, when `main` brought
+  SCRUM-128 and SCRUM-148 together). Still to switch: SCRUM-151's
+  `affected_booking_slot` view.
 
 ### D-05 — A capacity cut's "notification" is only a stored notice
 

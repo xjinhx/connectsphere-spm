@@ -109,14 +109,13 @@ export async function listVenues(includeRetired = false): Promise<VenueSummary[]
  * SCRUM-128 Search venues by date and slot.
  *
  * AC1: a venue is returned only if it is free in every selected slot.
- * AC2/AC3: a confirmed booking commits its own slots (D-04 stand-in bookings).
+ * AC2/AC3: a confirmed booking commits its own date and slot (SCRUM-148).
  * AC4: a slot recorded as unavailable commits it (D-09 stand-in table).
  * AC5: any valid date, however far ahead — VenueSearchQuerySchema sets no limit.
  *
  * The three reads are independent, so they run together; the rule that
  * combines them is isFreeInEverySlot (policy.ts).
  *
- * DUMMY(SCRUM-148) D-04: bookings are the stand-in venue_booking rows.
  * DUMMY(SCRUM-151) D-09: unavailable slots are the stand-in venue_unavailable_slot rows.
  */
 export async function searchVenues(input: unknown): Promise<VenueSearchResult> {
@@ -142,9 +141,7 @@ export async function searchVenues(input: unknown): Promise<VenueSearchResult> {
   }
 
   const committed = committedSlotsByVenue([
-    ...bookings.data.flatMap((booking) =>
-      (booking.event_request?.time_slots ?? []).map((slot) => ({ venueId: booking.venue_id, slot })),
-    ),
+    ...bookings.data.map((booking) => ({ venueId: booking.venue_id, slot: booking.slot })),
     ...unavailable.data.map((row) => ({ venueId: row.venue_id, slot: row.slot })),
   ]);
 

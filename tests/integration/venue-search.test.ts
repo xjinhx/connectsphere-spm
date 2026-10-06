@@ -15,9 +15,10 @@ import { ensureTestClientOrganisation } from './fixtures/clientOrganisation';
  * AC4 a Night slot recorded as unavailable excludes it from a Night search.
  * AC5 a date 5 years ahead returns results: no booking horizon.
  *
- * Bookings are stand-in D-04 (venue_booking, dated by its event request) and
- * unavailable slots are stand-in D-09 (venue_unavailable_slot). Both are added
- * by hand here, as a tester would. See docs/dummies.md.
+ * Bookings are real venue_booking rows (SCRUM-148), added here as an approval
+ * would leave them; unavailable slots are stand-in D-09
+ * (venue_unavailable_slot), added by hand as a tester would. See
+ * docs/dummies.md.
  *
  * Every test uses venues of its own and checks only those, because the search
  * reads the whole catalogue and other files add venues and bookings too.
@@ -49,7 +50,7 @@ async function createTestVenue(label: string, operatingSlots: OperatingSlot[] = 
   return venue.id;
 }
 
-/** D-04: a confirmed booking takes its date and slots from its event request. */
+/** A confirmed booking is one venue's one slot on one date (SCRUM-148): one row per slot. */
 async function book(venueId: string, slots: OperatingSlot[], date = DATE) {
   const { data, error } = await admin
     .from('event_request')
@@ -57,8 +58,6 @@ async function book(venueId: string, slots: OperatingSlot[], date = DATE) {
       organiser_id: organiserId,
       client_organisation_id: CLIENT_ORGANISATION_ID,
       name: `Venue Search Event ${RUN}`,
-      proposed_date: date,
-      time_slots: slots,
     })
     .select('id')
     .single();
@@ -68,7 +67,9 @@ async function book(venueId: string, slots: OperatingSlot[], date = DATE) {
   const { error: submitError } = await admin.from('event_request').update({ status: 'submitted' }).eq('id', data.id);
   if (submitError) throw new Error(`could not submit test request: ${submitError.message}`);
 
-  const { error: bookError } = await admin.from('venue_booking').insert({ venue_id: venueId, event_request_id: data.id });
+  const { error: bookError } = await admin
+    .from('venue_booking')
+    .insert(slots.map((slot) => ({ venue_id: venueId, event_request_id: data.id, date, slot })));
   if (bookError) throw new Error(`could not book test request: ${bookError.message}`);
 }
 
