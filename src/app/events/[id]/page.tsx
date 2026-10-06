@@ -16,7 +16,7 @@ import {
 } from '@/domain/event-request/policy';
 import { EVENT_REQUEST_STATUS_DEFINITIONS } from '@/domain/event-request/schema';
 import { getEventRequest } from '@/domain/event-request/service';
-import { COMMITMENT_STATEMENT, NO_COMMITMENTS } from '@/domain/review/policy';
+import { COMMITMENT_STATEMENT, NO_COMMITMENTS, showsCommitmentStatement } from '@/domain/review/policy';
 import { getApprovalView, getClarificationView, getRejectionView } from '@/domain/review/service';
 import { formatSingaporeDate, formatSingaporeDateTime } from '@/domain/shared/dates';
 import { getCurrentActor } from '@/lib/auth/currentActor';
@@ -160,8 +160,12 @@ export default async function EventRequestPage({
           ) : null}
           {/* The statement comes from the domain (COMMITMENT_STATEMENT), not
               written out again here, so the page and the API cannot drift into
-              telling the Organiser two different things. */}
-          <p className="mt-2">{approval.commitmentStatement}</p>
+              telling the Organiser two different things. Shown only while the
+              event is still Approved (showsCommitmentStatement): once it has
+              moved on, "nothing is yet committed" may no longer be true. */}
+          {showsCommitmentStatement(request.status) ? (
+            <p className="mt-2">{approval.commitmentStatement}</p>
+          ) : null}
         </div>
       ) : null}
 
