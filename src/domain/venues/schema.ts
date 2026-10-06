@@ -1,4 +1,5 @@
 import { z } from 'zod';
+import { isISODate } from '@/domain/shared/dates';
 
 /**
  * Venue Catalogue (EP-08): data shapes shared by the API routes and the UI.
@@ -8,6 +9,7 @@ import { z } from 'zod';
  * SCRUM-118 Record supported room layouts and their capacities
  * SCRUM-120 Update venue information
  * SCRUM-121 Browse and view the venue catalogue
+ * SCRUM-128 Search venues by date and slot
  *
  * Values mirror the check constraints in
  * supabase/migrations/20260911063000_create_venue_catalogue.sql.
@@ -209,6 +211,27 @@ export const VenueListQuerySchema = z.object({
 });
 export type VenueListQuery = z.infer<typeof VenueListQuerySchema>;
 
+/**
+ * SCRUM-128 AC1: "Given I enter a date and select one or more slots".
+ *
+ * AC5: no booking horizon applies (customer clarification #57), so the date has
+ * no upper limit — 5 years ahead is as valid as tomorrow. Nor is it held to the
+ * future: the card doesn't say so, and a search commits nothing.
+ *
+ * At least one slot, because AC1's "every one of the selected slots" is
+ * meaningless over none. Repeats are dropped, so [pm, pm] is the PM search.
+ */
+export const VenueSearchQuerySchema = z.object({
+  date: z
+    .string({ required_error: 'Enter a date.' })
+    .refine(isISODate, 'Enter a real date as YYYY-MM-DD.'),
+  slots: z
+    .array(OperatingSlotSchema, { required_error: 'Select at least one slot.' })
+    .min(1, 'Select at least one slot.')
+    .transform((slots) => OPERATING_SLOTS.filter((slot) => slots.includes(slot))),
+});
+export type VenueSearchQuery = z.infer<typeof VenueSearchQuerySchema>;
+
 // -----------------------------------------------------------------------------
 // Outputs (what the API returns)
 // -----------------------------------------------------------------------------
@@ -239,6 +262,14 @@ export const VenueSummarySchema = z.object({
   isRetired: z.boolean(),
 });
 export type VenueSummary = z.infer<typeof VenueSummarySchema>;
+
+/** SCRUM-128: the venues free in every searched slot, echoed with what was searched. */
+export const VenueSearchResultSchema = z.object({
+  date: z.string(),
+  slots: z.array(OperatingSlotSchema),
+  venues: z.array(VenueSummarySchema),
+});
+export type VenueSearchResult = z.infer<typeof VenueSearchResultSchema>;
 
 export const VenueLayoutSchema = z.object({
   layout: RoomLayoutSchema,
