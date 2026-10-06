@@ -39,6 +39,7 @@ import {
   showsCommitmentStatement,
   type Commitments,
 } from './policy';
+import { notifyBestEffort } from '@/domain/notification/service';
 
 /**
  * SCRUM-92 — Approve a request so planning can proceed.
@@ -48,6 +49,7 @@ import {
  * docs/architecture.md (rule 3) it never imports a Supabase client or builds a
  * query itself.
  */
+
 
 // ---------------------------------------------------------------------------
 // AC1 — approve
@@ -145,7 +147,18 @@ export async function approveEventRequest(id: string, input: unknown): Promise<A
   // need different answers - so the row is re-read to say which.
   if (!data) throw await approvalRaceError(parsedId.data, parsedInput.data.actorId);
 
-  return toApprovalOutcome(data as unknown as EventRequestRow);
+  const approvedRow = data as unknown as EventRequestRow;
+  // SCRUM-198 AC2: the organiser is notified that planning may proceed
+  // without committing a venue or equipment (customer clarification #80,
+  // the same statement getApprovalView shows).
+  await notifyBestEffort({
+    recipientId: approvedRow.organiser_id,
+    type: 'request_approved',
+    eventRequestId: approvedRow.id,
+    message: `${approvedRow.reference} (${approvedRow.name}) was approved. Planning may proceed; no venue or equipment is committed yet.`,
+  });
+
+  return toApprovalOutcome(approvedRow);
 }
 
 /**
@@ -533,7 +546,18 @@ export async function requestClarification(
   // between, and they need different answers - see clarificationRaceError.
   if (!data) throw await clarificationRaceError(parsedId.data, actorId);
 
-  return toClarificationOutcome(data as unknown as EventRequestRow);
+  const clarifiedRow = data as unknown as EventRequestRow;
+  // SCRUM-198 AC1: the organiser is notified with the coordinator's note.
+  // Best-effort: the decision above already succeeded, so a notification
+  // failure must not undo it.
+  await notifyBestEffort({
+    recipientId: clarifiedRow.organiser_id,
+    type: 'clarification_requested',
+    eventRequestId: clarifiedRow.id,
+    message: `Clarification requested on ${clarifiedRow.reference} (${clarifiedRow.name}): ${parsedInput.data.note}`,
+  });
+
+  return toClarificationOutcome(clarifiedRow);
 }
 
 // ---------------------------------------------------------------------------
@@ -694,7 +718,16 @@ export async function rejectEventRequest(
   // between, and they need different answers - see rejectionRaceError.
   if (!data) throw await rejectionRaceError(parsedId.data, actorId);
 
-  return toRejectionOutcome(data as unknown as EventRequestRow);
+  const rejectedRow = data as unknown as EventRequestRow;
+  // SCRUM-198 AC3: the organiser is notified with the recorded reason.
+  await notifyBestEffort({
+    recipientId: rejectedRow.organiser_id,
+    type: 'request_rejected',
+    eventRequestId: rejectedRow.id,
+    message: `${rejectedRow.reference} (${rejectedRow.name}) was rejected: ${parsedInput.data.reason}`,
+  });
+
+  return toRejectionOutcome(rejectedRow);
 }
 
 /**

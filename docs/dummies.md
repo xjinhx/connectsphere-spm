@@ -99,12 +99,15 @@ switch them the next time they edit those files.
 
 - **Kind:** Out-of-sprint stand-in
 - **Added by:** SCRUM-94 — commit `bb942af` (PR #28)
-- **Waiting on:** SCRUM-24 Notification System
-- **Where:** `src/domain/assignment/service.ts` — `assignCoordinator()`
-- **To replace:** notify the assigned coordinator from `assignCoordinator()`,
-  straight after the assignment is recorded, using SCRUM-24's mechanism;
-  re-run US-8.1-TC02 (SCRUM-94 AC1).
-- **Status:** Active
+- **Waiting on:** ~~SCRUM-24 Notification System~~ — resolved (SCRUM-193/198)
+- **Where:** ~~`src/domain/assignment/service.ts` — `assignCoordinator()`~~
+  — resolved: now calls `createNotification` (`coordinator_assigned`)
+  straight after the assignment is recorded, best-effort via
+  `notifyBestEffort` so a notification failure cannot undo the assignment.
+- **To replace:** ~~notify the assigned coordinator from~~
+  ~~`assignCoordinator()`...~~ Done. Re-run US-8.1-TC02 (SCRUM-94 AC1)
+  against the notification now created.
+- **Status:** Replaced (SCRUM-193/198).
 
 ### D-04 — Confirmed bookings are a stand-in table filled by hand
 
