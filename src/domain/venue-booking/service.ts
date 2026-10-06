@@ -7,6 +7,7 @@ import {
   VenueBookingRequestLineStatusEnum,
   type BookedSlot,
   type BookingQueueEntry,
+  type BookingRequestRequirements,
   type VenueBookingDecision,
   type VenueBookingRequestOutcome,
 } from './schema';
@@ -26,8 +27,10 @@ import { fetchProfileNames } from '@/lib/supabase/profiles';
 import type { EventRequestRow } from '@/lib/supabase/eventRequests';
 import {
   createVenueBookingRequest,
+  fetchBookingRequestRequirements,
   fetchPendingBookingLines,
   fetchVenueBookingRequestById,
+  type BookingRequestRequirementsRow,
   type PendingBookingLineRow,
   type VenueBookingRequestRow,
 } from '@/lib/supabase/venueBookingRequests';
@@ -357,4 +360,50 @@ export async function listPendingBookingQueue(sort: BookingQueueSort = 'requeste
   }
   const entries = (data as unknown as PendingBookingLineRow[]).map(toQueueEntry);
   return sortBookingQueue(entries, sort);
+}
+
+// ---------------------------------------------------------------------------
+// SCRUM-143 — Include the requirements Venue Staff need
+// ---------------------------------------------------------------------------
+
+/**
+ * SCRUM-143 AC1, AC2 — what Venue Staff need to assess a booking request,
+ * shown on SCRUM-148's decision page next to the requested dates and slots:
+ * the event's reference, who requested it and when, and the event's
+ * attendance, layout and accessibility needs as recorded on the event.
+ *
+ * Who may see it (Venue Staff, venue_administration) is checked by the page
+ * before this is called, the same as the decision itself.
+ */
+export async function getBookingRequestRequirements(requestId: string): Promise<BookingRequestRequirements> {
+  if (!VenueBookingRequestIdSchema.safeParse(requestId).success) {
+    throw new NotFoundError('Venue booking request');
+  }
+  const { data, error } = await fetchBookingRequestRequirements(requestId);
+  if (error) throw new ValidationError('The venue booking request could not be read.', error.message);
+  if (!data) throw new NotFoundError('Venue booking request');
+
+  const row = data as unknown as BookingRequestRequirementsRow;
+  const event = row.event_request;
+  // NOT NULL foreign key: a request always has an event.
+  if (!event) throw new ValidationError('A booking request is missing its event.', { requestId: row.id });
+
+  const { data: requester, error: requesterError } = await fetchProfileNames([row.requested_by]);
+  if (requesterError) {
+    throw new ValidationError('The requesting coordinator could not be read.', requesterError.message);
+  }
+
+  return {
+    eventName: event.name,
+    eventReference: event.reference,
+    requestedByName: requester?.[0]?.full_name ?? null,
+    requestedAt: row.created_at,
+    expectedAttendance: event.expected_attendance,
+    roomLayout: event.room_layout,
+    accessibilityRequired: event.accessibility_required,
+    accessibilityFeatures: event.event_request_accessibility_features.flatMap((link) =>
+      link.accessibility_features ? [{ name: link.accessibility_features.name }] : [],
+    ),
+    accessibilityNotes: event.accessibility_notes,
+  };
 }
