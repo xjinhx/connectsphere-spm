@@ -6,7 +6,7 @@
 -- and nothing else.
 --
 -- Planning is SCRUM-101's status: its branch adds it in
--- 20260927090000_event_request_planning_status.sql, not yet on main. This
+-- 20260927090100_event_request_planning_status.sql, not yet on main. This
 -- story needs it now, so it adds it too, with IF NOT EXISTS, and this file is
 -- timestamped after SCRUM-101's so a fresh reset runs theirs first. Either can
 -- merge first and a fresh reset still works.
