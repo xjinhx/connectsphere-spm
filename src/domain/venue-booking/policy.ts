@@ -2,6 +2,8 @@ import type { EventRequestStatus } from '@/domain/event-request/schema';
 import { isActionPermitted } from '@/domain/identity/permissions';
 import type { Role } from '@/domain/identity/roles';
 import type { VenueBookingRequestLineStatus, VenueBookingRequestStatus } from './schema';
+import { describeAccessibility } from '@/domain/event-request/policy';
+import { ROOM_LAYOUT_LABELS, RoomLayoutSchema } from '@/domain/venues/schema';
 
 /**
  * SCRUM-142 — Submit a venue booking request for an event.
@@ -95,4 +97,34 @@ export function sortBookingQueue<T extends { lineId: string; date: string; reque
     'event-date': (a, b) => byDate(a, b) || byRequestedAt(a, b) || byLine(a, b),
   };
   return [...entries].sort(order[sort]);
+}
+
+// ---------------------------------------------------------------------------
+// SCRUM-143 — Include the requirements Venue Staff need
+// ---------------------------------------------------------------------------
+// AC2: attendance, layout and accessibility needs are shown as recorded on the
+// event. AC4: a layout or accessibility need that was never recorded reads
+// "Not specified", never a blank. A recorded "no accessibility needs" is an
+// answer, so it reads "None required" (AC2), not "Not specified".
+
+export const NOT_SPECIFIED = 'Not specified';
+
+/** AC2, AC4 — the event's expected attendance. */
+export function describeAttendanceForVenueStaff(expectedAttendance: number | null): string {
+  return expectedAttendance === null ? NOT_SPECIFIED : String(expectedAttendance);
+}
+
+/** AC2, AC4 — the event's required layout, in the catalogue's own words. */
+export function describeLayoutForVenueStaff(roomLayout: string | null): string {
+  const layout = RoomLayoutSchema.safeParse(roomLayout);
+  return layout.success ? ROOM_LAYOUT_LABELS[layout.data] : NOT_SPECIFIED;
+}
+
+/** AC2, AC4 — the event's accessibility needs: the features and notes, "None required", or not specified. */
+export function describeAccessibilityForVenueStaff(event: {
+  accessibilityRequired: boolean | null;
+  accessibilityFeatures: readonly { name: string }[];
+  accessibilityNotes: string | null;
+}): string {
+  return event.accessibilityRequired === null ? NOT_SPECIFIED : describeAccessibility(event);
 }

@@ -6,6 +6,11 @@ import {
   getVenueBookingDecision,
   submitVenueBookingRequest,
 } from '@/domain/venue-booking/service';
+import {
+  NOT_SPECIFIED,
+  describeAccessibilityForVenueStaff,
+  describeLayoutForVenueStaff,
+} from '@/domain/venue-booking/policy';
 import { NotFoundError } from '@/domain/shared/errors';
 import { ensureTestClientOrganisation, TEST_CLIENT_ORGANISATION_ID } from './fixtures/clientOrganisation';
 
@@ -61,6 +66,15 @@ async function approvedEvent(name: string, fields: Record<string, unknown> = {})
   return id;
 }
 
+/** The id of a seeded accessibility feature, added if a fresh database lacks it. */
+async function featureId(name: string): Promise<string> {
+  const { data } = await admin.from('accessibility_features').select('id').eq('name', name).maybeSingle();
+  if (data) return data.id as string;
+  const { data: created, error } = await admin.from('accessibility_features').insert({ name }).select('id').single();
+  if (error || !created) throw new Error(`could not add accessibility feature ${name}: ${error?.message}`);
+  return created.id as string;
+}
+
 async function requestFor(eventId: string, date: string, timeSlots: string[]) {
   return (await submitVenueBookingRequest(eventId, coordinatorId, { venueId, lines: [{ date, timeSlots }] })).id;
 }
@@ -104,5 +118,58 @@ describe('SCRUM-143 AC1 — reference, requested dates and slots, requesting coo
   it('reports an unknown or malformed request id as not found', async () => {
     await expect(getBookingRequestRequirements('00000000-0000-0000-0000-000000000000')).rejects.toBeInstanceOf(NotFoundError);
     await expect(getBookingRequestRequirements('not-a-uuid')).rejects.toBeInstanceOf(NotFoundError);
+  });
+});
+
+describe('SCRUM-143 AC2 — attendance, layout and accessibility as recorded on the event', () => {
+  it('TC-143-02: shows 120, Banquet, Step-free access, Accessible toilet and the note, all matching the event', async () => {
+    const note = 'Two guests use wheelchairs; keep the aisle by table 1 clear';
+    const eventId = await approvedEvent('Recorded Gala', {
+      expected_attendance: 120,
+      room_layout: 'banquet',
+      accessibility_required: true,
+      accessibility_notes: note,
+    });
+    const links = [await featureId('Step-free access'), await featureId('Accessible toilet')].map((id) => ({
+      event_request_id: eventId,
+      accessibility_feature_id: id,
+    }));
+    const { error } = await admin.from('event_request_accessibility_features').insert(links);
+    if (error) throw new Error(`could not record accessibility features: ${error.message}`);
+
+    const requirements = await getBookingRequestRequirements(await requestFor(eventId, '2026-10-20', ['pm', 'night']));
+
+    expect(requirements.expectedAttendance).toBe(120);
+    expect(describeLayoutForVenueStaff(requirements.roomLayout)).toBe('Banquet');
+    const accessibility = describeAccessibilityForVenueStaff(requirements);
+    expect(accessibility).toContain('Step-free access');
+    expect(accessibility).toContain('Accessible toilet');
+    expect(accessibility).toContain(note);
+  });
+
+  it("TC-143-03: an accessibility answer of 'None' reads None required", async () => {
+    const eventId = await approvedEvent('Evening Product Talk', {
+      expected_attendance: 80,
+      room_layout: 'theatre',
+      accessibility_required: false,
+    });
+
+    const requirements = await getBookingRequestRequirements(await requestFor(eventId, '2026-10-21', ['night']));
+
+    expect(requirements.expectedAttendance).toBe(80);
+    expect(describeLayoutForVenueStaff(requirements.roomLayout)).toBe('Theatre');
+    expect(describeAccessibilityForVenueStaff(requirements)).toBe('None required');
+  });
+});
+
+describe('SCRUM-143 AC4 — not specified rather than blank', () => {
+  it('TC-143-07: an event with no layout and no accessibility answer reads Not specified for both', async () => {
+    const eventId = await approvedEvent('Quarterly Team Briefing', { expected_attendance: 30 });
+
+    const requirements = await getBookingRequestRequirements(await requestFor(eventId, '2026-10-23', ['am']));
+
+    expect(requirements.expectedAttendance).toBe(30);
+    expect(describeLayoutForVenueStaff(requirements.roomLayout)).toBe(NOT_SPECIFIED);
+    expect(describeAccessibilityForVenueStaff(requirements)).toBe(NOT_SPECIFIED);
   });
 });
