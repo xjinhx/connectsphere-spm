@@ -1,7 +1,12 @@
 import { afterAll, beforeAll, describe, expect, it } from 'vitest';
 import { createAdminClient } from '@/lib/supabase/admin';
 import { createVenue } from '@/domain/venues/service';
-import { listPendingBookingQueue, submitVenueBookingRequest } from '@/domain/venue-booking/service';
+import {
+  decideVenueBookingRequest,
+  getVenueBookingDecision,
+  listPendingBookingQueue,
+  submitVenueBookingRequest,
+} from '@/domain/venue-booking/service';
 import type { BookingQueueEntry } from '@/domain/venue-booking/schema';
 import { ensureTestClientOrganisation, TEST_CLIENT_ORGANISATION_ID } from './fixtures/clientOrganisation';
 
@@ -12,8 +17,9 @@ import { ensureTestClientOrganisation, TEST_CLIENT_ORGANISATION_ID } from './fix
  * the Sprint 2 test case workbook (TC-147-NN). Runs against the local Supabase
  * stack (`npm run db:start`, migrations applied).
  *
- * Requests are raised through SCRUM-142's real submitVenueBookingRequest. The
- * admin client only arranges rows and, for AC3, stands in for SCRUM-148/149.
+ * Requests are raised through SCRUM-142's real submitVenueBookingRequest and,
+ * for AC3, decided through SCRUM-148's real decideVenueBookingRequest. The
+ * admin client only arranges rows.
  * Other test files may add pending lines at the same time, so every check
  * looks only at this run's events.
  */
@@ -25,6 +31,7 @@ let locationId: string;
 const venueIds: string[] = [];
 let organiserId: string;
 let coordinatorId: string;
+let venueStaffId: string;
 const eventIds: string[] = [];
 
 async function createUser(label: string): Promise<string> {
@@ -71,10 +78,16 @@ async function raise(eventName: string, venueId: string, lines: { date: string; 
   return (await submitVenueBookingRequest(eventId, coordinatorId, { venueId, lines })).id;
 }
 
-// DUMMY(SCRUM-148) D-11: decides a line by setting its status directly; SCRUM-148/149's actions will.
-async function decide(requestId: string, status: 'approved' | 'rejected') {
-  const { error } = await admin.from('venue_booking_request_line').update({ status }).eq('request_id', requestId);
-  if (error) throw new Error(`could not decide test request: ${error.message}`);
+/** Approve or reject every pending line of a request as Venue Staff, through SCRUM-148. */
+async function decide(requestId: string, decision: 'approve' | 'reject') {
+  const { lines } = await getVenueBookingDecision(requestId);
+  await decideVenueBookingRequest(requestId, venueStaffId, {
+    decisions: lines.map((line) =>
+      decision === 'approve'
+        ? { lineId: line.id, decision }
+        : { lineId: line.id, decision, reason: 'Venue closed for maintenance' },
+    ),
+  });
 }
 
 /** This run's entries only. */
@@ -92,15 +105,16 @@ beforeAll(async () => {
   locationId = data.id;
   organiserId = await createUser('organiser');
   coordinatorId = await createUser('coordinator');
+  venueStaffId = await createUser('venuestaff');
 });
 
 afterAll(async () => {
-  // Events first: their requests and lines cascade with them, and a venue with
-  // a request cannot be deleted.
+  // Events first: their requests, lines and bookings cascade with them, a venue
+  // with a request cannot be deleted, and decided_by is ON DELETE RESTRICT.
   if (eventIds.length > 0) await admin.from('event_request').delete().in('id', eventIds);
   if (venueIds.length > 0) await admin.from('venues').delete().in('id', venueIds);
   if (locationId) await admin.from('locations').delete().eq('id', locationId);
-  for (const id of [organiserId, coordinatorId]) {
+  for (const id of [organiserId, coordinatorId, venueStaffId]) {
     if (id) await admin.auth.admin.deleteUser(id);
   }
 });
@@ -160,13 +174,13 @@ describe('SCRUM-147 AC2 — sorting by requested event date', () => {
   });
 });
 
-describe('SCRUM-147 AC3 — a decided request is no longer listed (stand-in D-11)', () => {
+describe('SCRUM-147 AC3 — a decided request is no longer listed (decided through SCRUM-148)', () => {
   it('TC-147-05: an approved request leaves the queue; another stays', async () => {
     const venueId = await venue('Approve Room');
     const r1 = await raise('Approve Me', venueId, [{ date: '2026-10-15', timeSlots: ['pm'] }]);
     await raise('Keep Pending A', venueId, [{ date: '2026-11-20', timeSlots: ['am'] }]);
 
-    await decide(r1, 'approved');
+    await decide(r1, 'approve');
 
     const queue = await myQueue();
     expect(named(queue, 'Approve Me')).toHaveLength(0);
@@ -178,7 +192,7 @@ describe('SCRUM-147 AC3 — a decided request is no longer listed (stand-in D-11
     await raise('Keep Pending B', venueId, [{ date: '2026-10-15', timeSlots: ['pm'] }]);
     const r2 = await raise('Reject Me', venueId, [{ date: '2026-11-20', timeSlots: ['am'] }]);
 
-    await decide(r2, 'rejected');
+    await decide(r2, 'reject');
 
     const queue = await myQueue();
     expect(named(queue, 'Reject Me')).toHaveLength(0);

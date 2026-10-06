@@ -259,24 +259,3 @@ switch them the next time they edit those files.
   saved (it would need a booking-decision type; 193's list has none yet).
   Re-run SCRUM-148 AC2.
 
-### D-11 — Booking request lines are decided by hand
-
-- **Kind:** Stand-in code (a shared column widened early, with nothing yet
-  writing the new values)
-- **Added by:** SCRUM-147 AC3
-- **Waiting on:** SCRUM-148 Approve a booking request · SCRUM-149 Reject a
-  booking request with a reason
-- **Where:**
-  - `supabase/migrations/20261006120000_venue_booking_request_line_decided_statuses.sql`
-    — `venue_booking_request_line.status` also allows `'approved'` and
-    `'rejected'` (`DUMMY(SCRUM-148) D-11`).
-  - `tests/integration/booking-queue.test.ts` — `decide()` sets a line's status
-    directly, where the app will use SCRUM-148/149's actions.
-  - Manual testing: TC-147-05 and TC-147-06 set a line to Approved or Rejected
-    in Studio.
-- **To replace:** once SCRUM-148 and SCRUM-149 are on main: keep the widened
-  constraint (they need the same values) unless they change it; switch
-  `decide()` to their approve and reject functions; approve and reject through
-  their actions in TC-147-05 and TC-147-06. Re-run TC-147-05 and TC-147-06
-  (SCRUM-147 AC3), automated as well as manual.
-- **Status:** Active
