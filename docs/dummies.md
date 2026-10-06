@@ -168,8 +168,11 @@ switch them the next time they edit those files.
   date and count an event once. `venue-capacity-cut.test.ts` passes, its setup
   rows now carrying a date and slot. The TypeScript markers are removed; the
   comments in the 20260924170000 migration stay as history rather than editing
-  an applied migration. Still to switch to a booking's own date once on main
-  together: SCRUM-151's `affected_booking_slot` view and SCRUM-128's search.
+  an applied migration. SCRUM-128's search (`fetchConfirmedBookingsOn()`,
+  `searchVenues()`) now reads each booking's own date and slot;
+  `venue-search.test.ts` passes, its setup rows carrying a date and slot.
+  Still to switch once on main together: SCRUM-151's `affected_booking_slot`
+  view.
 
 ### D-05 — A capacity cut's "notification" is only a stored notice
 
