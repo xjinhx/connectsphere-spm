@@ -1,7 +1,7 @@
 import { ValidationError } from '@/domain/shared/errors';
 import { isActionPermitted } from '@/domain/identity/permissions';
 import type { Role } from '@/domain/identity/roles';
-import { OPERATING_SLOTS, type OperatingSlot, type VenueLayoutInput } from './schema';
+import { OPERATING_SLOTS, type CalendarSlotState, type OperatingSlot, type VenueLayoutInput } from './schema';
 
 /**
  * Venue Catalogue business rules. Pure functions: no Supabase, no Next.js.
@@ -110,6 +110,73 @@ export function isFreeInEverySlot(
   committed: ReadonlySet<OperatingSlot> | undefined,
 ): boolean {
   return searchedSlots.every((slot) => operatingSlots.includes(slot) && !committed?.has(slot));
+}
+
+// -----------------------------------------------------------------------------
+// SCRUM-123: the state of each slot on a venue's calendar
+// -----------------------------------------------------------------------------
+
+/** What was recorded against one slot on one date. */
+export type CalendarSlotFacts = {
+  operates: boolean;
+  /** The reason a slot was recorded as unavailable, or null if it wasn't (AC7). */
+  unavailableReason: string | null;
+  confirmed: boolean;
+  pendingRequests: number;
+};
+
+/**
+ * The one state a slot is shown in. Where several things are recorded, the
+ * first that applies wins:
+ *
+ * 1. Outside operating hours (AC3): the venue doesn't run the slot, so nothing
+ *    else on it can matter.
+ * 2. Blocked (AC7): Venue Staff have withdrawn it, even over a booking — the
+ *    booking is then SCRUM-151's affected booking, not a working one.
+ * 3. Confirmed (AC5).
+ * 4. Pending request (AC6) — only when nothing is committed. A request on a
+ *    confirmed slot leaves it Confirmed (AC8); the count is still carried on
+ *    the slot so the calendar can show it beside the commitment.
+ * 5. Available (AC2).
+ */
+export function calendarSlotState(facts: CalendarSlotFacts): CalendarSlotState {
+  if (!facts.operates) return 'outside_operating_hours';
+  if (facts.unavailableReason !== null) return 'blocked';
+  if (facts.confirmed) return 'confirmed';
+  if (facts.pendingRequests > 0) return 'pending_request';
+  return 'available';
+}
+
+/**
+ * Committed means the same here as in SCRUM-128's search: a confirmed booking
+ * or a slot recorded as unavailable. A pending request never is (AC8), so the
+ * calendar and the search can't disagree about a slot.
+ */
+export function isCommitted(state: CalendarSlotState): boolean {
+  return state === 'confirmed' || state === 'blocked';
+}
+
+/**
+ * AC4: "committed for all three slots" — read as every slot the venue runs
+ * that day. For a venue open AM, PM and Night that is exactly the card's
+ * wording; for one that runs AM and PM only, both booked leaves nothing to
+ * request, so it is full too. A venue that runs no slot is never "full".
+ */
+export function isFullyCommitted(states: readonly CalendarSlotState[]): boolean {
+  const operating = states.filter((state) => state !== 'outside_operating_hours');
+  return operating.length > 0 && operating.every(isCommitted);
+}
+
+/** Every date from `from` to `to`, both included, as YYYY-MM-DD. */
+export function datesInRange(from: string, to: string): string[] {
+  const dates: string[] = [];
+  const day = new Date(`${from}T00:00:00Z`);
+  const end = new Date(`${to}T00:00:00Z`);
+  while (day <= end) {
+    dates.push(day.toISOString().slice(0, 10));
+    day.setUTCDate(day.getUTCDate() + 1);
+  }
+  return dates;
 }
 
 // -----------------------------------------------------------------------------

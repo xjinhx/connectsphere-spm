@@ -218,3 +218,60 @@ export async function fetchConfirmedBookingsOn(date: string) {
 export async function fetchUnavailableSlotsOn(date: string) {
   return db().from('venue_unavailable_slot').select('venue_id, slot').eq('date', date);
 }
+
+// -----------------------------------------------------------------------------
+// SCRUM-123: a venue's calendar over a date range
+// -----------------------------------------------------------------------------
+
+/** SCRUM-123: the venue and the slots it runs (AC2, AC3). */
+export async function fetchVenueForCalendar(venueId: string) {
+  return db().from('venues').select('id, name, operating_slots').eq('id', venueId).maybeSingle();
+}
+
+/**
+ * SCRUM-123 AC4, AC5 and AC8: the venue's confirmed bookings from `from` to
+ * `to`, with the date and slots each takes.
+ *
+ * DUMMY(SCRUM-148) D-04: a booking has no date or slot of its own yet; both
+ * come from its event request, as in fetchConfirmedBookingsOn.
+ */
+export async function fetchConfirmedBookingsBetween(venueId: string, from: string, to: string) {
+  return db()
+    .from('venue_booking')
+    .select('event_request:event_request_id!inner (proposed_date, time_slots)')
+    .eq('venue_id', venueId)
+    .eq('status', 'confirmed')
+    .gte('event_request.proposed_date', from)
+    .lte('event_request.proposed_date', to);
+}
+
+/**
+ * SCRUM-123 AC7: the venue's unavailable slots from `from` to `to`, with the
+ * recorded reason.
+ *
+ * DUMMY(SCRUM-151) D-09: venue_unavailable_slot is a stand-in that nothing
+ * writes yet; testers add rows by hand.
+ */
+export async function fetchUnavailableSlotsBetween(venueId: string, from: string, to: string) {
+  return db()
+    .from('venue_unavailable_slot')
+    .select('date, slot, reason')
+    .eq('venue_id', venueId)
+    .gte('date', from)
+    .lte('date', to);
+}
+
+/**
+ * SCRUM-123 AC6 and AC8: the venue's pending booking request lines from `from`
+ * to `to`. The lines are SCRUM-142's (venue_booking_request_line); this only
+ * reads them.
+ */
+export async function fetchPendingRequestLinesBetween(venueId: string, from: string, to: string) {
+  return db()
+    .from('venue_booking_request_line')
+    .select('date, time_slots, request:request_id!inner (venue_id)')
+    .eq('request.venue_id', venueId)
+    .eq('status', 'pending')
+    .gte('date', from)
+    .lte('date', to);
+}

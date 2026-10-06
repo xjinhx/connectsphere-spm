@@ -62,14 +62,23 @@ export default async function VenueDetailPage({ params }: { params: Promise<{ id
 
       <div className="mt-3 mb-6 flex flex-wrap items-center justify-between gap-3">
         <h1 className="text-2xl font-semibold">{venue.name}</h1>
-        {canManageVenues(actor.roles) && (
+        <div className="flex flex-wrap gap-3">
+          {/* SCRUM-123: anyone who can view the venue can view its calendar. */}
           <Link
-            href={`/venues/${venue.id}/edit`}
-            className="rounded bg-[var(--brand)] px-4 py-2 text-sm font-medium text-white hover:bg-[var(--brand-dark)]"
+            href={`/venues/${venue.id}/calendar`}
+            className="rounded border border-[var(--brand)] px-4 py-2 text-sm font-medium text-[var(--brand)] hover:bg-[var(--surface)]"
           >
-            Edit venue
+            View calendar
           </Link>
-        )}
+          {canManageVenues(actor.roles) && (
+            <Link
+              href={`/venues/${venue.id}/edit`}
+              className="rounded bg-[var(--brand)] px-4 py-2 text-sm font-medium text-white hover:bg-[var(--brand-dark)]"
+            >
+              Edit venue
+            </Link>
+          )}
+        </div>
       </div>
 
       {venue.isRetired && (

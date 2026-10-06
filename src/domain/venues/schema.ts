@@ -10,6 +10,7 @@ import { isISODate } from '@/domain/shared/dates';
  * SCRUM-120 Update venue information
  * SCRUM-121 Browse and view the venue catalogue
  * SCRUM-128 Search venues by date and slot
+ * SCRUM-123 View a venue's calendar with the state of each slot
  *
  * Values mirror the check constraints in
  * supabase/migrations/20260911063000_create_venue_catalogue.sql.
@@ -232,6 +233,43 @@ export const VenueSearchQuerySchema = z.object({
 });
 export type VenueSearchQuery = z.infer<typeof VenueSearchQuerySchema>;
 
+/**
+ * SCRUM-123: the longest range one calendar view shows. The card sets no
+ * limit; 31 days (a month) is the team's choice (6 Oct 2026), so a single
+ * request can't ask for years of slots.
+ */
+export const CALENDAR_MAX_DAYS = 31;
+
+/** Days from `from` to `to`, counting both ends: 2026-12-01 to 2026-12-01 is 1. */
+export function daysInRange(from: string, to: string): number {
+  const ms = Date.parse(`${to}T00:00:00Z`) - Date.parse(`${from}T00:00:00Z`);
+  return Math.round(ms / 86_400_000) + 1;
+}
+
+/**
+ * SCRUM-123 AC1: "Given I open a venue's calendar for a date range".
+ * A range that ends before it starts isn't one, and one view shows at most
+ * CALENDAR_MAX_DAYS days.
+ */
+export const VenueCalendarQuerySchema = z
+  .object({
+    from: z.string({ required_error: 'Enter a start date.' }).refine(isISODate, 'Enter a real start date as YYYY-MM-DD.'),
+    to: z.string({ required_error: 'Enter an end date.' }).refine(isISODate, 'Enter a real end date as YYYY-MM-DD.'),
+  })
+  .superRefine(({ from, to }, ctx) => {
+    if (!isISODate(from) || !isISODate(to)) return;
+    if (to < from) {
+      ctx.addIssue({ code: z.ZodIssueCode.custom, path: ['to'], message: 'The end date cannot be before the start date.' });
+    } else if (daysInRange(from, to) > CALENDAR_MAX_DAYS) {
+      ctx.addIssue({
+        code: z.ZodIssueCode.custom,
+        path: ['to'],
+        message: `A calendar can show at most ${CALENDAR_MAX_DAYS} days.`,
+      });
+    }
+  });
+export type VenueCalendarQuery = z.infer<typeof VenueCalendarQuerySchema>;
+
 // -----------------------------------------------------------------------------
 // Outputs (what the API returns)
 // -----------------------------------------------------------------------------
@@ -270,6 +308,61 @@ export const VenueSearchResultSchema = z.object({
   venues: z.array(VenueSummarySchema),
 });
 export type VenueSearchResult = z.infer<typeof VenueSearchResultSchema>;
+
+/**
+ * SCRUM-123: the state a calendar slot is shown in, from AC2, AC3, AC5, AC6
+ * and AC7. Where several apply, policy.ts calendarSlotState picks one.
+ */
+export const CALENDAR_SLOT_STATES = [
+  'outside_operating_hours',
+  'blocked',
+  'confirmed',
+  'pending_request',
+  'available',
+] as const;
+export const CalendarSlotStateSchema = z.enum(CALENDAR_SLOT_STATES);
+export type CalendarSlotState = z.infer<typeof CalendarSlotStateSchema>;
+
+/** The words each state is shown with; AC5, AC6 and AC7 name three of them. */
+export const CALENDAR_SLOT_STATE_LABELS: Record<CalendarSlotState, string> = {
+  outside_operating_hours: 'Outside operating hours',
+  blocked: 'Blocked',
+  confirmed: 'Confirmed',
+  pending_request: 'Pending request',
+  available: 'Available',
+};
+
+/**
+ * One slot on one date. No event, client or coordinator details: who may see
+ * those is SCRUM-148 AC3/AC4, and they are protected information (customer
+ * clarification #91).
+ */
+export const CalendarSlotSchema = z.object({
+  slot: OperatingSlotSchema,
+  state: CalendarSlotStateSchema,
+  /** AC7: the recorded reason, only for a Blocked slot. */
+  reason: z.string().nullable(),
+  /** AC6 and AC8: pending booking requests on this slot, whatever its state. */
+  pendingRequests: z.number().int().min(0),
+});
+export type CalendarSlot = z.infer<typeof CalendarSlotSchema>;
+
+export const CalendarDaySchema = z.object({
+  date: z.string(),
+  /** AC4: every slot the venue runs that day is committed. */
+  fullyCommitted: z.boolean(),
+  /** Always AM, PM and Night, in that order (AC1). */
+  slots: z.array(CalendarSlotSchema).length(3),
+});
+export type CalendarDay = z.infer<typeof CalendarDaySchema>;
+
+export const VenueCalendarSchema = z.object({
+  venue: z.object({ id: z.string().uuid(), name: z.string() }),
+  from: z.string(),
+  to: z.string(),
+  days: z.array(CalendarDaySchema),
+});
+export type VenueCalendar = z.infer<typeof VenueCalendarSchema>;
 
 export const VenueLayoutSchema = z.object({
   layout: RoomLayoutSchema,

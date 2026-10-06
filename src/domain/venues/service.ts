@@ -2,15 +2,19 @@ import {
   createVenueWithLists,
   fetchAccessibilityFeatureIdsIn,
   fetchAccessibilityFeatures,
+  fetchConfirmedBookingsBetween,
   fetchConfirmedBookingsOn,
   fetchConfirmedFutureBookings,
   fetchFacilities,
   fetchFacilityIdsIn,
   fetchLocationById,
   fetchLocations,
+  fetchPendingRequestLinesBetween,
   fetchSearchableVenues,
+  fetchUnavailableSlotsBetween,
   fetchUnavailableSlotsOn,
   fetchVenueDetail,
+  fetchVenueForCalendar,
   fetchVenueSummaries,
   saveVenueChanges,
 } from '@/lib/supabase/venues';
@@ -18,10 +22,13 @@ import { ConflictError, NotFoundError, ValidationError, isUniqueViolation } from
 import { todayInSingapore, type ISODate } from '@/domain/shared/dates';
 import {
   assertLayoutsWithinMaxCapacity,
+  calendarSlotState,
   committedSlotsByVenue,
+  datesInRange,
   isAffectedByCapacity,
   isCapacityCut,
   isFreeInEverySlot,
+  isFullyCommitted,
 } from './policy';
 import {
   AffectedBookingSchema,
@@ -29,6 +36,8 @@ import {
   OPERATING_SLOTS,
   ROOM_LAYOUTS,
   UpdateVenueInputSchema,
+  VenueCalendarQuerySchema,
+  VenueCalendarSchema,
   VenueDetailSchema,
   VenueFormOptionsSchema,
   VenueIdSchema,
@@ -37,6 +46,7 @@ import {
   VenueSummarySchema,
   type AffectedBooking,
   type AffectedBookingsDetails,
+  type VenueCalendar,
   type VenueDetail,
   type VenueFormOptions,
   type VenueLayoutInput,
@@ -50,6 +60,7 @@ import {
  * SCRUM-116 Add a venue          SCRUM-120 Update venue information
  * SCRUM-117 Facilities/access    SCRUM-121 Browse and view the catalogue
  * SCRUM-118 Room layouts       SCRUM-128 Search by date and slot
+ *                              SCRUM-123 Venue calendar
  *
  * Orchestration only. Every query lives in src/lib/supabase/venues.ts, every
  * rule that compares two values lives in policy.ts, and every single-field
@@ -163,6 +174,86 @@ export async function searchVenues(input: unknown): Promise<VenueSearchResult> {
       isRetired: row.is_retired,
     })),
   });
+}
+
+/**
+ * SCRUM-123 View a venue's calendar with the state of each slot.
+ *
+ * AC1: every date in the range, each with its AM, PM and Night slot.
+ * AC2–AC3, AC5–AC7: each slot's state, picked by calendarSlotState (policy.ts).
+ * AC4: a date where every slot the venue runs is committed is fully committed.
+ * AC8: a pending request never adds a commitment; it is counted on its slot.
+ * AC9–AC10 are the route's and page's permission check, not this function's.
+ *
+ * DUMMY(SCRUM-148) D-04: confirmed bookings are the stand-in venue_booking rows.
+ * DUMMY(SCRUM-151) D-09: unavailable slots are the stand-in venue_unavailable_slot rows.
+ * Pending requests are SCRUM-142's real request lines.
+ */
+export async function getVenueCalendar(venueId: string, input: unknown): Promise<VenueCalendar> {
+  if (!VenueIdSchema.safeParse(venueId).success) {
+    throw new NotFoundError('Venue');
+  }
+  const parsed = VenueCalendarQuerySchema.safeParse(input);
+  if (!parsed.success) {
+    throw new ValidationError('The calendar could not be loaded.', parsed.error.flatten());
+  }
+  const { from, to } = parsed.data;
+
+  const venue = await fetchVenueForCalendar(venueId);
+  if (venue.error) {
+    throw new ValidationError('Could not load the venue.', venue.error.message);
+  }
+  if (!venue.data) {
+    throw new NotFoundError('Venue');
+  }
+
+  const [bookings, unavailable, pending] = await Promise.all([
+    fetchConfirmedBookingsBetween(venueId, from, to),
+    fetchUnavailableSlotsBetween(venueId, from, to),
+    fetchPendingRequestLinesBetween(venueId, from, to),
+  ]);
+  if (bookings.error || !bookings.data) {
+    throw new ValidationError('Could not load bookings for that range.', bookings.error?.message);
+  }
+  if (unavailable.error || !unavailable.data) {
+    throw new ValidationError('Could not load unavailable slots for that range.', unavailable.error?.message);
+  }
+  if (pending.error || !pending.data) {
+    throw new ValidationError('Could not load booking requests for that range.', pending.error?.message);
+  }
+
+  const key = (date: string, slot: string) => `${date}|${slot}`;
+  const confirmed = new Set<string>();
+  for (const booking of bookings.data) {
+    const request = booking.event_request;
+    if (!request?.proposed_date) continue;
+    for (const slot of request.time_slots ?? []) confirmed.add(key(request.proposed_date, slot));
+  }
+  const reasons = new Map(unavailable.data.map((row) => [key(row.date, row.slot), row.reason]));
+  const pendingCount = new Map<string, number>();
+  for (const line of pending.data) {
+    for (const slot of line.time_slots) {
+      pendingCount.set(key(line.date, slot), (pendingCount.get(key(line.date, slot)) ?? 0) + 1);
+    }
+  }
+
+  const operating = new Set(venue.data.operating_slots);
+  const days = datesInRange(from, to).map((date) => {
+    const slots = OPERATING_SLOTS.map((slot) => {
+      const reason = reasons.get(key(date, slot)) ?? null;
+      const pendingRequests = pendingCount.get(key(date, slot)) ?? 0;
+      const state = calendarSlotState({
+        operates: operating.has(slot),
+        unavailableReason: reason,
+        confirmed: confirmed.has(key(date, slot)),
+        pendingRequests,
+      });
+      return { slot, state, reason: state === 'blocked' ? reason : null, pendingRequests };
+    });
+    return { date, fullyCommitted: isFullyCommitted(slots.map((s) => s.state)), slots };
+  });
+
+  return VenueCalendarSchema.parse({ venue: { id: venue.data.id, name: venue.data.name }, from, to, days });
 }
 
 export async function getVenue(venueId: string): Promise<VenueDetail> {
