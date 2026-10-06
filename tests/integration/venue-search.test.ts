@@ -181,6 +181,12 @@ describe('searchVenues: SCRUM-128 AC2 and AC3, confirmed bookings', () => {
 
   it('TC-128-12 returns a venue whose confirmed booking is in another slot (AC3)', async () => {
     const venue = await createTestVenue('Booked AM');
+    // AC3 is about a venue that needs no setup or turnaround slot: set that, don't rely on the default.
+    const { error } = await admin
+      .from('venues')
+      .update({ needs_setup_slot: false, needs_turnaround_slot: false })
+      .eq('id', venue);
+    if (error) throw error;
     await book(venue, ['am']);
     expect(await found(['pm'])).toContain(venue);
     // The booking is real: the same venue is excluded from an AM search.
