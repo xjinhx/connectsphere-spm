@@ -125,6 +125,9 @@ switch them the next time they edit those files.
   - Read by SCRUM-128 too: `src/lib/supabase/venues.ts` —
     `fetchConfirmedBookingsOn()`, and `src/domain/venues/service.ts` —
     `searchVenues()` (`DUMMY(SCRUM-148) D-04`)
+  - Read by SCRUM-123 too: `src/lib/supabase/venues.ts` —
+    `fetchConfirmedBookingsBetween()`, and `src/domain/venues/service.ts` —
+    `getVenueCalendar()` (`DUMMY(SCRUM-148) D-04`)
 - **What is real and what is faked:** the capacity check, the list of affected
   bookings, the confirm step and the refusal inside the save are SCRUM-120's
   real code. Only the bookings themselves are faked: nothing in Sprint 1
@@ -150,8 +153,9 @@ switch them the next time they edit those files.
   may widen `status` beyond `'confirmed'`). Nothing in SCRUM-120 changes;
   re-run `tests/integration/venue-capacity-cut.test.ts` and SCRUM-120 AC2 and
   AC3 by hand against a booking made through that flow, and
-  `tests/integration/venue-search.test.ts` for SCRUM-128 AC2 and AC3, then
-  remove the markers.
+  `tests/integration/venue-search.test.ts` for SCRUM-128 AC2 and AC3, and
+  `tests/integration/venue-calendar.test.ts` for SCRUM-123 AC4, AC5 and AC8,
+  then remove the markers.
 - **Status:** Active
 
 ### D-05 — A capacity cut's "notification" is only a stored notice
@@ -217,6 +221,9 @@ switch them the next time they edit those files.
     (`DUMMY(SCRUM-151) D-09`)
   - `src/domain/venues/service.ts` — `searchVenues()`
     (`DUMMY(SCRUM-151) D-09`)
+  - Read by SCRUM-123 too: `src/lib/supabase/venues.ts` —
+    `fetchUnavailableSlotsBetween()`, and `src/domain/venues/service.ts` —
+    `getVenueCalendar()` (`DUMMY(SCRUM-151) D-09`)
 - **What is real and what is faked:** the search, and its rule that a slot
   recorded as unavailable excludes the venue (SCRUM-128 AC4), are real. Only
   the recording is faked: nothing yet lets Venue Staff withdraw a slot, so a
@@ -236,10 +243,12 @@ switch them the next time they edit those files.
   widening the table if it needs to — for example, who recorded it, or a
   reason category: the customer's Week 7 change W7-2 names maintenance,
   equipment failure, renovation, safety and other, where `reason` here is free
-  text. Widen this table rather than add a second one. Nothing in SCRUM-128
-  changes if the four columns stay; re-run
-  `tests/integration/venue-search.test.ts` and SCRUM-128 AC4 by hand against a
-  slot withdrawn through that flow, then remove the markers.
+  text. Widen this table rather than add a second one. Nothing in SCRUM-128 or
+  SCRUM-123 changes if the four columns stay; re-run
+  `tests/integration/venue-search.test.ts` and
+  `tests/integration/venue-calendar.test.ts`, and SCRUM-128 AC4 and SCRUM-123
+  AC7 by hand against a slot withdrawn through that flow, then remove the
+  markers.
 
 ### D-10 — Planning is added and reached without SCRUM-101
 
