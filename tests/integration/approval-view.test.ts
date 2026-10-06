@@ -128,6 +128,26 @@ describe('getApprovalView', () => {
     expect(view.commitments.equipment).toBe(false);
   });
 
+  // SCRUM-235: the statement belongs only to an event that is still Approved.
+  // Asserted on the view itself, which the API route returns as-is, so the
+  // page and the API cannot disagree again.
+  it.each(['planning', 'confirmed', 'completed'] as const)(
+    'keeps the outcome and date but drops the statement once the event is %s',
+    async (status) => {
+      const id = await createSubmittedRequest();
+      const outcome = await approveEventRequest(id, { actorId: coordinatorId });
+      const { error } = await supabase.from('event_request').update({ status }).eq('id', id);
+      if (error) throw new Error(`could not move test request to ${status}: ${error.message}`);
+
+      const view = await getApprovalView(id, owner());
+
+      expect(view.status).toBe(status);
+      expect(view.decision).toBe('approved');
+      expect(view.decidedAt).toBe(outcome.decidedAt);
+      expect(view.commitmentStatement).toBeNull();
+    },
+  );
+
   it('shows no outcome or date for a request that has not been decided yet', async () => {
     const id = await createSubmittedRequest();
 

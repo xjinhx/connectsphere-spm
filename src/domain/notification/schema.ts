@@ -1,0 +1,66 @@
+import { z } from 'zod';
+
+/**
+ * Notifications (EP-20): SCRUM-193 View my notifications, SCRUM-198 Notify
+ * organisers about review outcomes.
+ *
+ * Values mirror the check constraint in
+ * supabase/migrations/20260929090000_create_notifications.sql.
+ */
+
+// -----------------------------------------------------------------------------
+// Fixed value lists
+// -----------------------------------------------------------------------------
+
+/** SCRUM-198 AC1-3, AC5. AC4 is out of scope for this story - moved to
+ * SCRUM-102, which owns the event confirmation path and its notification
+ * type (xjinhx, PR #75 review discussion with the PO).
+ */
+export const NOTIFICATION_TYPES = [
+  'clarification_requested',
+  'request_approved',
+  'request_rejected',
+  'coordinator_assigned',
+  // SCRUM-198 AC5: the organiser is also told who their coordinator is,
+  // distinct from 'coordinator_assigned' (which tells the coordinator
+  // themself). Added after PO clarification - see PR discussion.
+  'coordinator_named',
+] as const;
+export const NotificationTypeSchema = z.enum(NOTIFICATION_TYPES);
+export type NotificationType = z.infer<typeof NotificationTypeSchema>;
+
+export const NotificationIdSchema = z.string().uuid('Notification id must be a valid id.');
+
+// -----------------------------------------------------------------------------
+// Inputs
+// -----------------------------------------------------------------------------
+
+/** SCRUM-193 AC1: newest first is the only order; no query params to sort otherwise yet. */
+export const ListNotificationsQuerySchema = z.object({
+  unreadOnly: z
+    .enum(['true', 'false'])
+    .optional()
+    .transform((value) => value === 'true'),
+});
+export type ListNotificationsQuery = z.infer<typeof ListNotificationsQuerySchema>;
+
+// -----------------------------------------------------------------------------
+// Outputs
+// -----------------------------------------------------------------------------
+
+/** SCRUM-193 AC1: one row in the list. */
+export const NotificationSchema = z.object({
+  id: z.string().uuid(),
+  type: NotificationTypeSchema,
+  eventRequestId: z.string().uuid(),
+  message: z.string(),
+  readAt: z.string().nullable(),
+  createdAt: z.string(),
+});
+export type Notification = z.infer<typeof NotificationSchema>;
+
+/** SCRUM-193 AC2: the badge count. */
+export const UnreadCountSchema = z.object({
+  count: z.number().int().nonnegative(),
+});
+export type UnreadCount = z.infer<typeof UnreadCountSchema>;
