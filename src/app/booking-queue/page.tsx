@@ -18,8 +18,8 @@ import { formatSingaporeDate, toSingaporeISODate } from '@/domain/shared/dates';
  * AC4 every Venue Staff member sees every venue's requests; nothing here
  *     filters by venue.
  *
- * Needs venue_booking_review (SCRUM-69's permission matrix), checked before
- * anything is read.
+ * Needs venue_administration (Venue Staff's), the same permission SCRUM-148's
+ * decision page uses, checked before anything is read.
  */
 
 export const dynamic = 'force-dynamic';
@@ -36,7 +36,7 @@ export default async function VenueStaffBookingQueuePage({
 }) {
   const actor = await getCurrentActor();
 
-  if (!isActionPermitted(actor.roles, 'venue_booking_review')) {
+  if (!isActionPermitted(actor.roles, 'venue_administration')) {
     return (
       <main className="mx-auto max-w-2xl p-8">
         <h1 className="text-2xl font-semibold">Pending booking requests</h1>

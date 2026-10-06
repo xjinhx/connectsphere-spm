@@ -347,7 +347,7 @@ function toQueueEntry(row: PendingBookingLineRow): BookingQueueEntry {
  * SCRUM-147 AC1, AC3, AC4 — every pending line, at every venue, in the order
  * `sort` asks for (sortBookingQueue, policy.ts).
  *
- * Who may see it (Venue Staff, venue_booking_review) is checked by the page
+ * Who may see it (Venue Staff, venue_administration) is checked by the page
  * before this is called, the same split as listVenues (SCRUM-121).
  */
 export async function listPendingBookingQueue(sort: BookingQueueSort = 'requested'): Promise<BookingQueueEntry[]> {

@@ -7,9 +7,9 @@ describe('getPermittedActions', () => {
   // AC1: matches the permission matrix entry for the role exactly
   it('returns exactly the matrix entry for a single-role account', () => {
     expect(getPermittedActions(['venue_staff'])).toEqual(
-      expect.arrayContaining(['venue_administration', 'venue_catalogue_view', 'venue_booking_review']),
+      expect.arrayContaining(['venue_administration', 'venue_catalogue_view']),
     );
-    expect(getPermittedActions(['venue_staff'])).toHaveLength(3);
+    expect(getPermittedActions(['venue_staff'])).toHaveLength(2);
   });
 
   // AC2: Event Organiser never sees venue/equipment administration or coordinator assignment
@@ -28,14 +28,9 @@ describe('getPermittedActions', () => {
   it('unions actions across multiple roles on one account, without duplicates', () => {
     const actions = getPermittedActions(['venue_staff', 'technical_support']);
     expect(actions).toEqual(
-      expect.arrayContaining([
-        'venue_administration',
-        'venue_catalogue_view',
-        'venue_booking_review',
-        'equipment_administration',
-      ]),
+      expect.arrayContaining(['venue_administration', 'venue_catalogue_view', 'equipment_administration']),
     );
-    expect(actions).toHaveLength(4);
+    expect(actions).toHaveLength(3);
   });
 });
 
