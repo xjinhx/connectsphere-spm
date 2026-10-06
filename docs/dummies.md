@@ -234,8 +234,14 @@ switch them the next time they edit those files.
     (`DUMMY(SCRUM-151) D-09`)
   - `src/domain/venues/service.ts` — `searchVenues()`
     (`DUMMY(SCRUM-151) D-09`)
+  - `src/lib/supabase/venues.ts` — `fetchUnavailableSlotsForVenue()`
+    (`DUMMY(SCRUM-151) D-09`), added by SCRUM-154
+  - `src/domain/venue-booking/service.ts` — `refuseClashingSlots()`
+    (`DUMMY(SCRUM-151) D-09`), added by SCRUM-154
 - **What is real and what is faked:** the search, and its rule that a slot
-  recorded as unavailable excludes the venue (SCRUM-128 AC4), are real. Only
+  recorded as unavailable excludes the venue (SCRUM-128 AC4), are real.
+  SCRUM-154 reads the same rows to refuse a booking request for an unavailable
+  slot (its AC4), which is real in the same way. Only
   the recording is faked: nothing yet lets Venue Staff withdraw a slot, so a
   tester adds rows by hand. That makes AC4 testable against real rows.
   "Shared tables belong to no single story" (`CLAUDE.md`), so the table is the
@@ -256,7 +262,9 @@ switch them the next time they edit those files.
   text. Widen this table rather than add a second one. Nothing in SCRUM-128
   changes if the four columns stay; re-run
   `tests/integration/venue-search.test.ts` and SCRUM-128 AC4 by hand against a
-  slot withdrawn through that flow, then remove the markers.
+  slot withdrawn through that flow, and SCRUM-154 AC4 and AC5
+  (`tests/integration/submit-venue-booking-request.test.ts`), then remove the
+  markers.
 
 ### D-10 — Planning is added and reached without SCRUM-101
 

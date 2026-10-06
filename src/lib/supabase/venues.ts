@@ -217,3 +217,18 @@ export async function fetchConfirmedBookingsOn(date: string) {
 export async function fetchUnavailableSlotsOn(date: string) {
   return db().from('venue_unavailable_slot').select('venue_id, slot').eq('date', date);
 }
+
+/**
+ * SCRUM-154 AC4 and AC5: one venue's slots recorded as unavailable on the
+ * given dates. The reason is not read: the refusal names the slot only.
+ *
+ * DUMMY(SCRUM-151) D-09: venue_unavailable_slot is a stand-in that nothing
+ * writes yet; testers add rows by hand. SCRUM-151's flow writes it for real.
+ */
+export async function fetchUnavailableSlotsForVenue(venueId: string, dates: readonly string[]) {
+  return db()
+    .from('venue_unavailable_slot')
+    .select('date, slot')
+    .eq('venue_id', venueId)
+    .in('date', [...dates]);
+}
