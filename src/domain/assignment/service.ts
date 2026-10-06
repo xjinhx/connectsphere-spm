@@ -211,6 +211,16 @@ export async function assignCoordinator(
     message: `You have been assigned to ${assignedRow.reference} (${assignedRow.name}).`,
   });
 
+  // SCRUM-198 AC5: the organiser is also told who their coordinator is.
+  // Confirmed with the PO this is a second notification alongside the
+  // coordinator's own, not a replacement for it.
+  await notifyBestEffort({
+    recipientId: assignedRow.organiser_id,
+    type: 'coordinator_named',
+    eventRequestId: assignedRow.id,
+    message: `${target.full_name ?? 'A coordinator'} is now the coordinator for ${assignedRow.reference} (${assignedRow.name}).`,
+  });
+
   return toAssignmentOutcome(assignedRow, target.full_name);
 }
 

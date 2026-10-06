@@ -26,6 +26,10 @@ export const NOTIFICATION_TYPES = [
   'request_approved',
   'request_rejected',
   'coordinator_assigned',
+  // SCRUM-198 AC5: the organiser is also told who their coordinator is,
+  // distinct from 'coordinator_assigned' (which tells the coordinator
+  // themself). Added after PO clarification - see PR discussion.
+  'coordinator_named',
   'event_confirmed',
 ] as const;
 export const NotificationTypeSchema = z.enum(NOTIFICATION_TYPES);
