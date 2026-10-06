@@ -55,7 +55,7 @@ import { createNotification } from '@/domain/notification/service';
  * or surface as an error to the caller, so this catches and swallows rather
  * than throwing.
  */
-async function notifyBestEffort(notification: Parameters<typeof createNotification>[0]): Promise<void> {
+export async function notifyBestEffort(notification: Parameters<typeof createNotification>[0]): Promise<void> {
   try {
     await createNotification(notification);
   } catch (error) {
