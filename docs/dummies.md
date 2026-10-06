@@ -227,7 +227,11 @@ switch them the next time they edit those files.
   which would require that ticket's code to know this one exists. Re-run
   `enter-planning.test.ts`, and add a test that actually inserting a
   `venue_booking_request` row fires the trigger.
-- **Status:** Active
+- **Status:** Replaced (SCRUM-101). SCRUM-142 landed in PR #70. The trigger is
+  `supabase/migrations/20261006100000_event_request_enter_planning_on_booking_request.sql`,
+  tested in `tests/integration/submit-venue-booking-request.test.ts` (an
+  Approved event becomes Planning on its first request, stays Planning on a
+  further one, and is untouched when the request is refused).
 
 ### D-10 — Planning is added and reached without SCRUM-101
 
@@ -237,7 +241,7 @@ switch them the next time they edit those files.
 - **Where:**
   - `supabase/migrations/20260928120000_event_request_lifecycle_statuses.sql`
     — adds `'planning'` with `IF NOT EXISTS`. SCRUM-101's own migration
-    (`20260927090000_event_request_planning_status.sql`, branch
+    (`20260927090100_event_request_planning_status.sql`, branch
     `move-event-status`) adds the same value and runs first on a fresh reset.
   - `src/domain/event-request/schema.ts` — `'planning'` in
     `EventRequestStatusEnum` and its label.
@@ -254,4 +258,12 @@ switch them the next time they edit those files.
   migration); switch `createConfirmedRequest()` to SCRUM-101's approved ->
   planning function and set Planning through its action in the manual tests.
   Re-run TC-103-01 to 09 (SCRUM-103 AC1-AC4).
-- **Status:** Active
+- **Status:** Partly replaced (SCRUM-101). Done: a single `'planning'` in the
+  enum, labels and badge; `createConfirmedRequest()` now uses `enterPlanning`;
+  the markers are removed. SCRUM-101's migration was renamed to
+  `20260927090100_event_request_planning_status.sql` (it shared a version with
+  `20260927090000_venue_setup_turnaround_slots.sql`, which fails `supabase
+  start`). Still to do: the manual test cases that need a Planning event
+  (TC-103-09 and the SCRUM-97/99 cases) should now reach Planning by raising a
+  venue booking request instead of the SCRUM-103 harness, and TC-103-01 to 09
+  re-run.

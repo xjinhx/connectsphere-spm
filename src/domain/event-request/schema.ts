@@ -238,7 +238,6 @@ export type EventRequestSaveInput = z.infer<typeof eventRequestSaveSchema>;
 // SCRUM-103 adds the rest of the lifecycle its ACs name - confirmed,
 // completed, cancelled (and planning, with IF NOT EXISTS) - via
 // supabase/migrations/20260928120000_event_request_lifecycle_statuses.sql.
-// DUMMY(SCRUM-101) D-10: 'planning' was added by SCRUM-103 until SCRUM-101 is on main.
 // Which moves between them are allowed lives in domain/event-status/policy.ts.
 export const EventRequestStatusEnum = z.enum([
   'draft',

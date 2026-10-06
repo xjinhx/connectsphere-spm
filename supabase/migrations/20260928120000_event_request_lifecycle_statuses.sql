@@ -10,7 +10,6 @@
 -- story needs it now, so it adds it too, with IF NOT EXISTS, and this file is
 -- timestamped after SCRUM-101's so a fresh reset runs theirs first. Either can
 -- merge first and a fresh reset still works.
--- DUMMY(SCRUM-101) D-10: 'planning' added here until SCRUM-101's migration is on main.
 --
 -- Which moves between statuses are allowed is not stored here: it is the table
 -- in src/domain/event-status/policy.ts, applied by changeEventStatus

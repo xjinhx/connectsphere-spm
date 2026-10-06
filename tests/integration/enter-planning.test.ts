@@ -17,9 +17,9 @@ import { ensureTestClientOrganisation } from './fixtures/clientOrganisation';
  * tests/unit/event-status-policy.test.ts for what a unit test does cover
  * (the transition *rule*, canEnterPlanning, in isolation).
  *
- * Not covered here: the real-world trigger (a venue or equipment request
- * being raised) — that is SCRUM-142/143's request-creation code calling
- * enterPlanning() once it exists, not this ticket's. This test calls
+ * Not covered here: the real-world trigger (a venue booking request being
+ * raised) — that is the database trigger on venue_booking_request, tested in
+ * tests/integration/submit-venue-booking-request.test.ts. This test calls
  * enterPlanning() directly, the same way approve-event-request.test.ts
  * calls approveEventRequest() directly rather than going through the HTTP
  * route.

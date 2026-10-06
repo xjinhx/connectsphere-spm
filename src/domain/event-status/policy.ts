@@ -34,10 +34,10 @@ import type { EventRequestStatus } from '@/domain/event-request/schema';
  *
  * This is the transition rule only — it does not itself listen for a venue
  * booking request being raised. enterPlanning() (service.ts) is the write
- * this guards; SCRUM-142/143's request-creation code should call that the
- * moment a request is created (currently DUMMY(SCRUM-101) D-09 on
- * src/domain/venue-booking/service.ts, branch `submit-venue-booking-req`,
- * until that branch merges this one).
+ * this guards. In the app the move is made by the trigger on
+ * venue_booking_request (20261006100000_event_request_enter_planning_on_
+ * booking_request.sql), which restates this rule in SQL because the database
+ * cannot import it; change one, change the other.
  */
 export function canEnterPlanning(status: EventRequestStatus): boolean {
   return status === 'approved' || status === 'planning';

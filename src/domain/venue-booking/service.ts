@@ -101,11 +101,10 @@ export async function submitVenueBookingRequest(
   // something else deleted it in between, not that creation failed.
   if (!created) throw new NotFoundError('Venue booking request');
 
-  // This function's job ends here: the request and its lines exist. Whether
-  // and how the event's own status reacts to that (SCRUM-101 AC3) is
-  // SCRUM-101's concern, not this one's — see that ticket's notes on how it
-  // intends to observe a new venue_booking_request row (e.g. a database
-  // trigger on this table) once it can be written against a real one.
+  // This function's job ends here: the request and its lines exist. The
+  // event's own status reacts to the new row (SCRUM-101 AC3/AC4, Approved ->
+  // Planning) through a database trigger on venue_booking_request, in the
+  // same transaction as the insert — nothing to call from here.
 
   return toOutcome(created as unknown as VenueBookingRequestRow);
 }
