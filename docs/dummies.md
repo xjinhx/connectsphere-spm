@@ -126,6 +126,9 @@ switch them the next time they edit those files.
     — the `affected_booking_slot` view (`DUMMY(SCRUM-148) D-04`), added by
     SCRUM-151 AC2: a confirmed booking on a slot Venue Staff have made
     unavailable
+  - Read by SCRUM-128 too: `src/lib/supabase/venues.ts` —
+    `fetchConfirmedBookingsOn()`, and `src/domain/venues/service.ts` —
+    `searchVenues()` (`DUMMY(SCRUM-148) D-04`)
 - **What is real and what is faked:** the capacity check, the list of affected
   bookings, the confirm step and the refusal inside the save are SCRUM-120's
   real code. Only the bookings themselves are faked: nothing in Sprint 1
@@ -145,14 +148,16 @@ switch them the next time they edit those files.
   takes both from its event request (`proposed_date`, `time_slots`), and
   "future" is judged on the Singapore date (`todayInSingapore`). If SCRUM-148
   gives a booking its own date or slot, `update_venue`,
-  `fetchConfirmedFutureBookings()` and the `affected_booking_slot` view
-  (SCRUM-151) must read that instead. (Raised in review of PR #61.)
+  `fetchConfirmedFutureBookings()`, `fetchConfirmedBookingsOn()` (SCRUM-128)
+  and the `affected_booking_slot` view (SCRUM-151) must read that instead.
+  (Raised in review of PR #61.)
 - **To replace:** SCRUM-148's approval flow writes `venue_booking` rows (and
   may widen `status` beyond `'confirmed'`). Nothing in SCRUM-120 changes;
   re-run `tests/integration/venue-capacity-cut.test.ts` and SCRUM-120 AC2 and
   AC3 by hand against a booking made through that flow. Do the same for
-  SCRUM-151: `tests/integration/venue-unavailable-slots.test.ts` and AC2 and
-  AC3 by hand. Then remove the markers.
+  SCRUM-128 (`tests/integration/venue-search.test.ts`, AC2 and AC3) and
+  SCRUM-151 (`tests/integration/venue-unavailable-slots.test.ts`, AC2 and AC3).
+  Then remove the markers.
 - **Status:** Active
 
 ### D-05 — A capacity cut's "notification" is only a stored notice
@@ -203,6 +208,45 @@ switch them the next time they edit those files.
   Re-run US-7.2-TC04 (SCRUM-91 AC1).
 - **Status:** Active
 
+### D-09 — Unavailable slots are a stand-in table filled by hand
+
+- **Kind:** Stand-in code (a shared table created early, with nothing yet
+  writing to it)
+- **Added by:** SCRUM-128 Search venues by date and slot — branch
+  `venue-search-by-date-and-slot`
+- **Waiting on:** SCRUM-151 Withdraw venue availability when circumstances
+  change (its AC1 records the unavailable slots and their reason)
+- **Where:**
+  - `supabase/migrations/20261001090000_venue_unavailable_slot.sql` — the
+    `venue_unavailable_slot` table (`DUMMY(SCRUM-151) D-09`)
+  - `src/lib/supabase/venues.ts` — `fetchUnavailableSlotsOn()`
+    (`DUMMY(SCRUM-151) D-09`)
+  - `src/domain/venues/service.ts` — `searchVenues()`
+    (`DUMMY(SCRUM-151) D-09`)
+- **What is real and what is faked:** the search, and its rule that a slot
+  recorded as unavailable excludes the venue (SCRUM-128 AC4), are real. Only
+  the recording is faked: nothing yet lets Venue Staff withdraw a slot, so a
+  tester adds rows by hand. That makes AC4 testable against real rows.
+  "Shared tables belong to no single story" (`CLAUDE.md`), so the table is the
+  smallest one SCRUM-151 needs anyway: venue, date, slot, and a required reason
+  (customer clarification #54). SCRUM-123 AC7 reads the same rows to show a
+  slot as Blocked with its reason.
+- **To test by hand:** in Studio (`http://localhost:54323`), pick a venue that
+  runs the Night slot and a date, then run:
+  ```sql
+  insert into venue_unavailable_slot (venue_id, date, slot, reason)
+  values ('<venue id>', '<YYYY-MM-DD>', 'night', 'Annual maintenance');
+  ```
+  Search that date for Night (AC4: the venue is gone), then for AM (it's back).
+- **To replace:** SCRUM-151's flow writes `venue_unavailable_slot` rows,
+  widening the table if it needs to — for example, who recorded it, or a
+  reason category: the customer's Week 7 change W7-2 names maintenance,
+  equipment failure, renovation, safety and other, where `reason` here is free
+  text. Widen this table rather than add a second one. Nothing in SCRUM-128
+  changes if the four columns stay; re-run
+  `tests/integration/venue-search.test.ts` and SCRUM-128 AC4 by hand against a
+  slot withdrawn through that flow, then remove the markers.
+
 ### D-10 — Planning is added and reached without SCRUM-101
 
 - **Kind:** Stand-in code
@@ -218,6 +262,8 @@ switch them the next time they edit those files.
   - `tests/integration/event-status-transitions.test.ts` —
     `createConfirmedRequest()` moves approved -> planning with
     `changeEventStatus`, where the app will use SCRUM-101's action.
+  - `tests/integration/coordinator-my-events.test.ts` (SCRUM-97) —
+    `createAssignedEvent()` does the same for its Planning and Confirmed events.
   - Manual testing: TC-103-09 (and the SCRUM-97/99 cases that need a Planning
     or Confirmed event) set Planning with the SCRUM-103 harness,
     `tests/manual/change-event-status.test.ts`.
@@ -225,9 +271,10 @@ switch them the next time they edit those files.
   `EventRequestStatusEnum`, `EVENT_REQUEST_STATUS_LABELS` and the badge
   (merge whichever copy arrives second); leave the `IF NOT EXISTS` line in the
   migration (it is then a no-op, and removing it would change an applied
-  migration); switch `createConfirmedRequest()` to SCRUM-101's approved ->
-  planning function and set Planning through its action in the manual tests.
-  Re-run TC-103-01 to 09 (SCRUM-103 AC1-AC4).
+  migration); switch `createConfirmedRequest()` and `createAssignedEvent()` to
+  SCRUM-101's approved -> planning function and set Planning through its
+  action in the manual tests. Re-run TC-103-01 to 09 (SCRUM-103 AC1-AC4) and
+  TC-97-02 / TC-97-04 (SCRUM-97 AC1).
 - **Status:** Active
 
 ### D-11 — An affected booking's "notification" is only a stored notice

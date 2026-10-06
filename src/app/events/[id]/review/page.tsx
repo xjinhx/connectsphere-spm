@@ -7,6 +7,9 @@ import { RejectRequestForm } from '@/components/event-request/RejectRequestForm'
 import { RequestClarificationForm } from '@/components/event-request/RequestClarificationForm';
 import { AffectedBookingsNotice } from '@/components/venue/AffectedBookingsNotice';
 import { listAffectedBookings } from '@/domain/availability/service';
+import { RequestVenueBookingForm } from '@/components/event-request/RequestVenueBookingForm';
+import { canCreateBookingRequest } from '@/domain/venue-booking/policy';
+import { listVenues } from '@/domain/venues/service';
 import {
   describeAccessibility,
   describeEquipment,
@@ -115,6 +118,12 @@ export default async function ReviewEventRequestPage({
   // anyone the request is not theirs to see.
   const affectedBookings = await listAffectedBookings(request.id);
 
+  // SCRUM-142 AC1/AC2 — a venue can only be requested once the event is
+  // Approved or in Planning. Fetched only when
+  // the section will actually render, the same reasoning as gating every
+  // other action below on its own policy function first.
+  const venues = canCreateBookingRequest(request.status) ? await listVenues() : [];
+
   return (
     <main className="mx-auto max-w-2xl px-4 py-8">
       <Link href="/assigned-events" className="text-sm text-[var(--brand)] hover:underline">
@@ -212,6 +221,20 @@ export default async function ReviewEventRequestPage({
       {canBeApproved(request.status) ? (
         <section className="mt-6 rounded-lg border border-[var(--border)] bg-[var(--surface)] p-4">
           <ApproveRequestButton requestId={request.id} />
+        </section>
+      ) : null}
+
+      {/* SCRUM-142 AC1-AC4 — "As an Event Coordinator, I want to request a
+          specific venue for the slots my event needs". Gated on
+          canCreateBookingRequest, SCRUM-142's own rule, the same way the
+          Approve section above is gated on canBeApproved: the screen can
+          never offer an action the API would refuse. */}
+      {canCreateBookingRequest(request.status) ? (
+        <section className="mt-6 rounded-lg border border-[var(--border)] bg-[var(--surface)] p-4">
+          <h2 className="text-sm font-semibold">Request a venue</h2>
+          <div className="mt-3">
+            <RequestVenueBookingForm requestId={request.id} venues={venues} />
+          </div>
         </section>
       ) : null}
 
