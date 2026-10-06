@@ -269,15 +269,22 @@ switch them the next time they edit those files.
   SCRUM-101's approved -> planning function and set Planning through its
   action in the manual tests. Re-run TC-103-01 to 09 (SCRUM-103 AC1-AC4) and
   TC-97-02 / TC-97-04 (SCRUM-97 AC1).
-- **Status:** Partly replaced (SCRUM-101). Done: a single `'planning'` in the
-  enum, labels and badge; `createConfirmedRequest()` and `createAssignedEvent()`
-  now use `enterPlanning`; the markers are removed. SCRUM-101's migration was
-  renamed to `20260927090100_event_request_planning_status.sql` (it shared a
-  version with `20260927090000_venue_setup_turnaround_slots.sql`, which fails
-  `supabase start`). Still to do: the manual test cases that need a Planning
-  event (TC-103-09 and the SCRUM-97/99 cases) should now reach Planning by
-  raising a venue booking request instead of the SCRUM-103 harness, and
-  TC-103-01 to 09 and TC-97-02 / TC-97-04 re-run.
+- **Status:** Replaced (SCRUM-101, branch `move-event-status`). A single
+  `'planning'` is in the enum, labels and badge; `createConfirmedRequest()` and
+  `createAssignedEvent()` use `enterPlanning`; the markers are removed.
+  SCRUM-101's migration was renamed to
+  `20260927090100_event_request_planning_status.sql` (it shared a version with
+  `20260927090000_venue_setup_turnaround_slots.sql`, which fails
+  `supabase start`), and now uses `add value if not exists 'planning'` so it
+  also runs on a database that already has the value from SCRUM-103's
+  migration. TC-103-01 to 09 and TC-97-02 / TC-97-04 were re-run by hand on
+  06/10/26 and all passed, with Planning reached by raising a venue booking
+  request in the Request a venue form (the trigger in
+  `20261006100000_event_request_enter_planning_on_booking_request.sql`)
+  instead of the SCRUM-103 harness. Confirmed is still set with the harness
+  (`tests/manual/change-event-status.test.ts`), as there is no Confirm action
+  until Sprint 3. Results are in the SCRUM-101 Jira comment:
+  https://scrumers-is212.atlassian.net/browse/SCRUM-101?focusedCommentId=10292
 
 ### D-11 — Approved -> Planning is not yet triggered automatically
 

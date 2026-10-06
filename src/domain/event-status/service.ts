@@ -12,7 +12,7 @@ export interface PlanningOutcome {
 
 /**
  * SCRUM-101 AC3/AC4 — Approved -> Planning, when the first venue booking
- * request or equipment request is raised against the event.
+ * request is raised against the event.
  *
  * In the running app this move is made by the database, not by calling this:
  * the trigger on `venue_booking_request`

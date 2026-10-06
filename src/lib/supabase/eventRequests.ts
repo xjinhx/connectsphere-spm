@@ -450,8 +450,8 @@ export async function markEventRequestClarificationRequested(
 /**
  * AC3 — flips an approved event to planning. No decision fields to record:
  * unlike approve/reject, this is not a human decision, it is a consequence of
- * another action (a venue or equipment request being raised), so there is no
- * actor to stamp.
+ * another action (a venue booking request being raised), so there is no actor
+ * to stamp.
  *
  * The `status` filter is the guard, same shape as markEventRequestApproved:
  * a row that is not approved matches nothing and comes back empty. AC4's

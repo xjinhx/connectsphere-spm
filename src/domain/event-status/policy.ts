@@ -20,8 +20,8 @@ import type { EventRequestStatus } from '@/domain/event-request/schema';
 
 /**
  * AC3/AC4 — Approved -> Planning, when the first venue booking request is
- * raised against the event (customer clarification #80; see also
- * SCRUM-142/143, neither built yet this sprint). Idempotent: an event
+ * raised against the event (customer clarification #80; see also SCRUM-142,
+ * which raises it). Idempotent: an event
  * already in Planning stays there when a further venue booking request is
  * raised (AC4), rather than refusing the second one.
  *
