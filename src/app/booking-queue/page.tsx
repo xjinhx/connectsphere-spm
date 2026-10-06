@@ -18,6 +18,9 @@ import { formatSingaporeDate, toSingaporeISODate } from '@/domain/shared/dates';
  * AC4 every Venue Staff member sees every venue's requests; nothing here
  *     filters by venue.
  *
+ * Each row opens the request on SCRUM-148's decision page, where Venue Staff
+ * approve or reject it.
+ *
  * Needs venue_administration (Venue Staff's), the same permission SCRUM-148's
  * decision page uses, checked before anything is read.
  */
@@ -88,6 +91,9 @@ export default async function VenueStaffBookingQueuePage({
                 <th scope="col" className="p-3 font-medium">Requested date</th>
                 <th scope="col" className="p-3 font-medium">Slots</th>
                 <th scope="col" className="p-3 font-medium">Requested on</th>
+                <th scope="col" className="p-3 font-medium">
+                  <span className="sr-only">Open</span>
+                </th>
               </tr>
             </thead>
             <tbody>
@@ -101,6 +107,11 @@ export default async function VenueStaffBookingQueuePage({
                   <td className="p-3">{formatSingaporeDate(entry.date)}</td>
                   <td className="p-3">{describeTimeSlots(entry.timeSlots)}</td>
                   <td className="p-3">{formatSingaporeDate(toSingaporeISODate(new Date(entry.requestedAt)))}</td>
+                  <td className="p-3">
+                    <Link href={`/venue-booking-requests/${entry.requestId}`} className="text-[var(--brand)] hover:underline">
+                      Open
+                    </Link>
+                  </td>
                 </tr>
               ))}
             </tbody>
