@@ -34,7 +34,7 @@ export interface VenueBookingRequestRow {
 /**
  * AC1, AC3 — create the request and every one of its lines in one
  * transaction (create_venue_booking_request(),
- * 20260928090000_venue_booking_request.sql). Returns the new request's id.
+ * 20261006090000_venue_booking_request.sql). Returns the new request's id.
  */
 export async function createVenueBookingRequest(input: {
   eventRequestId: string;

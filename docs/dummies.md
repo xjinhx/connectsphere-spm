@@ -152,7 +152,7 @@ switch them the next time they edit those files.
   `decide_venue_booking_request` writes one booking per venue, date and slot,
   with its own `date` and `slot`, and `venue_booking_one_per_slot` refuses a
   second confirmed booking of a slot
-  (`20261005120000_venue_booking_decision.sql`). The hand-made stand-in rows
+  (`20261006100000_venue_booking_decision.sql`). The hand-made stand-in rows
   are removed by that migration. `update_venue` and
   `fetchConfirmedFutureBookings()` now judge "future" on the booking's own
   date and count an event once. `venue-capacity-cut.test.ts` passes, its setup

@@ -10,7 +10,7 @@
 --      Partially Approved; each rejected line carries a reason.
 --
 -- Built on SCRUM-142's venue_booking_request and venue_booking_request_line
--- (20260928090000), which leave deciding a line to this story:
+-- (20261006090000), which leave deciding a line to this story:
 --
 -- 1. A line can now be approved or rejected, with who decided, when, and the
 --    reason for a rejection. The request has no status column of its own: its
