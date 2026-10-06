@@ -486,6 +486,80 @@ export type Database = {
           },
         ]
       }
+      venue_booking_request: {
+        Row: {
+          created_at: string
+          event_request_id: string
+          id: string
+          requested_by: string
+          venue_id: string
+        }
+        Insert: {
+          created_at?: string
+          event_request_id: string
+          id?: string
+          requested_by: string
+          venue_id: string
+        }
+        Update: {
+          created_at?: string
+          event_request_id?: string
+          id?: string
+          requested_by?: string
+          venue_id?: string
+        }
+        Relationships: [
+          {
+            foreignKeyName: "venue_booking_request_event_request_id_fkey"
+            columns: ["event_request_id"]
+            isOneToOne: false
+            referencedRelation: "event_request"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "venue_booking_request_venue_id_fkey"
+            columns: ["venue_id"]
+            isOneToOne: false
+            referencedRelation: "venues"
+            referencedColumns: ["id"]
+          },
+        ]
+      }
+      venue_booking_request_line: {
+        Row: {
+          created_at: string
+          date: string
+          id: string
+          request_id: string
+          status: string
+          time_slots: string[]
+        }
+        Insert: {
+          created_at?: string
+          date: string
+          id?: string
+          request_id: string
+          status?: string
+          time_slots: string[]
+        }
+        Update: {
+          created_at?: string
+          date?: string
+          id?: string
+          request_id?: string
+          status?: string
+          time_slots?: string[]
+        }
+        Relationships: [
+          {
+            foreignKeyName: "venue_booking_request_line_request_id_fkey"
+            columns: ["request_id"]
+            isOneToOne: false
+            referencedRelation: "venue_booking_request"
+            referencedColumns: ["id"]
+          },
+        ]
+      }
       venue_capacity_notice: {
         Row: {
           coordinator_id: string | null
@@ -686,6 +760,15 @@ export type Database = {
           p_max_capacity: number
           p_name: string
           p_operating_slots: string[]
+        }
+        Returns: string
+      }
+      create_venue_booking_request: {
+        Args: {
+          p_event_request_id: string
+          p_lines: Json
+          p_requested_by: string
+          p_venue_id: string
         }
         Returns: string
       }
