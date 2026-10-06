@@ -201,33 +201,6 @@ switch them the next time they edit those files.
   Re-run US-7.2-TC04 (SCRUM-91 AC1).
 - **Status:** Active
 
-### D-09 — SCRUM-198 AC4 has no "event confirmed" notification to send
-
-- **Kind:** Out-of-sprint stand-in
-- **Added by:** SCRUM-198 — this PR
-- **Waiting on:** SCRUM-102 (after SCRUM-100) — whichever story adds a
-  Confirmed status. This sprint's SCRUM-101 (Move an event through its
-  statuses) stops at Planning by agreement with the product owner
-  (Telegram, 27 Sep 2026): "Confirm a planning event once its arrangements
-  are ready" is explicitly out of scope this sprint.
-- **Where:** `src/domain/notification/schema.ts` — `NOTIFICATION_TYPES`
-  includes `'event_confirmed'`, marked `DUMMY(SCRUM-102)`; no call site exists
-  anywhere, because there is no confirm action to call it from.
-- **What is real and what is faked:** the type is real (it will validate and
-  render correctly once used), the label is real
-  (`NotificationList.tsx`'s `TYPE_LABELS`). Nothing creates a notification of
-  this type. This differs from D-03/D-05/D-06/D-08, which all had a real
-  call site sending nothing; here there is no call site at all, since the
-  action it would follow does not exist yet.
-- **To replace:** once a story adds a Confirmed status (or similar) to
-  `event_request`, call `createNotification` with `type: 'event_confirmed'`
-  from wherever that status is recorded, addressed to the event's
-  organiser, stating the event is confirmed (SCRUM-198 AC4's wording). No
-  test currently exercises this type — the sheet's TC-198-04 stays Not
-  Executed / Blocked until then, per "Does a test against a dummy count?"
-  above: there is nothing to run against.
-- **Status:** Active
-
 ### D-10 — Planning is added and reached without SCRUM-101
 
 - **Kind:** Stand-in code

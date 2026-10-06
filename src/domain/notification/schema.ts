@@ -12,15 +12,9 @@ import { z } from 'zod';
 // Fixed value lists
 // -----------------------------------------------------------------------------
 
-/**
- * SCRUM-198 AC1-3, AC5, plus AC4's type.
- *
- * DUMMY(SCRUM-102) D-09: 'event_confirmed' has no call site. AC4 needs an
- * event 'Confirmed' status this sprint's SCRUM-101 (Move an event through
- * its statuses) does not create - it stops at Planning, by agreement with
- * the product owner. SCRUM-102, the story after SCRUM-101 that is
- * expected to add Confirm, is what this waits on (see docs/dummies.md
- * D-09). Wire the call site once that story lands.
+/** SCRUM-198 AC1-3, AC5. AC4 is out of scope for this story - moved to
+ * SCRUM-102, which owns the event confirmation path and its notification
+ * type (xjinhx, PR #75 review discussion with the PO).
  */
 export const NOTIFICATION_TYPES = [
   'clarification_requested',
@@ -31,7 +25,6 @@ export const NOTIFICATION_TYPES = [
   // distinct from 'coordinator_assigned' (which tells the coordinator
   // themself). Added after PO clarification - see PR discussion.
   'coordinator_named',
-  'event_confirmed',
 ] as const;
 export const NotificationTypeSchema = z.enum(NOTIFICATION_TYPES);
 export type NotificationType = z.infer<typeof NotificationTypeSchema>;
