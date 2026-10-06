@@ -4,13 +4,13 @@ import { describeTimeSlots } from '@/domain/event-request/policy';
 import { TimeSlotEnum } from '@/domain/event-request/schema';
 import { isActionPermitted } from '@/domain/identity/permissions';
 import { formatSingaporeDate, formatSingaporeDateTime } from '@/domain/shared/dates';
-import { NotFoundError } from '@/domain/shared/errors';
+import { ForbiddenError, NotFoundError } from '@/domain/shared/errors';
 import type {
   DecidedVenueBookingRequestLine,
   VenueBookingDecision,
   VenueBookingRequestStatus,
 } from '@/domain/venue-booking/schema';
-import { getVenueBookingDecision } from '@/domain/venue-booking/service';
+import { viewVenueBookingRequest } from '@/domain/venue-booking/service';
 import { getVenue } from '@/domain/venues/service';
 import { getCurrentActor } from '@/lib/auth/currentActor';
 
@@ -19,12 +19,15 @@ import { getCurrentActor } from '@/lib/auth/currentActor';
  * approve or reject each line, a rejected line with a reason. Once decided,
  * each line shows who decided, when, and why if rejected.
  *
- * Only the decision lives here. The event's details (reference, coordinator,
- * attendance, layout, notes) are SCRUM-143's to add to this page, and
- * SCRUM-147's queue is what will link to it. Until then it is opened by its
- * link.
+ * SCRUM-149 AC3 — the event's assigned coordinator opens the same page, read
+ * only, and sees each rejected line's reason and the staff member who decided.
+ * The decision form is for Venue Staff (venue_administration, the permission
+ * the decision route asserts).
  *
- * Needs venue_administration, the same permission the decision route asserts.
+ * Only the decision lives here. The event's details (reference, coordinator,
+ * attendance, layout, notes) are SCRUM-143's to add to this page, SCRUM-147's
+ * queue will link Venue Staff to it, and SCRUM-144's list will link
+ * coordinators. Until then it is opened by its link.
  */
 
 export const dynamic = 'force-dynamic';
@@ -42,29 +45,29 @@ function lineLabel(line: DecidedVenueBookingRequestLine): string {
 
 export default async function VenueBookingRequestPage({ params }: { params: Promise<{ id: string }> }) {
   const actor = await getCurrentActor();
-  if (!isActionPermitted(actor.roles, 'venue_administration')) {
-    return (
-      <main className="mx-auto max-w-2xl p-8">
-        <h1 className="text-2xl font-semibold">Booking request</h1>
-        <p className="mt-4 text-[var(--text-muted)]">
-          This page is for Venue Staff. Your account does not currently hold that role.
-        </p>
-      </main>
-    );
-  }
-
   const { id } = await params;
 
   let request: VenueBookingDecision;
   try {
-    request = await getVenueBookingDecision(id);
+    request = await viewVenueBookingRequest(id, actor);
   } catch (error) {
     if (error instanceof NotFoundError) {
       notFound();
     }
+    if (error instanceof ForbiddenError) {
+      return (
+        <main className="mx-auto max-w-2xl p-8">
+          <h1 className="text-2xl font-semibold">Booking request</h1>
+          <p className="mt-4 text-[var(--text-muted)]">
+            This booking request is for Venue Staff and the event&apos;s coordinator.
+          </p>
+        </main>
+      );
+    }
     throw error;
   }
   const venue = await getVenue(request.venueId);
+  const canDecide = request.status === 'pending' && isActionPermitted(actor.roles, 'venue_administration');
 
   return (
     <main className="mx-auto max-w-2xl px-4 py-8">
@@ -76,7 +79,7 @@ export default async function VenueBookingRequestPage({ params }: { params: Prom
       </div>
       <p className="mt-1 text-sm text-[var(--text-muted)]">{venue.name}</p>
 
-      {request.status === 'pending' ? (
+      {canDecide ? (
         <section className="mt-6 rounded-lg border border-[var(--border)] bg-[var(--surface)] p-4">
           <VenueBookingDecisionForm
             requestId={request.id}
@@ -88,15 +91,22 @@ export default async function VenueBookingRequestPage({ params }: { params: Prom
           {request.lines.map((line) => (
             <li key={line.id} className="border-b border-[var(--border)] p-4 text-sm last:border-b-0">
               <p className="font-medium">{lineLabel(line)}</p>
-              {/* AC1: the decider and the decision time, recorded against the line. */}
-              <p className="mt-1">
-                {line.status === 'approved' ? 'Approved' : 'Rejected'} by {line.decidedByName ?? 'Unnamed account'}
-                {line.decidedAt ? ` · ${formatSingaporeDateTime(line.decidedAt)}` : ''}
-              </p>
-              {/* AC5: each rejected line carries its reason. */}
-              {line.rejectionReason ? (
-                <p className="mt-1 text-[var(--text-muted)]">Reason: {line.rejectionReason}</p>
-              ) : null}
+              {line.status === 'pending' ? (
+                <p className="mt-1 text-[var(--text-muted)]">Awaiting a Venue Staff decision</p>
+              ) : (
+                <>
+                  {/* SCRUM-148 AC1, SCRUM-149 AC3: the decider and the decision time. */}
+                  <p className="mt-1">
+                    {line.status === 'approved' ? 'Approved' : 'Rejected'} by{' '}
+                    {line.decidedByName ?? 'Unnamed account'}
+                    {line.decidedAt ? ` · ${formatSingaporeDateTime(line.decidedAt)}` : ''}
+                  </p>
+                  {/* SCRUM-148 AC5, SCRUM-149 AC3: each rejected line carries its reason. */}
+                  {line.rejectionReason ? (
+                    <p className="mt-1 text-[var(--text-muted)]">Reason: {line.rejectionReason}</p>
+                  ) : null}
+                </>
+              )}
             </li>
           ))}
         </ul>

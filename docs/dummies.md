@@ -295,16 +295,19 @@ switch them the next time they edit those files.
 
 - **Kind:** Stand-in code (SCRUM-193's in-app notifications are in this sprint
   but not on main yet)
-- **Added by:** SCRUM-148 AC2 — branch `venue-booking-approval`
+- **Added by:** SCRUM-148 AC2 — branch `venue-booking-approval`. Also used by
+  SCRUM-149 AC1 (branch `venue-booking-rejection`): a rejection is the same
+  decision.
 - **Waiting on:** SCRUM-193 View my notifications in the application
 - **Where:** `src/domain/venue-booking/service.ts` —
   `decideVenueBookingRequest()` (`DUMMY(SCRUM-193) D-13`)
-- **What it does:** AC2's "the assigned Event Coordinator is notified" is the
-  decision recorded on each line (status, `decided_by`, `decided_at`, reason),
-  returned with the event's `coordinatorId`. The same minimum honest
-  notification as D-03 (SCRUM-94).
+- **What it does:** "the assigned Event Coordinator is notified" (SCRUM-148
+  AC2) and "the coordinator is notified" (SCRUM-149 AC1) are the decision
+  recorded on each line (status, `decided_by`, `decided_at`, reason), returned
+  with the event's `coordinatorId`. The same minimum honest notification as
+  D-03 (SCRUM-94).
 - **To replace:** once SCRUM-193's notifications exist, create one for the
   event's coordinator from `decideVenueBookingRequest()` after the decision is
   saved (it would need a booking-decision type; 193's list has none yet).
-  Re-run SCRUM-148 AC2.
+  Re-run SCRUM-148 AC2 and SCRUM-149 AC1.
 - **Status:** Active

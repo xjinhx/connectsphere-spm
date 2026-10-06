@@ -1,7 +1,7 @@
 import { afterAll, beforeAll, describe, expect, it } from 'vitest';
 import { createAdminClient } from '@/lib/supabase/admin';
 import { createVenue } from '@/domain/venues/service';
-import { decideVenueBookingRequest, listVenueBookings } from '@/domain/venue-booking/service';
+import { decideVenueBookingRequest, listVenueBookings, viewVenueBookingRequest } from '@/domain/venue-booking/service';
 import { todayInSingapore } from '@/domain/shared/dates';
 import { ensureTestClientOrganisation } from './fixtures/clientOrganisation';
 
@@ -19,6 +19,10 @@ import { ensureTestClientOrganisation } from './fixtures/clientOrganisation';
  * Runs against the local Supabase stack: decide_venue_booking_request writes
  * the decisions and bookings in one transaction, and venue_booking_one_per_slot
  * is what refuses a double booking.
+ *
+ * SCRUM-149 Reject a booking request with a reason uses the same decision
+ * (last describe): AC1 Rejected with the reason kept, AC2 no reason refused,
+ * AC3 the event's coordinator sees the reason and who decided.
  */
 
 const admin = createAdminClient();
@@ -28,6 +32,7 @@ const CLIENT_ORGANISATION_ID = '22222222-2222-2222-2222-222222222222';
 let locationId: string;
 let venueStaffId: string;
 let coordinatorId: string;
+let otherCoordinatorId: string;
 let organiserId: string;
 const venueIds: string[] = [];
 const eventIds: string[] = [];
@@ -103,6 +108,7 @@ beforeAll(async () => {
   venueStaffId = await createUser('venue-staff');
   await admin.from('profiles').update({ full_name: 'Decision Venue Staff' }).eq('id', venueStaffId);
   coordinatorId = await createUser('coordinator');
+  otherCoordinatorId = await createUser('other-coordinator');
   organiserId = await createUser('organiser');
 });
 
@@ -110,7 +116,7 @@ afterAll(async () => {
   // Events first: their requests, lines and bookings go with them (cascade).
   for (const id of eventIds) await admin.from('event_request').delete().eq('id', id);
   for (const id of venueIds) await admin.from('venues').delete().eq('id', id);
-  for (const id of [venueStaffId, coordinatorId, organiserId]) if (id) await admin.auth.admin.deleteUser(id);
+  for (const id of [venueStaffId, coordinatorId, otherCoordinatorId, organiserId]) if (id) await admin.auth.admin.deleteUser(id);
   if (locationId) await admin.from('locations').delete().eq('id', locationId);
 });
 
@@ -304,5 +310,71 @@ describe('listVenueBookings (SCRUM-148 AC3, AC4)', () => {
     await expect(
       listVenueBookings(venueId, { from: daysFromToday(16), to: daysFromToday(15) }, { userId: STRANGER, roles: ['venue_staff'] }),
     ).rejects.toMatchObject({ code: 'VALIDATION_ERROR' });
+  });
+});
+
+describe('rejecting a booking request (SCRUM-149 AC1, AC2, AC3)', () => {
+  it('AC1: rejecting a pending request with a reason makes it Rejected and keeps the reason (TC-149-01)', async () => {
+    const venue = await createTestVenue('Hall K');
+    const { requestId, eventId, lineIds } = await createRequest(venue.id, [{ date: daysFromToday(16), slots: ['pm'] }]);
+
+    const decided = await decideVenueBookingRequest(requestId, venueStaffId, {
+      decisions: [{ lineId: lineIds[0], decision: 'reject', reason: 'Capacity is 80, event needs 150' }],
+    });
+
+    expect(decided.status).toBe('rejected');
+    expect(decided.lines[0]).toMatchObject({
+      status: 'rejected',
+      decidedBy: venueStaffId,
+      rejectionReason: 'Capacity is 80, event needs 150',
+    });
+    // D-13: the decision comes back with the coordinator it is for.
+    expect(decided.coordinatorId).toBe(coordinatorId);
+    expect(await bookingsOf(eventId)).toEqual([]);
+  });
+
+  it('AC2: refuses a rejection without a reason, and the request stays Pending (TC-149-03)', async () => {
+    const venue = await createTestVenue('Hall L');
+    const { requestId, lineIds } = await createRequest(venue.id, [{ date: daysFromToday(16), slots: ['am'] }]);
+
+    await expect(
+      decideVenueBookingRequest(requestId, venueStaffId, { decisions: [{ lineId: lineIds[0], decision: 'reject', reason: '' }] }),
+    ).rejects.toMatchObject({ code: 'VALIDATION_ERROR', message: 'A reason is required for each rejected line.' });
+    expect(await lineStatuses(requestId)).toEqual(['pending']);
+  });
+
+  describe('AC3: the coordinator sees the reason and who decided (TC-149-02)', () => {
+    let requestId: string;
+
+    beforeAll(async () => {
+      const venue = await createTestVenue('Hall M');
+      const created = await createRequest(venue.id, [{ date: daysFromToday(17), slots: ['pm'] }]);
+      requestId = created.requestId;
+      await decideVenueBookingRequest(requestId, venueStaffId, {
+        decisions: [{ lineId: created.lineIds[0], decision: 'reject', reason: 'Capacity is 80, event needs 150' }],
+      });
+    });
+
+    it("shows the event's assigned coordinator the reason and the deciding staff member", async () => {
+      const seen = await viewVenueBookingRequest(requestId, { userId: coordinatorId, roles: ['coordinator'] });
+
+      expect(seen.status).toBe('rejected');
+      expect(seen.lines[0]).toMatchObject({
+        rejectionReason: 'Capacity is 80, event needs 150',
+        decidedByName: 'Decision Venue Staff',
+      });
+    });
+
+    it('lets Venue Staff open it too', async () => {
+      await expect(
+        viewVenueBookingRequest(requestId, { userId: venueStaffId, roles: ['venue_staff'] }),
+      ).resolves.toMatchObject({ status: 'rejected' });
+    });
+
+    it('refuses a coordinator who is not assigned to the event', async () => {
+      await expect(
+        viewVenueBookingRequest(requestId, { userId: otherCoordinatorId, roles: ['coordinator'] }),
+      ).rejects.toMatchObject({ code: 'FORBIDDEN' });
+    });
   });
 });
