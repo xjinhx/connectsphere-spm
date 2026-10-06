@@ -48,13 +48,19 @@ export default async function VenueCataloguePage({
         )}
       </div>
 
-      {/* SCRUM-121 AC3: off by default, so the plain URL hides retired venues. */}
-      <Link
-        href={showRetired ? '/venues' : '/venues?includeRetired=true'}
-        className="mb-4 inline-block text-sm text-[var(--brand)] underline"
-      >
-        {showRetired ? 'Hide retired venues' : 'Include retired venues'}
-      </Link>
+      <div className="mb-4 flex flex-wrap gap-4 text-sm">
+        {/* SCRUM-121 AC3: off by default, so the plain URL hides retired venues. */}
+        <Link
+          href={showRetired ? '/venues' : '/venues?includeRetired=true'}
+          className="text-[var(--brand)] underline"
+        >
+          {showRetired ? 'Hide retired venues' : 'Include retired venues'}
+        </Link>
+        {/* SCRUM-128 */}
+        <Link href="/venues/search" className="text-[var(--brand)] underline">
+          Search by date and slot
+        </Link>
+      </div>
 
       {venues.length === 0 ? (
         <p className="rounded border border-[var(--border)] bg-[var(--surface)] p-6 text-[var(--text-muted)]">
