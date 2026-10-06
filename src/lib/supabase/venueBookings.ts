@@ -48,6 +48,18 @@ export async function decideVenueBookingRequestLines(
   });
 }
 
+/**
+ * SCRUM-92's approval view (D-02's venue part, replaced by SCRUM-148): how many
+ * confirmed bookings an event holds. The count only; no rows come back.
+ */
+export async function countConfirmedBookingsForEvent(eventRequestId: string) {
+  return db()
+    .from('venue_booking')
+    .select('id', { count: 'exact', head: true })
+    .eq('event_request_id', eventRequestId)
+    .eq('status', 'confirmed');
+}
+
 /** AC3 and AC4: a venue's confirmed bookings from `from` to `to` (YYYY-MM-DD), with each booking's event. */
 export async function fetchConfirmedBookingsBetween(venueId: string, from: string, to: string) {
   return db()

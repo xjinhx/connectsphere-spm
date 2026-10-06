@@ -25,9 +25,10 @@ import {
   RequestClarificationInputSchema,
   type Decision,
 } from './schema';
+import { countConfirmedBookingsForEvent } from '@/lib/supabase/venueBookings';
 import {
-  COMMITMENT_STATEMENT,
-  NO_COMMITMENTS,
+  commitmentStatementFor,
+  commitmentsFor,
   canBeApproved,
   canBeRejected,
   canRequestClarification,
@@ -213,7 +214,8 @@ export interface ApprovalView {
  * see isAttendeeOnly's comment in domain/identity/policy.ts.
  *
  * The commitment flags and statement are returned for every request, decided
- * or not, because this sprint nothing can be committed against any request.
+ * or not. The venue flag comes from the event's confirmed bookings (SCRUM-148
+ * replaced D-02's venue part); equipment and registration are still false.
  */
 export async function getApprovalView(
   id: string,
@@ -237,13 +239,19 @@ export async function getApprovalView(
     throw new ForbiddenError('This approval is not yours to read.');
   }
 
+  const { count, error: bookingError } = await countConfirmedBookingsForEvent(row.id);
+  if (bookingError) {
+    throw new ValidationError("Could not check the event's venue bookings.", bookingError.message);
+  }
+  const commitments = commitmentsFor((count ?? 0) > 0);
+
   return {
     id: row.id,
     status: row.status,
     decision: row.decision,
     decidedAt: row.decided_at,
-    commitments: { ...NO_COMMITMENTS },
-    commitmentStatement: COMMITMENT_STATEMENT,
+    commitments,
+    commitmentStatement: commitmentStatementFor(commitments),
   };
 }
 

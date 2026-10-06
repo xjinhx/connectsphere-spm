@@ -93,7 +93,13 @@ switch them the next time they edit those files.
   confirmed bookings, reservations and registrations; re-run US-7.3-TC05 and
   TC06 (SCRUM-92 AC2 and AC3). Each flag can be replaced separately, as its
   epic lands.
-- **Status:** Active
+- **Status:** Partly replaced. **Venue:** replaced by SCRUM-148 (branch
+  `venue-booking-approval`). `getApprovalView` reads the event's confirmed
+  bookings (`commitmentsFor`), and once one exists the statement says "A venue
+  is booked…" in place of "No venue…". US-7.3-TC05 and TC06 were re-run in
+  `approval-view.test.ts`, and the SCRUM-148 marker was removed.
+  **Equipment and registration:** still asserted `false`, waiting on SCRUM-21
+  and SCRUM-22.
 
 ### D-03 — A coordinator's "notification" is only the recorded assignment
 
