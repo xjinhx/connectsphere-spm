@@ -246,6 +246,15 @@ switch them the next time they edit those files.
   changes if the four columns stay; re-run
   `tests/integration/venue-search.test.ts` and SCRUM-128 AC4 by hand against a
   slot withdrawn through that flow, then remove the markers.
+- **Status:** Replaced (SCRUM-151, branch `venue-unavailable-slots`). SCRUM-151
+  AC1 writes `venue_unavailable_slot` rows through
+  `POST /api/venues/[id]/unavailable-slots`. It kept the four columns and added
+  `recorded_by` (`20261005100000_venue_unavailable_slot.sql`), so nothing in
+  SCRUM-128 changed. `venue-search.test.ts` passes against the merged tables.
+  SCRUM-128 AC4 by hand is TC-151-02: search a date and slot withdrawn through
+  SCRUM-151. The TypeScript
+  markers are removed; the comments in the 20261001090000 migration stay as
+  history rather than editing an applied migration.
 
 ### D-10 — Planning is added and reached without SCRUM-101
 
