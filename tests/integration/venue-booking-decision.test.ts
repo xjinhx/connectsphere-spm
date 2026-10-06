@@ -101,6 +101,7 @@ beforeAll(async () => {
   if (error || !location) throw new Error(`could not create test location: ${error?.message}`);
   locationId = location.id;
   venueStaffId = await createUser('venue-staff');
+  await admin.from('profiles').update({ full_name: 'Decision Venue Staff' }).eq('id', venueStaffId);
   coordinatorId = await createUser('coordinator');
   organiserId = await createUser('organiser');
 });
@@ -121,7 +122,12 @@ describe('decideVenueBookingRequest (SCRUM-148 AC1, AC2, AC5)', () => {
     const decided = await decideVenueBookingRequest(requestId, venueStaffId, { decisions: [{ lineId: lineIds[0], decision: 'approve' }] });
 
     expect(decided.status).toBe('approved');
-    expect(decided.lines[0]).toMatchObject({ status: 'approved', decidedBy: venueStaffId, rejectionReason: null });
+    expect(decided.lines[0]).toMatchObject({
+      status: 'approved',
+      decidedBy: venueStaffId,
+      decidedByName: 'Decision Venue Staff',
+      rejectionReason: null,
+    });
     expect(decided.lines[0]!.decidedAt).not.toBeNull();
     // D-13: the decision comes back with the coordinator it is for.
     expect(decided.coordinatorId).toBe(coordinatorId);

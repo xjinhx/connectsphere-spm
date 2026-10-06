@@ -91,6 +91,8 @@ export interface DecidedVenueBookingRequestLine {
   timeSlots: readonly string[];
   status: VenueBookingRequestLineStatus;
   decidedBy: string | null;
+  /** The decider's name, for the page; null while pending or if the account has no name. */
+  decidedByName: string | null;
   decidedAt: string | null;
   rejectionReason: string | null;
 }

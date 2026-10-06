@@ -14,6 +14,7 @@ import { isCurrentCoordinator } from '@/domain/assignment/policy';
 import type { Role } from '@/domain/identity/roles';
 import { getVenue } from '@/domain/venues/service';
 import { fetchEventRequestById } from '@/lib/supabase/eventRequests';
+import { fetchProfileNames } from '@/lib/supabase/profiles';
 import type { EventRequestRow } from '@/lib/supabase/eventRequests';
 import {
   createVenueBookingRequest,
@@ -149,7 +150,7 @@ type DecisionRow = {
 };
 
 /** Lines in date order, then AM, PM, Night: the order the days run in. */
-function toDecision(row: DecisionRow): VenueBookingDecision {
+function toDecision(row: DecisionRow, deciderNames: ReadonlyMap<string, string | null>): VenueBookingDecision {
   const lines = [...row.venue_booking_request_line]
     .sort(
       (a, b) =>
@@ -162,6 +163,7 @@ function toDecision(row: DecisionRow): VenueBookingDecision {
       timeSlots: line.time_slots,
       status: VenueBookingRequestLineStatusEnum.parse(line.status),
       decidedBy: line.decided_by,
+      decidedByName: line.decided_by ? (deciderNames.get(line.decided_by) ?? null) : null,
       decidedAt: line.decided_at,
       rejectionReason: line.rejection_reason,
     }));
@@ -182,7 +184,19 @@ async function readDecision(requestId: string): Promise<VenueBookingDecision> {
     throw new ValidationError('The venue booking request could not be read.', error.message);
   }
   if (!data) throw new NotFoundError('Venue booking request');
-  return toDecision(data as DecisionRow);
+  const row = data as DecisionRow;
+  return toDecision(row, await readDeciderNames(row));
+}
+
+/** AC1: who decided each line, by name, so the decision page can show it. */
+async function readDeciderNames(row: DecisionRow): Promise<Map<string, string | null>> {
+  const ids = [...new Set(row.venue_booking_request_line.flatMap((line) => (line.decided_by ? [line.decided_by] : [])))];
+  if (ids.length === 0) return new Map();
+  const { data, error } = await fetchProfileNames(ids);
+  if (error) {
+    throw new ValidationError('The venue booking request could not be read.', error.message);
+  }
+  return new Map((data ?? []).map((profile) => [profile.id, profile.full_name]));
 }
 
 function alreadyDecided(): ConflictError {
