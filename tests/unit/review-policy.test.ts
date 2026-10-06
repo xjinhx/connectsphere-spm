@@ -7,6 +7,8 @@ import {
   canViewApproval,
   canViewClarification,
   canViewRejection,
+  commitmentStatementFor,
+  commitmentsFor,
   isAwaitingReview,
   isReviewable,
 } from '@/domain/review/policy';
@@ -319,5 +321,26 @@ describe('canViewClarification', () => {
 
   it('refuses a signed-in account that is none of the three', () => {
     expect(canViewClarification(unassigned, as(COORDINATOR_B))).toBe(false);
+  });
+});
+
+/**
+ * SCRUM-92 AC2/AC3, dummy D-02: the venue flag is derived from confirmed
+ * bookings now that SCRUM-148 creates them. Equipment and registration stay
+ * false until their stories land.
+ */
+describe('commitmentsFor and commitmentStatementFor (D-02, venue part)', () => {
+  it('commits nothing, and says so, while the event holds no confirmed booking', () => {
+    const commitments = commitmentsFor(false);
+    expect(commitments).toEqual({ venue: false, equipment: false, registration: false });
+    expect(commitmentStatementFor(commitments)).toBe('No venue, equipment or registration arrangement is yet committed.');
+  });
+
+  it('shows the venue as committed, and stops saying "no venue", once a booking is confirmed', () => {
+    const commitments = commitmentsFor(true);
+    expect(commitments).toEqual({ venue: true, equipment: false, registration: false });
+    expect(commitmentStatementFor(commitments)).toBe(
+      'A venue is booked. No equipment or registration arrangement is yet committed.',
+    );
   });
 });

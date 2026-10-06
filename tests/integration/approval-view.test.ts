@@ -1,6 +1,7 @@
 import { describe, it, expect, beforeAll, afterAll } from 'vitest';
 import { createAdminClient } from '@/lib/supabase/admin';
 import { approveEventRequest, getApprovalView } from '@/domain/review/service';
+import { createVenue } from '@/domain/venues/service';
 import { ensureTestClientOrganisation } from './fixtures/clientOrganisation';
 
 /**
@@ -225,5 +226,55 @@ describe('getApprovalView: only people with a part in the request', () => {
 
     const view = await getApprovalView(id, { userId: STRANGER, roles: ['operations_manager'] });
     expect(view.decision).toBe('approved');
+  });
+});
+
+// ---------------------------------------------------------------------------
+// D-02's venue part, replaced by SCRUM-148: an approved event that now holds a
+// confirmed booking shows the venue as committed. Re-runs US-7.3-TC05 and TC06
+// against a real booking, as D-02's replacement steps ask.
+// ---------------------------------------------------------------------------
+describe('getApprovalView: the venue flag comes from confirmed bookings (SCRUM-148, D-02)', () => {
+  let locationId: string;
+  let venueId: string;
+
+  beforeAll(async () => {
+    const { data, error } = await supabase
+      .from('locations')
+      .insert({ name: `Approval View Location ${Date.now()}` })
+      .select('id')
+      .single();
+    if (error || !data) throw new Error(`could not create test location: ${error?.message}`);
+    locationId = data.id;
+    const venue = await createVenue({ name: `Approval View Venue ${Date.now()}`, locationId, maxCapacity: 100 });
+    venueId = venue.id;
+  });
+
+  afterAll(async () => {
+    // Bookings first: venue_booking holds on to its venue (restrict).
+    await supabase.from('venue_booking').delete().eq('venue_id', venueId);
+    await supabase.from('venues').delete().eq('id', venueId);
+    await supabase.from('locations').delete().eq('id', locationId);
+  });
+
+  it('still shows nothing committed for an approved request with no booking', async () => {
+    const id = await createSubmittedRequest();
+    await approveEventRequest(id, { actorId: coordinatorId });
+
+    const view = await getApprovalView(id, owner());
+    expect(view.commitments.venue).toBe(false);
+  });
+
+  it('shows the venue as committed once the event holds a confirmed booking', async () => {
+    const id = await createSubmittedRequest();
+    await approveEventRequest(id, { actorId: coordinatorId });
+    const { error } = await supabase
+      .from('venue_booking')
+      .insert({ venue_id: venueId, event_request_id: id, date: '2027-01-15', slot: 'am' });
+    if (error) throw new Error(`could not book test request: ${error.message}`);
+
+    const view = await getApprovalView(id, owner());
+    expect(view.commitments).toEqual({ venue: true, equipment: false, registration: false });
+    expect(view.commitmentStatement).toBe('A venue is booked. No equipment or registration arrangement is yet committed.');
   });
 });
