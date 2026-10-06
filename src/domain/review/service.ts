@@ -36,6 +36,7 @@ import {
   canViewClarification,
   canViewRejection,
   isReviewable,
+  showsCommitmentStatement,
   type Commitments,
 } from './policy';
 
@@ -192,7 +193,8 @@ export interface ApprovalView {
   /** The approval date: an instant stamped by the database, or null. */
   decidedAt: string | null;
   commitments: Commitments;
-  commitmentStatement: string;
+  /** AC2's statement while the event is Approved; null at every other status (showsCommitmentStatement). */
+  commitmentStatement: string | null;
 }
 
 /**
@@ -212,8 +214,12 @@ export interface ApprovalView {
  * SCRUM-72 AC2 — an Attendee-only account is refused before anything is read;
  * see isAttendeeOnly's comment in domain/identity/policy.ts.
  *
- * The commitment flags and statement are returned for every request, decided
- * or not, because this sprint nothing can be committed against any request.
+ * The commitment flags are returned for every request, decided or not, because
+ * this sprint nothing can be committed against any request (D-02). The
+ * statement is returned only while the event is Approved
+ * (showsCommitmentStatement, SCRUM-235): once it has moved on, "nothing is yet
+ * committed" may no longer be true. Decided here rather than on the page, so
+ * the page and this route's API always say the same thing.
  */
 export async function getApprovalView(
   id: string,
@@ -243,7 +249,7 @@ export async function getApprovalView(
     decision: row.decision,
     decidedAt: row.decided_at,
     commitments: { ...NO_COMMITMENTS },
-    commitmentStatement: COMMITMENT_STATEMENT,
+    commitmentStatement: showsCommitmentStatement(row.status) ? COMMITMENT_STATEMENT : null,
   };
 }
 

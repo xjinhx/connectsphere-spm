@@ -16,7 +16,7 @@ import {
 } from '@/domain/event-request/policy';
 import { EVENT_REQUEST_STATUS_DEFINITIONS } from '@/domain/event-request/schema';
 import { getEventRequest } from '@/domain/event-request/service';
-import { COMMITMENT_STATEMENT, NO_COMMITMENTS, showsCommitmentStatement } from '@/domain/review/policy';
+import { NO_COMMITMENTS } from '@/domain/review/policy';
 import { getApprovalView, getClarificationView, getRejectionView } from '@/domain/review/service';
 import { formatSingaporeDate, formatSingaporeDateTime } from '@/domain/shared/dates';
 import { getCurrentActor } from '@/lib/auth/currentActor';
@@ -110,7 +110,7 @@ export default async function EventRequestPage({
     decision: null,
     decidedAt: null,
     commitments: { ...NO_COMMITMENTS },
-    commitmentStatement: COMMITMENT_STATEMENT,
+    commitmentStatement: null,
   };
   const emptyRejection = { id: request.id, status: request.status, rejectionReason: null, decidedAt: null };
   const [clarification, approval, rejection] = await Promise.all([
@@ -158,12 +158,13 @@ export default async function EventRequestPage({
               Approved {formatSingaporeDateTime(approval.decidedAt)}
             </p>
           ) : null}
-          {/* The statement comes from the domain (COMMITMENT_STATEMENT), not
-              written out again here, so the page and the API cannot drift into
-              telling the Organiser two different things. Shown only while the
-              event is still Approved (showsCommitmentStatement): once it has
-              moved on, "nothing is yet committed" may no longer be true. */}
-          {showsCommitmentStatement(request.status) ? (
+          {/* The statement comes from the domain (getApprovalView), not
+              written out or decided again here, so the page and the API cannot
+              drift into telling the Organiser two different things. The
+              service sends it only while the event is still Approved
+              (showsCommitmentStatement, SCRUM-235): once it has moved on,
+              "nothing is yet committed" may no longer be true. */}
+          {approval.commitmentStatement ? (
             <p className="mt-2">{approval.commitmentStatement}</p>
           ) : null}
         </div>
