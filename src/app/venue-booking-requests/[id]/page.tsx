@@ -35,8 +35,8 @@ import { getCurrentActor } from '@/lib/auth/currentActor';
  * shown as recorded on the event; AC4 — one never recorded reads "Not
  * specified", not blank (policy.ts). AC3 was removed in Change Log CL-05.
  *
- * SCRUM-147's queue links Venue Staff here. SCRUM-144's list (backlog) will
- * link coordinators; until then they open it by its link.
+ * SCRUM-147's queue links Venue Staff here. Coordinators open it by its link;
+ * a link from the event page is proposed for Sprint 3.
  */
 
 export const dynamic = 'force-dynamic';
