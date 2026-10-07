@@ -151,6 +151,19 @@ export function canViewApproval(
   );
 }
 
+/**
+ * AC2/AC3 — whether the "nothing is yet committed" statement belongs on the
+ * approval panel. Only while the event is still Approved: AC2 and AC3 describe
+ * a request that has only been approved. Once it has moved on (Planning,
+ * Confirmed, Completed, Cancelled), arrangements may exist, and on a Confirmed
+ * event the statement would contradict the status above it ("All essential
+ * arrangements are in place"). The approval outcome and date stay on the panel
+ * at every status: the event was approved, whatever happened next.
+ */
+export function showsCommitmentStatement(status: EventRequestStatus): boolean {
+  return status === 'approved';
+}
+
 
 // ---------------------------------------------------------------------------
 // SCRUM-90 — Request clarification from the Event Organiser
