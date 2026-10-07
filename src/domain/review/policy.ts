@@ -76,13 +76,12 @@ export interface Commitments {
  * begin, and commits ConnectSphere to no arrangement (customer clarification
  * #80).
  *
- * Hardcoded rather than derived, deliberately: Venue Booking, Equipment
- * Reservation and Attendee Registration are all outside Sprint 1, so there is
- * no record in the data model to read a commitment from. Deriving "false" from
- * tables that do not exist would be building the absent feature to make a test
- * pass.
+ * The venue flag is now derived (commitmentsFor below): SCRUM-148 creates real
+ * confirmed bookings. Equipment Reservation and Attendee Registration still
+ * have no record to read a commitment from, so those two stay hardcoded.
+ * Deriving "false" from tables that do not exist would be building the absent
+ * feature to make a test pass.
  *
- * DUMMY(SCRUM-148) D-02: venue is asserted false until confirmed bookings exist.
  * DUMMY(SCRUM-21) D-02: equipment is asserted false until reservations exist.
  * DUMMY(SCRUM-22) D-02: registration is asserted false until registrations exist.
  * Once they exist, derive each flag from those records - see docs/dummies.md.
@@ -96,6 +95,24 @@ export const NO_COMMITMENTS: Readonly<Commitments> = Object.freeze({
 /** AC2's statement, worded as the Jira card words it. */
 export const COMMITMENT_STATEMENT =
   'No venue, equipment or registration arrangement is yet committed.';
+
+/** Once a venue is booked, the statement stops saying "no venue". */
+export const VENUE_BOOKED_STATEMENT =
+  'A venue is booked. No equipment or registration arrangement is yet committed.';
+
+/**
+ * D-02's venue part, replaced by SCRUM-148: the venue is committed once the
+ * event holds a confirmed booking. Equipment and registration stay false
+ * (NO_COMMITMENTS above).
+ */
+export function commitmentsFor(hasConfirmedBooking: boolean): Commitments {
+  return { ...NO_COMMITMENTS, venue: hasConfirmedBooking };
+}
+
+/** AC2's statement while nothing is committed; the venue-booked one after. */
+export function commitmentStatementFor(commitments: Commitments): string {
+  return commitments.venue ? VENUE_BOOKED_STATEMENT : COMMITMENT_STATEMENT;
+}
 
 /**
  * AC2/AC3 — who may read a request's approval outcome and date: the organiser
