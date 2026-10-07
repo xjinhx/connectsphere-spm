@@ -1,6 +1,7 @@
 import type { Metadata } from 'next';
 import './globals.css';
 import { LogoutButton } from '@/components/auth/LogoutButton';
+import { NotificationBell } from '@/components/notification/NotificationBell';
 import { createSessionClient } from '@/lib/supabase/server';
 
 export const metadata: Metadata = {
@@ -18,7 +19,8 @@ export default async function RootLayout({ children }: { children: React.ReactNo
     <html lang="en">
       <body className="min-h-screen antialiased">
         {user && (
-          <header className="flex justify-end border-b border-[var(--border)] px-6 py-3">
+          <header className="flex items-center justify-end gap-3 border-b border-[var(--border)] px-6 py-3">
+            <NotificationBell />
             <LogoutButton />
           </header>
         )}

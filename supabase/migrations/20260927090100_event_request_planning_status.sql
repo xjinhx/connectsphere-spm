@@ -1,0 +1,24 @@
+-- =============================================================================
+-- SCRUM-101 — Move an event through its statuses (AC3/AC4)
+-- =============================================================================
+-- Step 1 of 2 (own migration, per the two-step pattern already established by
+-- 20260912154742_event_request_approved_status.sql and
+-- 20260920140000_event_request_rejected_status.sql): add the 'planning'
+-- status value, and nothing else. Postgres refuses to use a new enum value in
+-- the same transaction that adds it, and each migration file runs in its own
+-- transaction.
+--
+-- Only 'planning' is added here, matching SCRUM-101's actual Jira ACs (AC3:
+-- Approved -> Planning on the first venue booking request; AC4: idempotent
+-- while already Planning). SCRUM-103 adds Confirmed, Completed and Cancelled
+-- in 20260928120000_event_request_lifecycle_statuses.sql; Postponed and
+-- Withdrawn are deliberately not added — no story on this sprint's board owns
+-- those transitions yet. Same pattern as SCRUM-92/93: a value is added only
+-- once a story actually needs it, not speculatively for a future one.
+--
+-- IF NOT EXISTS because SCRUM-103's migration adds 'planning' too (it needs
+-- it as well), so a database that has already run that one has the value.
+-- A fresh reset runs this file first (it is timestamped earlier), where the
+-- clause changes nothing.
+
+alter type event_request_status add value if not exists 'planning';

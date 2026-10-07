@@ -2,7 +2,7 @@ import { afterAll, beforeAll, describe, expect, it } from 'vitest';
 import { createAdminClient } from '@/lib/supabase/admin';
 import { createVenue } from '@/domain/venues/service';
 import { decideVenueBookingRequest, listVenueBookings, viewVenueBookingRequest } from '@/domain/venue-booking/service';
-import { todayInSingapore } from '@/domain/shared/dates';
+import { formatSingaporeDate, todayInSingapore } from '@/domain/shared/dates';
 import { ensureTestClientOrganisation } from './fixtures/clientOrganisation';
 
 /**
@@ -147,6 +147,21 @@ describe('decideVenueBookingRequest (SCRUM-148 AC1, AC2, AC5)', () => {
     await decideVenueBookingRequest(requestId, venueStaffId, { decisions: [{ lineId: lineIds[0], decision: 'approve' }] });
 
     expect(await bookingsOf(eventId)).toEqual([`${date} am confirmed`, `${date} pm confirmed`]);
+  });
+
+  it("AC2: notifies the event's assigned coordinator of the decision", async () => {
+    const venue = await createTestVenue('Hall N');
+    const date = daysFromToday(11);
+    const { requestId, eventId, lineIds } = await createRequest(venue.id, [{ date, slots: ['am'] }]);
+
+    await decideVenueBookingRequest(requestId, venueStaffId, { decisions: [{ lineId: lineIds[0], decision: 'approve' }] });
+
+    const { data } = await admin
+      .from('notifications')
+      .select('type, message')
+      .eq('recipient_id', coordinatorId)
+      .eq('event_request_id', eventId);
+    expect(data).toEqual([{ type: 'venue_booking_update', message: `Your booking request for ${venue.name} was approved: ${formatSingaporeDate(date)} AM.` }]);
   });
 
   it('AC5: approves some lines and rejects one with a reason: Partially Approved, bookings for approved lines only', async () => {

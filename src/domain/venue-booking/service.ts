@@ -9,9 +9,10 @@ import {
   type VenueBookingDecision,
   type VenueBookingRequestOutcome,
 } from './schema';
-import { canCreateBookingRequest, canSeeBookingDetails, canViewBookingRequest, requestStatusOf } from './policy';
+import { bookingDecisionMessage, canCreateBookingRequest, canSeeBookingDetails, canViewBookingRequest, requestStatusOf } from './policy';
 import { isCurrentCoordinator } from '@/domain/assignment/policy';
 import type { Role } from '@/domain/identity/roles';
+import { notifyBestEffort } from '@/domain/notification/service';
 import { getVenue } from '@/domain/venues/service';
 import { fetchEventRequestById } from '@/lib/supabase/eventRequests';
 import { fetchProfileNames } from '@/lib/supabase/profiles';
@@ -117,11 +118,10 @@ export async function submitVenueBookingRequest(
   // something else deleted it in between, not that creation failed.
   if (!created) throw new NotFoundError('Venue booking request');
 
-  // This function's job ends here: the request and its lines exist. Whether
-  // and how the event's own status reacts to that (SCRUM-101 AC3) is
-  // SCRUM-101's concern, not this one's — see that ticket's notes on how it
-  // intends to observe a new venue_booking_request row (e.g. a database
-  // trigger on this table) once it can be written against a real one.
+  // This function's job ends here: the request and its lines exist. The
+  // event's own status reacts to the new row (SCRUM-101 AC3/AC4, Approved ->
+  // Planning) through a database trigger on venue_booking_request, in the
+  // same transaction as the insert — nothing to call from here.
 
   return toOutcome(created as unknown as VenueBookingRequestRow);
 }
@@ -246,10 +246,11 @@ export async function viewVenueBookingRequest(
  * SCRUM-149 AC1 and AC2 are this same decision: rejecting every line of a
  * request makes it Rejected, and each rejected line needs a reason.
  *
- * DUMMY(SCRUM-193) D-13: "the assigned Event Coordinator is notified" (SCRUM-148
- * AC2) and "the coordinator is notified" (SCRUM-149 AC1) are, for now, the
- * decision recorded on each line (who decided, when, the outcome), returned with
- * the coordinator it is for. SCRUM-193's notifications send it.
+ * "The assigned Event Coordinator is notified" (SCRUM-148 AC2) and "the
+ * coordinator is notified" (SCRUM-149 AC1): once the decision is saved, the
+ * coordinator gets a SCRUM-193 notification with the outcome and each
+ * rejected line's reason. Best effort, like SCRUM-198's: a notification that
+ * fails is logged and never undoes a saved decision.
  */
 export async function decideVenueBookingRequest(
   requestId: string,
@@ -285,7 +286,17 @@ export async function decideVenueBookingRequest(
   if (outcome === 'already_decided') throw alreadyDecided();
   if (outcome !== 'decided') throw new ValidationError(DECIDE_EVERY_LINE);
 
-  return readDecision(requestId);
+  const saved = await readDecision(requestId);
+  if (saved.coordinatorId) {
+    const venue = await getVenue(saved.venueId);
+    await notifyBestEffort({
+      recipientId: saved.coordinatorId,
+      type: 'venue_booking_update',
+      eventRequestId: saved.eventRequestId,
+      message: bookingDecisionMessage(venue.name, saved),
+    });
+  }
+  return saved;
 }
 
 /**

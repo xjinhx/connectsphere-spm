@@ -379,6 +379,44 @@ export type Database = {
         }
         Relationships: []
       }
+      notifications: {
+        Row: {
+          created_at: string
+          event_request_id: string
+          id: string
+          message: string
+          read_at: string | null
+          recipient_id: string
+          type: string
+        }
+        Insert: {
+          created_at?: string
+          event_request_id: string
+          id?: string
+          message: string
+          read_at?: string | null
+          recipient_id: string
+          type: string
+        }
+        Update: {
+          created_at?: string
+          event_request_id?: string
+          id?: string
+          message?: string
+          read_at?: string | null
+          recipient_id?: string
+          type?: string
+        }
+        Relationships: [
+          {
+            foreignKeyName: "notifications_event_request_id_fkey"
+            columns: ["event_request_id"]
+            isOneToOne: false
+            referencedRelation: "event_request"
+            referencedColumns: ["id"]
+          },
+        ]
+      }
       profiles: {
         Row: {
           client_organisation_id: string | null

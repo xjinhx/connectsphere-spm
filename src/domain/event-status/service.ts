@@ -1,8 +1,72 @@
-import { fetchEventRequestById, markEventRequestStatus, type EventRequestRow } from '@/lib/supabase/eventRequests';
-import { InvalidTransitionError, NotFoundError, ValidationError } from '@/domain/shared/errors';
+import { EventRequestIdSchema } from './schema';
+import { canEnterPlanning, canTransition } from './policy';
+import { fetchEventRequestById, markEventRequestPlanning, markEventRequestStatus } from '@/lib/supabase/eventRequests';
+import type { EventRequestRow } from '@/lib/supabase/eventRequests';
 import type { EventRequestStatus } from '@/domain/event-request/schema';
-import { EventRequestIdSchema } from '@/domain/review/schema';
-import { canTransition } from './policy';
+import { NotFoundError, ValidationError, InvalidTransitionError } from '@/domain/shared/errors';
+
+export interface PlanningOutcome {
+  id: string;
+  status: EventRequestStatus;
+}
+
+/**
+ * SCRUM-101 AC3/AC4 — Approved -> Planning, when the first venue booking
+ * request is raised against the event.
+ *
+ * In the running app this move is made by the database, not by calling this:
+ * the trigger on `venue_booking_request`
+ * (20261006100000_event_request_enter_planning_on_booking_request.sql) moves
+ * an Approved event to Planning in the same transaction as the request that
+ * causes it, so SCRUM-142's code does not need to know this ticket exists.
+ * This function is the same rule as a direct call - used by tests to bring an
+ * event to Planning, and by any later story that needs the move without a
+ * booking request.
+ *
+ * AC4's idempotency is handled here, not by the database filter alone: if
+ * the event is already in Planning when this is called (a further request
+ * raised against it), that is success, not a duplicate transition to
+ * refuse — so the current row is read first, and a write is only ever
+ * attempted from 'approved'.
+ */
+export async function enterPlanning(eventRequestId: string): Promise<PlanningOutcome> {
+  const parsedId = EventRequestIdSchema.safeParse(eventRequestId);
+  if (!parsedId.success) throw new NotFoundError('Event request');
+
+  const { data: existing, error: readError } = await fetchEventRequestById(parsedId.data);
+  if (readError) {
+    throw new ValidationError('The event request could not be read.', readError.message);
+  }
+  if (!existing) throw new NotFoundError('Event request');
+
+  const event = existing as unknown as EventRequestRow;
+
+  // AC4 — already there is success, not a duplicate transition to refuse.
+  if (event.status === 'planning') {
+    return { id: event.id, status: event.status };
+  }
+
+  if (!canEnterPlanning(event.status)) {
+    throw new InvalidTransitionError(event.status, 'planning');
+  }
+
+  const { data: updated, error: writeError } = await markEventRequestPlanning(parsedId.data);
+  if (writeError) {
+    throw new ValidationError('The event could not be moved to planning.', writeError.message);
+  }
+  // The checks above saw an approved event, yet no row matched the filter.
+  // Something changed it in between (e.g. it was rejected or cancelled) —
+  // re-read to say what, the same race-handling pattern as
+  // approveEventRequest's approvalRaceError.
+  if (!updated) {
+    const { data: current } = await fetchEventRequestById(parsedId.data);
+    const currentStatus = (current as unknown as EventRequestRow | null)?.status ?? event.status;
+    throw new InvalidTransitionError(currentStatus, 'planning');
+  }
+
+  const row = updated as unknown as EventRequestRow;
+  return { id: row.id, status: row.status };
+}
 
 /**
  * SCRUM-103 — Prevent invalid status transitions.
