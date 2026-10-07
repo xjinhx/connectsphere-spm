@@ -524,3 +524,75 @@ describe('blocking a conflicting approval (SCRUM-155)', () => {
     expect(await bookingsOf(eventId)).toEqual([]);
   });
 });
+
+describe('suggesting an alternative (SCRUM-150)', () => {
+  let requestId: string;
+  let eventId: string;
+  let lineId: string;
+  let suggested: { id: string; name: string };
+  let date: string;
+
+  beforeAll(async () => {
+    const venue = await createTestVenue('Hall V');
+    const other = await createTestVenue('Hall W');
+    suggested = { id: other.id, name: other.name };
+    date = daysFromToday(30);
+    const created = await createRequest(venue.id, [{ date, slots: ['pm'] }]);
+    requestId = created.requestId;
+    eventId = created.eventId;
+    lineId = created.lineIds[0]!;
+    await decideVenueBookingRequest(requestId, venueStaffId, {
+      decisions: [{ lineId, decision: 'reject', reason: 'Too small', suggestion: { venueId: suggested.id, date, slots: ['pm'] } }],
+    });
+  });
+
+  it('AC1: keeps the suggestion with the rejected line (TC-150-01)', async () => {
+    const seen = await viewVenueBookingRequest(requestId, { userId: venueStaffId, roles: ['venue_staff'] });
+
+    expect(seen.status).toBe('rejected');
+    expect(seen.lines[0]).toMatchObject({
+      rejectionReason: 'Too small',
+      suggestion: { venueId: suggested.id, venueName: suggested.name, date, slots: ['pm'] },
+    });
+  });
+
+  it("AC2: shows it to the event's coordinator (TC-150-02)", async () => {
+    const seen = await viewVenueBookingRequest(requestId, { userId: coordinatorId, roles: ['coordinator'] });
+    expect(seen.lines[0]?.suggestion).toMatchObject({ venueName: suggested.name, date, slots: ['pm'] });
+  });
+
+  it('AC3: books nothing and requests nothing at the suggested venue (TC-150-04)', async () => {
+    const { count: bookings } = await admin
+      .from('venue_booking')
+      .select('id', { count: 'exact', head: true })
+      .eq('venue_id', suggested.id)
+      .eq('date', date);
+    const { count: requests } = await admin
+      .from('venue_booking_request')
+      .select('id', { count: 'exact', head: true })
+      .eq('venue_id', suggested.id)
+      .eq('event_request_id', eventId);
+
+    expect(bookings).toBe(0);
+    expect(requests).toBe(0);
+  });
+
+  it("AC3: does not hold the suggested slot: another event's request for it is approved normally (TC-150-05)", async () => {
+    const competing = await createRequest(suggested.id, [{ date, slots: ['pm'] }], otherCoordinatorId);
+
+    const decided = await decideVenueBookingRequest(competing.requestId, venueStaffId, {
+      decisions: [{ lineId: competing.lineIds[0], decision: 'approve' }],
+    });
+    expect(decided.status).toBe('approved');
+  });
+
+  it('AC1: a rejection without a suggestion has none (TC-150-06)', async () => {
+    const venue = await createTestVenue('Hall X');
+    const plain = await createRequest(venue.id, [{ date: daysFromToday(31), slots: ['am'] }]);
+
+    const decided = await decideVenueBookingRequest(plain.requestId, venueStaffId, {
+      decisions: [{ lineId: plain.lineIds[0], decision: 'reject', reason: 'Private function' }],
+    });
+    expect(decided.lines[0]?.suggestion).toBeNull();
+  });
+});

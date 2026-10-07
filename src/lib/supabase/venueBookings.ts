@@ -21,7 +21,7 @@ export async function fetchVenueBookingDecision(id: string) {
   return db()
     .from('venue_booking_request')
     .select(
-      'id, event_request_id, venue_id, event_request:event_request_id (coordinator_id), venue_booking_request_line (id, date, time_slots, status, decided_by, decided_at, rejection_reason)',
+      'id, event_request_id, venue_id, event_request:event_request_id (coordinator_id), venue_booking_request_line (id, date, time_slots, status, decided_by, decided_at, rejection_reason, suggested_venue_id, suggested_date, suggested_slots, suggested_venue:suggested_venue_id (name))',
     )
     .eq('id', id)
     .maybeSingle();
@@ -39,12 +39,23 @@ export async function fetchVenueBookingDecision(id: string) {
  */
 export async function decideVenueBookingRequestLines(
   requestId: string,
-  decisions: readonly { lineId: string; decision: 'approve' | 'reject'; reason?: string }[],
+  decisions: readonly {
+    lineId: string;
+    decision: 'approve' | 'reject';
+    reason?: string;
+    suggestion?: { venueId: string; date: string; slots: readonly string[] };
+  }[],
   decidedBy: string,
 ) {
   return db().rpc('decide_venue_booking_request', {
     p_request_id: requestId,
-    p_decisions: decisions.map((d) => ({ line_id: d.lineId, decision: d.decision, reason: d.reason ?? null })),
+    p_decisions: decisions.map((d) => ({
+      line_id: d.lineId,
+      decision: d.decision,
+      reason: d.reason ?? null,
+      // SCRUM-150 AC1: saved on the rejected line with the decision.
+      suggestion: d.suggestion ? { venue_id: d.suggestion.venueId, date: d.suggestion.date, slots: [...d.suggestion.slots] } : null,
+    })),
     p_decided_by: decidedBy,
   });
 }
