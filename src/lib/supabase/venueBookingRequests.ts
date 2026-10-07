@@ -54,3 +54,69 @@ export async function createVenueBookingRequest(input: {
 export async function fetchVenueBookingRequestById(id: string) {
   return db().from('venue_booking_request').select(REQUEST_COLUMNS).eq('id', id).maybeSingle();
 }
+
+// ---------------------------------------------------------------------------
+// SCRUM-147 — View the pending booking request queue
+// ---------------------------------------------------------------------------
+
+/** One pending line, with the request, venue and event it belongs to. */
+export interface PendingBookingLineRow {
+  id: string;
+  date: string;
+  time_slots: string[];
+  venue_booking_request: {
+    id: string;
+    created_at: string;
+    venues: { name: string } | null;
+    event_request: { name: string; reference: string } | null;
+  } | null;
+}
+
+/**
+ * AC1, AC3, AC4 — every line still pending, at every venue.
+ *
+ * Only 'pending' lines are read, so a decided line (approved or rejected)
+ * drops out of the queue (AC3). No venue filter: Venue Staff are not scoped to
+ * particular venues (AC4).
+ */
+export async function fetchPendingBookingLines() {
+  return db()
+    .from('venue_booking_request_line')
+    .select(
+      'id, date, time_slots, venue_booking_request ( id, created_at, venues ( name ), event_request ( name, reference ) )',
+    )
+    .eq('status', 'pending');
+}
+
+// ---------------------------------------------------------------------------
+// SCRUM-143 — Include the requirements Venue Staff need
+// ---------------------------------------------------------------------------
+
+/** A booking request's event, as recorded, and who requested it. */
+export interface BookingRequestRequirementsRow {
+  id: string;
+  created_at: string;
+  requested_by: string;
+  event_request: {
+    name: string;
+    reference: string;
+    expected_attendance: number | null;
+    room_layout: string | null;
+    accessibility_required: boolean | null;
+    accessibility_notes: string | null;
+    event_request_accessibility_features: { accessibility_features: { name: string } | null }[];
+  } | null;
+}
+
+/** AC1, AC2 — the event behind a booking request, with its requirements as recorded on the event. */
+export async function fetchBookingRequestRequirements(id: string) {
+  return db()
+    .from('venue_booking_request')
+    .select(
+      'id, created_at, requested_by, ' +
+        'event_request ( name, reference, expected_attendance, room_layout, accessibility_required, accessibility_notes, ' +
+        'event_request_accessibility_features ( accessibility_features ( name ) ) )',
+    )
+    .eq('id', id)
+    .maybeSingle();
+}

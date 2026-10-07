@@ -50,6 +50,7 @@ import {
  * SCRUM-116 Add a venue          SCRUM-120 Update venue information
  * SCRUM-117 Facilities/access    SCRUM-121 Browse and view the catalogue
  * SCRUM-118 Room layouts       SCRUM-128 Search by date and slot
+ *                              (SCRUM-123's calendar is in calendar.ts)
  *
  * Orchestration only. Every query lives in src/lib/supabase/venues.ts, every
  * rule that compares two values lives in policy.ts, and every single-field
