@@ -125,7 +125,7 @@ switch them the next time they edit those files.
     (`DUMMY(SCRUM-148) D-04`)
   - `src/domain/venues/service.ts` — `findAffectedFutureBookings()`
     (`DUMMY(SCRUM-148) D-04`)
-  - `supabase/migrations/20261005110000_venue_unavailable_slot_affected_bookings.sql`
+  - `supabase/migrations/20261007120000_venue_unavailable_slot_affected_bookings.sql`
     — the `affected_booking_slot` view (`DUMMY(SCRUM-148) D-04`), added by
     SCRUM-151 AC2: a confirmed booking on a slot Venue Staff have made
     unavailable
@@ -252,7 +252,7 @@ switch them the next time they edit those files.
 - **Status:** Replaced (SCRUM-151, branch `venue-unavailable-slots`). SCRUM-151
   AC1 writes `venue_unavailable_slot` rows through
   `POST /api/venues/[id]/unavailable-slots`. It kept the four columns and added
-  `recorded_by` (`20261005100000_venue_unavailable_slot.sql`), so nothing in
+  `recorded_by` (`20261007110000_venue_unavailable_slot.sql`), so nothing in
   SCRUM-128 changed. `venue-search.test.ts` passes against the merged tables.
   SCRUM-128 AC4 by hand is TC-151-02: search a date and slot withdrawn through
   SCRUM-151. The TypeScript
@@ -343,14 +343,14 @@ switch them the next time they edit those files.
 
 - **Kind:** Out-of-sprint stand-in
 - **Added by:** SCRUM-151 AC3 — branch `venue-unavailable-slots`
-- **Waiting on:** a new story, "Release an affected booking", raised for the
-  Product Backlog because no story releases a single booking. Until it has a
-  key, the markers use its epic's: SCRUM-17 Venue Booking Approval. SCRUM-105
-  (cancel an event) and SCRUM-153 (postpone one) also release bookings and
-  should reuse the same release.
+- **Waiting on:** SCRUM-231 Release an affected booking (Sprint 3); its AC4
+  closes the outstanding action. "Replace" is SCRUM-229. SCRUM-105 (cancel an
+  event) and SCRUM-153 (postpone one) also release bookings and should reuse
+  the same release. (The markers first used the epic key SCRUM-17, before
+  SCRUM-231 existed.)
 - **Where:** `src/domain/availability/service.ts` — `listAffectedBookings()`;
   `src/components/venue/AffectedBookingsNotice.tsx` (both
-  `DUMMY(SCRUM-17) D-12`)
+  `DUMMY(SCRUM-231) D-12`)
 - **What is real and what is faked:** the outstanding action is real. Each
   affected booking is listed on the coordinator's event page for as long as it
   is still confirmed on an unavailable slot, and drops off once it is not.
@@ -362,7 +362,7 @@ switch them the next time they edit those files.
   ```
   "Replaced" is tested as booking the event at another venue, then removing
   the old booking.
-- **To replace:** the new story adds the release action (with SCRUM-148, a
+- **To replace:** SCRUM-231 adds the release action (with SCRUM-148, a
   released status). `listAffectedBookings()` does not change, because it only
   lists confirmed bookings. Add the action beside each entry in
   `AffectedBookingsNotice`, re-run SCRUM-151 AC3, then remove the markers.
@@ -377,7 +377,7 @@ switch them the next time they edit those files.
   SCRUM-148's).
 - **Waiting on:** SCRUM-193 View my notifications in the application
 - **Where:**
-  `supabase/migrations/20261005110000_venue_unavailable_slot_affected_bookings.sql`
+  `supabase/migrations/20261007120000_venue_unavailable_slot_affected_bookings.sql`
   — the `venue_unavailability_notice` table and the insert in
   `mark_slots_unavailable` (`DUMMY(SCRUM-193) D-14`);
   `src/domain/availability/service.ts` — `markSlotsUnavailable()`

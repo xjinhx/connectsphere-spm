@@ -896,7 +896,7 @@ export type Database = {
           p_today?: string
           p_venue_id: string
         }
-        Returns: number
+        Returns: Json
       }
       update_venue: {
         Args: {

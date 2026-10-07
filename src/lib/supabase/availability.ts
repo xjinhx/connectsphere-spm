@@ -25,13 +25,13 @@ const UNAVAILABLE_SLOT_SELECT = 'id, venue_id, date, slot, reason, created_at';
 
 /**
  * SCRUM-151 AC1 and AC2: one call to the database function
- * mark_slots_unavailable (migration 20261005110000_...), which records one
+ * mark_slots_unavailable (migration 20261007120000_...), which records one
  * row per slot and a notice for each affected booking's coordinator in a
  * single transaction. supabase-js has no transactions of its own.
  *
  * If any of the slots is already unavailable (the unique constraint) the
- * whole call fails and nothing is saved. Resolves to the number of notices
- * written. `today` is the Singapore date (YYYY-MM-DD) "upcoming" is judged
+ * whole call fails and nothing is saved. Resolves to the notices written, a
+ * jsonb array (NoticeWrittenSchema). `today` is the Singapore date (YYYY-MM-DD) "upcoming" is judged
  * against; left out, the function works it out itself.
  */
 export async function recordUnavailableSlots(input: {
@@ -50,20 +50,6 @@ export async function recordUnavailableSlots(input: {
     p_recorded_by: input.recordedBy,
     ...(input.today !== undefined && { p_today: input.today }),
   });
-}
-
-/**
- * SCRUM-151 AC2: the notices one save wrote. A slot can be marked unavailable
- * only once, so a notice naming any of the slots just marked came from that
- * save.
- */
-export async function fetchNoticesForSlots(venueId: string, date: string, slots: readonly string[]) {
-  return db()
-    .from('venue_unavailability_notice')
-    .select('coordinator_id, event_request_id, slot_date, slots, reason')
-    .eq('venue_id', venueId)
-    .eq('slot_date', date)
-    .overlaps('slots', [...slots]);
 }
 
 /** The venue's unavailable slots on one date, among `slots`. */

@@ -104,23 +104,26 @@ alter table venue_unavailability_notice enable row level security;
 -- date is worked out here. Never current_date: the database runs in UTC,
 -- which is still on yesterday until 08:00 in Singapore.
 --
--- Returns the number of notices written: one per affected booking of an
--- upcoming event that has a coordinator.
+-- Returns the notices it wrote, one per affected booking of an upcoming event
+-- that has a coordinator, as a jsonb array: the service sends each one as a
+-- notification, so it never has to read them back.
 -- -----------------------------------------------------------------------------
-create or replace function mark_slots_unavailable(
+drop function if exists mark_slots_unavailable(uuid, date, text[], text, uuid, date);
+
+create function mark_slots_unavailable(
   p_venue_id uuid,
   p_slot_date date,
   p_slots text[],
   p_reason text,
   p_recorded_by uuid,
   p_today date default null
-) returns integer
+) returns jsonb
 language plpgsql
 set search_path = public
 as $$
 declare
   v_today date := coalesce(p_today, timezone('Asia/Singapore', now())::date);
-  v_notices integer;
+  v_notices jsonb;
 begin
   -- AC1: one row per slot. A slot that is already unavailable breaks the
   -- unique constraint, which aborts the whole function, so nothing is saved.
@@ -130,23 +133,34 @@ begin
 
   -- AC2: one notice per affected booking of an upcoming event, naming the
   -- event's slots that were just withdrawn, in AM, PM, Night order.
-  insert into venue_unavailability_notice (venue_id, event_request_id, coordinator_id, slot_date, slots, reason)
-  select
-    a.venue_id,
-    a.event_request_id,
-    a.coordinator_id,
-    a.slot_date,
-    array_agg(a.slot order by array_position(array['am', 'pm', 'night']::text[], a.slot)),
-    p_reason
-  from affected_booking_slot a
-  where a.venue_id = p_venue_id
-    and a.slot_date = p_slot_date
-    and a.slot = any (p_slots)
-    and a.slot_date >= v_today
-    and a.coordinator_id is not null
-  group by a.venue_id, a.event_request_id, a.coordinator_id, a.slot_date;
+  with written as (
+    insert into venue_unavailability_notice (venue_id, event_request_id, coordinator_id, slot_date, slots, reason)
+    select
+      a.venue_id,
+      a.event_request_id,
+      a.coordinator_id,
+      a.slot_date,
+      array_agg(a.slot order by array_position(array['am', 'pm', 'night']::text[], a.slot)),
+      p_reason
+    from affected_booking_slot a
+    where a.venue_id = p_venue_id
+      and a.slot_date = p_slot_date
+      and a.slot = any (p_slots)
+      and a.slot_date >= v_today
+      and a.coordinator_id is not null
+    group by a.venue_id, a.event_request_id, a.coordinator_id, a.slot_date
+    returning event_request_id, coordinator_id, slot_date, slots, reason
+  )
+  select coalesce(jsonb_agg(jsonb_build_object(
+    'eventRequestId', event_request_id,
+    'coordinatorId', coordinator_id,
+    'date', slot_date,
+    'slots', to_jsonb(slots),
+    'reason', reason
+  )), '[]'::jsonb)
+  into v_notices
+  from written;
 
-  get diagnostics v_notices = row_count;
   return v_notices;
 end;
 $$;

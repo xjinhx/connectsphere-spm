@@ -1,7 +1,6 @@
 import { z } from 'zod';
 import {
   fetchAffectedBookingSlotsForEvent,
-  fetchNoticesForSlots,
   fetchUnavailableSlotsOn,
   fetchUpcomingUnavailableSlots,
   recordUnavailableSlots,
@@ -15,6 +14,7 @@ import { affectedBookingMessage, findNonOperatingSlots } from './policy';
 import {
   BookingOnUnavailableSlotSchema,
   MarkSlotsUnavailableInputSchema,
+  NoticeWrittenSchema,
   SLOT_NAMES,
   UnavailableSlotSchema,
   type BookingOnUnavailableSlot,
@@ -122,7 +122,7 @@ export async function markSlotsUnavailable(
 
   // "Upcoming" is judged on Singapore's date, decided here and handed to the
   // save, not on the database's UTC clock.
-  const { data: notifiedBookings, error } = await recordUnavailableSlots({
+  const { data, error } = await recordUnavailableSlots({
     venueId: venue.id,
     date,
     slots: [...slots],
@@ -138,22 +138,22 @@ export async function markSlotsUnavailable(
     throw new ValidationError('The slots could not be marked unavailable.', error.message);
   }
 
-  // AC2: each notice goes to its coordinator as a notification. Best effort,
-  // like SCRUM-198's: a notification that fails is logged and never undoes the
-  // save.
-  const { data: notices } = await fetchNoticesForSlots(venue.id, date, [...slots]);
-  for (const notice of notices ?? []) {
+  // AC2: the save returns the notices it wrote, and each goes to its
+  // coordinator as a notification. Best effort, like SCRUM-198's: a
+  // notification that fails is logged and never undoes the save.
+  const notices = NoticeWrittenSchema.array().parse(data);
+  for (const notice of notices) {
     await notifyBestEffort({
-      recipientId: notice.coordinator_id,
+      recipientId: notice.coordinatorId,
       type: 'venue_booking_update',
-      eventRequestId: notice.event_request_id,
-      message: affectedBookingMessage(venue.name, notice.slot_date, OperatingSlotSchema.array().parse(notice.slots), notice.reason),
+      eventRequestId: notice.eventRequestId,
+      message: affectedBookingMessage(venue.name, notice.date, notice.slots, notice.reason),
     });
   }
 
   return {
     unavailableSlots: await findUnavailableSlots(venue.id, date, slots),
-    notifiedBookings: notifiedBookings ?? 0,
+    notifiedBookings: notices.length,
   };
 }
 
@@ -229,9 +229,9 @@ const AffectedBookingSlotRowSchema = z.object({
  * another venue or slot, then release this one): "until they release or
  * replace it". Upcoming events only, on the Singapore date, like AC2's notices.
  *
- * DUMMY(SCRUM-17) D-12: nothing in the app releases a single booking yet, and
- * no story in the backlog does (a new one is being raised). Testers remove the
- * booking by hand to see the entry clear.
+ * DUMMY(SCRUM-231) D-12: nothing in the app releases a single booking yet;
+ * SCRUM-231 (Release an affected booking) adds it. Testers remove the booking
+ * by hand to see the entry clear.
  *
  * No access check of its own: its only caller is the coordinator's review
  * page, which calls it after getReviewDetail has refused anyone the request is

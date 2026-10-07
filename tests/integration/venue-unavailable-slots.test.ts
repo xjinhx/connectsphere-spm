@@ -287,6 +287,20 @@ describe('affected bookings and their coordinators (SCRUM-151 AC2)', () => {
     ]);
   });
 
+  it('leaves the event not cancelled, with its status unchanged (AC2, Week 7 change #2)', async () => {
+    const venue = await createTestVenue('Hall T');
+    const date = daysFromToday(10);
+    const eventId = await bookEvent(venue.id, { date, slots: ['am'], coordinator: coordinatorId });
+    const statusOf = async () => (await admin.from('event_request').select('status').eq('id', eventId).single()).data?.status;
+    const before = await statusOf();
+
+    await markSlotsUnavailable(venue.id, { date, slots: ['am'], reason: 'Ceiling repair' }, venueStaffId);
+
+    expect(await affectedSlotsOf(eventId)).toEqual(['am']);
+    expect(await statusOf()).toBe(before);
+    expect(await statusOf()).not.toBe('cancelled');
+  });
+
   it('sends one notice per booking, naming every withdrawn slot the event uses', async () => {
     const venue = await createTestVenue('Hall I');
     const date = daysFromToday(10);

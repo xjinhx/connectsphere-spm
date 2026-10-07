@@ -10,7 +10,7 @@ import { OperatingSlotSchema, type OperatingSlot } from '@/domain/venues/schema'
  * An unavailable slot (CONTEXT.md) is one slot at one venue on one date that
  * Venue Staff have withdrawn from use, with the reason recorded. Values mirror
  * the check constraints in
- * supabase/migrations/20261005100000_venue_unavailable_slot.sql.
+ * supabase/migrations/20261007110000_venue_unavailable_slot.sql.
  *
  * Slots reuse the venue catalogue's AM / PM / Night list (OperatingSlotSchema)
  * rather than a second copy of the same three values.
@@ -62,3 +62,15 @@ export const UnavailableSlotSchema = z.object({
   recordedAt: z.string(),
 });
 export type UnavailableSlot = z.infer<typeof UnavailableSlotSchema>;
+
+/**
+ * SCRUM-151 AC2: one notice mark_slots_unavailable wrote, as it returns it: the
+ * affected event, its coordinator, the withdrawn slots it uses, and the reason.
+ */
+export const NoticeWrittenSchema = z.object({
+  eventRequestId: z.string().uuid(),
+  coordinatorId: z.string().uuid(),
+  date: z.string(),
+  slots: z.array(OperatingSlotSchema),
+  reason: z.string(),
+});
