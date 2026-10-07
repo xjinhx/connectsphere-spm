@@ -360,4 +360,9 @@ switch them the next time they edit those files.
   event's coordinator from `decideVenueBookingRequest()` after the decision is
   saved (it would need a booking-decision type; 193's list has none yet).
   Re-run SCRUM-148 AC2.
-- **Status:** Active
+- **Status:** Replaced (SCRUM-148, before merging: SCRUM-193 merged first, PR
+  #75). `decideVenueBookingRequest()` now notifies the event's coordinator with
+  `notifyBestEffort()`, type `venue_booking_update`
+  (`20261007080000_notifications_venue_booking_update_type.sql`), giving the
+  outcome and each rejected line's reason. The marker is removed. Re-check
+  with TC-148-02, reading the notification as the coordinator.

@@ -1,6 +1,7 @@
 import type { EventRequestStatus } from '@/domain/event-request/schema';
 import { isActionPermitted } from '@/domain/identity/permissions';
 import type { Role } from '@/domain/identity/roles';
+import { formatSingaporeDate } from '@/domain/shared/dates';
 import type { VenueBookingRequestLineStatus, VenueBookingRequestStatus } from './schema';
 
 /**
@@ -57,4 +58,34 @@ export function canSeeBookingDetails(
     isActionPermitted(actor.roles, 'coordinator_assignment') ||
     (eventCoordinatorId !== null && eventCoordinatorId === actor.userId)
   );
+}
+
+const SLOT_NAMES: Record<string, string> = { am: 'AM', pm: 'PM', night: 'Night' };
+
+/**
+ * AC2: what the event's coordinator is told when their booking request is
+ * decided: the outcome, the dates and slots, and each rejected line's reason.
+ */
+export function bookingDecisionMessage(
+  venueName: string,
+  decision: {
+    status: VenueBookingRequestStatus;
+    lines: readonly {
+      date: string;
+      timeSlots: readonly string[];
+      status: VenueBookingRequestLineStatus;
+      rejectionReason: string | null;
+    }[];
+  },
+): string {
+  const when = (line: { date: string; timeSlots: readonly string[] }) =>
+    `${formatSingaporeDate(line.date)} ${line.timeSlots.map((slot) => SLOT_NAMES[slot] ?? slot).join(' + ')}`;
+  const approved = decision.lines.filter((line) => line.status === 'approved').map(when);
+  const rejected = decision.lines
+    .filter((line) => line.status === 'rejected')
+    .map((line) => `${when(line)} (${line.rejectionReason ?? ''})`);
+  const request = `Your booking request for ${venueName}`;
+  if (rejected.length === 0) return `${request} was approved: ${approved.join(', ')}.`;
+  if (approved.length === 0) return `${request} was rejected: ${rejected.join('; ')}.`;
+  return `${request} was partially approved. Approved: ${approved.join(', ')}. Rejected: ${rejected.join('; ')}.`;
 }

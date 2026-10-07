@@ -9,9 +9,10 @@ import {
   type VenueBookingDecision,
   type VenueBookingRequestOutcome,
 } from './schema';
-import { canCreateBookingRequest, canSeeBookingDetails, requestStatusOf } from './policy';
+import { bookingDecisionMessage, canCreateBookingRequest, canSeeBookingDetails, requestStatusOf } from './policy';
 import { isCurrentCoordinator } from '@/domain/assignment/policy';
 import type { Role } from '@/domain/identity/roles';
+import { notifyBestEffort } from '@/domain/notification/service';
 import { getVenue } from '@/domain/venues/service';
 import { fetchEventRequestById } from '@/lib/supabase/eventRequests';
 import { fetchProfileNames } from '@/lib/supabase/profiles';
@@ -225,9 +226,10 @@ export async function getVenueBookingDecision(requestId: string): Promise<VenueB
  * Who may decide is checked by the route (venue_administration, Venue
  * Staff's); the decider is the signed-in account, never an id from the body.
  *
- * DUMMY(SCRUM-193) D-13: AC2's "the assigned Event Coordinator is notified" is,
- * for now, the decision recorded on each line (who decided, when, the outcome),
- * returned with the coordinator it is for. SCRUM-193's notifications send it.
+ * AC2's "the assigned Event Coordinator is notified": once the decision is
+ * saved, the coordinator gets a SCRUM-193 notification with the outcome and
+ * each rejected line's reason. Best effort, like SCRUM-198's: a notification
+ * that fails is logged and never undoes a saved decision.
  */
 export async function decideVenueBookingRequest(
   requestId: string,
@@ -263,7 +265,17 @@ export async function decideVenueBookingRequest(
   if (outcome === 'already_decided') throw alreadyDecided();
   if (outcome !== 'decided') throw new ValidationError(DECIDE_EVERY_LINE);
 
-  return readDecision(requestId);
+  const saved = await readDecision(requestId);
+  if (saved.coordinatorId) {
+    const venue = await getVenue(saved.venueId);
+    await notifyBestEffort({
+      recipientId: saved.coordinatorId,
+      type: 'venue_booking_update',
+      eventRequestId: saved.eventRequestId,
+      message: bookingDecisionMessage(venue.name, saved),
+    });
+  }
+  return saved;
 }
 
 /**
