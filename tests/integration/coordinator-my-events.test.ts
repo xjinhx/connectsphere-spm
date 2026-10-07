@@ -2,7 +2,7 @@ import { describe, it, expect, beforeAll, afterAll } from 'vitest';
 import { createAdminClient } from '@/lib/supabase/admin';
 import { assignCoordinator, listMyAssignedEvents, reassignCoordinator } from '@/domain/assignment/service';
 import { approveEventRequest, requestClarification } from '@/domain/review/service';
-import { changeEventStatus } from '@/domain/event-status/service';
+import { changeEventStatus, enterPlanning } from '@/domain/event-status/service';
 import type { EventRequestStatus } from '@/domain/event-request/schema';
 import type { Role } from '@/domain/identity/roles';
 import { ensureTestClientOrganisation, TEST_CLIENT_ORGANISATION_ID } from './fixtures/clientOrganisation';
@@ -18,8 +18,9 @@ import { ensureTestClientOrganisation, TEST_CLIENT_ORGANISATION_ID } from './fix
  * listMyAssignedEvents returns, so that is what is tested here. Each event is
  * brought to its status the way the app gets it there - submitted, assigned
  * by a manager (SCRUM-94), clarified or approved by its coordinator
- * (SCRUM-90/92), then moved on with changeEventStatus (SCRUM-103) - so the
- * rows satisfy every constraint a real one would.
+ * (SCRUM-90/92), then moved on with enterPlanning (SCRUM-101) and
+ * changeEventStatus (SCRUM-103) - so the rows satisfy every constraint a real
+ * one would.
  *
  * Not covered here, verify manually:
  *   AC1 "whereas my review queue shows only those awaiting review" - that is
@@ -95,8 +96,7 @@ async function createAssignedEvent(
   if (status === 'approved' || status === 'planning' || status === 'confirmed') {
     await approveEventRequest(id, { actorId: coordinator.id });
   }
-  // DUMMY(SCRUM-101) D-10: approved -> planning set directly; SCRUM-101's action will do it.
-  if (status === 'planning' || status === 'confirmed') await changeEventStatus(id, 'planning');
+  if (status === 'planning' || status === 'confirmed') await enterPlanning(id);
   if (status === 'confirmed') await changeEventStatus(id, 'confirmed');
 
   return id;

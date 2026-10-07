@@ -33,7 +33,7 @@ import { ensureTestClientOrganisation } from './fixtures/clientOrganisation';
  * re-run end to end once they call it.
  *
  * AC2's bookings are stand-in D-04 (venue_booking, added by hand here as a
- * tester would) and its notice is stand-in D-11 (a venue_unavailability_notice
+ * tester would) and its notice is stand-in D-14 (a venue_unavailability_notice
  * row). See docs/dummies.md.
  *
  * Runs against the local Supabase stack: the unique constraint is what makes

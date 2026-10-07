@@ -80,7 +80,7 @@ export type MarkSlotsUnavailableOutcome = {
  * SCRUM-151 AC2: in the same save, every confirmed booking of an upcoming
  * event on one of those slots becomes affected (the affected_booking_slot
  * view), and its assigned coordinator is sent a notice with the reason.
- * DUMMY(SCRUM-193) D-11: the notice is stored, not shown, until the in-app
+ * DUMMY(SCRUM-193) D-14: the notice is stored, not shown, until the in-app
  * notification list exists.
  *
  * All or nothing: one database function writes the slots and the notices in

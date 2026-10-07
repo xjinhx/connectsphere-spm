@@ -36,8 +36,10 @@ import {
   canViewClarification,
   canViewRejection,
   isReviewable,
+  showsCommitmentStatement,
   type Commitments,
 } from './policy';
+import { notifyBestEffort } from '@/domain/notification/service';
 
 /**
  * SCRUM-92 — Approve a request so planning can proceed.
@@ -47,6 +49,7 @@ import {
  * docs/architecture.md (rule 3) it never imports a Supabase client or builds a
  * query itself.
  */
+
 
 // ---------------------------------------------------------------------------
 // AC1 — approve
@@ -144,7 +147,18 @@ export async function approveEventRequest(id: string, input: unknown): Promise<A
   // need different answers - so the row is re-read to say which.
   if (!data) throw await approvalRaceError(parsedId.data, parsedInput.data.actorId);
 
-  return toApprovalOutcome(data as unknown as EventRequestRow);
+  const approvedRow = data as unknown as EventRequestRow;
+  // SCRUM-198 AC2: the organiser is notified that planning may proceed
+  // without committing a venue or equipment (customer clarification #80,
+  // the same statement getApprovalView shows).
+  await notifyBestEffort({
+    recipientId: approvedRow.organiser_id,
+    type: 'request_approved',
+    eventRequestId: approvedRow.id,
+    message: `${approvedRow.reference} (${approvedRow.name}) was approved. Planning may proceed; no venue or equipment is committed yet.`,
+  });
+
+  return toApprovalOutcome(approvedRow);
 }
 
 /**
@@ -192,7 +206,8 @@ export interface ApprovalView {
   /** The approval date: an instant stamped by the database, or null. */
   decidedAt: string | null;
   commitments: Commitments;
-  commitmentStatement: string;
+  /** AC2's statement while the event is Approved; null at every other status (showsCommitmentStatement). */
+  commitmentStatement: string | null;
 }
 
 /**
@@ -212,8 +227,12 @@ export interface ApprovalView {
  * SCRUM-72 AC2 — an Attendee-only account is refused before anything is read;
  * see isAttendeeOnly's comment in domain/identity/policy.ts.
  *
- * The commitment flags and statement are returned for every request, decided
- * or not, because this sprint nothing can be committed against any request.
+ * The commitment flags are returned for every request, decided or not, because
+ * this sprint nothing can be committed against any request (D-02). The
+ * statement is returned only while the event is Approved
+ * (showsCommitmentStatement, SCRUM-235): once it has moved on, "nothing is yet
+ * committed" may no longer be true. Decided here rather than on the page, so
+ * the page and this route's API always say the same thing.
  */
 export async function getApprovalView(
   id: string,
@@ -243,7 +262,7 @@ export async function getApprovalView(
     decision: row.decision,
     decidedAt: row.decided_at,
     commitments: { ...NO_COMMITMENTS },
-    commitmentStatement: COMMITMENT_STATEMENT,
+    commitmentStatement: showsCommitmentStatement(row.status) ? COMMITMENT_STATEMENT : null,
   };
 }
 
@@ -527,7 +546,18 @@ export async function requestClarification(
   // between, and they need different answers - see clarificationRaceError.
   if (!data) throw await clarificationRaceError(parsedId.data, actorId);
 
-  return toClarificationOutcome(data as unknown as EventRequestRow);
+  const clarifiedRow = data as unknown as EventRequestRow;
+  // SCRUM-198 AC1: the organiser is notified with the coordinator's note.
+  // Best-effort: the decision above already succeeded, so a notification
+  // failure must not undo it.
+  await notifyBestEffort({
+    recipientId: clarifiedRow.organiser_id,
+    type: 'clarification_requested',
+    eventRequestId: clarifiedRow.id,
+    message: `Clarification requested on ${clarifiedRow.reference} (${clarifiedRow.name}): ${parsedInput.data.note}`,
+  });
+
+  return toClarificationOutcome(clarifiedRow);
 }
 
 // ---------------------------------------------------------------------------
@@ -688,7 +718,16 @@ export async function rejectEventRequest(
   // between, and they need different answers - see rejectionRaceError.
   if (!data) throw await rejectionRaceError(parsedId.data, actorId);
 
-  return toRejectionOutcome(data as unknown as EventRequestRow);
+  const rejectedRow = data as unknown as EventRequestRow;
+  // SCRUM-198 AC3: the organiser is notified with the recorded reason.
+  await notifyBestEffort({
+    recipientId: rejectedRow.organiser_id,
+    type: 'request_rejected',
+    eventRequestId: rejectedRow.id,
+    message: `${rejectedRow.reference} (${rejectedRow.name}) was rejected: ${parsedInput.data.reason}`,
+  });
+
+  return toRejectionOutcome(rejectedRow);
 }
 
 /**
