@@ -137,7 +137,7 @@ switch them the next time they edit those files.
     unavailable
   - Read by SCRUM-128 too: `src/lib/supabase/venues.ts` —
     `fetchConfirmedBookingsOn()`, and `src/domain/venues/service.ts` —
-    `searchVenues()` (`DUMMY(SCRUM-148) D-04`)
+    `searchVenues()` (markers removed, see Status)
 - **What is real and what is faked:** the capacity check, the list of affected
   bookings, the confirm step and the refusal inside the save are SCRUM-120's
   real code. Only the bookings themselves are faked: nothing in Sprint 1
@@ -255,7 +255,9 @@ switch them the next time they edit those files.
   - `src/domain/venues/service.ts` — `searchVenues()`
     (`DUMMY(SCRUM-151) D-09`)
 - **What is real and what is faked:** the search, and its rule that a slot
-  recorded as unavailable excludes the venue (SCRUM-128 AC4), are real. Only
+  recorded as unavailable excludes the venue (SCRUM-128 AC4), are real.
+  SCRUM-154 reads the same rows to refuse a booking request for an unavailable
+  slot (its AC4), which is real in the same way. Only
   the recording is faked: nothing yet lets Venue Staff withdraw a slot, so a
   tester adds rows by hand. That makes AC4 testable against real rows.
   "Shared tables belong to no single story" (`CLAUDE.md`), so the table is the
@@ -276,7 +278,9 @@ switch them the next time they edit those files.
   text. Widen this table rather than add a second one. Nothing in SCRUM-128
   changes if the four columns stay; re-run
   `tests/integration/venue-search.test.ts` and SCRUM-128 AC4 by hand against a
-  slot withdrawn through that flow, then remove the markers.
+  slot withdrawn through that flow, and SCRUM-154 AC4 and AC5
+  (`tests/integration/submit-venue-booking-request.test.ts`), then remove the
+  markers.
 - **Status:** Replaced (SCRUM-151, branch `venue-unavailable-slots`). SCRUM-151
   AC1 writes `venue_unavailable_slot` rows through
   `POST /api/venues/[id]/unavailable-slots`. It kept the four columns and added
