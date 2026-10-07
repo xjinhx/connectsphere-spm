@@ -331,7 +331,8 @@ describe('listVenueBookings (SCRUM-148 AC3, AC4)', () => {
 describe('rejecting a booking request (SCRUM-149 AC1, AC2, AC3)', () => {
   it('AC1: rejecting a pending request with a reason makes it Rejected and keeps the reason (TC-149-01)', async () => {
     const venue = await createTestVenue('Hall K');
-    const { requestId, eventId, lineIds } = await createRequest(venue.id, [{ date: daysFromToday(16), slots: ['pm'] }]);
+    const date = daysFromToday(16);
+    const { requestId, eventId, lineIds } = await createRequest(venue.id, [{ date, slots: ['pm'] }]);
 
     const decided = await decideVenueBookingRequest(requestId, venueStaffId, {
       decisions: [{ lineId: lineIds[0], decision: 'reject', reason: 'Capacity is 80, event needs 150' }],
@@ -343,9 +344,19 @@ describe('rejecting a booking request (SCRUM-149 AC1, AC2, AC3)', () => {
       decidedBy: venueStaffId,
       rejectionReason: 'Capacity is 80, event needs 150',
     });
-    // D-13: the decision comes back with the coordinator it is for.
-    expect(decided.coordinatorId).toBe(coordinatorId);
     expect(await bookingsOf(eventId)).toEqual([]);
+    // AC1: "the coordinator is notified", through SCRUM-193's notifications.
+    const { data: sent } = await admin
+      .from('notifications')
+      .select('type, message')
+      .eq('recipient_id', coordinatorId)
+      .eq('event_request_id', eventId);
+    expect(sent).toEqual([
+      {
+        type: 'venue_booking_update',
+        message: `Your booking request for ${venue.name} was rejected: ${formatSingaporeDate(date)} PM (Capacity is 80, event needs 150).`,
+      },
+    ]);
   });
 
   it('AC2: refuses a rejection without a reason, and the request stays Pending (TC-149-03)', async () => {
