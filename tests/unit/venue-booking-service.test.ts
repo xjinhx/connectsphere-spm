@@ -20,11 +20,20 @@ vi.mock('@/lib/supabase/venueBookingRequests', () => ({
   fetchVenueBookingRequestById: vi.fn(),
 }));
 
+vi.mock('@/lib/supabase/venueBookings', () => ({
+  fetchConfirmedSlotsForVenue: vi.fn(),
+}));
+vi.mock('@/lib/supabase/venues', () => ({
+  fetchUnavailableSlotsForVenue: vi.fn(),
+}));
+
 import { fetchEventRequestById } from '@/lib/supabase/eventRequests';
 import {
   createVenueBookingRequest,
   fetchVenueBookingRequestById,
 } from '@/lib/supabase/venueBookingRequests';
+import { fetchConfirmedSlotsForVenue } from '@/lib/supabase/venueBookings';
+import { fetchUnavailableSlotsForVenue } from '@/lib/supabase/venues';
 import { submitVenueBookingRequest } from '@/domain/venue-booking/service';
 import { assertPermission } from '@/domain/identity/policy';
 import { isActionPermitted } from '@/domain/identity/permissions';
@@ -86,6 +95,10 @@ beforeEach(() => {
   vi.mocked(fetchEventRequestById).mockReset();
   vi.mocked(createVenueBookingRequest).mockReset();
   vi.mocked(fetchVenueBookingRequestById).mockReset();
+  // SCRUM-142's cases run against a venue with nothing booked or withdrawn;
+  // the clash cases are in venue-booking-slot-clash.test.ts (SCRUM-154).
+  vi.mocked(fetchConfirmedSlotsForVenue).mockResolvedValue({ data: [], error: null } as never);
+  vi.mocked(fetchUnavailableSlotsForVenue).mockResolvedValue({ data: [], error: null } as never);
 });
 
 describe('AC1: assigned coordinator, approved event', () => {
