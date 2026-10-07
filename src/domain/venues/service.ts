@@ -110,13 +110,11 @@ export async function listVenues(includeRetired = false): Promise<VenueSummary[]
  *
  * AC1: a venue is returned only if it is free in every selected slot.
  * AC2/AC3: a confirmed booking commits its slot (SCRUM-148's bookings).
- * AC4: a slot recorded as unavailable commits it (D-09 stand-in table).
+ * AC4: a slot recorded as unavailable commits it (SCRUM-151 records them).
  * AC5: any valid date, however far ahead — VenueSearchQuerySchema sets no limit.
  *
  * The three reads are independent, so they run together; the rule that
  * combines them is isFreeInEverySlot (policy.ts).
- *
- * DUMMY(SCRUM-151) D-09: unavailable slots are the stand-in venue_unavailable_slot rows.
  */
 export async function searchVenues(input: unknown): Promise<VenueSearchResult> {
   const parsed = VenueSearchQuerySchema.safeParse(input);
