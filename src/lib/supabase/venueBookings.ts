@@ -33,8 +33,9 @@ export async function fetchVenueBookingDecision(id: string) {
  * decision and creates a confirmed booking per approved slot in one
  * transaction. supabase-js has no transactions of its own.
  *
- * Resolves to 'decided', 'already_decided' or 'incomplete'. A slot that already
- * holds a confirmed booking fails the whole call with a unique violation.
+ * Resolves to {"outcome": ..., "autoRejectedRequestIds": [...]} (SCRUM-155:
+ * 20261007130000_venue_booking_conflicts.sql). A slot that already holds a
+ * confirmed booking fails the whole call with a unique violation.
  */
 export async function decideVenueBookingRequestLines(
   requestId: string,
@@ -84,4 +85,9 @@ export async function fetchConfirmedBookingsBetween(venueId: string, from: strin
     .gte('date', from)
     .lte('date', to)
     .order('date');
+}
+
+/** SCRUM-155 AC5: one venue's slots recorded as unavailable on these dates, with each one's reason. */
+export async function fetchUnavailableSlotsWithReasons(venueId: string, dates: readonly string[]) {
+  return db().from('venue_unavailable_slot').select('date, slot, reason').eq('venue_id', venueId).in('date', [...dates]);
 }

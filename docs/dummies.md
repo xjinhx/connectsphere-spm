@@ -460,3 +460,21 @@ switch them the next time they edit those files.
   withdrawn slots and the reason. The notice rows stay as the record of who
   was told what. The markers are removed. Re-check with TC-151-05 and
   TC-151-06, reading the notification as the coordinator.
+
+### D-15 — Releasing or cancelling a booking is done by hand
+
+- **Kind:** Out-of-sprint stand-in (no story in this sprint releases or cancels
+  a single booking)
+- **Added by:** SCRUM-155 AC3 — branch `venue-booking-conflicts`
+- **Waiting on:** SCRUM-231 Release an affected booking (Sprint 3), and
+  SCRUM-105 (cancel an event, which releases its bookings)
+- **Where:** `src/domain/venue-booking/service.ts` — `conflictsFor()`
+  (`DUMMY(SCRUM-231) D-15`)
+- **What is real and what is faked:** the approval check is real: a booking
+  that is no longer confirmed no longer clashes, so the approval goes through.
+  Only the release or cancellation is faked: testers delete the clashing
+  `venue_booking` row by hand (`node scrum155-manual.mjs release <BR>`).
+- **To replace:** once a booking can be released or cancelled through the app,
+  re-run SCRUM-155 AC3 (TC-155-04 and TC-155-05) through that action, then
+  remove the marker.
+- **Status:** Active

@@ -257,3 +257,63 @@ export function canViewBookingRequest(
     (eventCoordinatorId !== null && eventCoordinatorId === actor.userId)
   );
 }
+
+// ---------------------------------------------------------------------------
+// SCRUM-155 — Block approval of a conflicting booking
+// ---------------------------------------------------------------------------
+
+/** AC4: the reason a competing request's line is rejected with (also in the database function). */
+export const SLOT_COMMITTED_REASON = 'This slot is committed to another event.';
+
+/** AC1 and AC5: one slot of a line being approved that clashes, and with what. */
+export type ApprovalConflict =
+  | { lineId: string; date: string; slot: string; kind: 'booked'; event: { reference: string; name: string } | null }
+  | { lineId: string; date: string; slot: string; kind: 'unavailable'; reason: string };
+
+/**
+ * AC1 and AC5: the slots of these lines that clash: a confirmed booking, or a
+ * slot recorded as unavailable. Same venue, same date, same slot, the rule
+ * SCRUM-154 applies when a coordinator requests a slot. Venue Staff also see
+ * which event holds the slot and why it is unavailable.
+ */
+export function findApprovalConflicts(
+  lines: readonly { id: string; date: string; timeSlots: readonly string[] }[],
+  bookings: readonly { date: string; slot: string; event: { reference: string; name: string } | null }[],
+  unavailable: readonly { date: string; slot: string; reason: string }[],
+): ApprovalConflict[] {
+  const conflicts: ApprovalConflict[] = [];
+  for (const line of lines) {
+    for (const slot of line.timeSlots) {
+      const booking = bookings.find((b) => b.date === line.date && b.slot === slot);
+      if (booking) {
+        conflicts.push({ lineId: line.id, date: line.date, slot, kind: 'booked', event: booking.event });
+        continue;
+      }
+      const withdrawn = unavailable.find((u) => u.date === line.date && u.slot === slot);
+      if (withdrawn) {
+        conflicts.push({ lineId: line.id, date: line.date, slot, kind: 'unavailable', reason: withdrawn.reason });
+      }
+    }
+  }
+  return conflicts;
+}
+
+/** AC1: "AM on 15 Nov 2026 is already booked for EVT-2026-0101 (Tech Summit)." AC5: "... is unavailable: Aircon repair." */
+export function describeApprovalConflict(conflict: ApprovalConflict): string {
+  const when = `${SLOT_NAMES[conflict.slot as TimeSlot] ?? conflict.slot} on ${formatSingaporeDate(conflict.date)}`;
+  if (conflict.kind === 'unavailable') return `${when} is unavailable: ${conflict.reason}.`;
+  return conflict.event
+    ? `${when} is already booked for ${conflict.event.reference} (${conflict.event.name}).`
+    : `${when} is already booked.`;
+}
+
+/** AC4: what a competing request's coordinator is told. */
+export function slotCommittedMessage(
+  venueName: string,
+  lines: readonly { date: string; timeSlots: readonly string[] }[],
+): string {
+  const when = lines
+    .map((line) => `${formatSingaporeDate(line.date)} ${line.timeSlots.map((slot) => SLOT_NAMES[slot as TimeSlot] ?? slot).join(' + ')}`)
+    .join(', ');
+  return `Your booking request for ${venueName} was rejected for ${when}: the slot is now committed to another event.`;
+}

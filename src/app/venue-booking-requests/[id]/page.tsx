@@ -12,10 +12,11 @@ import type {
 } from '@/domain/venue-booking/schema';
 import {
   describeAccessibilityForVenueStaff,
+  describeApprovalConflict,
   describeAttendanceForVenueStaff,
   describeLayoutForVenueStaff,
 } from '@/domain/venue-booking/policy';
-import { getBookingRequestRequirements, viewVenueBookingRequest } from '@/domain/venue-booking/service';
+import { findPendingLineConflicts, getBookingRequestRequirements, viewVenueBookingRequest } from '@/domain/venue-booking/service';
 import { getVenue } from '@/domain/venues/service';
 import { getCurrentActor } from '@/lib/auth/currentActor';
 
@@ -23,6 +24,9 @@ import { getCurrentActor } from '@/lib/auth/currentActor';
  * SCRUM-148 AC1 and AC5 — Venue Staff open a pending booking request and
  * approve or reject each line, a rejected line with a reason. Once decided,
  * each line shows who decided, when, and why if rejected.
+ *
+ * SCRUM-155 AC2 — a pending line that clashes with a confirmed booking or an
+ * unavailable slot shows what it clashes with, and offers Reject only.
  *
  * SCRUM-149 AC3 — the event's assigned coordinator opens the same page, read
  * only, and sees each rejected line's reason and the staff member who decided.
@@ -77,6 +81,7 @@ export default async function VenueBookingRequestPage({ params }: { params: Prom
   }
   const [venue, requirements] = await Promise.all([getVenue(request.venueId), getBookingRequestRequirements(request.id)]);
   const canDecide = request.status === 'pending' && isActionPermitted(actor.roles, 'venue_administration');
+  const conflicts = canDecide ? await findPendingLineConflicts(request) : [];
 
   return (
     <main className="mx-auto max-w-2xl px-4 py-8">
@@ -115,7 +120,14 @@ export default async function VenueBookingRequestPage({ params }: { params: Prom
         <section className="mt-6 rounded-lg border border-[var(--border)] bg-[var(--surface)] p-4">
           <VenueBookingDecisionForm
             requestId={request.id}
-            lines={request.lines.map((line) => ({ id: line.id, label: lineLabel(line) }))}
+            lines={request.lines.map((line) => {
+              const clashes = conflicts.filter((conflict) => conflict.lineId === line.id);
+              return {
+                id: line.id,
+                label: lineLabel(line),
+                blockedReason: clashes.length > 0 ? clashes.map(describeApprovalConflict).join(' ') : undefined,
+              };
+            })}
           />
         </section>
       ) : (

@@ -914,7 +914,7 @@ export type Database = {
       }
       decide_venue_booking_request: {
         Args: { p_decided_by: string; p_decisions: Json; p_request_id: string }
-        Returns: string
+        Returns: Json
       }
       mark_slots_unavailable: {
         Args: {
