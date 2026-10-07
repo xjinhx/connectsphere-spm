@@ -5,6 +5,8 @@ import { EventRequestStatusBadge } from '@/components/event-request/EventRequest
 import { ClarificationRounds } from '@/components/event-request/ClarificationRounds';
 import { RejectRequestForm } from '@/components/event-request/RejectRequestForm';
 import { RequestClarificationForm } from '@/components/event-request/RequestClarificationForm';
+import { AffectedBookingsNotice } from '@/components/venue/AffectedBookingsNotice';
+import { listAffectedBookings } from '@/domain/availability/service';
 import { RequestVenueBookingForm } from '@/components/event-request/RequestVenueBookingForm';
 import { canCreateBookingRequest } from '@/domain/venue-booking/policy';
 import { listVenues } from '@/domain/venues/service';
@@ -112,6 +114,10 @@ export default async function ReviewEventRequestPage({
     throw error;
   }
 
+  // SCRUM-151 AC3. Read only now, after getReviewDetail above has refused
+  // anyone the request is not theirs to see.
+  const affectedBookings = await listAffectedBookings(request.id);
+
   // SCRUM-142 AC1/AC2 — a venue can only be requested once the event is
   // Approved or in Planning. Fetched only when
   // the section will actually render, the same reasoning as gating every
@@ -129,6 +135,11 @@ export default async function ReviewEventRequestPage({
         <EventRequestStatusBadge status={request.status} />
       </div>
       <p className="mt-1 font-mono text-sm text-[var(--text-muted)]">{request.reference}</p>
+
+      {/* SCRUM-151 AC3: a confirmed booking on a slot Venue Staff have since
+          made unavailable, listed until it is released or replaced. First on
+          the page because it needs the coordinator to act. */}
+      <AffectedBookingsNotice bookings={affectedBookings} />
 
       {/* US-7.2 AC1/AC3 — a clarification already raised on this request.
           Status-aware wording, same reasoning as the Organiser's own page

@@ -488,22 +488,31 @@ export type Database = {
       venue_booking: {
         Row: {
           created_at: string
+          date: string
           event_request_id: string
           id: string
+          request_line_id: string | null
+          slot: string
           status: string
           venue_id: string
         }
         Insert: {
           created_at?: string
+          date: string
           event_request_id: string
           id?: string
+          request_line_id?: string | null
+          slot: string
           status?: string
           venue_id: string
         }
         Update: {
           created_at?: string
+          date?: string
           event_request_id?: string
           id?: string
+          request_line_id?: string | null
+          slot?: string
           status?: string
           venue_id?: string
         }
@@ -513,6 +522,13 @@ export type Database = {
             columns: ["event_request_id"]
             isOneToOne: false
             referencedRelation: "event_request"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "venue_booking_request_line_id_fkey"
+            columns: ["request_line_id"]
+            isOneToOne: false
+            referencedRelation: "venue_booking_request_line"
             referencedColumns: ["id"]
           },
           {
@@ -567,7 +583,10 @@ export type Database = {
         Row: {
           created_at: string
           date: string
+          decided_at: string | null
+          decided_by: string | null
           id: string
+          rejection_reason: string | null
           request_id: string
           status: string
           time_slots: string[]
@@ -575,7 +594,10 @@ export type Database = {
         Insert: {
           created_at?: string
           date: string
+          decided_at?: string | null
+          decided_by?: string | null
           id?: string
+          rejection_reason?: string | null
           request_id: string
           status?: string
           time_slots: string[]
@@ -583,7 +605,10 @@ export type Database = {
         Update: {
           created_at?: string
           date?: string
+          decided_at?: string | null
+          decided_by?: string | null
           id?: string
+          rejection_reason?: string | null
           request_id?: string
           status?: string
           time_slots?: string[]
@@ -702,12 +727,61 @@ export type Database = {
           },
         ]
       }
+      venue_unavailability_notice: {
+        Row: {
+          coordinator_id: string
+          created_at: string
+          event_request_id: string
+          id: string
+          reason: string
+          slot_date: string
+          slots: string[]
+          venue_id: string
+        }
+        Insert: {
+          coordinator_id: string
+          created_at?: string
+          event_request_id: string
+          id?: string
+          reason: string
+          slot_date: string
+          slots: string[]
+          venue_id: string
+        }
+        Update: {
+          coordinator_id?: string
+          created_at?: string
+          event_request_id?: string
+          id?: string
+          reason?: string
+          slot_date?: string
+          slots?: string[]
+          venue_id?: string
+        }
+        Relationships: [
+          {
+            foreignKeyName: "venue_unavailability_notice_event_request_id_fkey"
+            columns: ["event_request_id"]
+            isOneToOne: false
+            referencedRelation: "event_request"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "venue_unavailability_notice_venue_id_fkey"
+            columns: ["venue_id"]
+            isOneToOne: false
+            referencedRelation: "venues"
+            referencedColumns: ["id"]
+          },
+        ]
+      }
       venue_unavailable_slot: {
         Row: {
           created_at: string
           date: string
           id: string
           reason: string
+          recorded_by: string | null
           slot: string
           venue_id: string
         }
@@ -716,6 +790,7 @@ export type Database = {
           date: string
           id?: string
           reason: string
+          recorded_by?: string | null
           slot: string
           venue_id: string
         }
@@ -724,6 +799,7 @@ export type Database = {
           date?: string
           id?: string
           reason?: string
+          recorded_by?: string | null
           slot?: string
           venue_id?: string
         }
@@ -786,7 +862,33 @@ export type Database = {
       }
     }
     Views: {
-      [_ in never]: never
+      affected_booking_slot: {
+        Row: {
+          booking_id: string | null
+          coordinator_id: string | null
+          event_request_id: string | null
+          reason: string | null
+          slot: string | null
+          slot_date: string | null
+          venue_id: string | null
+        }
+        Relationships: [
+          {
+            foreignKeyName: "venue_booking_event_request_id_fkey"
+            columns: ["event_request_id"]
+            isOneToOne: false
+            referencedRelation: "event_request"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "venue_booking_venue_id_fkey"
+            columns: ["venue_id"]
+            isOneToOne: false
+            referencedRelation: "venues"
+            referencedColumns: ["id"]
+          },
+        ]
+      }
     }
     Functions: {
       create_venue: {
@@ -809,6 +911,21 @@ export type Database = {
           p_venue_id: string
         }
         Returns: string
+      }
+      decide_venue_booking_request: {
+        Args: { p_decided_by: string; p_decisions: Json; p_request_id: string }
+        Returns: string
+      }
+      mark_slots_unavailable: {
+        Args: {
+          p_reason: string
+          p_recorded_by: string
+          p_slot_date: string
+          p_slots: string[]
+          p_today?: string
+          p_venue_id: string
+        }
+        Returns: Json
       }
       update_venue: {
         Args: {

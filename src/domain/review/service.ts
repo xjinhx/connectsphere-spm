@@ -25,9 +25,10 @@ import {
   RequestClarificationInputSchema,
   type Decision,
 } from './schema';
+import { countConfirmedBookingsForEvent } from '@/lib/supabase/venueBookings';
 import {
-  COMMITMENT_STATEMENT,
-  NO_COMMITMENTS,
+  commitmentStatementFor,
+  commitmentsFor,
   canBeApproved,
   canBeRejected,
   canRequestClarification,
@@ -227,8 +228,9 @@ export interface ApprovalView {
  * SCRUM-72 AC2 — an Attendee-only account is refused before anything is read;
  * see isAttendeeOnly's comment in domain/identity/policy.ts.
  *
- * The commitment flags are returned for every request, decided or not, because
- * this sprint nothing can be committed against any request (D-02). The
+ * The commitment flags are returned for every request, decided or not. The
+ * venue flag comes from the event's confirmed bookings (SCRUM-148 replaced
+ * D-02's venue part); equipment and registration are still false. The
  * statement is returned only while the event is Approved
  * (showsCommitmentStatement, SCRUM-235): once it has moved on, "nothing is yet
  * committed" may no longer be true. Decided here rather than on the page, so
@@ -256,13 +258,19 @@ export async function getApprovalView(
     throw new ForbiddenError('This approval is not yours to read.');
   }
 
+  const { count, error: bookingError } = await countConfirmedBookingsForEvent(row.id);
+  if (bookingError) {
+    throw new ValidationError("Could not check the event's venue bookings.", bookingError.message);
+  }
+  const commitments = commitmentsFor((count ?? 0) > 0);
+
   return {
     id: row.id,
     status: row.status,
     decision: row.decision,
     decidedAt: row.decided_at,
-    commitments: { ...NO_COMMITMENTS },
-    commitmentStatement: showsCommitmentStatement(row.status) ? COMMITMENT_STATEMENT : null,
+    commitments,
+    commitmentStatement: showsCommitmentStatement(row.status) ? commitmentStatementFor(commitments) : null,
   };
 }
 

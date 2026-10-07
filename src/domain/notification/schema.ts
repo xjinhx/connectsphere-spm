@@ -25,6 +25,9 @@ export const NOTIFICATION_TYPES = [
   // distinct from 'coordinator_assigned' (which tells the coordinator
   // themself). Added after PO clarification - see PR discussion.
   'coordinator_named',
+  // SCRUM-148/149/151: a decision on a coordinator's venue booking request, or
+  // a confirmed booking affected by withdrawn availability.
+  'venue_booking_update',
 ] as const;
 export const NotificationTypeSchema = z.enum(NOTIFICATION_TYPES);
 export type NotificationType = z.infer<typeof NotificationTypeSchema>;

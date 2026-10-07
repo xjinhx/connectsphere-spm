@@ -2,7 +2,10 @@ import Link from 'next/link';
 import { notFound } from 'next/navigation';
 import { getVenue } from '@/domain/venues/service';
 import { canManageVenues, canViewVenueCatalogue } from '@/domain/venues/policy';
+import { listUpcomingUnavailableSlots } from '@/domain/availability/service';
+import { SLOT_NAMES } from '@/domain/availability/schema';
 import { NotFoundError } from '@/domain/shared/errors';
+import { formatSingaporeDate } from '@/domain/shared/dates';
 import {
   OPERATING_SLOTS,
   OPERATING_SLOT_LABELS,
@@ -11,6 +14,7 @@ import {
 } from '@/domain/venues/schema';
 import { getCurrentActor } from '@/lib/auth/currentActor';
 import NoVenueAccess from '@/components/venue/NoVenueAccess';
+import { MarkSlotsUnavailableForm } from '@/components/venue/MarkSlotsUnavailableForm';
 
 /**
  * SCRUM-121 AC2: opening a venue shows its location, capacities, supported
@@ -20,8 +24,11 @@ import NoVenueAccess from '@/components/venue/NoVenueAccess';
  * The turnaround values are read-only here. Entering them is SCRUM-119, which
  * is deferred out of Sprint 1, so they only ever show what seed data set.
  *
+ * SCRUM-151 AC1: the venue's upcoming unavailable slots are listed with their
+ * reasons, and Venue Staff can mark more from here.
+ *
  * Needs venue_catalogue_view, checked before the venue is read. The "Edit
- * venue" button only appears for Venue Staff.
+ * venue" button and the unavailable-slots form only appear for Venue Staff.
  */
 
 export const dynamic = 'force-dynamic';
@@ -53,6 +60,8 @@ export default async function VenueDetailPage({ params }: { params: Promise<{ id
     }
     throw error;
   }
+
+  const unavailableSlots = await listUpcomingUnavailableSlots(venue.id);
 
   return (
     <main className="mx-auto max-w-3xl p-6">
@@ -139,6 +148,25 @@ export default async function VenueDetailPage({ params }: { params: Promise<{ id
         <Row label="Needs setup slot">{venue.needsSetupSlot ? 'Yes' : 'No'}</Row>
         <Row label="Needs turnaround slot">{venue.needsTurnaroundSlot ? 'Yes' : 'No'}</Row>
       </dl>
+
+      {/* SCRUM-151 AC1: slots withdrawn on specific dates, from today on. */}
+      <section className="mt-6 space-y-4 rounded border border-[var(--border)] bg-[var(--surface)] p-4">
+        <h2 className="text-lg font-semibold">Unavailable slots</h2>
+        {unavailableSlots.length === 0 ? (
+          <p className="text-sm text-[var(--text-muted)]">No slots are unavailable from today on.</p>
+        ) : (
+          <ul className="space-y-1 text-sm">
+            {unavailableSlots.map((entry) => (
+              <li key={entry.id}>
+                {formatSingaporeDate(entry.date)}, {SLOT_NAMES[entry.slot]}: {entry.reason}
+              </li>
+            ))}
+          </ul>
+        )}
+        {canManageVenues(actor.roles) && (
+          <MarkSlotsUnavailableForm venueId={venue.id} operatingSlots={venue.operatingSlots} />
+        )}
+      </section>
     </main>
   );
 }
