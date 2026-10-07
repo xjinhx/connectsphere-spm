@@ -1,6 +1,6 @@
 import { z } from 'zod';
 import { isISODate } from '@/domain/shared/dates';
-import { TimeSlotEnum } from '@/domain/event-request/schema';
+import { TimeSlotEnum, type TimeSlot } from '@/domain/event-request/schema';
 
 // ---------------------------------------------------------------------------
 // SCRUM-142 — Submit a venue booking request for an event
@@ -128,6 +128,50 @@ export const VenueBookingRangeSchema = z
 export type BookedSlot =
   | { date: string; slot: string; state: 'confirmed'; event: { id: string; reference: string; name: string } }
   | { date: string; slot: string; state: 'committed' };
+
+// ---------------------------------------------------------------------------
+// SCRUM-147 — View the pending booking request queue
+// ---------------------------------------------------------------------------
+// One entry per pending line, not per request: each date-and-slots line is
+// decided on its own (SCRUM-148 AC5), so each one leaves the queue on its own.
+
+/** AC1 — one row of the queue: venue, event, requested date and slots, and when it was requested. */
+export interface BookingQueueEntry {
+  lineId: string;
+  requestId: string;
+  venueName: string;
+  eventName: string;
+  eventReference: string;
+  /** The requested date, YYYY-MM-DD. */
+  date: string;
+  timeSlots: readonly TimeSlot[];
+  /** When the request was made (timestamptz). */
+  requestedAt: string;
+}
+
+// ---------------------------------------------------------------------------
+// SCRUM-143 — Include the requirements Venue Staff need
+// ---------------------------------------------------------------------------
+
+/**
+ * What SCRUM-143 adds to SCRUM-148's decision page. That page already lists
+ * each requested date and its slots (AC1); this adds the event's reference and
+ * the requesting coordinator (AC1), and the event's attendance, layout and
+ * accessibility needs as recorded on the event (AC2). Values are as stored;
+ * policy.ts says how a missing one reads (AC4).
+ */
+export interface BookingRequestRequirements {
+  eventName: string;
+  eventReference: string;
+  /** Null when the coordinator's profile has no name recorded. */
+  requestedByName: string | null;
+  requestedAt: string;
+  expectedAttendance: number | null;
+  roomLayout: string | null;
+  accessibilityRequired: boolean | null;
+  accessibilityFeatures: readonly { name: string }[];
+  accessibilityNotes: string | null;
+}
 
 // ---------------------------------------------------------------------------
 // SCRUM-155 — Block approval of a conflicting booking

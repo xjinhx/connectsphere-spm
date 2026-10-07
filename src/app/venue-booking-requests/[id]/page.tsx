@@ -10,8 +10,13 @@ import type {
   VenueBookingDecision,
   VenueBookingRequestStatus,
 } from '@/domain/venue-booking/schema';
-import { describeApprovalConflict } from '@/domain/venue-booking/policy';
-import { findPendingLineConflicts, viewVenueBookingRequest } from '@/domain/venue-booking/service';
+import {
+  describeAccessibilityForVenueStaff,
+  describeApprovalConflict,
+  describeAttendanceForVenueStaff,
+  describeLayoutForVenueStaff,
+} from '@/domain/venue-booking/policy';
+import { findPendingLineConflicts, getBookingRequestRequirements, viewVenueBookingRequest } from '@/domain/venue-booking/service';
 import { getVenue } from '@/domain/venues/service';
 import { getCurrentActor } from '@/lib/auth/currentActor';
 
@@ -28,10 +33,14 @@ import { getCurrentActor } from '@/lib/auth/currentActor';
  * The decision form is for Venue Staff (venue_administration, the permission
  * the decision route asserts).
  *
- * Only the decision lives here. The event's details (reference, coordinator,
- * attendance, layout, notes) are SCRUM-143's to add to this page, SCRUM-147's
- * queue will link Venue Staff to it, and SCRUM-144's list will link
- * coordinators. Until then it is opened by its link.
+ * SCRUM-143 AC1 — with the requested dates and slots listed by the decision
+ * below, the event's reference and the requesting coordinator are shown.
+ * SCRUM-143 AC2 — the event's attendance, layout and accessibility needs are
+ * shown as recorded on the event; AC4 — one never recorded reads "Not
+ * specified", not blank (policy.ts). AC3 was removed in Change Log CL-05.
+ *
+ * SCRUM-147's queue links Venue Staff here. SCRUM-144's list (backlog) will
+ * link coordinators; until then they open it by its link.
  */
 
 export const dynamic = 'force-dynamic';
@@ -70,7 +79,7 @@ export default async function VenueBookingRequestPage({ params }: { params: Prom
     }
     throw error;
   }
-  const venue = await getVenue(request.venueId);
+  const [venue, requirements] = await Promise.all([getVenue(request.venueId), getBookingRequestRequirements(request.id)]);
   const canDecide = request.status === 'pending' && isActionPermitted(actor.roles, 'venue_administration');
   const conflicts = canDecide ? await findPendingLineConflicts(request) : [];
 
@@ -83,6 +92,29 @@ export default async function VenueBookingRequestPage({ params }: { params: Prom
         </span>
       </div>
       <p className="mt-1 text-sm text-[var(--text-muted)]">{venue.name}</p>
+
+      {/* SCRUM-143 AC1: the event, its reference and who requested it. */}
+      <dl className="mt-6 grid grid-cols-[max-content_1fr] gap-x-6 gap-y-2 rounded-lg border border-[var(--border)] bg-[var(--surface)] p-4 text-sm">
+        <dt className="font-medium text-[var(--text-muted)]">Event</dt>
+        <dd>{requirements.eventName}</dd>
+        <dt className="font-medium text-[var(--text-muted)]">Reference</dt>
+        <dd className="font-mono">{requirements.eventReference}</dd>
+        <dt className="font-medium text-[var(--text-muted)]">Requested by</dt>
+        <dd>{requirements.requestedByName ?? 'Name not recorded'}</dd>
+        <dt className="font-medium text-[var(--text-muted)]">Requested on</dt>
+        <dd>{formatSingaporeDateTime(requirements.requestedAt)}</dd>
+      </dl>
+
+      {/* SCRUM-143 AC2 and AC4: what the event needs from the venue, as recorded on the event. */}
+      <h2 className="mt-6 text-base font-semibold">Event requirements</h2>
+      <dl className="mt-2 grid grid-cols-[max-content_1fr] gap-x-6 gap-y-2 rounded-lg border border-[var(--border)] bg-[var(--surface)] p-4 text-sm">
+        <dt className="font-medium text-[var(--text-muted)]">Expected attendance</dt>
+        <dd>{describeAttendanceForVenueStaff(requirements.expectedAttendance)}</dd>
+        <dt className="font-medium text-[var(--text-muted)]">Room layout</dt>
+        <dd>{describeLayoutForVenueStaff(requirements.roomLayout)}</dd>
+        <dt className="font-medium text-[var(--text-muted)]">Accessibility needs</dt>
+        <dd className="whitespace-pre-line">{describeAccessibilityForVenueStaff(requirements)}</dd>
+      </dl>
 
       {canDecide ? (
         <section className="mt-6 rounded-lg border border-[var(--border)] bg-[var(--surface)] p-4">
