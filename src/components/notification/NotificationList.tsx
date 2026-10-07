@@ -10,6 +10,7 @@ const TYPE_LABELS: Record<string, string> = {
   request_rejected: 'Rejected',
   coordinator_assigned: 'Coordinator assigned',
   coordinator_named: 'Coordinator named',
+  venue_booking_update: 'Venue booking',
 };
 
 /**

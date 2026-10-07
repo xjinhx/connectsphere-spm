@@ -1,6 +1,7 @@
 import { z } from 'zod';
 import {
   fetchAffectedBookingSlotsForEvent,
+  fetchNoticesForSlots,
   fetchUnavailableSlotsOn,
   fetchUpcomingUnavailableSlots,
   recordUnavailableSlots,
@@ -8,8 +9,9 @@ import {
 import { ConflictError, ValidationError, isUniqueViolation } from '@/domain/shared/errors';
 import { formatSingaporeDate, todayInSingapore, type ISODate } from '@/domain/shared/dates';
 import { getVenue } from '@/domain/venues/service';
+import { notifyBestEffort } from '@/domain/notification/service';
 import { OPERATING_SLOTS, OperatingSlotSchema, type OperatingSlot } from '@/domain/venues/schema';
-import { findNonOperatingSlots } from './policy';
+import { affectedBookingMessage, findNonOperatingSlots } from './policy';
 import {
   BookingOnUnavailableSlotSchema,
   MarkSlotsUnavailableInputSchema,
@@ -79,9 +81,9 @@ export type MarkSlotsUnavailableOutcome = {
  *
  * SCRUM-151 AC2: in the same save, every confirmed booking of an upcoming
  * event on one of those slots becomes affected (the affected_booking_slot
- * view), and its assigned coordinator is sent a notice with the reason.
- * DUMMY(SCRUM-193) D-14: the notice is stored, not shown, until the in-app
- * notification list exists.
+ * view), and its assigned coordinator is notified with the reason: the save
+ * stores one notice per booking, and each is then sent as an in-app
+ * notification (SCRUM-193).
  *
  * All or nothing: one database function writes the slots and the notices in
  * one transaction, so if one slot is already unavailable nothing is saved and
@@ -134,6 +136,19 @@ export async function markSlotsUnavailable(
       throw await alreadyUnavailableError(venue.id, date, slots);
     }
     throw new ValidationError('The slots could not be marked unavailable.', error.message);
+  }
+
+  // AC2: each notice goes to its coordinator as a notification. Best effort,
+  // like SCRUM-198's: a notification that fails is logged and never undoes the
+  // save.
+  const { data: notices } = await fetchNoticesForSlots(venue.id, date, [...slots]);
+  for (const notice of notices ?? []) {
+    await notifyBestEffort({
+      recipientId: notice.coordinator_id,
+      type: 'venue_booking_update',
+      eventRequestId: notice.event_request_id,
+      message: affectedBookingMessage(venue.name, notice.slot_date, OperatingSlotSchema.array().parse(notice.slots), notice.reason),
+    });
   }
 
   return {

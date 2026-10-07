@@ -52,6 +52,20 @@ export async function recordUnavailableSlots(input: {
   });
 }
 
+/**
+ * SCRUM-151 AC2: the notices one save wrote. A slot can be marked unavailable
+ * only once, so a notice naming any of the slots just marked came from that
+ * save.
+ */
+export async function fetchNoticesForSlots(venueId: string, date: string, slots: readonly string[]) {
+  return db()
+    .from('venue_unavailability_notice')
+    .select('coordinator_id, event_request_id, slot_date, slots, reason')
+    .eq('venue_id', venueId)
+    .eq('slot_date', date)
+    .overlaps('slots', [...slots]);
+}
+
 /** The venue's unavailable slots on one date, among `slots`. */
 export async function fetchUnavailableSlotsOn(venueId: string, date: string, slots: readonly string[]) {
   return db()

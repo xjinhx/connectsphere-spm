@@ -392,4 +392,10 @@ switch them the next time they edit those files.
 - **To replace:** once SCRUM-193's notifications exist, write each notice as
   one of them (or have SCRUM-193 list these rows); the row already holds
   everything the message needs. Re-run SCRUM-151 AC2.
-- **Status:** Active
+- **Status:** Replaced (SCRUM-151, before merging: SCRUM-193 merged first, PR
+  #75). After the save, `markSlotsUnavailable()` sends each notice to its
+  coordinator with `notifyBestEffort()`, type `venue_booking_update`
+  (`20261007080000_notifications_venue_booking_update_type.sql`), naming the
+  withdrawn slots and the reason. The notice rows stay as the record of who
+  was told what. The markers are removed. Re-check with TC-151-05 and
+  TC-151-06, reading the notification as the coordinator.

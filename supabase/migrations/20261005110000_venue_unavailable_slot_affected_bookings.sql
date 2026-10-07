@@ -59,8 +59,9 @@ where b.status = 'confirmed';
 -- -----------------------------------------------------------------------------
 -- What the coordinator is told
 --
--- DUMMY(SCRUM-193) D-14: stored, not shown, until the in-app notification list
--- exists. The same stand-in as SCRUM-120's venue_capacity_notice (D-05).
+-- One notice per affected booking, the record of who was told what. The
+-- service then sends each one to its coordinator as an in-app notification
+-- (SCRUM-193).
 -- -----------------------------------------------------------------------------
 create table if not exists venue_unavailability_notice (
   id uuid primary key default gen_random_uuid(),

@@ -7,7 +7,7 @@ import {
   listUpcomingUnavailableSlots,
   markSlotsUnavailable,
 } from '@/domain/availability/service';
-import { todayInSingapore } from '@/domain/shared/dates';
+import { formatSingaporeDate, todayInSingapore } from '@/domain/shared/dates';
 import { ensureTestClientOrganisation } from './fixtures/clientOrganisation';
 
 /**
@@ -33,8 +33,8 @@ import { ensureTestClientOrganisation } from './fixtures/clientOrganisation';
  * re-run end to end once they call it.
  *
  * AC2's bookings are stand-in D-04 (venue_booking, added by hand here as a
- * tester would) and its notice is stand-in D-14 (a venue_unavailability_notice
- * row). See docs/dummies.md.
+ * tester would). Its notice is a venue_unavailability_notice row, sent to the
+ * coordinator as a SCRUM-193 notification. See docs/dummies.md.
  *
  * Runs against the local Supabase stack: the unique constraint is what makes
  * a save with a slot already unavailable save nothing at all, and
@@ -276,6 +276,14 @@ describe('affected bookings and their coordinators (SCRUM-151 AC2)', () => {
     expect(await affectedSlotsOf(eventId)).toEqual(['am']);
     expect(await noticesFor(eventId)).toEqual([
       { coordinator_id: coordinatorId, slot_date: date, slots: ['am'], reason: 'Ceiling repair' },
+    ]);
+    const { data: sent } = await admin.from('notifications').select('recipient_id, type, message').eq('event_request_id', eventId);
+    expect(sent).toEqual([
+      {
+        recipient_id: coordinatorId,
+        type: 'venue_booking_update',
+        message: `Your booking at ${venue.name} is affected: ${formatSingaporeDate(date)} AM is no longer available (Ceiling repair).`,
+      },
     ]);
   });
 
