@@ -213,6 +213,10 @@ type DecisionRow = {
     decided_by: string | null;
     decided_at: string | null;
     rejection_reason: string | null;
+    suggested_venue_id: string | null;
+    suggested_date: string | null;
+    suggested_slots: string[] | null;
+    suggested_venue: { name: string } | null;
   }[];
 };
 
@@ -233,6 +237,15 @@ function toDecision(row: DecisionRow, deciderNames: ReadonlyMap<string, string |
       decidedByName: line.decided_by ? (deciderNames.get(line.decided_by) ?? null) : null,
       decidedAt: line.decided_at,
       rejectionReason: line.rejection_reason,
+      suggestion:
+        line.suggested_venue_id && line.suggested_date && line.suggested_slots
+          ? {
+              venueId: line.suggested_venue_id,
+              venueName: line.suggested_venue?.name ?? 'Venue',
+              date: line.suggested_date,
+              slots: line.suggested_slots,
+            }
+          : null,
     }));
 
   return {

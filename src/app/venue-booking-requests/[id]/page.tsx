@@ -1,3 +1,4 @@
+import Link from 'next/link';
 import { notFound } from 'next/navigation';
 import { VenueBookingDecisionForm } from '@/components/venue-booking/VenueBookingDecisionForm';
 import { describeTimeSlots } from '@/domain/event-request/policy';
@@ -17,7 +18,7 @@ import {
   describeLayoutForVenueStaff,
 } from '@/domain/venue-booking/policy';
 import { findPendingLineConflicts, getBookingRequestRequirements, viewVenueBookingRequest } from '@/domain/venue-booking/service';
-import { getVenue } from '@/domain/venues/service';
+import { getVenue, listVenues } from '@/domain/venues/service';
 import { getCurrentActor } from '@/lib/auth/currentActor';
 
 /**
@@ -27,6 +28,11 @@ import { getCurrentActor } from '@/lib/auth/currentActor';
  *
  * SCRUM-155 AC2 — a pending line that clashes with a confirmed booking or an
  * unavailable slot shows what it clashes with, and offers Reject only.
+ *
+ * SCRUM-150 AC1, AC2 — a rejected line may carry a suggested venue, date and
+ * slots. It is shown under the line, and the event's coordinator gets a link to
+ * the event's own page, where a new booking request is made. Nothing is booked
+ * or requested by the suggestion itself (AC3).
  *
  * SCRUM-149 AC3 — the event's assigned coordinator opens the same page, read
  * only, and sees each rejected line's reason and the staff member who decided.
@@ -82,6 +88,8 @@ export default async function VenueBookingRequestPage({ params }: { params: Prom
   const [venue, requirements] = await Promise.all([getVenue(request.venueId), getBookingRequestRequirements(request.id)]);
   const canDecide = request.status === 'pending' && isActionPermitted(actor.roles, 'venue_administration');
   const conflicts = canDecide ? await findPendingLineConflicts(request) : [];
+  const venues = canDecide ? await listVenues() : [];
+  const isCoordinator = request.coordinatorId !== null && request.coordinatorId === actor.userId;
 
   return (
     <main className="mx-auto max-w-2xl px-4 py-8">
@@ -120,11 +128,14 @@ export default async function VenueBookingRequestPage({ params }: { params: Prom
         <section className="mt-6 rounded-lg border border-[var(--border)] bg-[var(--surface)] p-4">
           <VenueBookingDecisionForm
             requestId={request.id}
+            venues={venues.map((venue) => ({ id: venue.id, name: venue.name }))}
             lines={request.lines.map((line) => {
               const clashes = conflicts.filter((conflict) => conflict.lineId === line.id);
               return {
                 id: line.id,
                 label: lineLabel(line),
+                date: line.date,
+                timeSlots: line.timeSlots,
                 blockedReason: clashes.length > 0 ? clashes.map(describeApprovalConflict).join(' ') : undefined,
               };
             })}
@@ -148,6 +159,23 @@ export default async function VenueBookingRequestPage({ params }: { params: Prom
                   {/* SCRUM-148 AC5, SCRUM-149 AC3: each rejected line carries its reason. */}
                   {line.rejectionReason ? (
                     <p className="mt-1 text-[var(--text-muted)]">Reason: {line.rejectionReason}</p>
+                  ) : null}
+                  {/* SCRUM-150 AC1, AC2: what Venue Staff suggested instead, and for the coordinator a way to request it. */}
+                  {line.suggestion ? (
+                    <div className="mt-2 rounded-md border border-[var(--border)] px-3 py-2">
+                      <p>
+                        Suggested instead: {line.suggestion.venueName}, {formatSingaporeDate(line.suggestion.date)} ·{' '}
+                        {describeTimeSlots(TimeSlotEnum.array().parse(line.suggestion.slots))}
+                      </p>
+                      {isCoordinator ? (
+                        <Link
+                          href={`/events/${request.eventRequestId}/review`}
+                          className="mt-1 inline-block text-sm text-[var(--brand)] hover:underline"
+                        >
+                          Start a new booking request for this event
+                        </Link>
+                      ) : null}
+                    </div>
                   ) : null}
                 </>
               )}

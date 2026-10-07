@@ -589,6 +589,9 @@ export type Database = {
           rejection_reason: string | null
           request_id: string
           status: string
+          suggested_date: string | null
+          suggested_slots: string[] | null
+          suggested_venue_id: string | null
           time_slots: string[]
         }
         Insert: {
@@ -600,6 +603,9 @@ export type Database = {
           rejection_reason?: string | null
           request_id: string
           status?: string
+          suggested_date?: string | null
+          suggested_slots?: string[] | null
+          suggested_venue_id?: string | null
           time_slots: string[]
         }
         Update: {
@@ -611,6 +617,9 @@ export type Database = {
           rejection_reason?: string | null
           request_id?: string
           status?: string
+          suggested_date?: string | null
+          suggested_slots?: string[] | null
+          suggested_venue_id?: string | null
           time_slots?: string[]
         }
         Relationships: [
@@ -619,6 +628,13 @@ export type Database = {
             columns: ["request_id"]
             isOneToOne: false
             referencedRelation: "venue_booking_request"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "venue_booking_request_line_suggested_venue_id_fkey"
+            columns: ["suggested_venue_id"]
+            isOneToOne: false
+            referencedRelation: "venues"
             referencedColumns: ["id"]
           },
         ]

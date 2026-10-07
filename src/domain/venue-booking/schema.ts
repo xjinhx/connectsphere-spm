@@ -66,6 +66,20 @@ export type VenueBookingRequestStatus = z.infer<typeof VenueBookingRequestStatus
  * AC5: one decision for each pending line. A rejected line needs a reason; an
  * approved one doesn't take one.
  */
+/**
+ * SCRUM-150 AC1: another venue, date and slots Venue Staff suggest when they
+ * reject a line. All three are given; the form starts them as the line's own.
+ */
+export const SuggestionSchema = z.object({
+  venueId: z.string().uuid('Choose a venue to suggest.'),
+  date: z.string().refine(isISODate, 'Choose a date to suggest.'),
+  slots: z
+    .array(TimeSlotEnum)
+    .min(1, 'Choose at least one slot to suggest.')
+    .refine((slots) => new Set(slots).size === slots.length, 'Each slot can only be suggested once.'),
+});
+export type Suggestion = z.infer<typeof SuggestionSchema>;
+
 export const DecideVenueBookingRequestInputSchema = z.object({
   decisions: z
     .array(
@@ -73,6 +87,7 @@ export const DecideVenueBookingRequestInputSchema = z.object({
         lineId: z.string().uuid('Each decision must name a line of this request.'),
         decision: z.enum(['approve', 'reject']),
         reason: z.string().optional(),
+        suggestion: SuggestionSchema.optional(),
       }),
     )
     .min(1, 'Decide at least one line.')
@@ -80,6 +95,10 @@ export const DecideVenueBookingRequestInputSchema = z.object({
     .refine(
       (decisions) => decisions.every((d) => d.decision === 'approve' || (d.reason ?? '').trim().length > 0),
       'A reason is required for each rejected line.',
+    )
+    .refine(
+      (decisions) => decisions.every((d) => d.decision === 'reject' || d.suggestion === undefined),
+      'A suggestion can only go with a rejected line.',
     ),
 });
 export type DecideVenueBookingRequestInput = z.infer<typeof DecideVenueBookingRequestInputSchema>;
@@ -95,6 +114,8 @@ export interface DecidedVenueBookingRequestLine {
   decidedByName: string | null;
   decidedAt: string | null;
   rejectionReason: string | null;
+  /** SCRUM-150 AC1: what Venue Staff suggested instead, on a rejected line; null if nothing. */
+  suggestion: { venueId: string; venueName: string; date: string; slots: readonly string[] } | null;
 }
 
 /** A booking request with its status and decided lines. */
