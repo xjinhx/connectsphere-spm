@@ -135,7 +135,7 @@ export type BookedSlot =
 
 /**
  * What decide_venue_booking_request returns
- * (20261007100000_venue_booking_conflicts.sql): the outcome, and the other
+ * (20261007130000_venue_booking_conflicts.sql): the outcome, and the other
  * events' requests it rejected because a slot is now committed (AC4).
  */
 export const DecisionResultSchema = z.object({

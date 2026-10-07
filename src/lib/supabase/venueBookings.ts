@@ -34,7 +34,7 @@ export async function fetchVenueBookingDecision(id: string) {
  * transaction. supabase-js has no transactions of its own.
  *
  * Resolves to {"outcome": ..., "autoRejectedRequestIds": [...]} (SCRUM-155:
- * 20261007100000_venue_booking_conflicts.sql). A slot that already holds a
+ * 20261007130000_venue_booking_conflicts.sql). A slot that already holds a
  * confirmed booking fails the whole call with a unique violation.
  */
 export async function decideVenueBookingRequestLines(

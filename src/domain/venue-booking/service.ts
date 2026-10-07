@@ -356,7 +356,7 @@ export async function decideVenueBookingRequest(
  *
  * AC3: a booking that has been released or cancelled is no longer confirmed,
  * so it no longer clashes and the approval goes through.
- * DUMMY(SCRUM-105) D-15: nothing releases or cancels a single booking yet;
+ * DUMMY(SCRUM-231) D-15: nothing releases or cancels a single booking yet;
  * testers remove it by hand.
  */
 async function conflictsFor(
