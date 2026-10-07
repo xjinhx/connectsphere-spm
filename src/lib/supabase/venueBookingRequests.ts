@@ -87,3 +87,36 @@ export async function fetchPendingBookingLines() {
     )
     .eq('status', 'pending');
 }
+
+// ---------------------------------------------------------------------------
+// SCRUM-143 — Include the requirements Venue Staff need
+// ---------------------------------------------------------------------------
+
+/** A booking request's event, as recorded, and who requested it. */
+export interface BookingRequestRequirementsRow {
+  id: string;
+  created_at: string;
+  requested_by: string;
+  event_request: {
+    name: string;
+    reference: string;
+    expected_attendance: number | null;
+    room_layout: string | null;
+    accessibility_required: boolean | null;
+    accessibility_notes: string | null;
+    event_request_accessibility_features: { accessibility_features: { name: string } | null }[];
+  } | null;
+}
+
+/** AC1, AC2 — the event behind a booking request, with its requirements as recorded on the event. */
+export async function fetchBookingRequestRequirements(id: string) {
+  return db()
+    .from('venue_booking_request')
+    .select(
+      'id, created_at, requested_by, ' +
+        'event_request ( name, reference, expected_attendance, room_layout, accessibility_required, accessibility_notes, ' +
+        'event_request_accessibility_features ( accessibility_features ( name ) ) )',
+    )
+    .eq('id', id)
+    .maybeSingle();
+}

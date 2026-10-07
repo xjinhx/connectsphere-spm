@@ -148,3 +148,27 @@ export interface BookingQueueEntry {
   /** When the request was made (timestamptz). */
   requestedAt: string;
 }
+
+// ---------------------------------------------------------------------------
+// SCRUM-143 — Include the requirements Venue Staff need
+// ---------------------------------------------------------------------------
+
+/**
+ * What SCRUM-143 adds to SCRUM-148's decision page. That page already lists
+ * each requested date and its slots (AC1); this adds the event's reference and
+ * the requesting coordinator (AC1), and the event's attendance, layout and
+ * accessibility needs as recorded on the event (AC2). Values are as stored;
+ * policy.ts says how a missing one reads (AC4).
+ */
+export interface BookingRequestRequirements {
+  eventName: string;
+  eventReference: string;
+  /** Null when the coordinator's profile has no name recorded. */
+  requestedByName: string | null;
+  requestedAt: string;
+  expectedAttendance: number | null;
+  roomLayout: string | null;
+  accessibilityRequired: boolean | null;
+  accessibilityFeatures: readonly { name: string }[];
+  accessibilityNotes: string | null;
+}
