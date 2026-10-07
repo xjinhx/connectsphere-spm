@@ -369,3 +369,21 @@ switch them the next time they edit those files.
   (`20261007080000_notifications_venue_booking_update_type.sql`), giving the
   outcome and each rejected line's reason. The marker is removed. Re-check
   with TC-148-02 and TC-149-01, reading the notification as the coordinator.
+
+### D-15 — Releasing or cancelling a booking is done by hand
+
+- **Kind:** Out-of-sprint stand-in (no story in this sprint releases or cancels
+  a single booking)
+- **Added by:** SCRUM-155 AC3 — branch `venue-booking-conflicts`
+- **Waiting on:** SCRUM-105 (cancel an event, which releases its bookings) and
+  the "Release an affected booking" story raised with SCRUM-151 (Sprint 3)
+- **Where:** `src/domain/venue-booking/service.ts` — `conflictsFor()`
+  (`DUMMY(SCRUM-105) D-15`)
+- **What is real and what is faked:** the approval check is real: a booking
+  that is no longer confirmed no longer clashes, so the approval goes through.
+  Only the release or cancellation is faked: testers delete the clashing
+  `venue_booking` row by hand (`node scrum155-manual.mjs release <BR>`).
+- **To replace:** once a booking can be released or cancelled through the app,
+  re-run SCRUM-155 AC3 (TC-155-04 and TC-155-05) through that action, then
+  remove the marker.
+- **Status:** Active

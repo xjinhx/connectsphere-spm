@@ -2,6 +2,7 @@ import { afterAll, beforeAll, describe, expect, it } from 'vitest';
 import { createAdminClient } from '@/lib/supabase/admin';
 import { createVenue } from '@/domain/venues/service';
 import { decideVenueBookingRequest, listVenueBookings, viewVenueBookingRequest } from '@/domain/venue-booking/service';
+import { SLOT_COMMITTED_REASON } from '@/domain/venue-booking/policy';
 import { formatSingaporeDate, todayInSingapore } from '@/domain/shared/dates';
 import { ensureTestClientOrganisation } from './fixtures/clientOrganisation';
 
@@ -59,8 +60,8 @@ async function createTestVenue(label: string) {
   return venue;
 }
 
-/** A submitted event assigned to the test coordinator. */
-async function createEvent(date: string): Promise<string> {
+/** A submitted event assigned to the test coordinator, or to `coordinator`. */
+async function createEvent(date: string, coordinator = coordinatorId): Promise<string> {
   const { data, error } = await admin
     .from('event_request')
     .insert({ organiser_id: organiserId, client_organisation_id: CLIENT_ORGANISATION_ID, name: `Decision Event ${RUN}`, proposed_date: date })
@@ -69,17 +70,17 @@ async function createEvent(date: string): Promise<string> {
   if (error || !data) throw new Error(`could not create test event: ${error?.message}`);
   eventIds.push(data.id);
   await admin.from('event_request').update({ status: 'submitted' }).eq('id', data.id);
-  await admin.from('event_request').update({ coordinator_id: coordinatorId, assigned_by: coordinatorId }).eq('id', data.id);
+  await admin.from('event_request').update({ coordinator_id: coordinator, assigned_by: coordinator }).eq('id', data.id);
   return data.id;
 }
 
 /** A pending booking request, made the way SCRUM-142's form makes one. Line ids come back in the order given. */
-async function createRequest(venueId: string, lines: { date: string; slots: string[] }[]) {
-  const eventId = await createEvent(lines[0]!.date);
+async function createRequest(venueId: string, lines: { date: string; slots: string[] }[], coordinator = coordinatorId) {
+  const eventId = await createEvent(lines[0]!.date, coordinator);
   const { data: requestId, error } = await admin.rpc('create_venue_booking_request', {
     p_event_request_id: eventId,
     p_venue_id: venueId,
-    p_requested_by: coordinatorId,
+    p_requested_by: coordinator,
     p_lines: lines.map((line) => ({ date: line.date, time_slots: line.slots })),
   });
   if (error || !requestId) throw new Error(`could not create test request: ${error?.message}`);
@@ -261,16 +262,21 @@ describe('decideVenueBookingRequest (SCRUM-148 AC1, AC2, AC5)', () => {
     });
   });
 
-  it('AC1 "with no conflict": refuses a slot that already holds a confirmed booking, and saves nothing', async () => {
+  it('AC1 "with no conflict": the database refuses a slot that already holds a confirmed booking, and saves nothing', async () => {
     const venue = await createTestVenue('Hall I');
     const date = daysFromToday(14);
     const first = await createRequest(venue.id, [{ date, slots: ['pm'] }]);
     await decideVenueBookingRequest(first.requestId, venueStaffId, { decisions: [{ lineId: first.lineIds[0], decision: 'approve' }] });
     const second = await createRequest(venue.id, [{ date, slots: ['am', 'pm'] }]);
 
-    await expect(
-      decideVenueBookingRequest(second.requestId, venueStaffId, { decisions: [{ lineId: second.lineIds[0], decision: 'approve' }] }),
-    ).rejects.toMatchObject({ code: 'CONFLICT', details: { reason: 'slot_already_booked' } });
+    // Straight to the database function, past the service's check (SCRUM-155):
+    // venue_booking_one_per_slot is the guarantee underneath it.
+    const { error } = await admin.rpc('decide_venue_booking_request', {
+      p_request_id: second.requestId,
+      p_decisions: [{ line_id: second.lineIds[0], decision: 'approve', reason: null }],
+      p_decided_by: venueStaffId,
+    });
+    expect(error?.code).toBe('23505');
 
     expect(await lineStatuses(second.requestId)).toEqual(['pending']);
     expect(await bookingsOf(second.eventId)).toEqual([]);
@@ -402,5 +408,119 @@ describe('rejecting a booking request (SCRUM-149 AC1, AC2, AC3)', () => {
         viewVenueBookingRequest(requestId, { userId: otherCoordinatorId, roles: ['coordinator'] }),
       ).rejects.toMatchObject({ code: 'FORBIDDEN' });
     });
+  });
+});
+
+describe('blocking a conflicting approval (SCRUM-155)', () => {
+  /** A confirmed booking another event already holds, as a booking made before this request would be. */
+  async function bookForAnotherEvent(venueId: string, date: string, slot: string) {
+    const eventId = await createEvent(date, otherCoordinatorId);
+    const { data } = await admin.from('event_request').select('reference').eq('id', eventId).single();
+    await admin.from('venue_booking').insert({ venue_id: venueId, event_request_id: eventId, date, slot });
+    return { eventId, reference: data?.reference ?? '' };
+  }
+
+  it('AC1: refuses an approval on a slot holding a confirmed booking, and names that booking (TC-155-01)', async () => {
+    const venue = await createTestVenue('Hall P');
+    const date = daysFromToday(20);
+    const { requestId, lineIds } = await createRequest(venue.id, [{ date, slots: ['am'] }]);
+    const held = await bookForAnotherEvent(venue.id, date, 'am');
+
+    await expect(
+      decideVenueBookingRequest(requestId, venueStaffId, { decisions: [{ lineId: lineIds[0], decision: 'approve' }] }),
+    ).rejects.toMatchObject({
+      code: 'CONFLICT',
+      details: { reason: 'slot_conflict' },
+      message: expect.stringContaining(held.reference),
+    });
+    expect(await lineStatuses(requestId)).toEqual(['pending']);
+  });
+
+  it('AC3: approves once the conflicting booking has been released (TC-155-04)', async () => {
+    const venue = await createTestVenue('Hall Q');
+    const date = daysFromToday(20);
+    const { requestId, eventId, lineIds } = await createRequest(venue.id, [{ date, slots: ['pm'] }]);
+    const held = await bookForAnotherEvent(venue.id, date, 'pm');
+    // Released by hand: no release action exists yet.
+    await admin.from('venue_booking').delete().eq('event_request_id', held.eventId);
+
+    const decided = await decideVenueBookingRequest(requestId, venueStaffId, {
+      decisions: [{ lineId: lineIds[0], decision: 'approve' }],
+    });
+
+    expect(decided.status).toBe('approved');
+    expect(await bookingsOf(eventId)).toEqual([`${date} pm confirmed`]);
+  });
+
+  it('AC4: approving one of two competing requests rejects the other, and notifies its coordinator (TC-155-06)', async () => {
+    const venue = await createTestVenue('Hall R');
+    const date = daysFromToday(21);
+    const first = await createRequest(venue.id, [{ date, slots: ['pm'] }]);
+    const second = await createRequest(venue.id, [{ date, slots: ['pm'] }], otherCoordinatorId);
+
+    await decideVenueBookingRequest(first.requestId, venueStaffId, {
+      decisions: [{ lineId: first.lineIds[0], decision: 'approve' }],
+    });
+
+    const other = await viewVenueBookingRequest(second.requestId, { userId: venueStaffId, roles: ['venue_staff'] });
+    expect(other.status).toBe('rejected');
+    expect(other.lines[0]).toMatchObject({ rejectionReason: SLOT_COMMITTED_REASON, decidedBy: venueStaffId });
+    const { data: sent } = await admin
+      .from('notifications')
+      .select('type, message')
+      .eq('recipient_id', otherCoordinatorId)
+      .eq('event_request_id', second.eventId);
+    expect(sent).toEqual([
+      {
+        type: 'venue_booking_update',
+        message: `Your booking request for ${venue.name} was rejected for ${formatSingaporeDate(date)} PM: the slot is now committed to another event.`,
+      },
+    ]);
+  });
+
+  it('AC4: leaves a competing request for a different slot pending, and it can still be approved (TC-155-07)', async () => {
+    const venue = await createTestVenue('Hall S');
+    const date = daysFromToday(22);
+    const morning = await createRequest(venue.id, [{ date, slots: ['am'] }]);
+    const afternoon = await createRequest(venue.id, [{ date, slots: ['pm'] }], otherCoordinatorId);
+
+    await decideVenueBookingRequest(morning.requestId, venueStaffId, {
+      decisions: [{ lineId: morning.lineIds[0], decision: 'approve' }],
+    });
+    expect(await lineStatuses(afternoon.requestId)).toEqual(['pending']);
+
+    const decided = await decideVenueBookingRequest(afternoon.requestId, venueStaffId, {
+      decisions: [{ lineId: afternoon.lineIds[0], decision: 'approve' }],
+    });
+    expect(decided.status).toBe('approved');
+  });
+
+  it('AC5: refuses an approval on a slot recorded as unavailable, and shows the reason (TC-155-10)', async () => {
+    const venue = await createTestVenue('Hall T');
+    const date = daysFromToday(23);
+    const { requestId, lineIds } = await createRequest(venue.id, [{ date, slots: ['am'] }]);
+    await admin.from('venue_unavailable_slot').insert({ venue_id: venue.id, date, slot: 'am', reason: 'Aircon repair' });
+
+    await expect(
+      decideVenueBookingRequest(requestId, venueStaffId, { decisions: [{ lineId: lineIds[0], decision: 'approve' }] }),
+    ).rejects.toMatchObject({ code: 'CONFLICT', message: expect.stringContaining('unavailable: Aircon repair') });
+    expect(await lineStatuses(requestId)).toEqual(['pending']);
+  });
+
+  it('AC5: the database refuses it too, if the slot is withdrawn after the check', async () => {
+    const venue = await createTestVenue('Hall U');
+    const date = daysFromToday(23);
+    const { requestId, eventId, lineIds } = await createRequest(venue.id, [{ date, slots: ['pm'] }]);
+    await admin.from('venue_unavailable_slot').insert({ venue_id: venue.id, date, slot: 'pm', reason: 'Power works' });
+
+    const { data } = await admin.rpc('decide_venue_booking_request', {
+      p_request_id: requestId,
+      p_decisions: [{ line_id: lineIds[0], decision: 'approve', reason: null }],
+      p_decided_by: venueStaffId,
+    });
+
+    expect(data).toMatchObject({ outcome: 'unavailable' });
+    expect(await lineStatuses(requestId)).toEqual(['pending']);
+    expect(await bookingsOf(eventId)).toEqual([]);
   });
 });

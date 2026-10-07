@@ -15,13 +15,17 @@ type Decision = 'approve' | 'reject';
  * rejected line.").
  *
  * The decider is never sent from here. The route reads whoever is signed in.
+ *
+ * SCRUM-155 AC2: a line that clashes with a confirmed booking or an
+ * unavailable slot says what with, and offers Reject only. The API refuses an
+ * approval of it anyway, for everyone.
  */
 export function VenueBookingDecisionForm({
   requestId,
   lines,
 }: {
   requestId: string;
-  lines: readonly { id: string; label: string }[];
+  lines: readonly { id: string; label: string; blockedReason?: string }[];
 }) {
   const router = useRouter();
   const [decisions, setDecisions] = useState<Record<string, Decision>>({});
@@ -64,8 +68,11 @@ export function VenueBookingDecisionForm({
       {lines.map((line) => (
         <fieldset key={line.id} className="rounded-md border border-[var(--border)] p-3">
           <legend className="px-1 text-sm font-medium">{line.label}</legend>
+          {line.blockedReason ? (
+            <p className="mb-2 text-sm text-[var(--danger)]">{line.blockedReason} It cannot be approved.</p>
+          ) : null}
           <div className="flex gap-6">
-            {(['approve', 'reject'] as const).map((decision) => (
+            {(line.blockedReason ? (['reject'] as const) : (['approve', 'reject'] as const)).map((decision) => (
               <label key={decision} className="flex items-center gap-2 text-sm">
                 <input
                   type="radio"

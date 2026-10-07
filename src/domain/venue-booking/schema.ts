@@ -128,3 +128,17 @@ export const VenueBookingRangeSchema = z
 export type BookedSlot =
   | { date: string; slot: string; state: 'confirmed'; event: { id: string; reference: string; name: string } }
   | { date: string; slot: string; state: 'committed' };
+
+// ---------------------------------------------------------------------------
+// SCRUM-155 — Block approval of a conflicting booking
+// ---------------------------------------------------------------------------
+
+/**
+ * What decide_venue_booking_request returns
+ * (20261007100000_venue_booking_conflicts.sql): the outcome, and the other
+ * events' requests it rejected because a slot is now committed (AC4).
+ */
+export const DecisionResultSchema = z.object({
+  outcome: z.enum(['decided', 'already_decided', 'incomplete', 'unavailable']),
+  autoRejectedRequestIds: z.array(z.string().uuid()).default([]),
+});
