@@ -1,6 +1,6 @@
 import Link from 'next/link';
 import { notFound } from 'next/navigation';
-import { getVenueCalendar } from '@/domain/venues/service';
+import { getVenueCalendar } from '@/domain/venues/calendar';
 import { canViewVenueCatalogue } from '@/domain/venues/policy';
 import {
   CALENDAR_MAX_DAYS,
@@ -26,6 +26,8 @@ import NoVenueAccess from '@/components/venue/NoVenueAccess';
  *     shown beside it.
  * AC9/AC10 needs venue_catalogue_view, checked before anything is read; the
  *     API route enforces the same rule with a 403.
+ * SCRUM-148 AC3/AC4 a Confirmed slot names its event for Venue Staff, the
+ *     event's coordinator and Operations Managers; others see only Confirmed.
  *
  * A server component with a plain GET form, so a range is a URL and the rules
  * run once, in getVenueCalendar — the same call the API route makes. With no
@@ -71,6 +73,11 @@ function SlotCell({ slot }: { slot: CalendarSlot }) {
       {slot.state === 'blocked' && slot.reason && (
         <span className="block text-xs text-[var(--text-muted)]">Reason: {slot.reason}</span>
       )}
+      {slot.state === 'confirmed' && slot.event && (
+        <span className="block text-xs">
+          {slot.event.reference} · {slot.event.name}
+        </span>
+      )}
       {slot.state === 'confirmed' && slot.pendingRequests > 0 && (
         <span className="block text-xs text-[var(--text-muted)]">
           +{slot.pendingRequests} pending {slot.pendingRequests === 1 ? 'request' : 'requests'}, not a commitment
@@ -103,7 +110,7 @@ export default async function VenueCalendarPage({
   let calendar: VenueCalendar | null = null;
   let errors: string[] = [];
   try {
-    calendar = await getVenueCalendar(id, { from, to });
+    calendar = await getVenueCalendar(id, { from, to }, actor);
   } catch (error) {
     if (error instanceof NotFoundError) notFound();
     if (!(error instanceof ValidationError)) throw error;

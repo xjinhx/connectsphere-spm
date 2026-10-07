@@ -333,8 +333,12 @@ export const CALENDAR_SLOT_STATE_LABELS: Record<CalendarSlotState, string> = {
 };
 
 /**
- * One slot on one date. No event, client or coordinator details: who may see
- * those is SCRUM-148 AC3/AC4, and they are protected information (customer
+ * One slot on one date.
+ *
+ * Event details follow SCRUM-148 AC3/AC4, decided by its listVenueBookings():
+ * Venue Staff, the event's assigned coordinator and Event Operations Managers
+ * see which event holds a Confirmed slot; anyone else sees only that it is
+ * Confirmed. Client and coordinator details are never shown (customer
  * clarification #91).
  */
 export const CalendarSlotSchema = z.object({
@@ -344,6 +348,8 @@ export const CalendarSlotSchema = z.object({
   reason: z.string().nullable(),
   /** AC6 and AC8: pending booking requests on this slot, whatever its state. */
   pendingRequests: z.number().int().min(0),
+  /** SCRUM-148 AC3: the event on a Confirmed slot, when the viewer may see it. */
+  event: z.object({ id: z.string().uuid(), reference: z.string(), name: z.string() }).nullable(),
 });
 export type CalendarSlot = z.infer<typeof CalendarSlotSchema>;
 

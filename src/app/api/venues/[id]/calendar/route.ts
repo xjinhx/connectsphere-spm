@@ -1,5 +1,5 @@
 import { NextRequest, NextResponse } from 'next/server';
-import { getVenueCalendar } from '@/domain/venues/service';
+import { getVenueCalendar } from '@/domain/venues/calendar';
 import { assertPermission } from '@/domain/identity/policy';
 import { getCurrentActor } from '@/lib/auth/currentActor';
 import { handleApiError } from '@/lib/api/handler';
@@ -16,6 +16,9 @@ import { handleApiError } from '@/lib/api/handler';
  * parsed or read (SCRUM-69 AC3), so a refused caller gets a 403 and no
  * calendar data. A bad range is a ValidationError (400); an unknown venue is
  * a NotFoundError (404).
+ *
+ * The signed-in actor is passed on so a Confirmed slot carries its event only
+ * for viewers SCRUM-148 AC3/AC4 allows.
  */
 export async function GET(request: NextRequest, { params }: { params: Promise<{ id: string }> }) {
   try {
@@ -24,10 +27,11 @@ export async function GET(request: NextRequest, { params }: { params: Promise<{ 
 
     const { id } = await params;
     const query = request.nextUrl.searchParams;
-    const calendar = await getVenueCalendar(id, {
-      from: query.get('from') ?? undefined,
-      to: query.get('to') ?? undefined,
-    });
+    const calendar = await getVenueCalendar(
+      id,
+      { from: query.get('from') ?? undefined, to: query.get('to') ?? undefined },
+      actor,
+    );
     return NextResponse.json(calendar);
   } catch (error) {
     return handleApiError(error);
