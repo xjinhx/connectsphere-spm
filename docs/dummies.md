@@ -131,6 +131,10 @@ switch them the next time they edit those files.
     (`DUMMY(SCRUM-148) D-04`)
   - `src/domain/venues/service.ts` — `findAffectedFutureBookings()`
     (`DUMMY(SCRUM-148) D-04`)
+  - `supabase/migrations/20261007120000_venue_unavailable_slot_affected_bookings.sql`
+    — the `affected_booking_slot` view (`DUMMY(SCRUM-148) D-04`), added by
+    SCRUM-151 AC2: a confirmed booking on a slot Venue Staff have made
+    unavailable
   - Read by SCRUM-128 too: `src/lib/supabase/venues.ts` —
     `fetchConfirmedBookingsOn()`, and `src/domain/venues/service.ts` —
     `searchVenues()` (`DUMMY(SCRUM-148) D-04`)
@@ -153,14 +157,16 @@ switch them the next time they edit those files.
   takes both from its event request (`proposed_date`, `time_slots`), and
   "future" is judged on the Singapore date (`todayInSingapore`). If SCRUM-148
   gives a booking its own date or slot, `update_venue`,
-  `fetchConfirmedFutureBookings()` and `fetchConfirmedBookingsOn()` must read
-  that instead. (Raised in review of PR #61.)
+  `fetchConfirmedFutureBookings()`, `fetchConfirmedBookingsOn()` (SCRUM-128)
+  and the `affected_booking_slot` view (SCRUM-151) must read that instead.
+  (Raised in review of PR #61.)
 - **To replace:** SCRUM-148's approval flow writes `venue_booking` rows (and
   may widen `status` beyond `'confirmed'`). Nothing in SCRUM-120 changes;
   re-run `tests/integration/venue-capacity-cut.test.ts` and SCRUM-120 AC2 and
-  AC3 by hand against a booking made through that flow, and
-  `tests/integration/venue-search.test.ts` for SCRUM-128 AC2 and AC3, then
-  remove the markers.
+  AC3 by hand against a booking made through that flow. Do the same for
+  SCRUM-128 (`tests/integration/venue-search.test.ts`, AC2 and AC3) and
+  SCRUM-151 (`tests/integration/venue-unavailable-slots.test.ts`, AC2 and AC3).
+  Then remove the markers.
 - **Status:** Replaced (SCRUM-148, branch `venue-booking-approval`).
   `decide_venue_booking_request` writes one booking per venue, date and slot,
   with its own `date` and `slot`, and `venue_booking_one_per_slot` refuses a
@@ -174,8 +180,12 @@ switch them the next time they edit those files.
   an applied migration. SCRUM-128's search (`fetchConfirmedBookingsOn()`,
   `searchVenues()`) now reads each booking's own date and slot;
   `venue-search.test.ts` passes, its setup rows carrying a date and slot.
-  Still to switch once on main together: SCRUM-151's `affected_booking_slot`
-  view.
+  SCRUM-151's `affected_booking_slot` view
+  (`20261007120000_venue_unavailable_slot_affected_bookings.sql`) also reads
+  each booking's own date and slot, switched by SCRUM-151, which merged after
+  SCRUM-148; `venue-unavailable-slots.test.ts` passes, its setup rows carrying
+  a date and slot. Re-check SCRUM-151 AC2 and AC3 by hand against a booking
+  approved through SCRUM-148 (TC-151-05, TC-151-08).
 
 ### D-05 — A capacity cut's "notification" is only a stored notice
 
@@ -263,6 +273,15 @@ switch them the next time they edit those files.
   changes if the four columns stay; re-run
   `tests/integration/venue-search.test.ts` and SCRUM-128 AC4 by hand against a
   slot withdrawn through that flow, then remove the markers.
+- **Status:** Replaced (SCRUM-151, branch `venue-unavailable-slots`). SCRUM-151
+  AC1 writes `venue_unavailable_slot` rows through
+  `POST /api/venues/[id]/unavailable-slots`. It kept the four columns and added
+  `recorded_by` (`20261007110000_venue_unavailable_slot.sql`), so nothing in
+  SCRUM-128 changed. `venue-search.test.ts` passes against the merged tables.
+  SCRUM-128 AC4 by hand is TC-151-02: search a date and slot withdrawn through
+  SCRUM-151. The TypeScript
+  markers are removed; the comments in the 20261001090000 migration stay as
+  history rather than editing an applied migration.
 
 ### D-10 — Planning is added and reached without SCRUM-101
 
@@ -344,6 +363,35 @@ switch them the next time they edit those files.
   Approved event becomes Planning on its first request, stays Planning on a
   further one, and is untouched when the request is refused).
 
+### D-12 — Releasing an affected booking is done by hand
+
+- **Kind:** Out-of-sprint stand-in
+- **Added by:** SCRUM-151 AC3 — branch `venue-unavailable-slots`
+- **Waiting on:** SCRUM-231 Release an affected booking (Sprint 3); its AC4
+  closes the outstanding action. "Replace" is SCRUM-229. SCRUM-105 (cancel an
+  event) and SCRUM-153 (postpone one) also release bookings and should reuse
+  the same release. (The markers first used the epic key SCRUM-17, before
+  SCRUM-231 existed.)
+- **Where:** `src/domain/availability/service.ts` — `listAffectedBookings()`;
+  `src/components/venue/AffectedBookingsNotice.tsx` (both
+  `DUMMY(SCRUM-231) D-12`)
+- **What is real and what is faked:** the outstanding action is real. Each
+  affected booking is listed on the coordinator's event page for as long as it
+  is still confirmed on an unavailable slot, and drops off once it is not.
+  Only the release itself is missing: the page states the action instead of
+  offering a button. To see an entry clear, a tester removes the booking by
+  hand (the stand-in's status check only allows `'confirmed'`):
+  ```sql
+  delete from venue_booking where event_request_id = '<event id>' and venue_id = '<venue id>';
+  ```
+  "Replaced" is tested as booking the event at another venue, then removing
+  the old booking.
+- **To replace:** SCRUM-231 adds the release action (with SCRUM-148, a
+  released status). `listAffectedBookings()` does not change, because it only
+  lists confirmed bookings. Add the action beside each entry in
+  `AffectedBookingsNotice`, re-run SCRUM-151 AC3, then remove the markers.
+- **Status:** Active
+
 ### D-13 — A booking decision's "notification" is only the recorded decision
 
 - **Kind:** Stand-in code (SCRUM-193's in-app notifications are in this sprint
@@ -369,6 +417,38 @@ switch them the next time they edit those files.
   (`20261007080000_notifications_venue_booking_update_type.sql`), giving the
   outcome and each rejected line's reason. The marker is removed. Re-check
   with TC-148-02 and TC-149-01, reading the notification as the coordinator.
+
+### D-14 — An affected booking's "notification" is only a stored notice
+
+- **Kind:** Stand-in code (SCRUM-193's in-app notification list is in this
+  sprint but not built yet)
+- **Added by:** SCRUM-151 AC2 — branch `venue-unavailable-slots`. First
+  numbered D-11; renumbered when SCRUM-101 took D-11 on main (D-13 is
+  SCRUM-148's).
+- **Waiting on:** SCRUM-193 View my notifications in the application
+- **Where:**
+  `supabase/migrations/20261007120000_venue_unavailable_slot_affected_bookings.sql`
+  — the `venue_unavailability_notice` table and the insert in
+  `mark_slots_unavailable` (`DUMMY(SCRUM-193) D-14`);
+  `src/domain/availability/service.ts` — `markSlotsUnavailable()`
+  (`DUMMY(SCRUM-193) D-14`)
+- **What it does:** marking slots unavailable writes one
+  `venue_unavailability_notice` row per affected booking of an upcoming event,
+  addressed to the event's assigned coordinator, holding the date, the
+  withdrawn slots the event uses and the reason. It is written in the same
+  transaction as the slots. No coordinator assigned means no notice; the
+  booking still shows as affected (`affected_booking_slot`). The same minimum
+  honest notification as D-05 (SCRUM-120).
+- **To replace:** once SCRUM-193's notifications exist, write each notice as
+  one of them (or have SCRUM-193 list these rows); the row already holds
+  everything the message needs. Re-run SCRUM-151 AC2.
+- **Status:** Replaced (SCRUM-151, before merging: SCRUM-193 merged first, PR
+  #75). After the save, `markSlotsUnavailable()` sends each notice to its
+  coordinator with `notifyBestEffort()`, type `venue_booking_update`
+  (`20261007080000_notifications_venue_booking_update_type.sql`), naming the
+  withdrawn slots and the reason. The notice rows stay as the record of who
+  was told what. The markers are removed. Re-check with TC-151-05 and
+  TC-151-06, reading the notification as the coordinator.
 
 ### D-15 — Releasing or cancelling a booking is done by hand
 
