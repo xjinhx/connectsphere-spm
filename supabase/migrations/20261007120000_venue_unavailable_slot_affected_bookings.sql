@@ -27,10 +27,8 @@
 -- -----------------------------------------------------------------------------
 -- The flag: which confirmed bookings sit on an unavailable slot
 --
--- DUMMY(SCRUM-148) D-04: bookings come from the stand-in venue_booking. A
--- booking there has no date or slot of its own; both come from its event
--- request, as in SCRUM-120. When SCRUM-148 gives a booking its own date and
--- slot, this view reads those instead.
+-- Each confirmed booking holds one slot on one date (SCRUM-148), so it is
+-- affected when that venue, date and slot is recorded as unavailable.
 --
 -- One row per affected slot, so a booking whose AM and PM are both withdrawn
 -- appears twice. Callers decide what "upcoming" means (a Singapore date).
@@ -43,16 +41,16 @@ select
   b.id as booking_id,
   b.event_request_id,
   b.venue_id,
-  e.proposed_date as slot_date,
-  u.slot,
+  b.date as slot_date,
+  b.slot,
   u.reason,
   e.coordinator_id
 from venue_booking b
 join event_request e on e.id = b.event_request_id
 join venue_unavailable_slot u
   on u.venue_id = b.venue_id
- and u.date = e.proposed_date
- and u.slot = any (e.time_slots)
+ and u.date = b.date
+ and u.slot = b.slot
 where b.status = 'confirmed';
 
 

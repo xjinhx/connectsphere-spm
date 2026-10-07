@@ -246,9 +246,13 @@ export async function listAffectedBookings(
     throw new ValidationError("Could not check the event's venue bookings.", error?.message);
   }
 
-  const byBooking = new Map<string, BookingOnUnavailableSlot>();
+  // One entry per venue and date: since SCRUM-148 a booking is one row per
+  // slot, and the coordinator sees the event's booking of that venue on that
+  // day with each withdrawn slot. bookingId is the first slot's row.
+  const byVenueDay = new Map<string, BookingOnUnavailableSlot>();
   for (const row of data.map((raw) => AffectedBookingSlotRowSchema.parse(raw))) {
-    const booking = byBooking.get(row.booking_id) ?? {
+    const key = `${row.venue_id}|${row.slot_date}`;
+    const booking = byVenueDay.get(key) ?? {
       bookingId: row.booking_id,
       venueId: row.venue_id,
       venueName: row.venues.name,
@@ -256,10 +260,10 @@ export async function listAffectedBookings(
       slots: [],
     };
     booking.slots.push({ slot: row.slot, reason: row.reason });
-    byBooking.set(row.booking_id, booking);
+    byVenueDay.set(key, booking);
   }
 
-  return [...byBooking.values()]
+  return [...byVenueDay.values()]
     .map((booking) =>
       BookingOnUnavailableSlotSchema.parse({
         ...booking,

@@ -47,6 +47,11 @@ export async function listCoordinatorProfiles() {
     .order('full_name', { ascending: true });
 }
 
+/** SCRUM-148 AC1 — the names of the Venue Staff who decided a booking request's lines. */
+export async function fetchProfileNames(accountIds: readonly string[]) {
+  return createAdminClient().from('profiles').select('id, full_name').in('id', [...accountIds]);
+}
+
 /** SCRUM-204 — the caller's own profile, including organisation membership. */
 export async function fetchProfileWithOrganisation(supabase: SupabaseClient, accountId: string) {
   return supabase

@@ -32,9 +32,10 @@ import { ensureTestClientOrganisation } from './fixtures/clientOrganisation';
  * findUnavailableSlots, so that is tested directly here, and the check is
  * re-run end to end once they call it.
  *
- * AC2's bookings are stand-in D-04 (venue_booking, added by hand here as a
- * tester would). Its notice is a venue_unavailability_notice row, sent to the
- * coordinator as a SCRUM-193 notification. See docs/dummies.md.
+ * AC2's bookings are venue_booking rows with their own date and slot, as
+ * SCRUM-148's approval writes them, added directly here. Its notice is a
+ * venue_unavailability_notice row, sent to the coordinator as a SCRUM-193
+ * notification. See docs/dummies.md.
  *
  * Runs against the local Supabase stack: the unique constraint is what makes
  * a save with a slot already unavailable save nothing at all, and
@@ -87,9 +88,9 @@ async function createUser(label: string): Promise<string> {
 }
 
 /**
- * A confirmed booking of an event into the venue, made by hand as a tester
- * would (stand-in D-04). The booking has no date or slot of its own: both come
- * from the event. The assignment is an update after the submission, because
+ * A confirmed booking of an event into the venue, one row per slot on the
+ * date, as SCRUM-148's approval writes them, added directly rather than
+ * through a request. The assignment is an update after the submission, because
  * event_request_assignment_needs_submission refuses a coordinator on a draft.
  */
 async function bookEvent(
@@ -122,7 +123,9 @@ async function bookEvent(
     if (assignError) throw new Error(`could not assign test request: ${assignError.message}`);
   }
 
-  const { error: bookError } = await admin.from('venue_booking').insert({ venue_id: venueId, event_request_id: id });
+  const { error: bookError } = await admin
+    .from('venue_booking')
+    .insert(slots.map((slot) => ({ venue_id: venueId, event_request_id: id, date, slot })));
   if (bookError) throw new Error(`could not book test request: ${bookError.message}`);
   return id;
 }
@@ -413,7 +416,7 @@ describe("the coordinator's outstanding action (SCRUM-151 AC3)", () => {
     await markSlotsUnavailable(venue.id, { date, slots: ['am'], reason: 'Ceiling repair' }, venueStaffId);
 
     // The replacement alone does not clear it: the old booking is still held.
-    const { error } = await admin.from('venue_booking').insert({ venue_id: replacement.id, event_request_id: eventId });
+    const { error } = await admin.from('venue_booking').insert({ venue_id: replacement.id, event_request_id: eventId, date, slot: 'am' });
     if (error) throw new Error(`could not book the replacement: ${error.message}`);
     expect((await listAffectedBookings(eventId)).map((booking) => booking.venueId)).toEqual([venue.id]);
 

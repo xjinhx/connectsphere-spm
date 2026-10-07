@@ -19,7 +19,7 @@ export interface VenueBookingRequestLineRow {
   id: string;
   date: string;
   time_slots: string[];
-  status: 'pending';
+  status: 'pending' | 'approved' | 'rejected';
 }
 
 export interface VenueBookingRequestRow {

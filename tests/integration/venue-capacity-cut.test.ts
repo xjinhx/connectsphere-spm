@@ -18,9 +18,10 @@ import { ensureTestClientOrganisation } from './fixtures/clientOrganisation';
  *      when the change is applied, then the Event Coordinator assigned to each
  *      affected event is notified."
  *
- * Bookings are stand-in D-04 (venue_booking, added by hand here as a tester
- * would) and the notification is stand-in D-05 (a venue_capacity_notice row).
- * See docs/dummies.md.
+ * Bookings are venue_booking rows, one per venue, date and slot. In the app
+ * SCRUM-148's approval writes them (D-04, replaced); here they are added
+ * directly as setup. The notification is stand-in D-05 (a
+ * venue_capacity_notice row). See docs/dummies.md.
  *
  * Test cases: US-11.4-TC02 (AC2), US-11.4-TC03 (AC3), US-11.4-TC04 (AC4).
  *
@@ -91,10 +92,18 @@ async function bookEvent(
     if (assignError) throw new Error(`could not assign test request: ${assignError.message}`);
   }
 
-  const { error: bookError } = await admin.from('venue_booking').insert({ venue_id: venueId, event_request_id: id });
+  // One slot per booking, rotated so events sharing a venue and date never
+  // claim the same slot (venue_booking_one_per_slot, SCRUM-148).
+  const slot = SLOTS[bookingCount++ % SLOTS.length];
+  const { error: bookError } = await admin
+    .from('venue_booking')
+    .insert({ venue_id: venueId, event_request_id: id, date, slot });
   if (bookError) throw new Error(`could not book test request: ${bookError.message}`);
   return id;
 }
+
+const SLOTS = ['am', 'pm', 'night'];
+let bookingCount = 0;
 
 async function noticesFor(venueId: string) {
   const { data, error } = await admin

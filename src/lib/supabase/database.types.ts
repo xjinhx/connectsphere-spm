@@ -488,22 +488,31 @@ export type Database = {
       venue_booking: {
         Row: {
           created_at: string
+          date: string
           event_request_id: string
           id: string
+          request_line_id: string | null
+          slot: string
           status: string
           venue_id: string
         }
         Insert: {
           created_at?: string
+          date: string
           event_request_id: string
           id?: string
+          request_line_id?: string | null
+          slot: string
           status?: string
           venue_id: string
         }
         Update: {
           created_at?: string
+          date?: string
           event_request_id?: string
           id?: string
+          request_line_id?: string | null
+          slot?: string
           status?: string
           venue_id?: string
         }
@@ -513,6 +522,13 @@ export type Database = {
             columns: ["event_request_id"]
             isOneToOne: false
             referencedRelation: "event_request"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "venue_booking_request_line_id_fkey"
+            columns: ["request_line_id"]
+            isOneToOne: false
+            referencedRelation: "venue_booking_request_line"
             referencedColumns: ["id"]
           },
           {
@@ -567,7 +583,10 @@ export type Database = {
         Row: {
           created_at: string
           date: string
+          decided_at: string | null
+          decided_by: string | null
           id: string
+          rejection_reason: string | null
           request_id: string
           status: string
           time_slots: string[]
@@ -575,7 +594,10 @@ export type Database = {
         Insert: {
           created_at?: string
           date: string
+          decided_at?: string | null
+          decided_by?: string | null
           id?: string
+          rejection_reason?: string | null
           request_id: string
           status?: string
           time_slots: string[]
@@ -583,7 +605,10 @@ export type Database = {
         Update: {
           created_at?: string
           date?: string
+          decided_at?: string | null
+          decided_by?: string | null
           id?: string
+          rejection_reason?: string | null
           request_id?: string
           status?: string
           time_slots?: string[]
@@ -885,6 +910,10 @@ export type Database = {
           p_requested_by: string
           p_venue_id: string
         }
+        Returns: string
+      }
+      decide_venue_booking_request: {
+        Args: { p_decided_by: string; p_decisions: Json; p_request_id: string }
         Returns: string
       }
       mark_slots_unavailable: {

@@ -93,7 +93,13 @@ switch them the next time they edit those files.
   confirmed bookings, reservations and registrations; re-run US-7.3-TC05 and
   TC06 (SCRUM-92 AC2 and AC3). Each flag can be replaced separately, as its
   epic lands.
-- **Status:** Active
+- **Status:** Partly replaced. **Venue:** replaced by SCRUM-148 (branch
+  `venue-booking-approval`). `getApprovalView` reads the event's confirmed
+  bookings (`commitmentsFor`), and once one exists the statement says "A venue
+  is booked…" in place of "No venue…". US-7.3-TC05 and TC06 were re-run in
+  `approval-view.test.ts`, and the SCRUM-148 marker was removed.
+  **Equipment and registration:** still asserted `false`, waiting on SCRUM-21
+  and SCRUM-22.
 
 ### D-03 — A coordinator's "notification" is only the recorded assignment
 
@@ -161,7 +167,25 @@ switch them the next time they edit those files.
   SCRUM-128 (`tests/integration/venue-search.test.ts`, AC2 and AC3) and
   SCRUM-151 (`tests/integration/venue-unavailable-slots.test.ts`, AC2 and AC3).
   Then remove the markers.
-- **Status:** Active
+- **Status:** Replaced (SCRUM-148, branch `venue-booking-approval`).
+  `decide_venue_booking_request` writes one booking per venue, date and slot,
+  with its own `date` and `slot`, and `venue_booking_one_per_slot` refuses a
+  second confirmed booking of a slot
+  (`20261007090000_venue_booking_decision.sql`). The hand-made stand-in rows
+  are removed by that migration. `update_venue` and
+  `fetchConfirmedFutureBookings()` now judge "future" on the booking's own
+  date and count an event once. `venue-capacity-cut.test.ts` passes, its setup
+  rows now carrying a date and slot. The TypeScript markers are removed; the
+  comments in the 20260924170000 migration stay as history rather than editing
+  an applied migration. SCRUM-128's search (`fetchConfirmedBookingsOn()`,
+  `searchVenues()`) now reads each booking's own date and slot;
+  `venue-search.test.ts` passes, its setup rows carrying a date and slot.
+  SCRUM-151's `affected_booking_slot` view
+  (`20261007120000_venue_unavailable_slot_affected_bookings.sql`) also reads
+  each booking's own date and slot, switched by SCRUM-151, which merged after
+  SCRUM-148; `venue-unavailable-slots.test.ts` passes, its setup rows carrying
+  a date and slot. Re-check SCRUM-151 AC2 and AC3 by hand against a booking
+  approved through SCRUM-148 (TC-151-05, TC-151-08).
 
 ### D-05 — A capacity cut's "notification" is only a stored notice
 
@@ -367,6 +391,29 @@ switch them the next time they edit those files.
   lists confirmed bookings. Add the action beside each entry in
   `AffectedBookingsNotice`, re-run SCRUM-151 AC3, then remove the markers.
 - **Status:** Active
+
+### D-13 — A booking decision's "notification" is only the recorded decision
+
+- **Kind:** Stand-in code (SCRUM-193's in-app notifications are in this sprint
+  but not on main yet)
+- **Added by:** SCRUM-148 AC2 — branch `venue-booking-approval`
+- **Waiting on:** SCRUM-193 View my notifications in the application
+- **Where:** `src/domain/venue-booking/service.ts` —
+  `decideVenueBookingRequest()` (`DUMMY(SCRUM-193) D-13`)
+- **What it does:** AC2's "the assigned Event Coordinator is notified" is the
+  decision recorded on each line (status, `decided_by`, `decided_at`, reason),
+  returned with the event's `coordinatorId`. The same minimum honest
+  notification as D-03 (SCRUM-94).
+- **To replace:** once SCRUM-193's notifications exist, create one for the
+  event's coordinator from `decideVenueBookingRequest()` after the decision is
+  saved (it would need a booking-decision type; 193's list has none yet).
+  Re-run SCRUM-148 AC2.
+- **Status:** Replaced (SCRUM-148, before merging: SCRUM-193 merged first, PR
+  #75). `decideVenueBookingRequest()` now notifies the event's coordinator with
+  `notifyBestEffort()`, type `venue_booking_update`
+  (`20261007080000_notifications_venue_booking_update_type.sql`), giving the
+  outcome and each rejected line's reason. The marker is removed. Re-check
+  with TC-148-02, reading the notification as the coordinator.
 
 ### D-14 — An affected booking's "notification" is only a stored notice
 

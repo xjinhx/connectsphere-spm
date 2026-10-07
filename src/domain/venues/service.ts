@@ -109,14 +109,12 @@ export async function listVenues(includeRetired = false): Promise<VenueSummary[]
  * SCRUM-128 Search venues by date and slot.
  *
  * AC1: a venue is returned only if it is free in every selected slot.
- * AC2/AC3: a confirmed booking commits its own slots (D-04 stand-in bookings).
+ * AC2/AC3: a confirmed booking commits its slot (SCRUM-148's bookings).
  * AC4: a slot recorded as unavailable commits it (SCRUM-151 records them).
  * AC5: any valid date, however far ahead — VenueSearchQuerySchema sets no limit.
  *
  * The three reads are independent, so they run together; the rule that
  * combines them is isFreeInEverySlot (policy.ts).
- *
- * DUMMY(SCRUM-148) D-04: bookings are the stand-in venue_booking rows.
  */
 export async function searchVenues(input: unknown): Promise<VenueSearchResult> {
   const parsed = VenueSearchQuerySchema.safeParse(input);
@@ -141,9 +139,7 @@ export async function searchVenues(input: unknown): Promise<VenueSearchResult> {
   }
 
   const committed = committedSlotsByVenue([
-    ...bookings.data.flatMap((booking) =>
-      (booking.event_request?.time_slots ?? []).map((slot) => ({ venueId: booking.venue_id, slot })),
-    ),
+    ...bookings.data.map((booking) => ({ venueId: booking.venue_id, slot: booking.slot })),
     ...unavailable.data.map((row) => ({ venueId: row.venue_id, slot: row.slot })),
   ]);
 
@@ -460,12 +456,11 @@ export async function updateVenue(venueId: string, input: unknown): Promise<Venu
 // -----------------------------------------------------------------------------
 
 /**
- * The confirmed bookings at this venue, for events on or after today, whose
+ * The events with a confirmed booking at this venue on or after today whose
  * expected attendance is above `proposedMaxCapacity` (isAffectedByCapacity).
  *
- * DUMMY(SCRUM-148) D-04: the bookings come from venue_booking, a stand-in
- * table nothing writes to in Sprint 1; testers add rows by hand. SCRUM-148's
- * booking flow writes it for real, and this function does not change.
+ * Bookings are SCRUM-148's, one per venue, date and slot (D-04 replaced), so
+ * an event booked for several slots is listed once.
  *
  * "Today" is Singapore's date, not the server's: the server runs in UTC, which
  * is still on yesterday until 08:00 in Singapore, and would count an event
@@ -482,8 +477,9 @@ export async function findAffectedFutureBookings(
     throw new ValidationError("Could not check the venue's bookings.", error?.message);
   }
 
-  return data
-    .map((row) => row.event_request)
+  const events = [...new Map(data.map((row) => [row.event_request.id, row.event_request])).values()];
+
+  return events
     .filter((event) => isAffectedByCapacity(event.expected_attendance, proposedMaxCapacity))
     .map((event) =>
       AffectedBookingSchema.parse({
