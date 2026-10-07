@@ -1,7 +1,7 @@
 import { describe, it, expect, beforeAll, afterAll } from 'vitest';
 import { createAdminClient } from '@/lib/supabase/admin';
 import { approveEventRequest, rejectEventRequest } from '@/domain/review/service';
-import { changeEventStatus } from '@/domain/event-status/service';
+import { changeEventStatus, enterPlanning } from '@/domain/event-status/service';
 import type { EventRequestStatus } from '@/domain/event-request/schema';
 import { ensureTestClientOrganisation, TEST_CLIENT_ORGANISATION_ID } from './fixtures/clientOrganisation';
 
@@ -18,8 +18,9 @@ import { ensureTestClientOrganisation, TEST_CLIENT_ORGANISATION_ID } from './fix
  * move is actually written.
  *
  * Each event is brought to its starting status the way the app gets it there -
- * submit, approve and reject through their own paths, and every later move
- * through changeEventStatus - so the rows satisfy every constraint a real one
+ * submit, approve and reject through their own paths, approved -> planning
+ * through enterPlanning (SCRUM-101), and every later move through
+ * changeEventStatus - so the rows satisfy every constraint a real one
  * would.
  */
 
@@ -69,8 +70,7 @@ async function createDraftRequest(): Promise<string> {
 async function createConfirmedRequest(): Promise<string> {
   const id = await createSubmittedRequest();
   await approveEventRequest(id, { actorId: coordinatorId });
-  // DUMMY(SCRUM-101) D-10: approved -> planning set directly; SCRUM-101's action will do it.
-  await changeEventStatus(id, 'planning');
+  await enterPlanning(id);
   await changeEventStatus(id, 'confirmed');
   return id;
 }

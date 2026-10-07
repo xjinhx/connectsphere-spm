@@ -105,12 +105,15 @@ switch them the next time they edit those files.
 
 - **Kind:** Out-of-sprint stand-in
 - **Added by:** SCRUM-94 — commit `bb942af` (PR #28)
-- **Waiting on:** SCRUM-24 Notification System
-- **Where:** `src/domain/assignment/service.ts` — `assignCoordinator()`
-- **To replace:** notify the assigned coordinator from `assignCoordinator()`,
-  straight after the assignment is recorded, using SCRUM-24's mechanism;
-  re-run US-8.1-TC02 (SCRUM-94 AC1).
-- **Status:** Active
+- **Waiting on:** ~~SCRUM-24 Notification System~~ — resolved (SCRUM-193/198)
+- **Where:** ~~`src/domain/assignment/service.ts` — `assignCoordinator()`~~
+  — resolved: now calls `createNotification` (`coordinator_assigned`)
+  straight after the assignment is recorded, best-effort via
+  `notifyBestEffort` so a notification failure cannot undo the assignment.
+- **To replace:** ~~notify the assigned coordinator from~~
+  ~~`assignCoordinator()`...~~ Done. Re-run US-8.1-TC02 (SCRUM-94 AC1)
+  against the notification now created.
+- **Status:** Replaced (SCRUM-193/198).
 
 ### D-04 — Confirmed bookings are a stand-in table filled by hand
 
@@ -162,7 +165,7 @@ switch them the next time they edit those files.
   `decide_venue_booking_request` writes one booking per venue, date and slot,
   with its own `date` and `slot`, and `venue_booking_one_per_slot` refuses a
   second confirmed booking of a slot
-  (`20261006100000_venue_booking_decision.sql`). The hand-made stand-in rows
+  (`20261007090000_venue_booking_decision.sql`). The hand-made stand-in rows
   are removed by that migration. `update_venue` and
   `fetchConfirmedFutureBookings()` now judge "future" on the booking's own
   date and count an event once. `venue-capacity-cut.test.ts` passes, its setup
@@ -269,7 +272,7 @@ switch them the next time they edit those files.
 - **Where:**
   - `supabase/migrations/20260928120000_event_request_lifecycle_statuses.sql`
     — adds `'planning'` with `IF NOT EXISTS`. SCRUM-101's own migration
-    (`20260927090000_event_request_planning_status.sql`, branch
+    (`20260927090100_event_request_planning_status.sql`, branch
     `move-event-status`) adds the same value and runs first on a fresh reset.
   - `src/domain/event-request/schema.ts` — `'planning'` in
     `EventRequestStatusEnum` and its label.
@@ -289,7 +292,57 @@ switch them the next time they edit those files.
   SCRUM-101's approved -> planning function and set Planning through its
   action in the manual tests. Re-run TC-103-01 to 09 (SCRUM-103 AC1-AC4) and
   TC-97-02 / TC-97-04 (SCRUM-97 AC1).
-- **Status:** Active
+- **Status:** Replaced (SCRUM-101, branch `move-event-status`). A single
+  `'planning'` is in the enum, labels and badge; `createConfirmedRequest()` and
+  `createAssignedEvent()` use `enterPlanning`; the markers are removed.
+  SCRUM-101's migration was renamed to
+  `20260927090100_event_request_planning_status.sql` (it shared a version with
+  `20260927090000_venue_setup_turnaround_slots.sql`, which fails
+  `supabase start`), and now uses `add value if not exists 'planning'` so it
+  also runs on a database that already has the value from SCRUM-103's
+  migration. TC-103-01 to 09 and TC-97-02 / TC-97-04 were re-run by hand on
+  06/10/26 and all passed, with Planning reached by raising a venue booking
+  request in the Request a venue form (the trigger in
+  `20261006100000_event_request_enter_planning_on_booking_request.sql`)
+  instead of the SCRUM-103 harness. Confirmed is still set with the harness
+  (`tests/manual/change-event-status.test.ts`), as there is no Confirm action
+  until Sprint 3. Results are in the SCRUM-101 Jira comment:
+  https://scrumers-is212.atlassian.net/browse/SCRUM-101?focusedCommentId=10292
+
+### D-11 — Approved -> Planning is not yet triggered automatically
+
+- **Kind:** Stand-in code (the rule and the write both exist for real; only
+  the automatic trigger is missing)
+- **Added by:** SCRUM-101 — this commit
+- **Waiting on:** SCRUM-142 Submit a venue booking request for an event
+  (branch `submit-venue-booking-req`), for its `venue_booking_request`
+  table to exist so a trigger can reference it
+- **Where:** `src/domain/event-status/policy.ts` (`canEnterPlanning`) and
+  `src/domain/event-status/service.ts` (`enterPlanning`)
+- **What is real and what is faked:** the transition rule (AC3/AC4) and the
+  database write are both real and integration-tested against a real
+  database (`tests/integration/enter-planning.test.ts`) — calling
+  `enterPlanning(id)` directly genuinely moves an Approved event to
+  Planning. What's missing is the automatic connection: nothing currently
+  calls `enterPlanning()` when a venue booking request is actually raised,
+  because SCRUM-142's `venue_booking_request` table doesn't exist on this
+  branch or on `main` yet. This is deliberately not SCRUM-142's problem to
+  carry — that ticket's own ACs only cover creating the request, not the
+  event reacting to it — so the connection is tracked here instead.
+- **To replace:** once SCRUM-142 merges to `main` and this branch merges
+  `main` in, add a database trigger on `venue_booking_request` (after
+  insert) that calls into the Planning transition when the parent event is
+  Approved, the same pattern as `set_decided_at`/
+  `set_clarification_requested_at` elsewhere in this codebase — rather than
+  having SCRUM-142's application code call `enterPlanning()` directly,
+  which would require that ticket's code to know this one exists. Re-run
+  `enter-planning.test.ts`, and add a test that actually inserting a
+  `venue_booking_request` row fires the trigger.
+- **Status:** Replaced (SCRUM-101). SCRUM-142 landed in PR #70. The trigger is
+  `supabase/migrations/20261006100000_event_request_enter_planning_on_booking_request.sql`,
+  tested in `tests/integration/submit-venue-booking-request.test.ts` (an
+  Approved event becomes Planning on its first request, stays Planning on a
+  further one, and is untouched when the request is refused).
 
 ### D-13 — A booking decision's "notification" is only the recorded decision
 
