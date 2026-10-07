@@ -16,6 +16,8 @@ import {
   canCreateBookingRequest,
   canSeeBookingDetails,
   canViewBookingRequest,
+  describeSlotClashes,
+  findSlotClashes,
   requestStatusOf,
   sortBookingQueue,
   type BookingQueueSort,
@@ -27,6 +29,7 @@ import { notifyBestEffort } from '@/domain/notification/service';
 import { getVenue } from '@/domain/venues/service';
 import { fetchEventRequestById } from '@/lib/supabase/eventRequests';
 import { fetchProfileNames } from '@/lib/supabase/profiles';
+import { fetchUnavailableSlotsForVenue } from '@/lib/supabase/venues';
 import type { EventRequestRow } from '@/lib/supabase/eventRequests';
 import {
   createVenueBookingRequest,
@@ -40,6 +43,7 @@ import {
 import {
   decideVenueBookingRequestLines,
   fetchConfirmedBookingsBetween,
+  fetchConfirmedSlotsForVenue,
   fetchVenueBookingDecision,
 } from '@/lib/supabase/venueBookings';
 import {
@@ -65,6 +69,41 @@ function toOutcome(row: VenueBookingRequestRow): VenueBookingRequestOutcome {
       status: line.status,
     })),
   };
+}
+
+/**
+ * SCRUM-154 AC1 to AC5 — refuse a request for a slot that already holds a
+ * confirmed booking (AC1, AC3) or that Venue Staff recorded as unavailable
+ * (AC4). Slots that do not clash are not held against the request (AC2, AC5).
+ *
+ * The refusal names each clashing date's committed and unavailable slots and
+ * the ones still available, and nothing about the other booking (AC1): the
+ * reads below fetch dates and slots only.
+ *
+ * This is a check at request time, not a lock: a booking confirmed a moment
+ * later is still caught when Venue Staff approve, by venue_booking_one_per_slot
+ * (SCRUM-148).
+ */
+async function refuseClashingSlots(
+  venueId: string,
+  lines: readonly { date: string; timeSlots: readonly TimeSlot[] }[],
+): Promise<void> {
+  const dates = [...new Set(lines.map((line) => line.date))];
+  const [confirmed, unavailable] = await Promise.all([
+    fetchConfirmedSlotsForVenue(venueId, dates),
+    fetchUnavailableSlotsForVenue(venueId, dates),
+  ]);
+  if (confirmed.error || !confirmed.data) {
+    throw new ValidationError("Could not check the venue's bookings.", confirmed.error?.message);
+  }
+  if (unavailable.error || !unavailable.data) {
+    throw new ValidationError("Could not check the venue's unavailable slots.", unavailable.error?.message);
+  }
+
+  const clashes = findSlotClashes(lines, confirmed.data, unavailable.data);
+  if (clashes.length > 0) {
+    throw new ConflictError(describeSlotClashes(clashes), { reason: 'slot_clash', clashes });
+  }
 }
 
 /**
@@ -111,14 +150,20 @@ export async function submitVenueBookingRequest(
     throw new ValidationError('The venue booking request is not valid.', parsedInput.error.flatten());
   }
 
+  const lines = parsedInput.data.lines.map((line) => ({
+    date: line.date.toISOString().slice(0, 10),
+    timeSlots: line.timeSlots,
+  }));
+
+  // SCRUM-154 — after the field checks, so a request that is missing fields is
+  // told so first, and before anything is written.
+  await refuseClashingSlots(parsedInput.data.venueId, lines);
+
   const { data: newRequestId, error: writeError } = await createVenueBookingRequest({
     eventRequestId: parsedId.data,
     venueId: parsedInput.data.venueId,
     requestedBy: actorId,
-    lines: parsedInput.data.lines.map((line) => ({
-      date: line.date.toISOString().slice(0, 10),
-      timeSlots: line.timeSlots,
-    })),
+    lines,
   });
 
   if (writeError || !newRequestId) {

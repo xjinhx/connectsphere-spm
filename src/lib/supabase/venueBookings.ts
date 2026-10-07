@@ -60,6 +60,20 @@ export async function countConfirmedBookingsForEvent(eventRequestId: string) {
     .eq('status', 'confirmed');
 }
 
+/**
+ * SCRUM-154 AC1 to AC3: which slots a venue holds confirmed bookings in on the
+ * given dates. Date and slot only: nothing about the booking's event is read,
+ * so nothing about it can reach the coordinator being refused.
+ */
+export async function fetchConfirmedSlotsForVenue(venueId: string, dates: readonly string[]) {
+  return db()
+    .from('venue_booking')
+    .select('date, slot')
+    .eq('venue_id', venueId)
+    .eq('status', 'confirmed')
+    .in('date', [...dates]);
+}
+
 /** AC3 and AC4: a venue's confirmed bookings from `from` to `to` (YYYY-MM-DD), with each booking's event. */
 export async function fetchConfirmedBookingsBetween(venueId: string, from: string, to: string) {
   return db()
