@@ -29,7 +29,7 @@ export async function fetchVenueBookingDecision(id: string) {
 
 /**
  * AC1, AC2 and AC5: one call to decide_venue_booking_request
- * (20261006110000_venue_booking_decision.sql), which records every line's
+ * (20261007090000_venue_booking_decision.sql), which records every line's
  * decision and creates a confirmed booking per approved slot in one
  * transaction. supabase-js has no transactions of its own.
  *

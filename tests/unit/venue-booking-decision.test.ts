@@ -1,5 +1,5 @@
 import { describe, it, expect } from 'vitest';
-import { canSeeBookingDetails, requestStatusOf } from '@/domain/venue-booking/policy';
+import { bookingDecisionMessage, canSeeBookingDetails, requestStatusOf } from '@/domain/venue-booking/policy';
 import { DecideVenueBookingRequestInputSchema, VenueBookingRangeSchema } from '@/domain/venue-booking/schema';
 
 /**
@@ -96,5 +96,40 @@ describe('VenueBookingRangeSchema (AC3, AC4)', () => {
 
   it('refuses a range that ends before it starts', () => {
     expect(VenueBookingRangeSchema.safeParse({ from: '2026-10-16', to: '2026-10-15' }).success).toBe(false);
+  });
+});
+
+describe('bookingDecisionMessage (AC2)', () => {
+  const line = (date: string, slot: string, status: 'approved' | 'rejected', reason: string | null = null) => ({
+    date,
+    timeSlots: [slot],
+    status,
+    rejectionReason: reason,
+  });
+
+  it('tells the coordinator an approved request was approved', () => {
+    expect(bookingDecisionMessage('Bugis Seminar Room', { status: 'approved', lines: [line('2026-10-26', 'am', 'approved')] })).toBe(
+      'Your booking request for Bugis Seminar Room was approved: 26 Oct 2026 AM.',
+    );
+  });
+
+  it('names each rejected line and its reason when the request is partly approved', () => {
+    expect(
+      bookingDecisionMessage('Marina Bay Ballroom', {
+        status: 'partially_approved',
+        lines: [line('2026-10-28', 'am', 'approved'), line('2026-10-28', 'night', 'rejected', 'No security staff after 10pm')],
+      }),
+    ).toBe(
+      'Your booking request for Marina Bay Ballroom was partially approved. Approved: 28 Oct 2026 AM. Rejected: 28 Oct 2026 Night (No security staff after 10pm).',
+    );
+  });
+
+  it('gives the reason when the whole request is rejected', () => {
+    expect(
+      bookingDecisionMessage('Jurong East Training Room', {
+        status: 'rejected',
+        lines: [line('2026-10-30', 'am', 'rejected', 'Venue under maintenance')],
+      }),
+    ).toBe('Your booking request for Jurong East Training Room was rejected: 30 Oct 2026 AM (Venue under maintenance).');
   });
 });

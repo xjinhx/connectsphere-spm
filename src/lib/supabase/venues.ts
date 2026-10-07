@@ -200,10 +200,8 @@ export async function fetchConfirmedBookingsOn(date: string) {
 }
 
 /**
- * SCRUM-128 AC4: every slot recorded as unavailable on `date`.
- *
- * DUMMY(SCRUM-151) D-09: venue_unavailable_slot is a stand-in that nothing
- * writes yet; testers add rows by hand. SCRUM-151's flow writes it for real.
+ * SCRUM-128 AC4: every slot recorded as unavailable on `date`. SCRUM-151's
+ * flow writes these rows (POST /api/venues/[id]/unavailable-slots).
  */
 export async function fetchUnavailableSlotsOn(date: string) {
   return db().from('venue_unavailable_slot').select('venue_id, slot').eq('date', date);
