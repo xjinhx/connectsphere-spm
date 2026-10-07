@@ -89,3 +89,41 @@ export function bookingDecisionMessage(
   if (approved.length === 0) return `${request} was rejected: ${rejected.join('; ')}.`;
   return `${request} was partially approved. Approved: ${approved.join(', ')}. Rejected: ${rejected.join('; ')}.`;
 }
+
+// ---------------------------------------------------------------------------
+// SCRUM-147 — View the pending booking request queue
+// ---------------------------------------------------------------------------
+
+export const BOOKING_QUEUE_SORTS = ['requested', 'event-date'] as const;
+export type BookingQueueSort = (typeof BOOKING_QUEUE_SORTS)[number];
+
+/** A sort named in the URL, or the default when it is missing or unknown. */
+export function toBookingQueueSort(value: unknown): BookingQueueSort {
+  return BOOKING_QUEUE_SORTS.find((sort) => sort === value) ?? 'requested';
+}
+
+/**
+ * The order the queue is shown in.
+ *
+ * 'requested' (the default; the card sets none): the oldest request first, so
+ *   Venue Staff work through requests in the order they arrived.
+ * 'event-date' (AC2): the soonest requested event date first. Dates are
+ *   compared as YYYY-MM-DD strings, which order the same way as the calendar,
+ *   never as displayed text ("2 Jan 2027" would sort before "30 Dec 2026").
+ *
+ * Ties fall back to the other order, then the line id, so the result is stable.
+ * Returns a new array; the input is not reordered in place.
+ */
+export function sortBookingQueue<T extends { lineId: string; date: string; requestedAt: string }>(
+  entries: readonly T[],
+  sort: BookingQueueSort,
+): T[] {
+  const byRequestedAt = (a: T, b: T) => Date.parse(a.requestedAt) - Date.parse(b.requestedAt);
+  const byDate = (a: T, b: T) => a.date.localeCompare(b.date);
+  const byLine = (a: T, b: T) => a.lineId.localeCompare(b.lineId);
+  const order: Record<BookingQueueSort, (a: T, b: T) => number> = {
+    requested: (a, b) => byRequestedAt(a, b) || byDate(a, b) || byLine(a, b),
+    'event-date': (a, b) => byDate(a, b) || byRequestedAt(a, b) || byLine(a, b),
+  };
+  return [...entries].sort(order[sort]);
+}

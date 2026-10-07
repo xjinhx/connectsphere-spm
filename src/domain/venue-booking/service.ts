@@ -6,11 +6,20 @@ import {
   VenueBookingRequestIdSchema,
   VenueBookingRequestLineStatusEnum,
   type BookedSlot,
+  type BookingQueueEntry,
   type VenueBookingDecision,
   type VenueBookingRequestOutcome,
 } from './schema';
-import { bookingDecisionMessage, canCreateBookingRequest, canSeeBookingDetails, requestStatusOf } from './policy';
+import {
+  bookingDecisionMessage,
+  canCreateBookingRequest,
+  canSeeBookingDetails,
+  requestStatusOf,
+  sortBookingQueue,
+  type BookingQueueSort,
+} from './policy';
 import { isCurrentCoordinator } from '@/domain/assignment/policy';
+import { TimeSlotEnum, type TimeSlot } from '@/domain/event-request/schema';
 import type { Role } from '@/domain/identity/roles';
 import { notifyBestEffort } from '@/domain/notification/service';
 import { getVenue } from '@/domain/venues/service';
@@ -19,7 +28,9 @@ import { fetchProfileNames } from '@/lib/supabase/profiles';
 import type { EventRequestRow } from '@/lib/supabase/eventRequests';
 import {
   createVenueBookingRequest,
+  fetchPendingBookingLines,
   fetchVenueBookingRequestById,
+  type PendingBookingLineRow,
   type VenueBookingRequestRow,
 } from '@/lib/supabase/venueBookingRequests';
 import {
@@ -318,4 +329,44 @@ export async function listVenueBookings(
       return { date: row.date, slot: row.slot, state: 'committed' };
     })
     .sort((a, b) => a.date.localeCompare(b.date) || SLOT_ORDER.indexOf(a.slot) - SLOT_ORDER.indexOf(b.slot));
+}
+
+// ---------------------------------------------------------------------------
+// SCRUM-147 — View the pending booking request queue
+// ---------------------------------------------------------------------------
+
+function toQueueEntry(row: PendingBookingLineRow): BookingQueueEntry {
+  const request = row.venue_booking_request;
+  // Postgres guarantees each line has a request, venue and event (NOT NULL
+  // foreign keys); the generated embed types cannot say so.
+  if (!request?.venues || !request.event_request) {
+    throw new ValidationError('A booking request line is missing its request, venue or event.', { lineId: row.id });
+  }
+  return {
+    lineId: row.id,
+    requestId: request.id,
+    venueName: request.venues.name,
+    eventName: request.event_request.name,
+    eventReference: request.event_request.reference,
+    date: row.date,
+    // The table's check constraint allows only these three values.
+    timeSlots: row.time_slots.filter((slot): slot is TimeSlot => TimeSlotEnum.safeParse(slot).success),
+    requestedAt: request.created_at,
+  };
+}
+
+/**
+ * SCRUM-147 AC1, AC3, AC4 — every pending line, at every venue, in the order
+ * `sort` asks for (sortBookingQueue, policy.ts).
+ *
+ * Who may see it (Venue Staff, venue_administration) is checked by the page
+ * before this is called, the same split as listVenues (SCRUM-121).
+ */
+export async function listPendingBookingQueue(sort: BookingQueueSort = 'requested'): Promise<BookingQueueEntry[]> {
+  const { data, error } = await fetchPendingBookingLines();
+  if (error || !data) {
+    throw new ValidationError('Could not load the booking request queue.', error?.message);
+  }
+  const entries = (data as unknown as PendingBookingLineRow[]).map(toQueueEntry);
+  return sortBookingQueue(entries, sort);
 }

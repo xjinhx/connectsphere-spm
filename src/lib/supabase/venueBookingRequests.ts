@@ -54,3 +54,36 @@ export async function createVenueBookingRequest(input: {
 export async function fetchVenueBookingRequestById(id: string) {
   return db().from('venue_booking_request').select(REQUEST_COLUMNS).eq('id', id).maybeSingle();
 }
+
+// ---------------------------------------------------------------------------
+// SCRUM-147 — View the pending booking request queue
+// ---------------------------------------------------------------------------
+
+/** One pending line, with the request, venue and event it belongs to. */
+export interface PendingBookingLineRow {
+  id: string;
+  date: string;
+  time_slots: string[];
+  venue_booking_request: {
+    id: string;
+    created_at: string;
+    venues: { name: string } | null;
+    event_request: { name: string; reference: string } | null;
+  } | null;
+}
+
+/**
+ * AC1, AC3, AC4 — every line still pending, at every venue.
+ *
+ * Only 'pending' lines are read, so a decided line (approved or rejected)
+ * drops out of the queue (AC3). No venue filter: Venue Staff are not scoped to
+ * particular venues (AC4).
+ */
+export async function fetchPendingBookingLines() {
+  return db()
+    .from('venue_booking_request_line')
+    .select(
+      'id, date, time_slots, venue_booking_request ( id, created_at, venues ( name ), event_request ( name, reference ) )',
+    )
+    .eq('status', 'pending');
+}
