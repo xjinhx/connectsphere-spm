@@ -82,8 +82,6 @@ function toOutcome(row: VenueBookingRequestRow): VenueBookingRequestOutcome {
  * This is a check at request time, not a lock: a booking confirmed a moment
  * later is still caught when Venue Staff approve, by venue_booking_one_per_slot
  * (SCRUM-148).
- *
- * DUMMY(SCRUM-151) D-09: unavailable slots are the stand-in venue_unavailable_slot rows.
  */
 async function refuseClashingSlots(
   venueId: string,

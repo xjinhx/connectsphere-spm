@@ -186,6 +186,10 @@ switch them the next time they edit those files.
   SCRUM-148; `venue-unavailable-slots.test.ts` passes, its setup rows carrying
   a date and slot. Re-check SCRUM-151 AC2 and AC3 by hand against a booking
   approved through SCRUM-148 (TC-151-05, TC-151-08).
+  SCRUM-123's venue calendar, merged after SCRUM-148, reads bookings through
+  `listVenueBookings()` (`src/domain/venues/calendar.ts`), so it uses each
+  booking's own date and slot and SCRUM-148 AC3/AC4's event visibility; no
+  markers left. `tests/integration/venue-calendar.test.ts` passes.
 
 ### D-05 — A capacity cut's "notification" is only a stored notice
 
@@ -250,10 +254,6 @@ switch them the next time they edit those files.
     (`DUMMY(SCRUM-151) D-09`)
   - `src/domain/venues/service.ts` — `searchVenues()`
     (`DUMMY(SCRUM-151) D-09`)
-  - `src/lib/supabase/venues.ts` — `fetchUnavailableSlotsForVenue()`
-    (`DUMMY(SCRUM-151) D-09`), added by SCRUM-154
-  - `src/domain/venue-booking/service.ts` — `refuseClashingSlots()`
-    (`DUMMY(SCRUM-151) D-09`), added by SCRUM-154
 - **What is real and what is faked:** the search, and its rule that a slot
   recorded as unavailable excludes the venue (SCRUM-128 AC4), are real.
   SCRUM-154 reads the same rows to refuse a booking request for an unavailable
@@ -290,6 +290,9 @@ switch them the next time they edit those files.
   SCRUM-151. The TypeScript
   markers are removed; the comments in the 20261001090000 migration stay as
   history rather than editing an applied migration.
+  SCRUM-123's venue calendar, merged after SCRUM-151, reads the same table
+  (`fetchUnavailableSlotsBetween()`); no markers left.
+  `tests/integration/venue-calendar.test.ts` passes.
 
 ### D-10 — Planning is added and reached without SCRUM-101
 

@@ -210,9 +210,6 @@ export async function fetchUnavailableSlotsOn(date: string) {
 /**
  * SCRUM-154 AC4 and AC5: one venue's slots recorded as unavailable on the
  * given dates. The reason is not read: the refusal names the slot only.
- *
- * DUMMY(SCRUM-151) D-09: venue_unavailable_slot is a stand-in that nothing
- * writes yet; testers add rows by hand. SCRUM-151's flow writes it for real.
  */
 export async function fetchUnavailableSlotsForVenue(venueId: string, dates: readonly string[]) {
   return db()
@@ -220,4 +217,36 @@ export async function fetchUnavailableSlotsForVenue(venueId: string, dates: read
     .select('date, slot')
     .eq('venue_id', venueId)
     .in('date', [...dates]);
+}
+
+// -----------------------------------------------------------------------------
+// SCRUM-123: a venue's calendar over a date range
+// -----------------------------------------------------------------------------
+
+/**
+ * SCRUM-123 AC7: the venue's unavailable slots from `from` to `to`, with the
+ * recorded reason. Venue Staff record them through SCRUM-151.
+ */
+export async function fetchUnavailableSlotsBetween(venueId: string, from: string, to: string) {
+  return db()
+    .from('venue_unavailable_slot')
+    .select('date, slot, reason')
+    .eq('venue_id', venueId)
+    .gte('date', from)
+    .lte('date', to);
+}
+
+/**
+ * SCRUM-123 AC6 and AC8: the venue's pending booking request lines from `from`
+ * to `to`. The lines are SCRUM-142's (venue_booking_request_line); this only
+ * reads them.
+ */
+export async function fetchPendingRequestLinesBetween(venueId: string, from: string, to: string) {
+  return db()
+    .from('venue_booking_request_line')
+    .select('date, time_slots, request:request_id!inner (venue_id)')
+    .eq('request.venue_id', venueId)
+    .eq('status', 'pending')
+    .gte('date', from)
+    .lte('date', to);
 }
