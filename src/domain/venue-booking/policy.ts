@@ -237,3 +237,23 @@ export function describeAccessibilityForVenueStaff(event: {
 }): string {
   return event.accessibilityRequired === null ? NOT_SPECIFIED : describeAccessibility(event);
 }
+
+// ---------------------------------------------------------------------------
+// SCRUM-149 — Reject a booking request with a reason
+// ---------------------------------------------------------------------------
+
+/**
+ * AC3: who may open a booking request and see its decision. Venue Staff
+ * (venue_administration), who decide it, and the event's assigned coordinator,
+ * who sees the reason and the deciding staff member. The card names nobody
+ * else.
+ */
+export function canViewBookingRequest(
+  actor: { userId: string; roles: readonly Role[] },
+  eventCoordinatorId: string | null,
+): boolean {
+  return (
+    isActionPermitted(actor.roles, 'venue_administration') ||
+    (eventCoordinatorId !== null && eventCoordinatorId === actor.userId)
+  );
+}

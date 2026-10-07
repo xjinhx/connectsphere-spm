@@ -15,6 +15,7 @@ import {
   bookingDecisionMessage,
   canCreateBookingRequest,
   canSeeBookingDetails,
+  canViewBookingRequest,
   describeSlotClashes,
   findSlotClashes,
   requestStatusOf,
@@ -271,6 +272,23 @@ export async function getVenueBookingDecision(requestId: string): Promise<VenueB
 }
 
 /**
+ * SCRUM-149 AC3: a booking request for someone allowed to open it: Venue Staff,
+ * or the event's assigned coordinator, who sees each rejected line's reason and
+ * who decided it (canViewBookingRequest). The page and the API route both use
+ * this, so they can never disagree about who may look.
+ */
+export async function viewVenueBookingRequest(
+  requestId: string,
+  actor: { userId: string; roles: readonly Role[] },
+): Promise<VenueBookingDecision> {
+  const decision = await getVenueBookingDecision(requestId);
+  if (!canViewBookingRequest(actor, decision.coordinatorId)) {
+    throw new ForbiddenError("Only Venue Staff and the event's coordinator can view this booking request.");
+  }
+  return decision;
+}
+
+/**
  * SCRUM-148 AC1, AC2 and AC5: decide every pending line of a booking request.
  *
  * Each line is approved or rejected on its own, a rejected line with a reason
@@ -285,10 +303,14 @@ export async function getVenueBookingDecision(requestId: string): Promise<VenueB
  * Who may decide is checked by the route (venue_administration, Venue
  * Staff's); the decider is the signed-in account, never an id from the body.
  *
- * AC2's "the assigned Event Coordinator is notified": once the decision is
- * saved, the coordinator gets a SCRUM-193 notification with the outcome and
- * each rejected line's reason. Best effort, like SCRUM-198's: a notification
- * that fails is logged and never undoes a saved decision.
+ * SCRUM-149 AC1 and AC2 are this same decision: rejecting every line of a
+ * request makes it Rejected, and each rejected line needs a reason.
+ *
+ * "The assigned Event Coordinator is notified" (SCRUM-148 AC2) and "the
+ * coordinator is notified" (SCRUM-149 AC1): once the decision is saved, the
+ * coordinator gets a SCRUM-193 notification with the outcome and each
+ * rejected line's reason. Best effort, like SCRUM-198's: a notification that
+ * fails is logged and never undoes a saved decision.
  */
 export async function decideVenueBookingRequest(
   requestId: string,
