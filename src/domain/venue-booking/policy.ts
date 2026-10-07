@@ -1,4 +1,4 @@
-import type { EventRequestStatus } from '@/domain/event-request/schema';
+import { TIME_SLOT_ORDER, type EventRequestStatus, type TimeSlot } from '@/domain/event-request/schema';
 import { isActionPermitted } from '@/domain/identity/permissions';
 import type { Role } from '@/domain/identity/roles';
 import { formatSingaporeDate } from '@/domain/shared/dates';
@@ -23,6 +23,86 @@ import { ROOM_LAYOUT_LABELS, RoomLayoutSchema } from '@/domain/venues/schema';
  */
 export function canCreateBookingRequest(status: EventRequestStatus): boolean {
   return status === 'approved' || status === 'planning';
+}
+
+// ---------------------------------------------------------------------------
+// SCRUM-154 — Block a booking request that clashes with a booking or an
+// unavailable slot
+// ---------------------------------------------------------------------------
+
+/** A venue's slot on one date, as stored: a confirmed booking or an unavailable slot. */
+export type DatedSlot = { date: string; slot: string };
+
+/**
+ * One requested date where at least one slot cannot be had. `committed` holds
+ * a confirmed booking (AC1, AC3), `unavailable` a slot Venue Staff withdrew
+ * (AC4); `available` is every other slot asked for on that date (AC3).
+ *
+ * It carries slots only, never who holds them: AC1 says no event name, client
+ * organisation, coordinator or status of the other booking is shown.
+ */
+export interface SlotClash {
+  date: string;
+  committed: TimeSlot[];
+  unavailable: TimeSlot[];
+  available: TimeSlot[];
+}
+
+/**
+ * AC1 to AC5: the requested dates that clash, and how.
+ *
+ * Slots are compared one by one on the same date, so an AM booking leaves PM
+ * free (AC2, AC5), and a clash on one date says nothing about another. A
+ * pending booking request commits nothing, so only confirmed bookings are
+ * passed in. A slot that is both booked and unavailable is reported as
+ * committed.
+ */
+export function findSlotClashes(
+  lines: readonly { date: string; timeSlots: readonly TimeSlot[] }[],
+  confirmed: readonly DatedSlot[],
+  unavailable: readonly DatedSlot[],
+): SlotClash[] {
+  const holds = (list: readonly DatedSlot[], date: string, slot: TimeSlot) =>
+    list.some((row) => row.date === date && row.slot === slot);
+
+  const clashes: SlotClash[] = [];
+  for (const line of lines) {
+    const asked = TIME_SLOT_ORDER.filter((slot) => line.timeSlots.includes(slot));
+    const committed = asked.filter((slot) => holds(confirmed, line.date, slot));
+    const withdrawn = asked.filter((slot) => !committed.includes(slot) && holds(unavailable, line.date, slot));
+    if (committed.length === 0 && withdrawn.length === 0) continue;
+    clashes.push({
+      date: line.date,
+      committed,
+      unavailable: withdrawn,
+      available: asked.filter((slot) => !committed.includes(slot) && !withdrawn.includes(slot)),
+    });
+  }
+  return clashes;
+}
+
+const SLOT_NAMES: Record<TimeSlot, string> = { am: 'AM', pm: 'PM', night: 'Night' };
+
+function slotNames(slots: readonly TimeSlot[]): string {
+  const names = slots.map((slot) => SLOT_NAMES[slot]);
+  return names.length > 1 ? `${names.slice(0, -1).join(', ')} and ${names[names.length - 1]}` : (names[0] ?? '');
+}
+
+/**
+ * The refusal the coordinator reads: per date, which slots are committed or
+ * unavailable and which are still available (AC1, AC3, AC4).
+ */
+export function describeSlotClashes(clashes: readonly SlotClash[]): string {
+  const parts = clashes.map((clash) => {
+    const reasons = [
+      clash.committed.length > 0 && `${slotNames(clash.committed)} already committed`,
+      clash.unavailable.length > 0 && `${slotNames(clash.unavailable)} unavailable`,
+    ].filter(Boolean);
+    const free =
+      clash.available.length > 0 ? `; ${slotNames(clash.available)} still available` : '';
+    return `${clash.date}: ${reasons.join(', ')}${free}`;
+  });
+  return `This venue cannot be requested for those slots. ${parts.join('. ')}.`;
 }
 
 // ---------------------------------------------------------------------------
@@ -62,8 +142,6 @@ export function canSeeBookingDetails(
   );
 }
 
-const SLOT_NAMES: Record<string, string> = { am: 'AM', pm: 'PM', night: 'Night' };
-
 /**
  * AC2: what the event's coordinator is told when their booking request is
  * decided: the outcome, the dates and slots, and each rejected line's reason.
@@ -81,7 +159,7 @@ export function bookingDecisionMessage(
   },
 ): string {
   const when = (line: { date: string; timeSlots: readonly string[] }) =>
-    `${formatSingaporeDate(line.date)} ${line.timeSlots.map((slot) => SLOT_NAMES[slot] ?? slot).join(' + ')}`;
+    `${formatSingaporeDate(line.date)} ${line.timeSlots.map((slot) => SLOT_NAMES[slot as TimeSlot] ?? slot).join(' + ')}`;
   const approved = decision.lines.filter((line) => line.status === 'approved').map(when);
   const rejected = decision.lines
     .filter((line) => line.status === 'rejected')
@@ -222,7 +300,7 @@ export function findApprovalConflicts(
 
 /** AC1: "AM on 15 Nov 2026 is already booked for EVT-2026-0101 (Tech Summit)." AC5: "... is unavailable: Aircon repair." */
 export function describeApprovalConflict(conflict: ApprovalConflict): string {
-  const when = `${SLOT_NAMES[conflict.slot] ?? conflict.slot} on ${formatSingaporeDate(conflict.date)}`;
+  const when = `${SLOT_NAMES[conflict.slot as TimeSlot] ?? conflict.slot} on ${formatSingaporeDate(conflict.date)}`;
   if (conflict.kind === 'unavailable') return `${when} is unavailable: ${conflict.reason}.`;
   return conflict.event
     ? `${when} is already booked for ${conflict.event.reference} (${conflict.event.name}).`
@@ -235,7 +313,7 @@ export function slotCommittedMessage(
   lines: readonly { date: string; timeSlots: readonly string[] }[],
 ): string {
   const when = lines
-    .map((line) => `${formatSingaporeDate(line.date)} ${line.timeSlots.map((slot) => SLOT_NAMES[slot] ?? slot).join(' + ')}`)
+    .map((line) => `${formatSingaporeDate(line.date)} ${line.timeSlots.map((slot) => SLOT_NAMES[slot as TimeSlot] ?? slot).join(' + ')}`)
     .join(', ');
   return `Your booking request for ${venueName} was rejected for ${when}: the slot is now committed to another event.`;
 }
