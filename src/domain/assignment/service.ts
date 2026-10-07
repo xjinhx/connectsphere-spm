@@ -17,6 +17,7 @@ import {
   type EventAssignmentRow,
   type EventAssignmentWithHistoryRow,
 } from '@/lib/supabase/assignments';
+import { notifyBestEffort } from '@/domain/notification/service';
 import {
   ConflictError,
   ForbiddenError,
@@ -123,17 +124,12 @@ function toAssignmentOutcome(row: EventRequestRow, coordinatorName: string | nul
 
 /**
  * AC1 — a submitted event with no coordinator gets one, and the assignment is
- * recorded with the manager who made it and the date.
+ * recorded with the manager who made it and the date. AC1 also says the
+ * assigned coordinator is notified - see the notifyBestEffort call below
+ * (formerly dummy D-03, now replaced; docs/dummies.md).
  *
  * AC2 — no workload limit is applied: nothing here counts how many events the
  * chosen coordinator already holds (clarification #92).
- *
- * DUMMY(SCRUM-24) D-03: AC1 also says the assigned coordinator is notified.
- * The Notification System (SCRUM-24) is not in this sprint, so nothing is sent:
- * the recorded assignment is the minimum honest implementation, and the
- * limitation is documented rather than papered over with an email call. When
- * SCRUM-24 lands, raise the notification from here - the assignment has just
- * been recorded and the coordinator's id is to hand. See docs/dummies.md.
  */
 export async function assignCoordinator(
   eventRequestId: string,
@@ -186,7 +182,28 @@ export async function assignCoordinator(
     throw new ConflictError('This event could not be assigned; its state has changed.');
   }
 
-  return toAssignmentOutcome(data as unknown as EventRequestRow, target.full_name);
+  const assignedRow = data as unknown as EventRequestRow;
+  // Notifies the newly assigned coordinator - replaces dummy D-03, now
+  // Replaced (docs/dummies.md). Best-effort: the assignment above already
+  // succeeded, so a notification failure must not undo it.
+  await notifyBestEffort({
+    recipientId: coordinatorId,
+    type: 'coordinator_assigned',
+    eventRequestId: assignedRow.id,
+    message: `You have been assigned to ${assignedRow.reference} (${assignedRow.name}).`,
+  });
+
+  // SCRUM-198 AC5: the organiser is also told who their coordinator is.
+  // Confirmed with the PO this is a second notification alongside the
+  // coordinator's own, not a replacement for it.
+  await notifyBestEffort({
+    recipientId: assignedRow.organiser_id,
+    type: 'coordinator_named',
+    eventRequestId: assignedRow.id,
+    message: `${target.full_name ?? 'A coordinator'} is now the coordinator for ${assignedRow.reference} (${assignedRow.name}).`,
+  });
+
+  return toAssignmentOutcome(assignedRow, target.full_name);
 }
 
 // ---------------------------------------------------------------------------

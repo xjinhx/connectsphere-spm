@@ -2,18 +2,27 @@ import {
   createVenueWithLists,
   fetchAccessibilityFeatureIdsIn,
   fetchAccessibilityFeatures,
+  fetchConfirmedBookingsOn,
   fetchConfirmedFutureBookings,
   fetchFacilities,
   fetchFacilityIdsIn,
   fetchLocationById,
   fetchLocations,
+  fetchSearchableVenues,
+  fetchUnavailableSlotsOn,
   fetchVenueDetail,
   fetchVenueSummaries,
   saveVenueChanges,
 } from '@/lib/supabase/venues';
 import { ConflictError, NotFoundError, ValidationError, isUniqueViolation } from '@/domain/shared/errors';
 import { todayInSingapore, type ISODate } from '@/domain/shared/dates';
-import { assertLayoutsWithinMaxCapacity, isAffectedByCapacity, isCapacityCut } from './policy';
+import {
+  assertLayoutsWithinMaxCapacity,
+  committedSlotsByVenue,
+  isAffectedByCapacity,
+  isCapacityCut,
+  isFreeInEverySlot,
+} from './policy';
 import {
   AffectedBookingSchema,
   CreateVenueInputSchema,
@@ -23,12 +32,15 @@ import {
   VenueDetailSchema,
   VenueFormOptionsSchema,
   VenueIdSchema,
+  VenueSearchQuerySchema,
+  VenueSearchResultSchema,
   VenueSummarySchema,
   type AffectedBooking,
   type AffectedBookingsDetails,
   type VenueDetail,
   type VenueFormOptions,
   type VenueLayoutInput,
+  type VenueSearchResult,
   type VenueSummary,
 } from './schema';
 
@@ -37,7 +49,7 @@ import {
  *
  * SCRUM-116 Add a venue          SCRUM-120 Update venue information
  * SCRUM-117 Facilities/access    SCRUM-121 Browse and view the catalogue
- * SCRUM-118 Room layouts
+ * SCRUM-118 Room layouts       SCRUM-128 Search by date and slot
  *
  * Orchestration only. Every query lives in src/lib/supabase/venues.ts, every
  * rule that compares two values lives in policy.ts, and every single-field
@@ -93,6 +105,61 @@ export async function listVenues(includeRetired = false): Promise<VenueSummary[]
  * this check Postgres rejects it (22P02) and the venue pages answered 500 for
  * a mistyped link instead of showing not-found.
  */
+/**
+ * SCRUM-128 Search venues by date and slot.
+ *
+ * AC1: a venue is returned only if it is free in every selected slot.
+ * AC2/AC3: a confirmed booking commits its slot (SCRUM-148's bookings).
+ * AC4: a slot recorded as unavailable commits it (SCRUM-151 records them).
+ * AC5: any valid date, however far ahead — VenueSearchQuerySchema sets no limit.
+ *
+ * The three reads are independent, so they run together; the rule that
+ * combines them is isFreeInEverySlot (policy.ts).
+ */
+export async function searchVenues(input: unknown): Promise<VenueSearchResult> {
+  const parsed = VenueSearchQuerySchema.safeParse(input);
+  if (!parsed.success) {
+    throw new ValidationError('The search could not be run.', parsed.error.flatten());
+  }
+  const { date, slots } = parsed.data;
+
+  const [venues, bookings, unavailable] = await Promise.all([
+    fetchSearchableVenues(),
+    fetchConfirmedBookingsOn(date),
+    fetchUnavailableSlotsOn(date),
+  ]);
+  if (venues.error || !venues.data) {
+    throw new ValidationError('Could not load the venue catalogue.', venues.error?.message);
+  }
+  if (bookings.error || !bookings.data) {
+    throw new ValidationError('Could not load bookings for that date.', bookings.error?.message);
+  }
+  if (unavailable.error || !unavailable.data) {
+    throw new ValidationError('Could not load unavailable slots for that date.', unavailable.error?.message);
+  }
+
+  const committed = committedSlotsByVenue([
+    ...bookings.data.map((booking) => ({ venueId: booking.venue_id, slot: booking.slot })),
+    ...unavailable.data.map((row) => ({ venueId: row.venue_id, slot: row.slot })),
+  ]);
+
+  const free = venues.data.filter((venue) =>
+    isFreeInEverySlot(venue.operating_slots, slots, committed.get(venue.id)),
+  );
+
+  return VenueSearchResultSchema.parse({
+    date,
+    slots,
+    venues: free.map((row) => ({
+      id: row.id,
+      name: row.name,
+      location: requireLocation(row.locations, row.name),
+      maxCapacity: row.max_capacity,
+      isRetired: row.is_retired,
+    })),
+  });
+}
+
 export async function getVenue(venueId: string): Promise<VenueDetail> {
   if (!VenueIdSchema.safeParse(venueId).success) {
     throw new NotFoundError('Venue');
