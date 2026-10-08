@@ -1,3 +1,5 @@
+import { z } from 'zod';
+
 /**
  * Clock times on the 15-minute booking unit (customer change Week 7 #1,
  * forum #126, #128; "15 minutes" clarified in #131).
@@ -67,3 +69,31 @@ export function datesBetween(from: string, to: string): string[] {
   }
   return dates;
 }
+
+// -----------------------------------------------------------------------------
+// Shared input schemas. Every route that accepts a time uses these, so the
+// 15-minute rule is checked one way everywhere (SCRUM-238 AC4, SCRUM-239 AC1).
+// -----------------------------------------------------------------------------
+
+const STEP_MESSAGE = 'Choose a time on a 15-minute step (:00, :15, :30 or :45).';
+
+/** A start time: 00:00 to 23:45 on the 15-minute unit. */
+export const StartTimeSchema = z.string().refine(isQuarterHourStart, STEP_MESSAGE);
+
+/** An end time: 00:15 to 24:00 on the 15-minute unit. */
+export const EndTimeSchema = z.string().refine(isQuarterHourEnd, STEP_MESSAGE);
+
+/**
+ * A start and end time on one date, end after start. When end is not after
+ * start the error is on both fields (SCRUM-238 AC2: "both time fields are
+ * identified").
+ */
+export const ClockRangeSchema = z
+  .object({ start: StartTimeSchema, end: EndTimeSchema })
+  .superRefine((range, ctx) => {
+    if (toMinutes(range.end) <= toMinutes(range.start)) {
+      const message = 'The end time must be after the start time.';
+      ctx.addIssue({ code: z.ZodIssueCode.custom, path: ['start'], message });
+      ctx.addIssue({ code: z.ZodIssueCode.custom, path: ['end'], message });
+    }
+  });

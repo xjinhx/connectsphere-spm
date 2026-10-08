@@ -1,5 +1,6 @@
 import { describe, expect, it } from 'vitest';
 import {
+  ClockRangeSchema,
   datesBetween,
   isQuarterHourEnd,
   isQuarterHourStart,
@@ -108,5 +109,39 @@ describe('helpers', () => {
 
   it('lists every date in a range, across a month end', () => {
     expect(datesBetween('2026-10-30', '2026-11-02')).toEqual(['2026-10-30', '2026-10-31', '2026-11-01', '2026-11-02']);
+  });
+});
+
+describe('ClockRangeSchema: the shared input schema', () => {
+  const pathsOf = (input: unknown) => {
+    const result = ClockRangeSchema.safeParse(input);
+    return result.success ? [] : result.error.issues.map((issue) => issue.path.join('.'));
+  };
+
+  it('accepts a range on the 15-minute unit, including 24:00 as the end', () => {
+    expect(ClockRangeSchema.safeParse({ start: '11:30', end: '13:30' }).success).toBe(true);
+    expect(ClockRangeSchema.safeParse({ start: '19:00', end: '24:00' }).success).toBe(true);
+  });
+
+  it('accepts the shortest range, one 15-minute step (TC-238-17)', () => {
+    expect(ClockRangeSchema.safeParse({ start: '10:00', end: '10:15' }).success).toBe(true);
+  });
+
+  it('refuses a time off the 15-minute step (TC-238-08, TC-238-19)', () => {
+    expect(pathsOf({ start: '10:10', end: '12:00' })).toContain('start');
+    expect(pathsOf({ start: '10:15', end: '12:14' })).toContain('end');
+  });
+
+  it('refuses 24:00 as a start', () => {
+    expect(pathsOf({ start: '24:00', end: '24:00' })).toContain('start');
+  });
+
+  it('flags both fields when the end is not after the start (TC-238-04, TC-238-05)', () => {
+    expect(pathsOf({ start: '14:00', end: '14:00' })).toEqual(['start', 'end']);
+    expect(pathsOf({ start: '15:00', end: '13:30' })).toEqual(['start', 'end']);
+  });
+
+  it('refuses a missing time', () => {
+    expect(ClockRangeSchema.safeParse({ start: '10:00' }).success).toBe(false);
   });
 });
