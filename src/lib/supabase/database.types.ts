@@ -98,6 +98,7 @@ export type Database = {
           decided_by: string | null
           decision: string | null
           description: string | null
+          end_time: string | null
           equipment_required: boolean | null
           expected_attendance: number | null
           id: string
@@ -110,6 +111,7 @@ export type Database = {
           registration_required: boolean | null
           rejection_reason: string | null
           room_layout: string | null
+          start_time: string | null
           status: Database["public"]["Enums"]["event_request_status"]
           submitted_at: string | null
           technical_support_notes: string | null
@@ -131,6 +133,7 @@ export type Database = {
           decided_by?: string | null
           decision?: string | null
           description?: string | null
+          end_time?: string | null
           equipment_required?: boolean | null
           expected_attendance?: number | null
           id?: string
@@ -143,6 +146,7 @@ export type Database = {
           registration_required?: boolean | null
           rejection_reason?: string | null
           room_layout?: string | null
+          start_time?: string | null
           status?: Database["public"]["Enums"]["event_request_status"]
           submitted_at?: string | null
           technical_support_notes?: string | null
@@ -164,6 +168,7 @@ export type Database = {
           decided_by?: string | null
           decision?: string | null
           description?: string | null
+          end_time?: string | null
           equipment_required?: boolean | null
           expected_attendance?: number | null
           id?: string
@@ -176,6 +181,7 @@ export type Database = {
           registration_required?: boolean | null
           rejection_reason?: string | null
           room_layout?: string | null
+          start_time?: string | null
           status?: Database["public"]["Enums"]["event_request_status"]
           submitted_at?: string | null
           technical_support_notes?: string | null
@@ -489,30 +495,36 @@ export type Database = {
         Row: {
           created_at: string
           date: string
+          end_time: string
           event_request_id: string
           id: string
           request_line_id: string | null
           slot: string
+          start_time: string
           status: string
           venue_id: string
         }
         Insert: {
           created_at?: string
           date: string
+          end_time: string
           event_request_id: string
           id?: string
           request_line_id?: string | null
           slot: string
+          start_time: string
           status?: string
           venue_id: string
         }
         Update: {
           created_at?: string
           date?: string
+          end_time?: string
           event_request_id?: string
           id?: string
           request_line_id?: string | null
           slot?: string
+          start_time?: string
           status?: string
           venue_id?: string
         }
@@ -585,9 +597,11 @@ export type Database = {
           date: string
           decided_at: string | null
           decided_by: string | null
+          end_time: string
           id: string
           rejection_reason: string | null
           request_id: string
+          start_time: string
           status: string
           suggested_date: string | null
           suggested_slots: string[] | null
@@ -599,9 +613,11 @@ export type Database = {
           date: string
           decided_at?: string | null
           decided_by?: string | null
+          end_time: string
           id?: string
           rejection_reason?: string | null
           request_id: string
+          start_time: string
           status?: string
           suggested_date?: string | null
           suggested_slots?: string[] | null
@@ -613,9 +629,11 @@ export type Database = {
           date?: string
           decided_at?: string | null
           decided_by?: string | null
+          end_time?: string
           id?: string
           rejection_reason?: string | null
           request_id?: string
+          start_time?: string
           status?: string
           suggested_date?: string | null
           suggested_slots?: string[] | null
@@ -795,28 +813,34 @@ export type Database = {
         Row: {
           created_at: string
           date: string
+          end_time: string
           id: string
           reason: string
           recorded_by: string | null
           slot: string
+          start_time: string
           venue_id: string
         }
         Insert: {
           created_at?: string
           date: string
+          end_time: string
           id?: string
           reason: string
           recorded_by?: string | null
           slot: string
+          start_time: string
           venue_id: string
         }
         Update: {
           created_at?: string
           date?: string
+          end_time?: string
           id?: string
           reason?: string
           recorded_by?: string | null
           slot?: string
+          start_time?: string
           venue_id?: string
         }
         Relationships: [
@@ -831,6 +855,7 @@ export type Database = {
       }
       venues: {
         Row: {
+          closes_at: string
           created_at: string
           id: string
           is_retired: boolean
@@ -839,10 +864,14 @@ export type Database = {
           name: string
           needs_setup_slot: boolean
           needs_turnaround_slot: boolean
+          opens_at: string
           operating_slots: string[]
+          setup_minutes: number
+          turnaround_minutes: number
           updated_at: string
         }
         Insert: {
+          closes_at: string
           created_at?: string
           id?: string
           is_retired?: boolean
@@ -851,10 +880,14 @@ export type Database = {
           name: string
           needs_setup_slot?: boolean
           needs_turnaround_slot?: boolean
+          opens_at: string
           operating_slots?: string[]
+          setup_minutes?: number
+          turnaround_minutes?: number
           updated_at?: string
         }
         Update: {
+          closes_at?: string
           created_at?: string
           id?: string
           is_retired?: boolean
@@ -863,7 +896,10 @@ export type Database = {
           name?: string
           needs_setup_slot?: boolean
           needs_turnaround_slot?: boolean
+          opens_at?: string
           operating_slots?: string[]
+          setup_minutes?: number
+          turnaround_minutes?: number
           updated_at?: string
         }
         Relationships: [
@@ -932,6 +968,7 @@ export type Database = {
         Args: { p_decided_by: string; p_decisions: Json; p_request_id: string }
         Returns: Json
       }
+      is_quarter_hour: { Args: { p_time: string }; Returns: boolean }
       mark_slots_unavailable: {
         Args: {
           p_reason: string
@@ -943,6 +980,8 @@ export type Database = {
         }
         Returns: Json
       }
+      slot_end_time: { Args: { p_slot: string }; Returns: string }
+      slot_start_time: { Args: { p_slot: string }; Returns: string }
       update_venue: {
         Args: {
           p_accessibility_feature_ids?: string[]
