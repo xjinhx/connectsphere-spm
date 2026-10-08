@@ -1,6 +1,7 @@
 import type { OperatingSlot } from '@/domain/venues/schema';
 import { formatSingaporeDate, type ISODate } from '@/domain/shared/dates';
-import { SLOT_NAMES } from './schema';
+import { rangesOverlap, type ClockRange } from '@/domain/shared/times';
+import { SLOT_NAMES, type VenueCommitment } from './schema';
 
 /**
  * Venue availability rules. Pure functions: no Supabase, no Next.js.
@@ -33,4 +34,17 @@ export function affectedBookingMessage(
 ): string {
   const names = slots.map((slot) => SLOT_NAMES[slot]).join(' + ');
   return `Your booking at ${venueName} is affected: ${formatSingaporeDate(date)} ${names} is no longer available (${reason}).`;
+}
+
+/**
+ * SCRUM-239: the commitments on one date that overlap a requested range.
+ * Half-open, so a range that only touches a commitment is free (AC2:
+ * 12:00-14:00 is free next to a 10:00-12:00 booking; 11:45-13:00 is not).
+ */
+export function commitmentsOverlapping(
+  commitments: readonly VenueCommitment[],
+  date: ISODate,
+  range: ClockRange,
+): VenueCommitment[] {
+  return commitments.filter((c) => c.date === date && rangesOverlap(c, range));
 }
