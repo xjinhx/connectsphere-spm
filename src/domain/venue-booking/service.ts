@@ -6,6 +6,7 @@ import {
   VenueBookingRangeSchema,
   VenueBookingRequestIdSchema,
   VenueBookingRequestLineStatusEnum,
+  venueBookingRequestErrorDetails,
   type BookedSlot,
   type BookingQueueEntry,
   type BookingRequestRequirements,
@@ -154,7 +155,7 @@ export async function submitVenueBookingRequest(
   // which fields are missing.
   const parsedInput = CreateVenueBookingRequestInputSchema.safeParse(input);
   if (!parsedInput.success) {
-    throw new ValidationError('The venue booking request is not valid.', parsedInput.error.flatten());
+    throw new ValidationError('The venue booking request is not valid.', venueBookingRequestErrorDetails(parsedInput.error));
   }
 
   const lines = parsedInput.data.lines.map((line) => ({
