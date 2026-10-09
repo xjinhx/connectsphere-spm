@@ -10,7 +10,7 @@ SCRUM-<key> — <story title, as on the Jira card>
 
 | AC (from Jira) | Test case IDs | How it was tested |
 |---|---|---|
-| AC1 — | US-x.x-TC0x | Manual: … · Automated: … |
+| AC1 — | TC-<key>-01 | Manual: … · Automated: … |
 
 ## Not built or blocked
 
