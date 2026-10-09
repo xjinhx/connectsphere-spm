@@ -278,7 +278,7 @@ out the story; see "Definition of Done" below.
 ## Definition of Done
 
 Agreed by the team — the source is the **Definition of Done** tab in the team
-tracker (`IS212_Tracker_W4`); keep the two in step. This is what actually closes
+tracker (`IS212_Meeting_Tracker`); keep the two in step. This is what actually closes
 a story — a story that doesn't meet this is **not** counted toward sprint
 velocity, is not shown at Sprint Review, and returns to the Product Backlog.
 **There is no partial credit** — a nearly-finished story scores zero for the
@@ -502,7 +502,7 @@ workflow") rather than assuming ownership of it.
 
 - **Jira** — authoritative source for acceptance criteria and story scope.
   Check the card before writing code, not just before opening a PR.
-- **Team tracker** (`IS212_Tracker_W4`, Google Sheets) — the management
+- **Team tracker** (`IS212_Meeting_Tracker`, Google Sheets) — the management
   overview. Its rule: anything with story points lives in Jira; anything that
   is a date, a decision or a piece of evidence lives in the tracker. Tabs
   include Definition of Done (the source for the DoD above), Meeting Tracker
