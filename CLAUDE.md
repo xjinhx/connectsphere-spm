@@ -29,50 +29,101 @@ matrix — customer clarification #52 leaves user administration for the team
 to propose. Use that role; don't add another admin-style role without agreeing
 it with the team first.
 
-## Current sprint scope (Sprint 2, 24 Sep – 8 Oct 2026)
+## Current sprint scope (Sprint 3, 8 Oct – 21 Oct 2026)
 
-**Sprint goal:** "Coordinators can book a venue for an approved event, and
-Venue Staff can approve or reject it without any double-booking."
+**Sprint goal:** "ConnectSphere books venues the way the customer actually
+runs them — to the quarter-hour, with setup and turnaround time protected,
+holds that expire, and a replacement path when a venue falls through — so that
+no Release 1 work is still being built on AM/PM/Night slots."
+
+21 stories, 67 points, plus 2 bug tickets (no points). Product Owner: Arwen
+(from Joshua). 49 of the 67 points are the Week 7 customer changes, which are
+the sprint goal and are never dropped.
 
 **Release 1 scope and current sprint scope are not the same thing.** Release
-1 is everything due by Week 12, covering ~20 functionality areas across all
-sprints. The current sprint is a subset of that. Build only what the current
-sprint covers.
+1 is everything due by Week 12, now 26 core features (the 20 from Week 4 plus
+the six Week 7 changes), one epic each. The current sprint is a subset of
+that. Build only what the current sprint covers.
 
 **In the current sprint** (the Jira sprint board is the list of record; where
 an area has other stories in the backlog, only the ones named here are in):
 
-- Venue Booking Request (SCRUM-142, 143)
-- Venue Booking Approval (SCRUM-147, 148, 149, 150)
-- Booking Conflict Detection (SCRUM-154, 155)
-- Venue Availability (SCRUM-123, 151)
-- Venue Search (SCRUM-128)
-- Event Status Management (SCRUM-99, 101, 103)
-- Notification System (SCRUM-193, 198)
-- Coordinator Assignment (SCRUM-97)
-- Venue Catalogue (SCRUM-119)
+- Lane 1 — Time model (critical path): SCRUM-238 request times in 15-minute
+  steps, SCRUM-239 venue hours, availability, calendar and search in
+  15-minute ranges, SCRUM-226 setup and turnaround treated as committed
+- Lane 2 — Venue config, holds and suitability: SCRUM-225, 227, 228, 135, 136
+- Lane 3 — Multi-venue, replacement and booking request: SCRUM-230, 231, 229,
+  236, and SCRUM-142 (reopened: one AC was never met, so it was not Done)
+- Lane 4 — Lifecycle, roles and notifications: SCRUM-234 Operational Safety
+  Check, SCRUM-232 and 233 Event Coordinator Lead, SCRUM-197 assignment
+  notifications
+- Lane 5 — Equipment and readiness: SCRUM-240 equipment catalogue, SCRUM-160,
+  164, 100
+- Bugs: SCRUM-237 (SCRUM-142) and SCRUM-241 (SCRUM-193), each with the owner of
+  the story it was found in
 
-**Built in Sprint 1:** Authentication, Account Roles / User Profile, Client
-Organisations, Event Request Creation, Draft Event Requests, Event Review &
-Approval, Coordinator Assignment, Venue Catalogue. Fix bugs in them (see
-"Bugs"); extend them only through a story.
+**Stretch, in this order:** SCRUM-167, then 109, then 110. **Drop order,
+decided at the day-8 checkpoint:** SCRUM-135 and 136, then 236, then 164.
 
-**In Release 1 but NOT in the current sprint — do not build:** Venue
-Suitability, Equipment Request / Availability / Reservation, Attendee
-Registration.
+**The 15-minute booking unit** (Week 7 change 1, customer #126, #128) replaces
+AM/PM/Night slots. Do not write new code against slots. The stories already
+Done on slots stay Done (Week 7 guide, scenario 2); the switch is new work in
+SCRUM-238/239. Old slots map to AM 07:00–12:00, PM 13:00–18:00,
+Night 19:00–24:00. Times are Singapore clock times on :00, :15, :30 or :45,
+validated with the shared `ClockRangeSchema` (`src/domain/shared/times.ts`).
+Ranges are half-open: a booking ending 12:00 does not clash with one starting
+12:00. ACs rewritten for minutes are marked "pending #131".
 
-**Scrum Master:** Jinhong takes no user stories this sprint and reviews all
-PRs. If PRs pile up near the end of the sprint, whoever is free helps,
-coordinating with him.
+**Agreed on day 1:**
 
-**Notification** is in this sprint, in-app only: SCRUM-193 (a notification
-list and unread count for any user) and SCRUM-198 (notify the Organiser about
-clarification, approval, rejection, confirmation and assignment), both Yee
-Teng's. Neither card mentions email, so Twilio SendGrid stays out: do not add
-SendGrid calls or email triggers. Where another story's AC says someone is
-notified, create the notification through SCRUM-193/198's mechanism once it
-is merged. Until then, record it and mark it as a dummy, as the Sprint 1
-notification dummies are (D-03, D-05, D-06, D-08).
+- One migration for the time model: clock times instead of slots and venue
+  setup/turnaround columns defaulting to 0. Don't add a second migration
+  touching the same tables without agreeing it with Lanes 1 and 3 first.
+- Availability goes through `getVenueCommitments(venueId, start, end)` in
+  `src/domain/availability/service.ts`. Call it; don't write your own overlap
+  check. Until the real query lands (day 4) it is a stub (D-16), so a PR that
+  calls it is `uses-dummy`.
+- "Committed", not "occupied": a period taken by a confirmed booking, an active
+  hold, an unavailable period, or setup/turnaround around a booking. Venue
+  Staff see which event holds a clash (SCRUM-155 AC1); coordinators see only
+  the period.
+- Event Coordinator Lead is a display name only (customer #129): the role in
+  code stays `operations_manager`.
+- Interim rules pending the customer: a safety rejection records the reason
+  and returns the event to Planning, not Cancelled (#130); a venue opening at
+  08:00 with 30 minutes' setup has an earliest start of 08:30 (recorded on
+  SCRUM-239).
+
+**Built in Sprints 1 and 2:** Authentication, Account Roles / User Profile,
+Client Organisations, Event Request Creation, Draft Event Requests, Event
+Review & Approval, Coordinator Assignment, Venue Catalogue, Venue Booking
+Approval, Booking Conflict Detection, Venue Availability, Venue Search, Event
+Status Management, in-app notifications. Fix bugs in them (see "Bugs");
+extend them only through a story.
+
+**In Release 1 but NOT in the current sprint — do not build:** Attendee
+Registration, change requests, event information changes and impact review
+(SCRUM-109 to 111, unless pulled in as stretch), equipment availability and
+reservation beyond the catalogue (SCRUM-166, 167, 170, 173, 175, 177, unless
+SCRUM-167 is pulled in as stretch), email notifications.
+
+**Scrum Master:** Dylan takes no user stories this sprint and reviews all
+PRs. First review within 24 hours, by anyone other than the author. If PRs
+pile up near the end of the sprint, whoever is free helps, coordinating with
+him.
+
+**Working agreements carried from the retro:** first PR by day 3, half the
+points merged by day 8. Branch from `main` rather than stacking PRs. Claim
+dummy numbers on Slack. Use a current timestamp for migrations and never rename
+one on `main`; run `npm run db:reset` after pulling new migrations. Check the
+customer forum every two days. Update Jira the day a PR merges. Add test cases
+for rewritten ACs to your own test tab before building.
+
+**Notification** stays in-app only. No card in this sprint mentions email, so
+Twilio SendGrid stays out: do not add SendGrid calls or email triggers. Where
+an AC says someone is notified, create the notification through the existing
+in-app mechanism (SCRUM-193/198). Dummies replaced this sprint, as part of the
+story that waits on them: D-06 by SCRUM-197, D-12 and D-15 by SCRUM-231.
 
 **Where an AC depends on something outside the current sprint** — an
 equipment reservation, an attendee registration — implement the
@@ -242,6 +293,7 @@ sprint, so be honest about status rather than optimistic.
 | Runs from the README instructions | Yes |
 | Merged and integrated into the Git | Yes |
 | Code has been reviewed by someone other than the author | Yes |
+| Required Jira/Slack updates, decisions and evidence recorded in the agreed locations | Yes |
 
 Note the automated-testing row: unit/integration tests are good practice and
 encouraged (and required where the story's dependencies allow it — see
