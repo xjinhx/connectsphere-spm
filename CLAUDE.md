@@ -314,18 +314,6 @@ be annotated), each labelled with its AC and test case number (e.g. AC1 T1).
 This is a team agreement, not a DoD change — the table above stays as it is
 until the tracker's Definition of Done tab says otherwise.
 
-**Proposed additions — not yet agreed.** These are proposed for the team to
-vote on. Do not apply them as part of the DoD until the tracker's Definition
-of Done tab is updated:
-
-- Every test case for **that Jira ticket's** acceptance criteria passes. Scope
-  it to the ticket, not the whole consolidated story on the test sheet —
-  US-8.1 bundles SCRUM-94, 95 and 96, so "every test case on the sheet" would
-  keep SCRUM-94 from being Done while reassignment is unbuilt.
-- No open bug tickets are logged against it (see "Bugs" below).
-- Git checks: testing is finished on the branch, and `main` has been merged in
-  with any conflicts resolved before review.
-
 **Board statuses:** To Do → In Progress → In Review → Merged - Pending
 Verification → Done.
 
