@@ -1,6 +1,7 @@
 import type { OperatingSlot } from '@/domain/venues/schema';
 import { formatSingaporeDate, type ISODate } from '@/domain/shared/dates';
-import { SLOT_NAMES } from './schema';
+import { rangesOverlap, type ClockRange } from '@/domain/shared/times';
+import { SLOT_NAMES, type CommittedPeriod, type VenueCommitment } from './schema';
 
 /**
  * Venue availability rules. Pure functions: no Supabase, no Next.js.
@@ -33,4 +34,35 @@ export function affectedBookingMessage(
 ): string {
   const names = slots.map((slot) => SLOT_NAMES[slot]).join(' + ');
   return `Your booking at ${venueName} is affected: ${formatSingaporeDate(date)} ${names} is no longer available (${reason}).`;
+}
+
+/**
+ * SCRUM-239: the commitments on one date that overlap a requested range.
+ * Half-open, so a range that only touches a commitment is free (AC2:
+ * 12:00-14:00 is free next to a 10:00-12:00 booking; 11:45-13:00 is not).
+ */
+export function commitmentsOverlapping(
+  commitments: readonly VenueCommitment[],
+  date: ISODate,
+  range: ClockRange,
+): VenueCommitment[] {
+  return commitments.filter((c) => c.date === date && rangesOverlap(c, range));
+}
+
+/**
+ * SCRUM-239 AC3, SCRUM-226 AC4: commitments reduced to their periods, so no
+ * other event's id or reason can reach a coordinator or organiser. Sorted by
+ * date then start time; two commitments with the same period become one.
+ */
+export function toCommittedPeriods(commitments: readonly VenueCommitment[]): CommittedPeriod[] {
+  const seen = new Set<string>();
+  const periods: CommittedPeriod[] = [];
+  for (const { date, start, end } of commitments) {
+    const key = `${date} ${start} ${end}`;
+    if (!seen.has(key)) {
+      seen.add(key);
+      periods.push({ date, start, end });
+    }
+  }
+  return periods.sort((a, b) => a.date.localeCompare(b.date) || a.start.localeCompare(b.start));
 }
