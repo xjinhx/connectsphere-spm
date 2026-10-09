@@ -422,8 +422,11 @@ login` → `npx supabase link --project-ref <ref>` → `npx supabase db push
   Jira) and the test case IDs covering each. This is the traceability
   evidence, and it is far cheaper to write while the work is fresh. The PR
   template (`.github/pull_request_template.md`) prompts for this, for any
-  dummy added or replaced, and for the git checks — fill it in rather than
-  deleting it.
+  dummy added or replaced, for the git checks, and for the Definition of Done
+  (Part A before review, Part B after merge; it mirrors the DoD table above,
+  so change both together) — fill it in rather than deleting it. A PR that
+  isn't a story (docs, tooling) replaces the template with a short
+  description instead.
 - Do not rewrite or force-push shared `main` history without explicit
   team-wide agreement — even for something as minor as fixing a commit's
   author email. It's rarely worth the coordination cost; if unsure, leave
