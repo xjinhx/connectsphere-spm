@@ -478,3 +478,25 @@ switch them the next time they edit those files.
   re-run SCRUM-155 AC3 (TC-155-04 and TC-155-05) through that action, then
   remove the marker.
 - **Status:** Active
+
+### D-16 — getVenueCommitments returns a fixture booking
+
+- **Kind:** Stand-in code
+- **Added by:** SCRUM-239 — branch `scrum-239-availability-time-ranges`
+- **Waiting on:** SCRUM-239 Check venue availability in 15-minute time ranges
+  (its own real query, due Sprint 3 day 4, once the shared time-model migration
+  is merged)
+- **Where:** `src/domain/availability/service.ts` — `getVenueCommitments()`
+  (`DUMMY(SCRUM-239) D-16`)
+- **What it does:** returns one confirmed booking, 10:00–12:00, at the venue
+  asked about on every date in the range, filtered to the range like the real
+  check will be. It reads nothing from the database. The signature, the
+  `VenueCommitment` shape (`src/domain/availability/schema.ts`) and the
+  half-open overlap rule (`rangesOverlap` in `src/domain/shared/times.ts`) are
+  real and do not change when the stub is replaced. Lets SCRUM-227 (holds) and
+  SCRUM-229 (replacement venue) build against a non-empty result from day 2.
+- **To replace:** query `venue_booking` (confirmed) and the unavailable periods
+  by their start and end times, add holds once SCRUM-227 has them, and keep
+  the same return shape. Re-run `tests/unit/venue-commitments.test.ts`, then
+  ask the SCRUM-227 and SCRUM-229 owners to re-run the ACs that use the check.
+- **Status:** Active

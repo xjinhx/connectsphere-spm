@@ -1,4 +1,5 @@
 import { z } from 'zod';
+import { EndTimeSchema, StartTimeSchema } from '@/domain/shared/times';
 import { isISODate } from '@/domain/shared/dates';
 import { OperatingSlotSchema, type OperatingSlot } from '@/domain/venues/schema';
 
@@ -74,3 +75,54 @@ export const NoticeWrittenSchema = z.object({
   slots: z.array(OperatingSlotSchema),
   reason: z.string(),
 });
+
+// -----------------------------------------------------------------------------
+// SCRUM-239 Check venue availability in 15-minute time ranges
+// -----------------------------------------------------------------------------
+
+/**
+ * What can commit a venue's time, so that no one else can book it:
+ * - `booking`: a confirmed booking (SCRUM-155 approves it).
+ * - `hold`: a held slot, once SCRUM-227 (Hold a venue slot until an expiry)
+ *   adds them. Listed now so the contract does not change when it lands.
+ * - `unavailable`: a period Venue Staff withdrew (SCRUM-151), labelled
+ *   Blocked on the calendar (SCRUM-123 AC7).
+ *
+ * A pending booking request commits nothing: several can ask for the same
+ * period, and Venue Staff's approval decides (SCRUM-239 AC4).
+ */
+export const COMMITMENT_KINDS = ['booking', 'hold', 'unavailable'] as const;
+export type CommitmentKind = (typeof COMMITMENT_KINDS)[number];
+
+/**
+ * One committed period at a venue on one date, as getVenueCommitments returns
+ * it. Times are Singapore clock times on the 15-minute unit, half-open.
+ *
+ * `eventRequestId` and `reason` are for callers whose story lets the viewer see
+ * them (Venue Staff deciding an approval, SCRUM-155 AC5). Anyone else is told
+ * only the period: SCRUM-239 AC3 refuses a request "without any other event's
+ * details", and SCRUM-226 AC4 shows a committed period "with no details of the
+ * other event".
+ */
+export const VenueCommitmentSchema = z.object({
+  kind: z.enum(COMMITMENT_KINDS),
+  venueId: z.string().uuid(),
+  date: z.string().refine(isISODate),
+  start: StartTimeSchema,
+  end: EndTimeSchema,
+  eventRequestId: z.string().uuid().nullable(),
+  reason: z.string().nullable(),
+});
+export type VenueCommitment = z.infer<typeof VenueCommitmentSchema>;
+
+/**
+ * A committed period with nothing about who or what holds it: the date and
+ * times only. What a coordinator or organiser may be shown (SCRUM-239 AC3:
+ * "without any other event's details"; SCRUM-226 AC4: "with no details of the
+ * other event").
+ */
+export interface CommittedPeriod {
+  date: string;
+  start: string;
+  end: string;
+}
