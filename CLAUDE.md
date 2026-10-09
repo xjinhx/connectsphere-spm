@@ -290,7 +290,6 @@ sprint, so be honest about status rather than optimistic.
 | Manually tested against those acceptance criteria | Yes |
 | Automated tested against those acceptance criteria | **No** |
 | Merged into main and existing functionality still works | Yes |
-| Runs from the README instructions | Yes |
 | Merged and integrated into the Git | Yes |
 | Code has been reviewed by someone other than the author | Yes |
 | Required Jira/Slack updates, decisions and evidence recorded in the agreed locations | Yes |
