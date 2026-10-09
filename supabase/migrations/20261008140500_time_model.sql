@@ -1,6 +1,6 @@
 -- =============================================================================
 -- Time model: clock times on the 15-minute booking unit (Sprint 3 shared
--- migration, Time model + Multi-venue lanes).
+-- migration, Time model lane).
 --
 -- SCRUM-239 Check venue availability in 15-minute time ranges
 -- SCRUM-238 Request event times in 15-minute steps
@@ -221,11 +221,14 @@ alter table event_request
 
 
 -- =============================================================================
--- Multi-venue lane (SCRUM-230, 231): many bookings per event
+-- Multi-venue lane (SCRUM-230, 231): not in this migration
 --
--- To be added here by the multi-venue lane in the day-1 pairing, so the whole
--- Sprint 3 schema change lands as one migration (Sprint 2 lost time to the
--- 101 / 119 version clash). venue_booking already allows several rows per
--- event (one per date and slot since 20261007090000); what each booking needs
--- of its own (attendance, requirements, SCRUM-230) belongs in this section.
+-- Agreed with the multi-venue lane on 9 Oct 2026: their columns go in their own
+-- migration, timestamped after this one, in the SCRUM-230 / SCRUM-231 PRs that
+-- use them. They touch other columns (venue_booking status and release reason;
+-- venue_booking_request attendance, layout and accessibility), and venue_booking
+-- has allowed several bookings per event since 20261007090000.
+--
+-- getVenueCommitments reads only confirmed bookings, so a booking SCRUM-231
+-- releases stops committing the venue without any change here.
 -- =============================================================================
