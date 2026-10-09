@@ -8,9 +8,9 @@ import {
   splitDateTime,
   toMinutes,
 } from '@/domain/shared/times';
-import { commitmentsOverlapping } from '@/domain/availability/policy';
-import { getVenueCommitments } from '@/domain/availability/service';
-import type { VenueCommitment } from '@/domain/availability/schema';
+import { commitmentsOverlapping, toCommittedPeriods } from '@/domain/availability/policy';
+import { getCommittedPeriods, getVenueCommitments } from '@/domain/availability/service';
+import { VenueCommitmentSchema, type VenueCommitment } from '@/domain/availability/schema';
 
 /**
  * SCRUM-239 Check venue availability in 15-minute time ranges (Jira,
@@ -143,5 +143,49 @@ describe('ClockRangeSchema: the shared input schema', () => {
 
   it('refuses a missing time', () => {
     expect(ClockRangeSchema.safeParse({ start: '10:00' }).success).toBe(false);
+  });
+});
+
+describe('review fixes (PR #88)', () => {
+  it('toMinutes throws on a time that is not on the 15-minute unit, instead of returning NaN', () => {
+    for (const bad of ['10:10', '1000', 'ab:cd', '', '25:00', '10:15:00']) {
+      expect(() => toMinutes(bad)).toThrow();
+    }
+  });
+
+  it('so a malformed commitment makes the overlap check fail loudly, never read as free', () => {
+    expect(() => rangesOverlap({ start: '10:00', end: '12:00' }, { start: 'ab:cd', end: '12:00' })).toThrow();
+  });
+
+  it('ClockRangeSchema still returns an error, not a throw, for an off-step time', () => {
+    expect(() => ClockRangeSchema.safeParse({ start: '10:10', end: '10:10' })).not.toThrow();
+    expect(ClockRangeSchema.safeParse({ start: '10:10', end: '10:10' }).success).toBe(false);
+  });
+
+  it('VenueCommitmentSchema refuses a commitment whose times are off the 15-minute unit', () => {
+    const commitment = { ...booking('2026-11-10', '10:00', '12:00'), start: '10:05' };
+    expect(VenueCommitmentSchema.safeParse(commitment).success).toBe(false);
+  });
+
+  it('toCommittedPeriods keeps the period only: no event id, no reason (SCRUM-239 AC3, SCRUM-226 AC4)', () => {
+    const withDetails: VenueCommitment = {
+      ...booking('2026-11-10', '10:00', '12:00'),
+      eventRequestId: '22222222-2222-4222-8222-222222222222',
+    };
+    const blocked: VenueCommitment = { ...booking('2026-11-10', '14:00', '16:30'), kind: 'unavailable', reason: 'Ceiling repair' };
+
+    const periods = toCommittedPeriods([blocked, withDetails]);
+
+    expect(periods).toEqual([
+      { date: '2026-11-10', start: '10:00', end: '12:00' },
+      { date: '2026-11-10', start: '14:00', end: '16:30' },
+    ]);
+    expect(JSON.stringify(periods)).not.toMatch(/2222|Ceiling|eventRequestId|reason|kind/);
+  });
+
+  it('getCommittedPeriods returns the stub booking as a bare period', async () => {
+    expect(await getCommittedPeriods(VENUE_A, '2026-11-10T09:00', '2026-11-10T13:00')).toEqual([
+      { date: '2026-11-10', start: '10:00', end: '12:00' },
+    ]);
   });
 });

@@ -1,4 +1,5 @@
 import { z } from 'zod';
+import { EndTimeSchema, StartTimeSchema } from '@/domain/shared/times';
 import { isISODate } from '@/domain/shared/dates';
 import { OperatingSlotSchema, type OperatingSlot } from '@/domain/venues/schema';
 
@@ -107,9 +108,21 @@ export const VenueCommitmentSchema = z.object({
   kind: z.enum(COMMITMENT_KINDS),
   venueId: z.string().uuid(),
   date: z.string().refine(isISODate),
-  start: z.string(),
-  end: z.string(),
+  start: StartTimeSchema,
+  end: EndTimeSchema,
   eventRequestId: z.string().uuid().nullable(),
   reason: z.string().nullable(),
 });
 export type VenueCommitment = z.infer<typeof VenueCommitmentSchema>;
+
+/**
+ * A committed period with nothing about who or what holds it: the date and
+ * times only. What a coordinator or organiser may be shown (SCRUM-239 AC3:
+ * "without any other event's details"; SCRUM-226 AC4: "with no details of the
+ * other event").
+ */
+export interface CommittedPeriod {
+  date: string;
+  start: string;
+  end: string;
+}

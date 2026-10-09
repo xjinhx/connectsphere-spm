@@ -11,7 +11,7 @@ import { getVenue } from '@/domain/venues/service';
 import { notifyBestEffort } from '@/domain/notification/service';
 import { OPERATING_SLOTS, OperatingSlotSchema, type OperatingSlot } from '@/domain/venues/schema';
 import { datesBetween, splitDateTime, type SingaporeDateTime } from '@/domain/shared/times';
-import { affectedBookingMessage, commitmentsOverlapping, findNonOperatingSlots } from './policy';
+import { affectedBookingMessage, commitmentsOverlapping, findNonOperatingSlots, toCommittedPeriods } from './policy';
 import {
   BookingOnUnavailableSlotSchema,
   MarkSlotsUnavailableInputSchema,
@@ -20,6 +20,7 @@ import {
   UnavailableSlotSchema,
   type BookingOnUnavailableSlot,
   type UnavailableSlot,
+  type CommittedPeriod,
   type VenueCommitment,
 } from './schema';
 
@@ -308,6 +309,14 @@ const FIXTURE_EVENT_REQUEST_ID = '00000000-0000-4000-8000-000000000239';
  * `start` and `end` are Singapore date-times on the 15-minute unit. Returned
  * periods are sorted by date, then start time.
  *
+ * Each commitment carries the event id or reason behind it, for Venue Staff
+ * (SCRUM-155). Anything shown to a coordinator or organiser goes through
+ * getCommittedPeriods instead, which returns the periods only.
+ *
+ * A period never crosses midnight: setup and turnaround must fit inside the
+ * venue's opening hours (PO assumption, 8 Oct 2026; TC-226-18, 19), and opening
+ * hours end by 24:00, so every commitment sits within one date.
+ *
  * DUMMY(SCRUM-239) D-16: returns one fixture booking - the venue asked about,
  * confirmed 10:00-12:00 on every date in the range - instead of reading the
  * database, so SCRUM-227 and SCRUM-229 can build against a real-looking result
@@ -334,4 +343,19 @@ export async function getVenueCommitments(
     const dayEnd = commitment.date === to.date ? to.time : '24:00';
     return commitmentsOverlapping([commitment], commitment.date, { start: dayStart, end: dayEnd }).length > 0;
   });
+}
+
+/**
+ * SCRUM-239 AC3, SCRUM-226 AC4: the venue's committed periods that overlap
+ * [start, end), with no other event's details. Use this for anything a
+ * coordinator or organiser sees (a refused request, the calendar's committed
+ * blocks); use getVenueCommitments only where the viewer may see who holds a
+ * period.
+ */
+export async function getCommittedPeriods(
+  venueId: string,
+  start: SingaporeDateTime,
+  end: SingaporeDateTime,
+): Promise<CommittedPeriod[]> {
+  return toCommittedPeriods(await getVenueCommitments(venueId, start, end));
 }

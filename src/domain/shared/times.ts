@@ -31,8 +31,20 @@ export function isQuarterHourEnd(value: string): boolean {
   return (QUARTER_HOUR_PATTERN.test(value) && value !== '00:00') || value === END_OF_DAY;
 }
 
-/** Minutes after midnight. `24:00` is 1440. */
+/** True for any time on the 15-minute unit, 00:00 to 24:00. */
+export function isQuarterHour(value: string): boolean {
+  return isQuarterHourStart(value) || value === END_OF_DAY;
+}
+
+/**
+ * Minutes after midnight. `24:00` is 1440.
+ *
+ * Throws on anything that isn't a time on the 15-minute unit, rather than
+ * returning NaN: a NaN makes every comparison false, so rangesOverlap would
+ * report no clash and the venue would read as free.
+ */
 export function toMinutes(time: ClockTime): number {
+  if (!isQuarterHour(time)) throw new Error(`Expected a time on the 15-minute unit (HH:MM), got "${time}"`);
   const [hours = 0, minutes = 0] = time.split(':').map(Number);
   return hours * 60 + minutes;
 }
@@ -91,6 +103,8 @@ export const EndTimeSchema = z.string().refine(isQuarterHourEnd, STEP_MESSAGE);
 export const ClockRangeSchema = z
   .object({ start: StartTimeSchema, end: EndTimeSchema })
   .superRefine((range, ctx) => {
+    // Zod still runs this when a field has already failed; only compare valid times.
+    if (!isQuarterHourStart(range.start) || !isQuarterHourEnd(range.end)) return;
     if (toMinutes(range.end) <= toMinutes(range.start)) {
       const message = 'The end time must be after the start time.';
       ctx.addIssue({ code: z.ZodIssueCode.custom, path: ['start'], message });
