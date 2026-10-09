@@ -29,16 +29,10 @@ SCRUM-<key> — <story title, as on the Jira card>
 
 ## Definition of Done
 
-<!-- Same as the DoD table in CLAUDE.md. Tick A before asking for review. Tick B after the merge, then move the Jira story to Done. -->
-
-**A. Before review**
+<!-- Tick all before asking for review. Review by someone other than the author and the merge into main happen through this PR; move the Jira story to Done the day it merges. -->
 
 - [ ] All acceptance criteria are met
 - [ ] Manually tested against those acceptance criteria (evidence on the Jira ticket)
 - [ ] Runs from the README instructions
-
-**B. After merge**
-
-- [ ] Code reviewed by someone other than the author
-- [ ] Merged into `main` and existing functionality still works
+- [ ] Existing functionality still works (`main` merged in, tests and CI green)
 - [ ] Required Jira/Slack updates, decisions and evidence recorded in the agreed locations

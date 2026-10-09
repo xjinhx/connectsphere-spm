@@ -423,8 +423,10 @@ login` → `npx supabase link --project-ref <ref>` → `npx supabase db push
   evidence, and it is far cheaper to write while the work is fresh. The PR
   template (`.github/pull_request_template.md`) prompts for this, for any
   dummy added or replaced, for the git checks, and for the Definition of Done
-  (Part A before review, Part B after merge; it mirrors the DoD table above,
-  so change both together) — fill it in rather than deleting it. A PR that
+  (ticked once, before review; the review and merge rows are met by the PR
+  itself, and the Jira story moves to Done the day it merges; it mirrors the
+  DoD table above, so change both together) — fill it in rather than
+  deleting it. A PR that
   isn't a story (docs, tooling) replaces the template with a short
   description instead.
 - Do not rewrite or force-push shared `main` history without explicit
