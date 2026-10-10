@@ -31,6 +31,13 @@ _Avoid_: reservation (that word is for equipment)
 **Affected booking**:
 A confirmed booking for an upcoming event that sits on a slot that has since become unavailable (SCRUM-151).
 
+**Setup time** / **Turnaround time**:
+The minutes a venue needs before an event to prepare the room and after it to reset it, in 15-minute steps, set per venue by Venue Staff (SCRUM-225). A booking commits its venue from its start minus the setup time to its end plus the turnaround time.
+_Avoid_: teardown (folded into turnaround), buffer
+
+**Affected by a setup or turnaround change**:
+A confirmed booking that a confirmed setup or turnaround change has left too close to another event's booking. It stays confirmed and is flagged for Venue Staff (SCRUM-225 AC5). Kept apart from an _affected booking_, which carries an outstanding action for the coordinator.
+
 **Outstanding action**:
 An open item on an event that its coordinator must deal with, such as releasing or replacing an affected booking. It closes when that is done.
 _Avoid_: task, alert
