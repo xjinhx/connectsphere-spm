@@ -498,6 +498,9 @@ export type Database = {
           end_time: string
           event_request_id: string
           id: string
+          release_reason: string | null
+          released_at: string | null
+          released_by: string | null
           request_line_id: string | null
           slot: string
           start_time: string
@@ -510,6 +513,9 @@ export type Database = {
           end_time: string
           event_request_id: string
           id?: string
+          release_reason?: string | null
+          released_at?: string | null
+          released_by?: string | null
           request_line_id?: string | null
           slot: string
           start_time: string
@@ -522,6 +528,9 @@ export type Database = {
           end_time?: string
           event_request_id?: string
           id?: string
+          release_reason?: string | null
+          released_at?: string | null
+          released_by?: string | null
           request_line_id?: string | null
           slot?: string
           start_time?: string
