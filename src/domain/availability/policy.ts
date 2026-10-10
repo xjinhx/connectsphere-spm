@@ -40,6 +40,11 @@ export function affectedBookingMessage(
  * SCRUM-239: the commitments on one date that overlap a requested range.
  * Half-open, so a range that only touches a commitment is free (AC2:
  * 12:00-14:00 is free next to a 10:00-12:00 booking; 11:45-13:00 is not).
+ *
+ * Not a clash check on its own: it knows nothing of the venue's setup and
+ * turnaround (SCRUM-226), so it cannot see that a 13:00 start needs setting
+ * up from 12:30. To ask whether a booking would clash, call getVenueCommitments
+ * with the range itself and treat any result as a clash.
  */
 export function commitmentsOverlapping(
   commitments: readonly VenueCommitment[],
