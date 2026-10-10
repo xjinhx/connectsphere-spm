@@ -486,8 +486,8 @@ switch them the next time they edit those files.
 - **Waiting on:** SCRUM-239 Check venue availability in 15-minute time ranges
   (its own real query, due Sprint 3 day 4, once the shared time-model migration
   is merged)
-- **Where:** `src/domain/availability/service.ts` — `getVenueCommitments()`
-  (`DUMMY(SCRUM-239) D-16`)
+- **Where:** ~~`src/domain/availability/service.ts` — `getVenueCommitments()`
+  (`DUMMY(SCRUM-239) D-16`)~~ — marker removed
 - **What it does:** returns one confirmed booking, 10:00–12:00, at the venue
   asked about on every date in the range, filtered to the range like the real
   check will be. It reads nothing from the database. The signature, the
@@ -499,4 +499,11 @@ switch them the next time they edit those files.
   by their start and end times, add holds once SCRUM-227 has them, and keep
   the same return shape. Re-run `tests/unit/venue-commitments.test.ts`, then
   ask the SCRUM-227 and SCRUM-229 owners to re-run the ACs that use the check.
-- **Status:** Active
+- **Status:** Replaced (SCRUM-239, PR #92). `getVenueCommitments()` now
+  reads confirmed bookings (`venue_booking`) and unavailable periods
+  (`venue_unavailable_slot`) by their start and end times, added by the
+  time-model migration (`20261008140500_time_model.sql`, PR #89). Same
+  signature and return shape. Holds join once SCRUM-227 adds them. Re-checked
+  with `tests/unit/venue-commitments.test.ts` and
+  `tests/integration/venue-commitments.test.ts`; SCRUM-227 and SCRUM-229
+  owners to re-run the ACs that use it.

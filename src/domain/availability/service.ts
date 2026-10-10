@@ -1,6 +1,8 @@
 import { z } from 'zod';
 import {
   fetchAffectedBookingSlotsForEvent,
+  fetchConfirmedBookingPeriods,
+  fetchUnavailablePeriods,
   fetchUnavailableSlotsOn,
   fetchUpcomingUnavailableSlots,
   recordUnavailableSlots,
@@ -10,14 +12,15 @@ import { formatSingaporeDate, todayInSingapore, type ISODate } from '@/domain/sh
 import { getVenue } from '@/domain/venues/service';
 import { notifyBestEffort } from '@/domain/notification/service';
 import { OPERATING_SLOTS, OperatingSlotSchema, type OperatingSlot } from '@/domain/venues/schema';
-import { datesBetween, splitDateTime, type SingaporeDateTime } from '@/domain/shared/times';
-import { affectedBookingMessage, commitmentsOverlapping, findNonOperatingSlots, toCommittedPeriods } from './policy';
+import { fromDatabaseTime, splitDateTime, type SingaporeDateTime } from '@/domain/shared/times';
+import { affectedBookingMessage, commitmentsInRange, findNonOperatingSlots, toCommittedPeriods } from './policy';
 import {
   BookingOnUnavailableSlotSchema,
   MarkSlotsUnavailableInputSchema,
   NoticeWrittenSchema,
   SLOT_NAMES,
   UnavailableSlotSchema,
+  VenueCommitmentSchema,
   type BookingOnUnavailableSlot,
   type UnavailableSlot,
   type CommittedPeriod,
@@ -295,54 +298,74 @@ export async function listUpcomingUnavailableSlots(
 // SCRUM-239 Check venue availability in 15-minute time ranges
 // -----------------------------------------------------------------------------
 
-/** The stub's one booking, the fixture agreed for Sprint 3 day 2. */
-const FIXTURE_EVENT_REQUEST_ID = '00000000-0000-4000-8000-000000000239';
-
 /**
  * Every committed period at a venue that overlaps [start, end): its confirmed
- * bookings, holds and unavailable periods. The one check behind venue search
- * (SCRUM-239 AC2), booking requests (AC3), approvals (AC4) and the calendar
- * (AC5), and the check SCRUM-227 (holds) and SCRUM-229 (replacement venue)
- * call instead of writing their own. SCRUM-226 will widen each period by the
- * venue's setup and turnaround here, so no caller adds them.
+ * bookings and unavailable periods (holds join them once SCRUM-227 adds them).
+ * The one check behind venue search (SCRUM-239 AC2), booking requests (AC3),
+ * approvals (AC4) and the calendar (AC5), and the check SCRUM-227 (holds) and
+ * SCRUM-229 (replacement venue) call instead of writing their own. Unavailable
+ * periods are included because the story builds on SCRUM-151 and SCRUM-154,
+ * which keep a withdrawn period from being booked. SCRUM-226 will widen each
+ * period by the venue's setup and turnaround here, so no caller adds them.
  *
  * `start` and `end` are Singapore date-times on the 15-minute unit. Returned
  * periods are sorted by date, then start time.
  *
  * Each commitment carries the event id or reason behind it, for Venue Staff
- * (SCRUM-155). Anything shown to a coordinator or organiser goes through
- * getCommittedPeriods instead, which returns the periods only.
+ * (SCRUM-239 AC4, as SCRUM-155 AC1). Anything shown to a coordinator or
+ * organiser goes through getCommittedPeriods instead, which returns the
+ * periods only.
  *
  * A period never crosses midnight: setup and turnaround must fit inside the
  * venue's opening hours (PO assumption, 8 Oct 2026; TC-226-18, 19), and opening
  * hours end by 24:00, so every commitment sits within one date.
  *
- * DUMMY(SCRUM-239) D-16: returns one fixture booking - the venue asked about,
- * confirmed 10:00-12:00 on every date in the range - instead of reading the
- * database, so SCRUM-227 and SCRUM-229 can build against a real-looking result
- * before the time-range tables exist. The real query replaces it by day 4.
+ * Only confirmed bookings are read, so a booking SCRUM-231 releases stops
+ * committing the venue with no change here.
  */
 export async function getVenueCommitments(
   venueId: string,
   start: SingaporeDateTime,
   end: SingaporeDateTime,
 ): Promise<VenueCommitment[]> {
-  const from = splitDateTime(start);
-  const to = splitDateTime(end);
-  const fixture: VenueCommitment[] = datesBetween(from.date, to.date).map((date) => ({
-    kind: 'booking',
-    venueId,
-    date,
-    start: '10:00',
-    end: '12:00',
-    eventRequestId: FIXTURE_EVENT_REQUEST_ID,
-    reason: null,
-  }));
-  return fixture.filter((commitment) => {
-    const dayStart = commitment.date === from.date ? from.time : '00:00';
-    const dayEnd = commitment.date === to.date ? to.time : '24:00';
-    return commitmentsOverlapping([commitment], commitment.date, { start: dayStart, end: dayEnd }).length > 0;
-  });
+  const fromDate = splitDateTime(start).date;
+  const toDate = splitDateTime(end).date;
+  const [bookings, unavailable] = await Promise.all([
+    fetchConfirmedBookingPeriods(venueId, fromDate, toDate),
+    fetchUnavailablePeriods(venueId, fromDate, toDate),
+  ]);
+  if (bookings.error || !bookings.data || unavailable.error || !unavailable.data) {
+    throw new ValidationError(
+      "Could not check the venue's availability.",
+      bookings.error?.message ?? unavailable.error?.message,
+    );
+  }
+
+  const commitments: VenueCommitment[] = [
+    ...bookings.data.map((row) =>
+      VenueCommitmentSchema.parse({
+        kind: 'booking',
+        venueId: row.venue_id,
+        date: row.date,
+        start: fromDatabaseTime(row.start_time),
+        end: fromDatabaseTime(row.end_time),
+        eventRequestId: row.event_request_id,
+        reason: null,
+      }),
+    ),
+    ...unavailable.data.map((row) =>
+      VenueCommitmentSchema.parse({
+        kind: 'unavailable',
+        venueId: row.venue_id,
+        date: row.date,
+        start: fromDatabaseTime(row.start_time),
+        end: fromDatabaseTime(row.end_time),
+        eventRequestId: null,
+        reason: row.reason,
+      }),
+    ),
+  ];
+  return commitmentsInRange(commitments, start, end);
 }
 
 /**
