@@ -36,6 +36,27 @@ export function isQuarterHour(value: string): boolean {
   return isQuarterHourStart(value) || value === END_OF_DAY;
 }
 
+/** Every time a range may start at, 00:00 to 23:45, in order (SCRUM-238 AC1). */
+export const START_TIME_OPTIONS: readonly ClockTime[] = Array.from({ length: 96 }, (_, i) =>
+  fromMinutes(i * 15),
+);
+
+/** Every time a range may end at, 00:15 to 24:00, in order (SCRUM-238 AC1). */
+export const END_TIME_OPTIONS: readonly ClockTime[] = Array.from({ length: 96 }, (_, i) =>
+  fromMinutes((i + 1) * 15),
+);
+
+/** Minutes after midnight as `HH:MM`. 1440 is `24:00`. */
+export function fromMinutes(minutes: number): ClockTime {
+  const hours = Math.floor(minutes / 60);
+  return `${String(hours).padStart(2, '0')}:${String(minutes % 60).padStart(2, '0')}`;
+}
+
+/** A range as it is shown, e.g. `19:00–24:00`. */
+export function formatClockRange(range: ClockRange): string {
+  return `${range.start}–${range.end}`;
+}
+
 /**
  * Minutes after midnight. `24:00` is 1440.
  *
@@ -47,6 +68,11 @@ export function toMinutes(time: ClockTime): number {
   if (!isQuarterHour(time)) throw new Error(`Expected a time on the 15-minute unit (HH:MM), got "${time}"`);
   const [hours = 0, minutes = 0] = time.split(':').map(Number);
   return hours * 60 + minutes;
+}
+
+/** A Postgres `time` (`10:00:00`, `24:00:00`) as a clock time (`10:00`, `24:00`). */
+export function fromDatabaseTime(value: string): ClockTime {
+  return value.slice(0, 5);
 }
 
 /** A start and end time on one date. End is after start. */
