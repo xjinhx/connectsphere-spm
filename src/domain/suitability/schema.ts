@@ -4,6 +4,7 @@ import { z } from 'zod';
  * Venue Suitability Checking (EP-11, SCRUM-15): data shapes shared by the API
  * route and the UI.
  *
+ * SCRUM-135 Check a selected venue against the event's requirements
  * SCRUM-136 Flag a venue whose capacity is exceeded
  *
  * A suitability check compares one venue against one event's requirements and
@@ -57,6 +58,18 @@ export const SuitabilityResultSchema = z.object({
   requirements: z.array(RequirementResultSchema),
 });
 export type SuitabilityResult = z.infer<typeof SuitabilityResultSchema>;
+
+/**
+ * SCRUM-135: a check as it was run and stored. AC3: reopening a venue against
+ * the event shows this, with the time it was run, without running it again.
+ * `outOfDate` is true once the event's requirements have changed since the
+ * run, so the stored verdict is not presented as the current one.
+ */
+export const SuitabilityCheckSchema = SuitabilityResultSchema.extend({
+  checkedAt: z.string(),
+  outOfDate: z.boolean(),
+});
+export type SuitabilityCheck = z.infer<typeof SuitabilityCheckSchema>;
 
 /** "When suitability is checked": which venue. The event comes from the URL. */
 export const CheckSuitabilityInputSchema = z.object({
