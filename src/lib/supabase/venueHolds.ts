@@ -101,3 +101,13 @@ export async function fetchEventsInStatuses(statuses: readonly EventStatus[]) {
 export async function fetchEventNames(eventRequestIds: readonly string[]) {
   return db().from('event_request').select('id, reference, name').in('id', [...eventRequestIds]);
 }
+
+/**
+ * SCRUM-228 AC1 and AC2: one run of the hold-expiry check, the database
+ * function pg_cron runs every 5 minutes (20261010140000_...). `now` is for
+ * tests; left out, the database's own clock is used. Resolves to how many
+ * notifications were sent.
+ */
+export async function runHoldExpiryCheck(now?: string) {
+  return db().rpc('notify_hold_expiries', now === undefined ? {} : { p_now: now });
+}
