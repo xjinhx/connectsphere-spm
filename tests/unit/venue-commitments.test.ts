@@ -11,13 +11,18 @@ import {
 import { commitmentsInRange, commitmentsOverlapping, toCommittedPeriods } from '@/domain/availability/policy';
 import { getCommittedPeriods, getVenueCommitments } from '@/domain/availability/service';
 import { VenueCommitmentSchema, type VenueCommitment } from '@/domain/availability/schema';
-import { fetchConfirmedBookingPeriods, fetchUnavailablePeriods } from '@/lib/supabase/availability';
+import {
+  fetchConfirmedBookingPeriods,
+  fetchUnavailablePeriods,
+  fetchVenueSetupTurnaround,
+} from '@/lib/supabase/availability';
 
 // The database layer is replaced at its boundary; the service and policy run for real.
 vi.mock('@/lib/supabase/availability', async (importOriginal) => ({
   ...(await importOriginal<typeof import('@/lib/supabase/availability')>()),
   fetchConfirmedBookingPeriods: vi.fn(),
   fetchUnavailablePeriods: vi.fn(),
+  fetchVenueSetupTurnaround: vi.fn(),
 }));
 
 const ok = <T>(data: T) => ({ data, error: null }) as never;
@@ -33,6 +38,10 @@ const bookingRow = (date: string, start: string, end: string) => ({
 beforeEach(() => {
   vi.mocked(fetchConfirmedBookingPeriods).mockReset().mockResolvedValue(ok([]));
   vi.mocked(fetchUnavailablePeriods).mockReset().mockResolvedValue(ok([]));
+  // The default for every venue (PO, 8 Oct 2026): no setup, no turnaround.
+  vi.mocked(fetchVenueSetupTurnaround)
+    .mockReset()
+    .mockResolvedValue(ok({ setup_minutes: 0, turnaround_minutes: 0 }));
 });
 
 /**
@@ -250,5 +259,89 @@ describe('review fixes (PR #88)', () => {
     const periods = await getCommittedPeriods(VENUE_A, '2026-11-10T09:00', '2026-11-10T13:00');
     expect(periods).toEqual([{ date: '2026-11-10', start: '10:00', end: '12:00' }]);
     expect(JSON.stringify(periods)).not.toContain(EVENT_ID);
+  });
+});
+
+// -----------------------------------------------------------------------------
+// SCRUM-226 — Treat setup and turnaround time as occupied
+// Card example: 30 min setup, 45 min turnaround, confirmed 10 Nov 2026
+// 10:00-12:00, so occupied 09:30-12:45. IDs from the SCRUM-226 tab.
+// -----------------------------------------------------------------------------
+
+describe('getVenueCommitments: SCRUM-226 setup and turnaround are occupied', () => {
+  const DAY = '2026-11-10';
+  const at = (time: string) => `${DAY}T${time}`;
+  /** A booking for [start, end) at the card's venue clashes with something. */
+  const clashes = async (start: string, end: string) =>
+    (await getVenueCommitments(VENUE_A, at(start), at(end))).length > 0;
+
+  beforeEach(() => {
+    vi.mocked(fetchVenueSetupTurnaround).mockResolvedValue(ok({ setup_minutes: 30, turnaround_minutes: 45 }));
+    vi.mocked(fetchConfirmedBookingPeriods).mockResolvedValue(ok([bookingRow(DAY, '10:00', '12:00')]));
+  });
+
+  it('TC-226-01 / 03 / 04 (AC1-AC3): 12:30-14:00 clashes with the occupied 09:30-12:45', async () => {
+    expect(await clashes('12:30', '14:00')).toBe(true);
+  });
+
+  it('TC-226-04 (AC3): the clashing booking is identified for Venue Staff', async () => {
+    const [clash] = await getVenueCommitments(VENUE_A, at('12:30'), at('14:00'));
+    expect(clash).toMatchObject({ kind: 'booking', eventRequestId: EVENT_ID });
+  });
+
+  it('TC-226-05 (AC4): the day shows 09:30-12:45, setup and turnaround included', async () => {
+    expect(await getCommittedPeriods(VENUE_A, at('00:00'), at('24:00'))).toEqual([
+      { date: DAY, start: '09:30', end: '12:45' },
+    ]);
+  });
+
+  it('TC-226-06 (AC4): the periods a coordinator sees carry no event details', async () => {
+    const [period] = await getCommittedPeriods(VENUE_A, at('00:00'), at('24:00'));
+    expect(Object.keys(period ?? {}).sort()).toEqual(['date', 'end', 'start']);
+  });
+
+  it('TC-226-07..10 (AC5): 13:15 is free - its own 30 min setup starts at 12:45', async () => {
+    expect(await clashes('13:15', '14:30')).toBe(false);
+  });
+
+  it('TC-226-07..10 (AC5): 13:00 is refused - its setup would start at 12:30, in the turnaround', async () => {
+    expect(await clashes('13:00', '14:30')).toBe(true);
+  });
+
+  it('applies the new booking\'s turnaround too: an earlier booking must clear the next setup', async () => {
+    // Ends 08:45 + 45 min turnaround = 09:30, exactly when the 10:00 booking's setup starts.
+    expect(await clashes('07:00', '08:45')).toBe(false);
+    expect(await clashes('07:00', '09:00')).toBe(true);
+  });
+
+  it('does not widen an unavailable period: nothing is set up for a withdrawn period', async () => {
+    vi.mocked(fetchConfirmedBookingPeriods).mockResolvedValue(ok([]));
+    vi.mocked(fetchUnavailablePeriods).mockResolvedValue(
+      ok([{ venue_id: VENUE_A, date: DAY, start_time: '14:00:00', end_time: '16:30:00', reason: 'Repairs' }]),
+    );
+    expect(await getCommittedPeriods(VENUE_A, at('00:00'), at('24:00'))).toEqual([
+      { date: DAY, start: '14:00', end: '16:30' },
+    ]);
+  });
+
+  it('changes nothing for a venue with no setup and no turnaround (the default)', async () => {
+    vi.mocked(fetchVenueSetupTurnaround).mockResolvedValue(ok({ setup_minutes: 0, turnaround_minutes: 0 }));
+    expect(await clashes('12:00', '14:00')).toBe(false);
+    expect(await clashes('11:45', '13:00')).toBe(true);
+  });
+
+  it('keeps the widened window inside the day', async () => {
+    vi.mocked(fetchConfirmedBookingPeriods).mockResolvedValue(ok([bookingRow(DAY, '00:30', '01:00')]));
+    expect(await clashes('00:15', '00:30')).toBe(true);
+    expect(await getCommittedPeriods(VENUE_A, at('00:00'), at('24:00'))).toEqual([
+      { date: DAY, start: '00:00', end: '01:45' },
+    ]);
+  });
+
+  it('refuses to answer when the venue cannot be read, rather than calling it free', async () => {
+    vi.mocked(fetchVenueSetupTurnaround).mockResolvedValue({ data: null, error: { message: 'boom' } } as never);
+    await expect(getVenueCommitments(VENUE_A, at('12:30'), at('14:00'))).rejects.toThrow(
+      "Could not check the venue's availability.",
+    );
   });
 });
