@@ -31,6 +31,10 @@ _Avoid_: reservation (that word is for equipment)
 **Affected booking**:
 A confirmed booking for an upcoming event that sits on a slot that has since become unavailable (SCRUM-151).
 
+**Hold**:
+A period at one venue kept for one event by Venue Staff until an expiry, so the coordinator can finish arranging the booking (SCRUM-227). While it is _active_ it commits the period against every other event; it is _closed_ when that event's booking for the period is confirmed, and _lapsed_ once its expiry passes first. A hold is never a booking.
+_Avoid_: tentative booking, reservation, provisional booking
+
 **Outstanding action**:
 An open item on an event that its coordinator must deal with, such as releasing or replacing an affected booking. It closes when that is done.
 _Avoid_: task, alert
