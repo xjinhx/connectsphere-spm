@@ -735,6 +735,63 @@ export type Database = {
           },
         ]
       }
+      venue_hold: {
+        Row: {
+          closed_at: string | null
+          created_at: string
+          created_by: string
+          date: string
+          end_time: string
+          event_request_id: string
+          expires_at: string
+          id: string
+          start_time: string
+          status: string
+          venue_id: string
+        }
+        Insert: {
+          closed_at?: string | null
+          created_at?: string
+          created_by: string
+          date: string
+          end_time: string
+          event_request_id: string
+          expires_at: string
+          id?: string
+          start_time: string
+          status?: string
+          venue_id: string
+        }
+        Update: {
+          closed_at?: string | null
+          created_at?: string
+          created_by?: string
+          date?: string
+          end_time?: string
+          event_request_id?: string
+          expires_at?: string
+          id?: string
+          start_time?: string
+          status?: string
+          venue_id?: string
+        }
+        Relationships: [
+          {
+            foreignKeyName: "venue_hold_event_request_id_fkey"
+            columns: ["event_request_id"]
+            isOneToOne: false
+            referencedRelation: "event_request"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "venue_hold_venue_id_fkey"
+            columns: ["venue_id"]
+            isOneToOne: false
+            referencedRelation: "venues"
+            referencedColumns: ["id"]
+          },
+        ]
+      }
       venue_layouts: {
         Row: {
           capacity: number
