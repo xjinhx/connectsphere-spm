@@ -499,7 +499,7 @@ switch them the next time they edit those files.
   by their start and end times, add holds once SCRUM-227 has them, and keep
   the same return shape. Re-run `tests/unit/venue-commitments.test.ts`, then
   ask the SCRUM-227 and SCRUM-229 owners to re-run the ACs that use the check.
-- **Status:** Replaced (SCRUM-239, PR #<this PR>). `getVenueCommitments()` now
+- **Status:** Replaced (SCRUM-239, PR #92). `getVenueCommitments()` now
   reads confirmed bookings (`venue_booking`) and unavailable periods
   (`venue_unavailable_slot`) by their start and end times, added by the
   time-model migration (`20261008140500_time_model.sql`, PR #89). Same
