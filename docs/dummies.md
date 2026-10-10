@@ -401,7 +401,17 @@ switch them the next time they edit those files.
   released status). `listAffectedBookings()` does not change, because it only
   lists confirmed bookings. Add the action beside each entry in
   `AffectedBookingsNotice`, re-run SCRUM-151 AC3, then remove the markers.
-- **Status:** Active
+- **Status:** Replaced (SCRUM-231, branch `venue-booking-release`). A booking
+  now has a `released` status with its reason, who released it and when
+  (`20261010143000_venue_booking_release.sql`). The event's assigned
+  coordinator releases it from the event page's Venue bookings list
+  (`releaseVenueBooking()`, `POST /api/venue-bookings/[id]/release`).
+  `listAffectedBookings()` did not change: a released booking is no longer
+  confirmed, so its entry clears. The release sits in the bookings list rather
+  than beside each entry, and the notice points there, so there is one Release
+  button per booking. The markers are removed. Re-check with TC-151-09
+  (release) and TC-151-10 (book elsewhere, then release the old booking), both
+  through the app.
 
 ### D-13 — A booking decision's "notification" is only the recorded decision
 
@@ -469,7 +479,7 @@ switch them the next time they edit those files.
 - **Waiting on:** SCRUM-231 Release an affected booking (Sprint 3), and
   SCRUM-105 (cancel an event, which releases its bookings)
 - **Where:** `src/domain/venue-booking/service.ts` — `conflictsFor()`
-  (`DUMMY(SCRUM-231) D-15`)
+  (`DUMMY(SCRUM-105) D-15`; first `DUMMY(SCRUM-231) D-15`)
 - **What is real and what is faked:** the approval check is real: a booking
   that is no longer confirmed no longer clashes, so the approval goes through.
   Only the release or cancellation is faked: testers delete the clashing
@@ -477,7 +487,12 @@ switch them the next time they edit those files.
 - **To replace:** once a booking can be released or cancelled through the app,
   re-run SCRUM-155 AC3 (TC-155-04 and TC-155-05) through that action, then
   remove the marker.
-- **Status:** Active
+- **Status:** Release half replaced (SCRUM-231, branch
+  `venue-booking-release`): a booking is released through the app, so
+  TC-155-04 no longer needs the helper; re-check it that way. Still active for
+  cancellation: nothing cancels an event's bookings until SCRUM-105, so
+  TC-155-05 still removes the booking by hand. The marker now names
+  SCRUM-105.
 
 ### D-16 — getVenueCommitments returns a fixture booking
 

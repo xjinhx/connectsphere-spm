@@ -31,6 +31,10 @@ _Avoid_: reservation (that word is for equipment)
 **Affected booking**:
 A confirmed booking for an upcoming event that sits on a slot that has since become unavailable (SCRUM-151).
 
+**Released booking**:
+A confirmed booking that its event's coordinator has given up, with a reason. It no longer commits the venue; the event and its other bookings are unchanged (SCRUM-231).
+_Avoid_: cancelled booking (cancelling is for a whole event, SCRUM-105)
+
 **Outstanding action**:
 An open item on an event that its coordinator must deal with, such as releasing or replacing an affected booking. It closes when that is done.
 _Avoid_: task, alert

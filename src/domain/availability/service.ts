@@ -232,9 +232,8 @@ const AffectedBookingSlotRowSchema = z.object({
  * another venue or slot, then release this one): "until they release or
  * replace it". Upcoming events only, on the Singapore date, like AC2's notices.
  *
- * DUMMY(SCRUM-231) D-12: nothing in the app releases a single booking yet;
- * SCRUM-231 (Release an affected booking) adds it. Testers remove the booking
- * by hand to see the entry clear.
+ * SCRUM-231 releases a booking (releaseVenueBooking), which ends its confirmed
+ * status, so the entry clears with no change here.
  *
  * No access check of its own: its only caller is the coordinator's review
  * page, which calls it after getReviewDetail has refused anyone the request is
