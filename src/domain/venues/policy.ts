@@ -1,7 +1,15 @@
 import { ValidationError } from '@/domain/shared/errors';
 import { isActionPermitted } from '@/domain/identity/permissions';
 import type { Role } from '@/domain/identity/roles';
-import { OPERATING_SLOTS, type CalendarSlotState, type OperatingSlot, type VenueLayoutInput } from './schema';
+import { toMinutes, type ClockRange, type ClockTime } from '@/domain/shared/times';
+import {
+  CALENDAR_PERIOD_KINDS,
+  OPERATING_SLOTS,
+  type CalendarDay,
+  type CalendarPeriod,
+  type OperatingSlot,
+  type VenueLayoutInput,
+} from './schema';
 
 /**
  * Venue Catalogue business rules. Pure functions: no Supabase, no Next.js.
@@ -113,58 +121,83 @@ export function isFreeInEverySlot(
 }
 
 // -----------------------------------------------------------------------------
-// SCRUM-123: the state of each slot on a venue's calendar
+// SCRUM-239 AC5: the periods on a venue's calendar
 // -----------------------------------------------------------------------------
 
-/** What was recorded against one slot on one date. */
-export type CalendarSlotFacts = {
-  operates: boolean;
-  /** The reason a slot was recorded as unavailable, or null if it wasn't (AC7). */
-  unavailableReason: string | null;
-  confirmed: boolean;
-  pendingRequests: number;
+/** A committed period on one date, as getVenueCommitments returns it, plus the event behind a booking. */
+export type CalendarCommitmentInput = {
+  kind: 'booking' | 'hold' | 'unavailable';
+  date: string;
+  start: ClockTime;
+  end: ClockTime;
+  eventRequestId: string | null;
+  reason: string | null;
+};
+
+/** A pending booking request line on one date. */
+export type CalendarPendingInput = { date: string; start: ClockTime; end: ClockTime };
+
+/** The event behind a confirmed booking, keyed `${date}|${eventRequestId}`, only where the viewer may see it. */
+export type VisibleEvents = ReadonlyMap<string, { id: string; reference: string; name: string }>;
+
+const KIND_OF: Record<CalendarCommitmentInput['kind'], CalendarPeriod['kind']> = {
+  booking: 'confirmed',
+  hold: 'held',
+  unavailable: 'blocked',
 };
 
 /**
- * The one state a slot is shown in. Where several things are recorded, the
- * first that applies wins:
- *
- * 1. Outside operating hours (AC3): the venue doesn't run the slot, so nothing
- *    else on it can matter.
- * 2. Blocked (AC7): Venue Staff have withdrawn it, even over a booking — the
- *    booking is then SCRUM-151's affected booking, not a working one.
- * 3. Confirmed (AC5).
- * 4. Pending request (AC6) — only when nothing is committed. A request on a
- *    confirmed slot leaves it Confirmed (AC8); the count is still carried on
- *    the slot so the calendar can show it beside the commitment.
- * 5. Available (AC2).
+ * SCRUM-123 AC4 in time ranges: the committed periods leave no gap anywhere
+ * in the opening hours. A pending request is never a commitment (SCRUM-123
+ * AC8), so only confirmed, held and blocked periods count.
  */
-export function calendarSlotState(facts: CalendarSlotFacts): CalendarSlotState {
-  if (!facts.operates) return 'outside_operating_hours';
-  if (facts.unavailableReason !== null) return 'blocked';
-  if (facts.confirmed) return 'confirmed';
-  if (facts.pendingRequests > 0) return 'pending_request';
-  return 'available';
+export function coversOpeningHours(
+  committed: readonly ClockRange[],
+  hours: { opensAt: ClockTime; closesAt: ClockTime },
+): boolean {
+  let reached = toMinutes(hours.opensAt);
+  const closes = toMinutes(hours.closesAt);
+  for (const period of [...committed].sort((a, b) => toMinutes(a.start) - toMinutes(b.start))) {
+    if (toMinutes(period.start) > reached) break;
+    reached = Math.max(reached, toMinutes(period.end));
+    if (reached >= closes) return true;
+  }
+  return reached >= closes;
 }
 
 /**
- * Committed means the same here as in SCRUM-128's search: a confirmed booking
- * or a slot recorded as unavailable. A pending request never is (AC8), so the
- * calendar and the search can't disagree about a slot.
+ * SCRUM-239 AC5: one date on the calendar. Every confirmed, pending, held and
+ * blocked period shows with its exact start and end time, in start order; no
+ * fixed lunch or dinner gap is drawn because nothing here knows about slots.
  */
-export function isCommitted(state: CalendarSlotState): boolean {
-  return state === 'confirmed' || state === 'blocked';
-}
+export function calendarDay(
+  date: string,
+  hours: { opensAt: ClockTime; closesAt: ClockTime },
+  commitments: readonly CalendarCommitmentInput[],
+  pending: readonly CalendarPendingInput[],
+  visibleEvents: VisibleEvents,
+): CalendarDay {
+  const committed: CalendarPeriod[] = commitments
+    .filter((c) => c.date === date)
+    .map((c) => ({
+      kind: KIND_OF[c.kind],
+      start: c.start,
+      end: c.end,
+      reason: c.kind === 'unavailable' ? c.reason : null,
+      event: c.kind === 'booking' && c.eventRequestId ? (visibleEvents.get(`${date}|${c.eventRequestId}`) ?? null) : null,
+    }));
+  const requested: CalendarPeriod[] = pending
+    .filter((p) => p.date === date)
+    .map((p) => ({ kind: 'pending', start: p.start, end: p.end, reason: null, event: null }));
 
-/**
- * AC4: "committed for all three slots" — read as every slot the venue runs
- * that day. For a venue open AM, PM and Night that is exactly the card's
- * wording; for one that runs AM and PM only, both booked leaves nothing to
- * request, so it is full too. A venue that runs no slot is never "full".
- */
-export function isFullyCommitted(states: readonly CalendarSlotState[]): boolean {
-  const operating = states.filter((state) => state !== 'outside_operating_hours');
-  return operating.length > 0 && operating.every(isCommitted);
+  const kindOrder = CALENDAR_PERIOD_KINDS;
+  const periods = [...committed, ...requested].sort(
+    (a, b) =>
+      toMinutes(a.start) - toMinutes(b.start) ||
+      toMinutes(a.end) - toMinutes(b.end) ||
+      kindOrder.indexOf(a.kind) - kindOrder.indexOf(b.kind),
+  );
+  return { date, fullyCommitted: coversOpeningHours(committed, hours), periods };
 }
 
 /** Every date from `from` to `to`, both included, as YYYY-MM-DD. */
