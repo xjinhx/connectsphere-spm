@@ -49,6 +49,11 @@ export function toMinutes(time: ClockTime): number {
   return hours * 60 + minutes;
 }
 
+/** A Postgres `time` (`10:00:00`, `24:00:00`) as a clock time (`10:00`, `24:00`). */
+export function fromDatabaseTime(value: string): ClockTime {
+  return value.slice(0, 5);
+}
+
 /** A start and end time on one date. End is after start. */
 export interface ClockRange {
   start: ClockTime;
