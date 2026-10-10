@@ -1,6 +1,6 @@
 import type { OperatingSlot } from '@/domain/venues/schema';
 import { formatSingaporeDate, type ISODate } from '@/domain/shared/dates';
-import { rangesOverlap, type ClockRange } from '@/domain/shared/times';
+import { END_OF_DAY, rangesOverlap, splitDateTime, toMinutes, type ClockRange, type SingaporeDateTime } from '@/domain/shared/times';
 import { SLOT_NAMES, type CommittedPeriod, type VenueCommitment } from './schema';
 
 /**
@@ -65,4 +65,29 @@ export function toCommittedPeriods(commitments: readonly VenueCommitment[]): Com
     }
   }
   return periods.sort((a, b) => a.date.localeCompare(b.date) || a.start.localeCompare(b.start));
+}
+
+/**
+ * SCRUM-239: the commitments that overlap [start, end), where start and end
+ * are Singapore date-times and may fall on different dates. On the first date
+ * the window opens at the start time, on the last it closes at the end time,
+ * and any date in between counts whole. Sorted by date, then start time.
+ */
+export function commitmentsInRange(
+  commitments: readonly VenueCommitment[],
+  start: SingaporeDateTime,
+  end: SingaporeDateTime,
+): VenueCommitment[] {
+  const from = splitDateTime(start);
+  const to = splitDateTime(end);
+  return commitments
+    .filter((c) => c.date >= from.date && c.date <= to.date)
+    .filter((c) => {
+      const window: ClockRange = {
+        start: c.date === from.date ? from.time : '00:00',
+        end: c.date === to.date ? to.time : END_OF_DAY,
+      };
+      return rangesOverlap(c, window);
+    })
+    .sort((a, b) => a.date.localeCompare(b.date) || toMinutes(a.start) - toMinutes(b.start));
 }
