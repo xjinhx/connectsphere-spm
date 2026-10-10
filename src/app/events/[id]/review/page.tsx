@@ -8,6 +8,7 @@ import { RequestClarificationForm } from '@/components/event-request/RequestClar
 import { AffectedBookingsNotice } from '@/components/venue/AffectedBookingsNotice';
 import { listAffectedBookings } from '@/domain/availability/service';
 import { RequestVenueBookingForm } from '@/components/event-request/RequestVenueBookingForm';
+import { SuitabilityCheckForm } from '@/components/suitability/SuitabilityCheckForm';
 import { canCreateBookingRequest } from '@/domain/venue-booking/policy';
 import { listVenues } from '@/domain/venues/service';
 import {
@@ -221,6 +222,19 @@ export default async function ReviewEventRequestPage({
       {canBeApproved(request.status) ? (
         <section className="mt-6 rounded-lg border border-[var(--border)] bg-[var(--surface)] p-4">
           <ApproveRequestButton requestId={request.id} />
+        </section>
+      ) : null}
+
+      {/* SCRUM-136 — check a venue against the event before asking Venue Staff
+          for it ("so that a room that cannot hold the event is never
+          requested"). Offered whenever a venue can be requested, just above
+          that form; the service refuses anyone but the event's coordinator. */}
+      {canCreateBookingRequest(request.status) ? (
+        <section className="mt-6 rounded-lg border border-[var(--border)] bg-[var(--surface)] p-4">
+          <h2 className="text-sm font-semibold">Check venue suitability</h2>
+          <div className="mt-3">
+            <SuitabilityCheckForm requestId={request.id} venues={venues} />
+          </div>
         </section>
       ) : null}
 
