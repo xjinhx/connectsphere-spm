@@ -1,15 +1,6 @@
 import { describe, it, expect } from 'vitest';
+import { describeTimeSlots, isFullDay } from '@/domain/event-request/policy';
 import {
-  describeTimeSlots,
-  haveAllTimeSlotsEndedToday,
-  hasTimeSlotEndedToday,
-  incompleteFields,
-  isFullDay,
-  PAST_TIME_SLOT_MESSAGE,
-  type StoredEventRequestFields,
-} from '@/domain/event-request/policy';
-import {
-  eventRequestSaveSchema,
   normaliseTimeSlots,
   TIME_SLOT_HOURS,
   TIME_SLOT_ORDER,
@@ -21,6 +12,14 @@ import {
  * SCRUM-77 — Choose the time slots the event needs.
  *
  * AC text is taken from the Jira card, which is authoritative.
+ *
+ * SUPERSEDED for event requests by SCRUM-238 (customer change Week 7 #1): a
+ * request now has a start and end time, tested in event-request-times.test.ts.
+ * SCRUM-77 stays Done (scenario 2 of the Week 7 guide). What is left here is
+ * the slot definitions themselves, still used by venue booking request lines
+ * until SCRUM-239 moves them to times. AC1 (slots saved with the request), AC3
+ * (no slot blocks submission) and AC5 (slot already ended today) were removed
+ * with the behaviour; AC5's fix lives on as SCRUM-238 AC5.
  *
  * Sheet mapping (US-5.1 = SCRUM-76+77+78): TC02 (only am/pm/night offered;
  * all three = full day) and TC03 (two slots on one date) are this ticket's.
@@ -37,41 +36,14 @@ import {
  *        is built from TIME_SLOT_ORDER, which is asserted below.
  */
 
-const A_MONDAY = '2026-11-09';
-
-const basicDetails = {
-  name: 'Annual Tech Summit',
-  purpose: 'Networking',
-  description: 'Yearly gathering',
-  proposedDate: '2026-11-15',
-};
-
-const complete: StoredEventRequestFields = {
-  ...basicDetails,
-  timeSlots: ['pm'],
-  expectedAttendance: 80,
-};
-
 describe('SCRUM-77 — Choose the time slots the event needs', () => {
-  describe('AC1 — selected slots are saved with the request', () => {
-    // US-5.1-TC03 — event spanning two slots on one date: both recorded in full
-    it('keeps both slots when am and pm are chosen for the same date', () => {
-      const result = eventRequestSaveSchema.parse({ ...basicDetails, timeSlots: ['am', 'pm'] });
-      expect(result.timeSlots).toEqual(['am', 'pm']);
-    });
-
+  describe('AC1 — a selection is a set, in day order', () => {
     it('stores slots in the order of the day, however they were picked', () => {
       expect(timeSlotsSchema.parse(['night', 'am'])).toEqual(['am', 'night']);
     });
 
     it('treats a selection as a set - the same slot twice is one slot', () => {
       expect(normaliseTimeSlots(['pm', 'pm', 'am'])).toEqual(['am', 'pm']);
-    });
-
-    it('allows a request to be saved with no slot chosen yet', () => {
-      // AC3 blocks submission without a slot, not saving.
-      expect(eventRequestSaveSchema.safeParse({ ...basicDetails, timeSlots: [] }).success).toBe(true);
-      expect(eventRequestSaveSchema.parse(basicDetails).timeSlots).toEqual([]);
     });
   });
 
@@ -94,24 +66,6 @@ describe('SCRUM-77 — Choose the time slots the event needs', () => {
     it('shows "not yet provided" until a slot is chosen', () => {
       expect(describeTimeSlots(null)).toBe('Not yet provided');
       expect(describeTimeSlots([])).toBe('Not yet provided');
-    });
-  });
-
-  describe('AC3 — no slot chosen: submission is blocked and the organiser is told', () => {
-    it('names time slots as incomplete when none are chosen', () => {
-      const result = incompleteFields({ ...complete, timeSlots: [] }, A_MONDAY);
-      expect(result).toEqual([
-        { field: 'timeSlots', label: 'Time slots', reason: 'Select at least one time slot' },
-      ]);
-    });
-
-    it('treats slots that were never chosen the same as an empty choice', () => {
-      const result = incompleteFields({ ...complete, timeSlots: null }, A_MONDAY);
-      expect(result.map((item) => item.field)).toEqual(['timeSlots']);
-    });
-
-    it('is satisfied by a single slot', () => {
-      expect(incompleteFields({ ...complete, timeSlots: ['night'] }, A_MONDAY)).toEqual([]);
     });
   });
 
@@ -149,50 +103,6 @@ describe('SCRUM-77 — Choose the time slots the event needs', () => {
         pm: { start: 13, end: 18 },
         night: { start: 19, end: 24 },
       });
-    });
-  });
-
-  describe('AC5 — a slot that has already ended today cannot still be submitted (bug fix, ex-US-76-TC06)', () => {
-    // 16:07 Singapore time on the proposed date (A_MONDAY) itself.
-    const AFTERNOON = new Date(`${A_MONDAY}T16:07:00+08:00`);
-
-    it('treats a slot whose end hour has passed as ended', () => {
-      expect(hasTimeSlotEndedToday('am', AFTERNOON)).toBe(true); // ended at 12:00
-      expect(hasTimeSlotEndedToday('pm', AFTERNOON)).toBe(false); // ends at 18:00
-      expect(hasTimeSlotEndedToday('night', AFTERNOON)).toBe(false); // has not started
-    });
-
-    it('is not satisfied only when every selected slot has ended', () => {
-      expect(haveAllTimeSlotsEndedToday(['am'], AFTERNOON)).toBe(true);
-      // pm is still ahead, so a mixed am+pm selection is not fully lapsed.
-      expect(haveAllTimeSlotsEndedToday(['am', 'pm'], AFTERNOON)).toBe(false);
-      expect(haveAllTimeSlotsEndedToday(['am', 'night'], AFTERNOON)).toBe(false);
-    });
-
-    it('blocks submission of an already-ended slot for a proposed date of today', () => {
-      const result = incompleteFields({ ...complete, proposedDate: A_MONDAY, timeSlots: ['am'] }, A_MONDAY, AFTERNOON);
-      expect(result).toEqual([
-        { field: 'timeSlots', label: 'Time slots', reason: PAST_TIME_SLOT_MESSAGE },
-      ]);
-    });
-
-    it('still allows a slot later in today that has not ended yet', () => {
-      const result = incompleteFields({ ...complete, proposedDate: A_MONDAY, timeSlots: ['pm'] }, A_MONDAY, AFTERNOON);
-      expect(result).toEqual([]);
-    });
-
-    it('does not apply this check to a future date - the whole day is still ahead', () => {
-      // complete.proposedDate is 2026-11-15, a Sunday after A_MONDAY. Its "am"
-      // slot has no relationship to AFTERNOON's clock time; only a date that
-      // equals `today` is ever checked against `now`.
-      expect(incompleteFields({ ...complete, timeSlots: ['am'] }, A_MONDAY, AFTERNOON)).toEqual([]);
-    });
-
-    it('leaves the date-only rules unchanged when `now` is not supplied', () => {
-      // The existing SCRUM-76 AC4 behaviour ("today, at any hour, is
-      // accepted") must not become wall-clock-dependent for callers that
-      // never asked for the slot check.
-      expect(incompleteFields({ ...complete, proposedDate: A_MONDAY, timeSlots: ['am'] }, A_MONDAY)).toEqual([]);
     });
   });
 });

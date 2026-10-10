@@ -10,7 +10,7 @@ import { createAdminClient } from './admin';
 
 const COLUMNS =
   'id, reference, organiser_id, client_organisation_id, name, purpose, description, proposed_date, ' +
-  'time_slots, expected_attendance, status, submitted_at, created_at, updated_at, ' +
+  'time_slots, start_time, end_time, expected_attendance, status, submitted_at, created_at, updated_at, ' +
   // SCRUM-79. The chosen accessibility features come back nested through the
   // link table, the same way a venue's do in lib/supabase/venues.ts.
   'room_layout, accessibility_required, accessibility_notes, ' +
@@ -52,6 +52,10 @@ export interface EventRequestRow {
   // Placeholders owned by SCRUM-77/78; read here so SCRUM-82 can judge
   // completeness once those tickets start filling them in.
   time_slots: string[] | null;
+  // SCRUM-238. Postgres `time` ('10:00:00', '24:00:00'), Singapore clock time;
+  // null together until entered. Filled from time_slots for older rows (AC6).
+  start_time: string | null;
+  end_time: string | null;
   expected_attendance: number | null;
   // SCRUM-82. Uses the shared type rather than a literal union, so adding a
   // status in one place cannot leave this row shape claiming the value is
@@ -100,8 +104,13 @@ export interface EventRequestWrite {
   purpose: string | null;
   description: string | null;
   proposed_date: string | null;
-  // SCRUM-77. Null when none chosen, so "not yet provided" has one spelling.
-  time_slots: string[] | null;
+  // SCRUM-77. Always written as null since SCRUM-238: a request has times, not
+  // slots. Clearing it on save means an edited legacy request keeps no stale
+  // slot behind its new times (the fill trigger ignores a null array).
+  time_slots: null;
+  // SCRUM-238. `HH:MM`; both null or both set (event_request_times_together).
+  start_time: string | null;
+  end_time: string | null;
   // SCRUM-78's column. Optional on the write so SCRUM-76's create path, which
   // does not collect it, keeps compiling unchanged; SCRUM-83's draft save does
   // send it. See the note in domain/event-request/service.ts about the create
