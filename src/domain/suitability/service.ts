@@ -6,7 +6,16 @@ import { isCurrentCoordinator } from '@/domain/assignment/policy';
 import { EventRequestIdSchema } from '@/domain/venue-booking/schema';
 import { RoomLayoutSchema } from '@/domain/venues/schema';
 import { getVenue } from '@/domain/venues/service';
-import { capacityRequirement, needsFor, sameNeeds, toRoomLayout, verdictOf, type SuitabilityNeeds } from './policy';
+import {
+  accessibilityNeedsFor,
+  accessibilityRequirement,
+  capacityRequirement,
+  needsFor,
+  sameNeeds,
+  toRoomLayout,
+  verdictOf,
+  type CheckedNeeds,
+} from './policy';
 import {
   CheckSuitabilityInputSchema,
   RequirementResultSchema,
@@ -29,9 +38,11 @@ import {
  * reads the event's protected details (customer clarification #91). The route
  * also requires the coordinator role (venue_booking_request).
  *
- * Requirements checked: capacity (SCRUM-136). Layout, accessibility and
- * facilities are SCRUM-137's rules, which no sprint holds yet; when they land
- * they add to `requirements` here and to SuitabilityNeeds.
+ * Requirements checked: capacity (SCRUM-136) and accessibility. The
+ * accessibility rule is SCRUM-137's, which no sprint holds, so a stand-in is
+ * used until it is built (D-17, accessibilityRequirement in policy.ts). Layout,
+ * facilities and operating hours are SCRUM-137's too and are not checked; when
+ * it lands they add to `requirements` here.
  *
  * SCRUM-135 AC4 and SCRUM-136 AC5, a booking request's own needs, are
  * needsFor's (policy.ts) and wait on SCRUM-230, which gives each booking
@@ -40,7 +51,7 @@ import {
  */
 
 /** The event, once the actor is known to be its coordinator, with what the check needs from it. */
-async function readEventForCheck(eventRequestId: string, actorId: string): Promise<{ id: string; needs: SuitabilityNeeds }> {
+async function readEventForCheck(eventRequestId: string, actorId: string): Promise<{ id: string; needs: CheckedNeeds }> {
   if (!EventRequestIdSchema.safeParse(eventRequestId).success) throw new NotFoundError('Event request');
 
   const { data, error } = await fetchEventRequestById(eventRequestId);
@@ -56,7 +67,15 @@ async function readEventForCheck(eventRequestId: string, actorId: string): Promi
 
   return {
     id: event.id,
-    needs: needsFor({ expectedAttendance: event.expected_attendance, roomLayout: toRoomLayout(event.room_layout) }),
+    needs: {
+      ...needsFor({ expectedAttendance: event.expected_attendance, roomLayout: toRoomLayout(event.room_layout) }),
+      accessibility: accessibilityNeedsFor({
+        accessibilityRequired: event.accessibility_required,
+        accessibilityFeatures: event.event_request_accessibility_features.flatMap((link) =>
+          link.accessibility_features ? [link.accessibility_features] : [],
+        ),
+      }),
+    },
   };
 }
 
@@ -83,7 +102,11 @@ export async function checkVenueSuitability(
   // Throws NotFoundError for a venue that does not exist.
   const venue = await getVenue(parsed.data.venueId);
 
-  const requirements = [capacityRequirement(event.needs, venue)];
+  const requirements = [
+    capacityRequirement(event.needs, venue),
+    // DUMMY(SCRUM-137) D-17: SCRUM-137's accessibility rule, stood in for.
+    accessibilityRequirement(event.needs.accessibility, venue.accessibilityFeatures),
+  ];
   const verdict = verdictOf(requirements);
 
   const { data: stored, error } = await insertSuitabilityCheck({
@@ -91,7 +114,14 @@ export async function checkVenueSuitability(
     venueId: venue.id,
     verdict,
     requirements,
-    needs: event.needs,
+    needs: {
+      expectedAttendance: event.needs.expectedAttendance,
+      roomLayout: event.needs.roomLayout,
+      accessibility: {
+        accessibilityRequired: event.needs.accessibility.accessibilityRequired,
+        accessibilityFeatures: event.needs.accessibility.accessibilityFeatures.map(({ id, name }) => ({ id, name })),
+      },
+    },
     checkedBy: actorId,
   });
   if (error || !stored) throw new ValidationError('The suitability check could not be saved.', error?.message);
@@ -110,6 +140,10 @@ export async function checkVenueSuitability(
 const StoredNeedsSchema = z.object({
   expectedAttendance: z.number().int().nullable(),
   roomLayout: RoomLayoutSchema.nullable(),
+  accessibility: z.object({
+    accessibilityRequired: z.boolean().nullable(),
+    accessibilityFeatures: z.array(z.object({ id: z.string(), name: z.string() })),
+  }),
 });
 
 /**

@@ -37,15 +37,22 @@ export type Outcome = (typeof OUTCOMES)[number];
  * AC1: "the shortfall of 30 is stated"; AC3: "expected attendance is named as
  * the unverified item").
  */
+/**
+ * The requirements a check looks at. Capacity is SCRUM-136's. Accessibility is
+ * SCRUM-137's, stood in for by D-17 until that story is built (see
+ * accessibilityRequirement in policy.ts).
+ */
+export const REQUIREMENTS = ['capacity', 'accessibility'] as const;
+
 export const RequirementResultSchema = z.object({
-  requirement: z.literal('capacity'),
+  requirement: z.enum(REQUIREMENTS),
   label: z.string(),
   outcome: z.enum(OUTCOMES),
   eventValue: z.string(),
   venueValue: z.string(),
   /** Null when the requirement is met. */
   detail: z.string().nullable(),
-  /** SCRUM-136 AC1: by how many attendees the venue falls short; null unless not met. */
+  /** SCRUM-136 AC1: by how many attendees the venue falls short; null unless capacity is not met. */
   shortfall: z.number().int().positive().nullable(),
 });
 export type RequirementResult = z.infer<typeof RequirementResultSchema>;
