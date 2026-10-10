@@ -83,8 +83,8 @@ export const NoticeWrittenSchema = z.object({
 /**
  * What can commit a venue's time, so that no one else can book it:
  * - `booking`: a confirmed booking (SCRUM-155 approves it).
- * - `hold`: a held slot, once SCRUM-227 (Hold a venue slot until an expiry)
- *   adds them. Listed now so the contract does not change when it lands.
+ * - `hold`: an active hold that has not expired (SCRUM-227, Hold a venue
+ *   until an expiry), with its event and expiry.
  * - `unavailable`: a period Venue Staff withdrew (SCRUM-151), labelled
  *   Blocked on the calendar (SCRUM-123 AC7).
  *
@@ -112,6 +112,12 @@ export const VenueCommitmentSchema = z.object({
   end: EndTimeSchema,
   eventRequestId: z.string().uuid().nullable(),
   reason: z.string().nullable(),
+  /**
+   * SCRUM-227: a hold's expiry (an ISO instant), so it can be named and shown
+   * as Held with its expiry (AC4, AC7). Left out for bookings and unavailable
+   * periods, which do not expire.
+   */
+  expiresAt: z.string().nullable().optional(),
 });
 export type VenueCommitment = z.infer<typeof VenueCommitmentSchema>;
 
