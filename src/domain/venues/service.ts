@@ -2,7 +2,6 @@ import {
   createVenueWithLists,
   fetchAccessibilityFeatureIdsIn,
   fetchAccessibilityFeatures,
-  fetchConfirmedBookingsOn,
   fetchConfirmedFutureBookings,
   fetchConfirmedFutureBookingTimes,
   fetchFacilities,
@@ -11,20 +10,20 @@ import {
   fetchLocations,
   fetchSearchableVenues,
   fetchSetupTurnaroundAffectedBookings,
-  fetchUnavailableSlotsOn,
   fetchVenueDetail,
   fetchVenueSummaries,
   saveVenueChanges,
 } from '@/lib/supabase/venues';
 import { ConflictError, NotFoundError, ValidationError, isUniqueViolation } from '@/domain/shared/errors';
 import { todayInSingapore, type ISODate } from '@/domain/shared/dates';
+import { fromDatabaseTime } from '@/domain/shared/times';
+import { getCommittedPeriods } from '@/domain/availability/service';
 import {
   assertLayoutsWithinMaxCapacity,
-  committedSlotsByVenue,
   findNewSetupTurnaroundClashes,
   isAffectedByCapacity,
   isCapacityCut,
-  isFreeInEverySlot,
+  isWithinOpeningHours,
   type SetupTurnaround,
 } from './policy';
 import {
@@ -116,50 +115,50 @@ export async function listVenues(includeRetired = false): Promise<VenueSummary[]
  * a mistyped link instead of showing not-found.
  */
 /**
- * SCRUM-128 Search venues by date and slot.
+ * SCRUM-239 AC2 and AC8: search venues by a date and an exact start and end time,
+ * replacing SCRUM-128's slots (which stays Done on slots, per the Week 7 guide).
  *
- * AC1: a venue is returned only if it is free in every selected slot.
- * AC2/AC3: a confirmed booking commits its slot (SCRUM-148's bookings).
- * AC4: a slot recorded as unavailable commits it (SCRUM-151 records them).
- * AC5: any valid date, however far ahead — VenueSearchQuerySchema sets no limit.
+ * A venue is returned only if the whole period is inside its opening hours
+ * (AC1: "search does not return that venue for it") and nothing commits any of
+ * it. Commitments come from getCommittedPeriods, the one availability check
+ * agreed on day 1: confirmed bookings (AC2) and periods Venue Staff marked
+ * unavailable (AC8, carrying SCRUM-128 AC4 to time ranges). A pending request
+ * commits nothing.
+ * SCRUM-128 AC5 (no booking horizon) still holds: the schema sets no limit.
  *
- * The three reads are independent, so they run together; the rule that
- * combines them is isFreeInEverySlot (policy.ts).
+ * One availability check per open venue. The catalogue is small, so this is
+ * simpler than a second, catalogue-wide copy of the overlap rule.
  */
 export async function searchVenues(input: unknown): Promise<VenueSearchResult> {
   const parsed = VenueSearchQuerySchema.safeParse(input);
   if (!parsed.success) {
     throw new ValidationError('The search could not be run.', parsed.error.flatten());
   }
-  const { date, slots } = parsed.data;
+  const { date, start, end } = parsed.data;
 
-  const [venues, bookings, unavailable] = await Promise.all([
-    fetchSearchableVenues(),
-    fetchConfirmedBookingsOn(date),
-    fetchUnavailableSlotsOn(date),
-  ]);
+  const venues = await fetchSearchableVenues();
   if (venues.error || !venues.data) {
     throw new ValidationError('Could not load the venue catalogue.', venues.error?.message);
   }
-  if (bookings.error || !bookings.data) {
-    throw new ValidationError('Could not load bookings for that date.', bookings.error?.message);
-  }
-  if (unavailable.error || !unavailable.data) {
-    throw new ValidationError('Could not load unavailable slots for that date.', unavailable.error?.message);
-  }
 
-  const committed = committedSlotsByVenue([
-    ...bookings.data.map((booking) => ({ venueId: booking.venue_id, slot: booking.slot })),
-    ...unavailable.data.map((row) => ({ venueId: row.venue_id, slot: row.slot })),
-  ]);
-
-  const free = venues.data.filter((venue) =>
-    isFreeInEverySlot(venue.operating_slots, slots, committed.get(venue.id)),
+  const open = venues.data.filter((venue) =>
+    isWithinOpeningHours(
+      { start, end },
+      { opensAt: fromDatabaseTime(venue.opens_at), closesAt: fromDatabaseTime(venue.closes_at) },
+    ),
   );
+  const checked = await Promise.all(
+    open.map(async (venue) => ({
+      venue,
+      committed: await getCommittedPeriods(venue.id, `${date}T${start}`, `${date}T${end}`),
+    })),
+  );
+  const free = checked.filter(({ committed }) => committed.length === 0).map(({ venue }) => venue);
 
   return VenueSearchResultSchema.parse({
     date,
-    slots,
+    start,
+    end,
     venues: free.map((row) => ({
       id: row.id,
       name: row.name,

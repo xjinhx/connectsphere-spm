@@ -12,7 +12,7 @@ import {
   describeRegistration,
   describeRoomLayout,
   describeTechnicalSupport,
-  describeTimeSlots,
+  describeEventTimes,
 } from '@/domain/event-request/policy';
 import { EVENT_REQUEST_STATUS_DEFINITIONS } from '@/domain/event-request/schema';
 import { getEventRequest } from '@/domain/event-request/service';
@@ -217,11 +217,9 @@ export default async function EventRequestPage({
             request.proposedDate ? formatSingaporeDate(request.proposedDate) : 'Not yet provided'
           }
         />
-        {/* SCRUM-77 AC2: all three slots read as a full-day booking requirement. */}
-        <Row
-          label="Time slots"
-          value={describeTimeSlots(request.timeSlots)}
-        />
+        {/* SCRUM-238 AC6/AC7: the request's times in Singapore time; an older
+            slot request shows its slot's times. */}
+        <Row label="Time" value={describeEventTimes(request.startTime, request.endTime)} />
         {/* SCRUM-78. Was missing from this page entirely - confirmed via a
             manual walkthrough (2026-09-16) that the API already returned it
             correctly and only the row was never added. */}

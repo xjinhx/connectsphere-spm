@@ -5,14 +5,16 @@ import { getCurrentActor } from '@/lib/auth/currentActor';
 import { handleApiError } from '@/lib/api/handler';
 
 /**
- * /api/venues/search?date=YYYY-MM-DD&slots=am&slots=pm
+ * /api/venues/search?date=YYYY-MM-DD&start=HH:MM&end=HH:MM
  *
- * GET SCRUM-128 AC1 to AC5: the venues free in every selected slot on the date.
+ * GET SCRUM-239 AC2: the venues open and free for the whole period on the date
+ *     (replacing SCRUM-128's slots).
  *     Needs venue_catalogue_view, the same as browsing the catalogue it
  *     searches, so Event Organisers and Attendees are refused.
  *
  * Permission is checked before anything is parsed or read (SCRUM-69 AC3). A
- * missing or invalid date, or no slot selected, is a ValidationError: 400.
+ * missing or invalid date, or a time off the 15-minute unit or an end not after
+ * the start (ClockRangeSchema), is a ValidationError: 400.
  */
 export async function GET(request: NextRequest) {
   try {
@@ -22,7 +24,8 @@ export async function GET(request: NextRequest) {
     const params = request.nextUrl.searchParams;
     const result = await searchVenues({
       date: params.get('date') ?? undefined,
-      slots: params.getAll('slots'),
+      start: params.get('start') ?? undefined,
+      end: params.get('end') ?? undefined,
     });
     return NextResponse.json(result);
   } catch (error) {
