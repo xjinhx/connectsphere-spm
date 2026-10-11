@@ -11,7 +11,7 @@ import { ClockRangeSchema } from '@/domain/shared/times';
  * A hold (CONTEXT.md) keeps one period at one venue for one event until an
  * expiry, so the coordinator can finish arranging the booking without the
  * venue being taken, and without it being held forever. Values mirror the
- * check constraints in supabase/migrations/20261010130000_venue_hold.sql.
+ * check constraints in supabase/migrations/20261011193100_venue_hold.sql.
  */
 
 /** Only these events can be held: the same rule as a booking request (SCRUM-142 AC1, AC2). */
