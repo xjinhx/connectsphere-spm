@@ -65,6 +65,8 @@ import {
 const EVENT_NOT_APPROVED_MESSAGE =
   'The event must be approved before venue arrangements can begin.';
 
+const RETIRED_VENUE_MESSAGE = 'This venue is retired, so it cannot be requested.';
+
 function toOutcome(row: VenueBookingRequestRow): VenueBookingRequestOutcome {
   return {
     id: row.id,
@@ -162,6 +164,18 @@ export async function submitVenueBookingRequest(
     date: line.date.toISOString().slice(0, 10),
     timeSlots: line.timeSlots,
   }));
+
+  // TC-142-10 — a retired venue can't host a new event (SCRUM-121 AC3). The
+  // form only lists active venues, so this catches a direct API call. Throws
+  // NotFoundError for a venue that does not exist.
+  const venue = await getVenue(parsedInput.data.venueId);
+  if (venue.isRetired) {
+    throw new ValidationError(RETIRED_VENUE_MESSAGE, {
+      formErrors: [],
+      fieldErrors: { venueId: [RETIRED_VENUE_MESSAGE] },
+      lineErrors: [],
+    });
+  }
 
   // SCRUM-154 — after the field checks, so a request that is missing fields is
   // told so first, and before anything is written.
