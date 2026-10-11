@@ -5,16 +5,12 @@ import { listMyAssignedEvents } from '@/domain/assignment/service';
 import { isAwaitingReview } from '@/domain/review/policy';
 import { EventRequestStatusBadge } from '@/components/event-request/EventRequestStatusBadge';
 import { formatSingaporeDate, formatSingaporeDateTime } from '@/domain/shared/dates';
+import { formatClockRange } from '@/domain/shared/times';
 
-const SLOT_SHORT_LABELS: Record<string, string> = {
-  am: 'AM',
-  pm: 'PM',
-  night: 'Night',
-};
-
-function formatSlots(slots: string[] | null): string {
-  if (!slots || slots.length === 0) return '—';
-  return slots.map((slot) => SLOT_SHORT_LABELS[slot] ?? slot).join(', ');
+/** SCRUM-238 — the event's times, or a dash until the organiser has given them. */
+function formatTimes(event: { startTime: string | null; endTime: string | null }): string {
+  if (event.startTime === null || event.endTime === null) return '—';
+  return formatClockRange({ start: event.startTime, end: event.endTime });
 }
 
 /**
@@ -120,7 +116,7 @@ export default async function EventCoordinatorAssignedEventsPage() {
                   Proposed date
                 </th>
                 <th scope="col" className="p-3 font-medium">
-                  Slots
+                  Time
                 </th>
                 <th scope="col" className="p-3 font-medium">
                   Submitted
@@ -142,7 +138,7 @@ export default async function EventCoordinatorAssignedEventsPage() {
                   <td className="p-3">
                     {event.proposedDate ? formatSingaporeDate(event.proposedDate) : '—'}
                   </td>
-                  <td className="p-3">{formatSlots(event.timeSlots)}</td>
+                  <td className="p-3">{formatTimes(event)}</td>
                   <td className="p-3">
                     {event.submittedAt ? formatSingaporeDateTime(event.submittedAt) : '—'}
                   </td>

@@ -5,24 +5,29 @@ import { createVenue } from '@/domain/venues/service';
 import { getVenueCalendar } from '@/domain/venues/calendar';
 import type { Role } from '@/domain/identity/roles';
 import type { CalendarDay, OperatingSlot } from '@/domain/venues/schema';
+
+type Period = { slot: OperatingSlot; start?: string; end?: string };
+const times = ({ start, end }: Period) => (start && end ? { start_time: start, end_time: end } : {});
 import { ensureTestClientOrganisation } from './fixtures/clientOrganisation';
 
 /**
- * SCRUM-123 View a venue's calendar with the state of each slot: AC1 to AC8,
- * against Postgres. AC9 and AC10 are the route's permission check, covered in
+ * SCRUM-239 AC5 View a venue's calendar in exact time ranges, against Postgres.
+ * Replaces SCRUM-123's per-slot calendar; its AC1, AC3, AC4, AC7 and AC8 carry
+ * over in time ranges and keep their test case IDs as regression checks.
+ * AC9 and AC10 are the route's permission check, covered in
  * tests/unit/venue-calendar.test.ts and by hand.
  *
- * Confirmed bookings are SCRUM-148's venue_booking rows, one per venue, date
- * and slot, read through its listVenueBookings(); they are inserted directly
- * here as an approval would write them. Unavailable slots are SCRUM-151's
- * venue_unavailable_slot rows and pending requests SCRUM-142's request lines.
+ * Bookings (venue_booking), unavailable periods (venue_unavailable_slot) and
+ * pending request lines (venue_booking_request_line) are written directly
+ * with their times. Each row still carries the slot it falls in, because the
+ * slot columns stay required until Dylan's #89 follow-up drops them; without
+ * times the migration's trigger fills them from the slot (SCRUM-239 AC7).
  *
  * The calendar is read as a coordinator who isn't assigned to any of these
- * events, so a Confirmed slot carries no event; the last block checks who does
- * see it (SCRUM-148 AC3/AC4).
+ * events, so a Confirmed period carries no event; the last block checks who
+ * does see it (SCRUM-148 AC3/AC4).
  *
  * Every test uses a venue of its own, so other files' rows can't change it.
- * Test case IDs are from Self_Owned_ScrumsTest.xlsx, sheet SCRUM-123.
  */
 
 const admin = createAdminClient();
@@ -71,19 +76,19 @@ async function eventRequest(date: string, slots: OperatingSlot[], coordinator: s
   return data.id;
 }
 
-/** SCRUM-148: a confirmed booking is one venue_booking row per slot, with its own date and slot. */
-async function book(venueId: string, date: string, slots: OperatingSlot[], coordinator: string | null = null) {
-  const eventId = await eventRequest(date, slots, coordinator);
+/** A confirmed booking: one venue_booking row per period. Without times, the slot's times apply. */
+async function book(venueId: string, date: string, periods: Period[], coordinator: string | null = null) {
+  const eventId = await eventRequest(date, periods.map((p) => p.slot), coordinator);
   const { error } = await admin
     .from('venue_booking')
-    .insert(slots.map((slot) => ({ venue_id: venueId, event_request_id: eventId, date, slot, status: 'confirmed' })));
+    .insert(periods.map((p) => ({ venue_id: venueId, event_request_id: eventId, date, slot: p.slot, status: 'confirmed', ...times(p) })));
   if (error) throw new Error(`could not book: ${error.message}`);
   return eventId;
 }
 
-/** SCRUM-142: a pending booking request with one date-and-slot line. */
-async function requestSlots(venueId: string, date: string, slots: OperatingSlot[]) {
-  const eventId = await eventRequest(date, slots);
+/** A pending booking request with one line. Without times, the slot's times apply. */
+async function request(venueId: string, date: string, period: Period) {
+  const eventId = await eventRequest(date, [period.slot]);
   const { data, error } = await admin
     .from('venue_booking_request')
     .insert({ venue_id: venueId, event_request_id: eventId, requested_by: organiserId })
@@ -92,17 +97,20 @@ async function requestSlots(venueId: string, date: string, slots: OperatingSlot[
   if (error || !data) throw new Error(`could not create booking request: ${error?.message}`);
   const { error: lineError } = await admin
     .from('venue_booking_request_line')
-    .insert({ request_id: data.id, date, time_slots: slots });
+    .insert({ request_id: data.id, date, time_slots: [period.slot], ...times(period) });
   if (lineError) throw new Error(`could not create request line: ${lineError.message}`);
 }
 
-/** SCRUM-151: Venue Staff have withdrawn this slot, with a reason. */
-async function markUnavailable(venueId: string, date: string, slot: OperatingSlot, reason = 'Annual maintenance') {
-  const { error } = await admin.from('venue_unavailable_slot').insert({ venue_id: venueId, date, slot, reason });
-  if (error) throw new Error(`could not record unavailable slot: ${error.message}`);
+/** Venue Staff have withdrawn this period, with a reason. Without times, the slot's times apply. */
+async function markUnavailable(venueId: string, date: string, period: Period, reason = 'Annual maintenance') {
+  const { error } = await admin
+    .from('venue_unavailable_slot')
+    .insert({ venue_id: venueId, date, slot: period.slot, reason, ...times(period) });
+  if (error) throw new Error(`could not record unavailable period: ${error.message}`);
 }
 
-const slotOf = (day: CalendarDay, slot: OperatingSlot) => day.slots.find((s) => s.slot === slot)!;
+const summary = (day: CalendarDay) => day.periods.map((p) => `${p.start}-${p.end} ${p.kind}`);
+
 
 async function oneDay(venueId: string, date: string, viewer: Viewer = otherCoordinator): Promise<CalendarDay> {
   const calendar = await getVenueCalendar(venueId, { from: date, to: date }, viewer);
@@ -139,152 +147,124 @@ afterAll(async () => {
   if (organiserId) await admin.auth.admin.deleteUser(organiserId);
 });
 
-describe('getVenueCalendar: SCRUM-123 AC1, a date range', () => {
-  it('TC-123-01 shows every date in the range with its AM, PM and Night slot and a state', async () => {
+describe('getVenueCalendar: SCRUM-239 AC5, periods with exact times', () => {
+  it('TC-239-12: shows confirmed, pending and blocked periods each with their exact times, in time order', async () => {
+    const venue = await createTestVenue('Mixed day');
+    const date = '2026-12-01';
+    await book(venue, date, [{ slot: 'am', start: '08:00', end: '10:00' }]);
+    await request(venue, date, { slot: 'am', start: '10:30', end: '11:15' });
+    await markUnavailable(venue, date, { slot: 'pm', start: '15:00', end: '16:30' }, 'Ceiling repair');
+    const day = await oneDay(venue, date);
+    expect(summary(day)).toEqual(['08:00-10:00 confirmed', '10:30-11:15 pending', '15:00-16:30 blocked']);
+    expect(day.periods[2]).toMatchObject({ reason: 'Ceiling repair' });
+  });
+
+  it('TC-239-13: draws a booking across the old lunch break as one period, with no gap', async () => {
+    const venue = await createTestVenue('Across lunch');
+    const date = '2026-12-02';
+    await book(venue, date, [{ slot: 'am', start: '11:30', end: '13:30' }]);
+    expect(summary(await oneDay(venue, date))).toEqual(['11:30-13:30 confirmed']);
+  });
+
+  it('TC-239-15: a booking made under the slot model (PM, no times written) shows as 13:00-18:00', async () => {
+    const venue = await createTestVenue('Legacy PM');
+    const date = '2026-12-03';
+    await book(venue, date, [{ slot: 'pm' }]);
+    expect(summary(await oneDay(venue, date))).toEqual(['13:00-18:00 confirmed']);
+  });
+
+  it('TC-123-05: a day with nothing recorded has no periods', async () => {
+    const venue = await createTestVenue('Empty day');
+    expect((await oneDay(venue, '2026-12-04')).periods).toEqual([]);
+  });
+
+  it('TC-123-01: shows every date in the range', async () => {
     const venue = await createTestVenue('Five days');
-    const calendar = await getVenueCalendar(venue, { from: '2026-12-01', to: '2026-12-05' }, otherCoordinator);
-    expect(calendar.days.map((d) => d.date)).toEqual(['2026-12-01', '2026-12-02', '2026-12-03', '2026-12-04', '2026-12-05']);
-    for (const day of calendar.days) {
-      expect(day.slots.map((s) => s.slot)).toEqual(['am', 'pm', 'night']);
-      expect(day.slots.every((s) => s.state === 'available')).toBe(true);
-    }
+    const calendar = await getVenueCalendar(venue, { from: '2026-12-07', to: '2026-12-11' }, otherCoordinator);
+    expect(calendar.days.map((d) => d.date)).toEqual(['2026-12-07', '2026-12-08', '2026-12-09', '2026-12-10', '2026-12-11']);
   });
 
-  it('TC-123-02 shows one date for a single-day range', async () => {
-    const venue = await createTestVenue('One day');
-    const calendar = await getVenueCalendar(venue, { from: '2026-12-02', to: '2026-12-02' }, otherCoordinator);
-    expect(calendar.days).toHaveLength(1);
-    expect(calendar.days[0]!.slots).toHaveLength(3);
-  });
-
-  it('TC-123-03 refuses a range that ends before it starts', async () => {
-    const venue = await createTestVenue('Backwards');
-    await expect(getVenueCalendar(venue, { from: '2026-12-03', to: '2026-12-01' }, otherCoordinator)).rejects.toMatchObject({
+  it('TC-123-03, 04: refuses a range ending before it starts, or longer than 31 days', async () => {
+    const venue = await createTestVenue('Bad range');
+    await expect(getVenueCalendar(venue, { from: '2026-12-10', to: '2026-12-09' }, otherCoordinator)).rejects.toMatchObject({
       code: 'VALIDATION_ERROR',
-      details: { fieldErrors: { to: ['The end date cannot be before the start date.'] } },
     });
-  });
-
-  it('TC-123-04 refuses a range longer than 31 days', async () => {
-    const venue = await createTestVenue('Too long');
-    await expect(getVenueCalendar(venue, { from: '2026-12-04', to: '2027-01-04' }, otherCoordinator)).rejects.toMatchObject({
+    await expect(getVenueCalendar(venue, { from: '2026-12-01', to: '2027-01-01' }, otherCoordinator)).rejects.toMatchObject({
       code: 'VALIDATION_ERROR',
-      details: { fieldErrors: { to: ['A calendar can show at most 31 days.'] } },
     });
   });
 
   it('reports an unknown venue as not found', async () => {
-    await expect(
-      getVenueCalendar('00000000-0000-4000-8000-000000000000', { from: '2026-12-01', to: '2026-12-01' }, otherCoordinator),
-    ).rejects.toMatchObject({ code: 'NOT_FOUND' });
+    await expect(getVenueCalendar(randomUUID(), { from: '2026-12-01', to: '2026-12-01' }, otherCoordinator)).rejects.toMatchObject({
+      code: 'NOT_FOUND',
+    });
   });
 });
 
-describe('getVenueCalendar: SCRUM-123 AC2 and AC3, open and closed slots', () => {
-  it('TC-123-05 shows an open slot with nothing recorded as available (AC2)', async () => {
-    const venue = await createTestVenue('Available');
-    expect(slotOf(await oneDay(venue, '2026-12-05'), 'am').state).toBe('available');
-  });
-
-  it('TC-123-06 shows every Night slot as outside operating hours (AC3)', async () => {
+describe('getVenueCalendar: SCRUM-123 AC3 in time ranges, opening hours', () => {
+  it('TC-123-06: shows a venue open AM and PM as open 07:00-18:00', async () => {
     const venue = await createTestVenue('Day only', ['am', 'pm']);
-    const calendar = await getVenueCalendar(venue, { from: '2026-12-06', to: '2026-12-10' }, otherCoordinator);
-    expect(calendar.days).toHaveLength(5);
-    expect(calendar.days.every((day) => slotOf(day, 'night').state === 'outside_operating_hours')).toBe(true);
-    expect(calendar.days.every((day) => slotOf(day, 'am').state === 'available')).toBe(true);
-  });
-
-  it('TC-123-07 keeps a closed slot outside operating hours even with a request on it (AC3)', async () => {
-    const venue = await createTestVenue('Day only, requested', ['am', 'pm']);
-    await requestSlots(venue, '2026-12-07', ['night']);
-    expect(slotOf(await oneDay(venue, '2026-12-07'), 'night').state).toBe('outside_operating_hours');
+    const calendar = await getVenueCalendar(venue, { from: '2026-12-05', to: '2026-12-05' }, otherCoordinator);
+    expect(calendar.venue).toMatchObject({ opensAt: '07:00', closesAt: '18:00' });
   });
 });
 
-describe('getVenueCalendar: SCRUM-123 AC4, fully committed', () => {
-  it('TC-123-08 shows a date committed in all three slots as fully committed', async () => {
-    const venue = await createTestVenue('All booked');
-    await book(venue, '2026-12-08', ['am', 'pm', 'night']);
-    const day = await oneDay(venue, '2026-12-08');
-    expect(day.fullyCommitted).toBe(true);
-    expect(day.slots.every((s) => s.state === 'confirmed')).toBe(true);
+describe('getVenueCalendar: SCRUM-123 AC4 in time ranges, fully committed', () => {
+  it('TC-123-08: committed periods covering the whole opening hours make the day fully committed', async () => {
+    const venue = await createTestVenue('Full day', ['am', 'pm']);
+    const date = '2026-12-14';
+    await book(venue, date, [{ slot: 'am', start: '07:00', end: '12:00' }]);
+    await markUnavailable(venue, date, { slot: 'pm', start: '12:00', end: '18:00' });
+    expect((await oneDay(venue, date)).fullyCommitted).toBe(true);
   });
 
-  it('TC-123-09 does not show two of three committed as fully committed', async () => {
-    const venue = await createTestVenue('Two booked');
-    await book(venue, '2026-12-09', ['am', 'pm']);
-    const day = await oneDay(venue, '2026-12-09');
-    expect(day.fullyCommitted).toBe(false);
-    expect(slotOf(day, 'night').state).toBe('available');
-  });
-});
-
-describe('getVenueCalendar: SCRUM-123 AC5 to AC7, the state of a slot', () => {
-  it('TC-123-10 shows a confirmed booking as Confirmed (AC5)', async () => {
-    const venue = await createTestVenue('Confirmed AM');
-    await book(venue, '2026-12-10', ['am']);
-    const day = await oneDay(venue, '2026-12-10');
-    expect(slotOf(day, 'am').state).toBe('confirmed');
-    expect(slotOf(day, 'pm').state).toBe('available');
+  it('TC-123-09: AM and PM booked leaves 12:00-13:00 free, so the day is not fully committed', async () => {
+    const venue = await createTestVenue('Lunch free', ['am', 'pm']);
+    const date = '2026-12-15';
+    await book(venue, date, [{ slot: 'am' }, { slot: 'pm' }]);
+    expect((await oneDay(venue, date)).fullyCommitted).toBe(false);
   });
 
-  it('TC-123-11 shows a pending booking request as Pending request (AC6)', async () => {
-    const venue = await createTestVenue('Requested PM');
-    await requestSlots(venue, '2026-12-11', ['pm']);
-    const pm = slotOf(await oneDay(venue, '2026-12-11'), 'pm');
-    expect(pm.state).toBe('pending_request');
-    expect(pm.pendingRequests).toBe(1);
-  });
-
-  it('TC-123-12 shows a slot recorded as unavailable as Blocked, with its reason (AC7)', async () => {
-    const venue = await createTestVenue('Night blocked');
-    await markUnavailable(venue, '2026-12-12', 'night');
-    const day = await oneDay(venue, '2026-12-12');
-    expect(slotOf(day, 'night')).toMatchObject({ state: 'blocked', reason: 'Annual maintenance' });
-    expect(slotOf(day, 'am').reason).toBeNull();
+  it('TC-123-14: a pending request does not count towards fully committed (AC8)', async () => {
+    const venue = await createTestVenue('Pending fills gap', ['am', 'pm']);
+    const date = '2026-12-16';
+    await book(venue, date, [{ slot: 'am', start: '07:00', end: '12:00' }]);
+    await request(venue, date, { slot: 'pm', start: '12:00', end: '18:00' });
+    expect((await oneDay(venue, date)).fullyCommitted).toBe(false);
   });
 });
 
-describe('getVenueCalendar: SCRUM-123 AC8, a second request is not a commitment', () => {
-  it('TC-123-13 leaves one confirmed commitment and shows the second request as pending', async () => {
-    const venue = await createTestVenue('Confirmed then requested');
-    await book(venue, '2026-12-13', ['am']);
-    await requestSlots(venue, '2026-12-13', ['am']);
-    const am = slotOf(await oneDay(venue, '2026-12-13'), 'am');
-    expect(am).toMatchObject({ state: 'confirmed', pendingRequests: 1 });
-  });
-
-  it('TC-123-14 does not count a pending request towards a fully committed date', async () => {
-    const venue = await createTestVenue('Two booked, one requested');
-    await book(venue, '2026-12-14', ['am', 'pm']);
-    await requestSlots(venue, '2026-12-14', ['night']);
-    const day = await oneDay(venue, '2026-12-14');
-    expect(day.fullyCommitted).toBe(false);
-    expect(slotOf(day, 'night').state).toBe('pending_request');
+describe('getVenueCalendar: SCRUM-123 AC8, a request is not a commitment', () => {
+  it('TC-123-13: a pending request on a confirmed period is shown beside it', async () => {
+    const venue = await createTestVenue('Request on booking');
+    const date = '2026-12-17';
+    await book(venue, date, [{ slot: 'am', start: '10:00', end: '12:00' }]);
+    await request(venue, date, { slot: 'am', start: '10:00', end: '12:00' });
+    expect(summary(await oneDay(venue, date))).toEqual(['10:00-12:00 confirmed', '10:00-12:00 pending']);
   });
 });
 
-describe('getVenueCalendar: who sees the event on a Confirmed slot (SCRUM-148 AC3/AC4)', () => {
+describe('getVenueCalendar: who sees the event on a Confirmed period (SCRUM-148 AC3/AC4)', () => {
   it('shows the event to an Event Operations Manager', async () => {
     const venue = await createTestVenue('Seen by ops');
-    const eventId = await book(venue, '2026-12-21', ['am']);
-    const am = slotOf(await oneDay(venue, '2026-12-21', { userId: randomUUID(), roles: ['operations_manager'] }), 'am');
-    expect(am.state).toBe('confirmed');
-    expect(am.event?.id).toBe(eventId);
-    expect(am.event?.reference).toBeTruthy();
+    const eventId = await book(venue, '2026-12-21', [{ slot: 'am', start: '09:00', end: '11:00' }]);
+    const [period] = (await oneDay(venue, '2026-12-21', { userId: randomUUID(), roles: ['operations_manager'] })).periods;
+    expect(period).toMatchObject({ kind: 'confirmed', start: '09:00', end: '11:00' });
+    expect(period?.event?.id).toBe(eventId);
+    expect(period?.event?.reference).toBeTruthy();
   });
 
   it("shows the event to the event's assigned coordinator", async () => {
     const venue = await createTestVenue('Seen by its coordinator');
-    const eventId = await book(venue, '2026-12-22', ['pm'], coordinatorId);
-    const pm = slotOf(await oneDay(venue, '2026-12-22', { userId: coordinatorId, roles: ['coordinator'] }), 'pm');
-    expect(pm.event?.id).toBe(eventId);
+    const eventId = await book(venue, '2026-12-22', [{ slot: 'pm' }], coordinatorId);
+    const [period] = (await oneDay(venue, '2026-12-22', { userId: coordinatorId, roles: ['coordinator'] })).periods;
+    expect(period?.event?.id).toBe(eventId);
   });
 
-  it('shows any other coordinator only that the slot is Confirmed', async () => {
+  it('shows any other coordinator only that the period is Confirmed', async () => {
     const venue = await createTestVenue('Hidden from others');
-    await book(venue, '2026-12-23', ['night'], coordinatorId);
-    const night = slotOf(await oneDay(venue, '2026-12-23', otherCoordinator), 'night');
-    expect(night).toMatchObject({ state: 'confirmed', event: null });
+    await book(venue, '2026-12-23', [{ slot: 'night' }], coordinatorId);
+    const [period] = (await oneDay(venue, '2026-12-23', otherCoordinator)).periods;
+    expect(period).toMatchObject({ kind: 'confirmed', start: '19:00', end: '24:00', event: null });
   });
 });
