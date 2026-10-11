@@ -22,6 +22,7 @@ const CLIENT_ORGANISATION_ID = '22222222-2222-2222-2222-222222222222';
 let locationId: string;
 let venueId: string;
 let otherVenueId: string | undefined;
+let retiredVenueId: string | undefined;
 let organiserId: string;
 let coordinatorId: string;
 let otherCoordinatorId: string;
@@ -101,6 +102,7 @@ afterAll(async () => {
   // request cannot be deleted, and coordinator_id is ON DELETE RESTRICT.
   if (requestIds.length > 0) await admin.from('event_request').delete().in('id', requestIds);
   if (otherVenueId) await admin.from('venues').delete().eq('id', otherVenueId);
+  if (retiredVenueId) await admin.from('venues').delete().eq('id', retiredVenueId);
   if (venueId) await admin.from('venues').delete().eq('id', venueId);
   if (locationId) await admin.from('locations').delete().eq('id', locationId);
   for (const id of [organiserId, coordinatorId, otherCoordinatorId]) {
@@ -197,6 +199,24 @@ describe('SCRUM-142 against a real database', () => {
       }),
     ).rejects.toMatchObject({ code: 'FORBIDDEN' });
     expect(await requestsFor(eventId)).toHaveLength(0);
+  });
+
+  // TC-142-10 (supplementary): before this check the request was created and
+  // the event moved to Planning.
+  it('refuses a retired venue, writes nothing and leaves the event Approved', async () => {
+    retiredVenueId = (await createVenue({ name: `VBR Retired Venue ${RUN}`, locationId, maxCapacity: 200 })).id;
+    const { error: retireError } = await admin.from('venues').update({ is_retired: true }).eq('id', retiredVenueId);
+    if (retireError) throw new Error(`could not retire test venue: ${retireError.message}`);
+    const eventId = await createEvent('approved', coordinatorId);
+
+    await expect(
+      submitVenueBookingRequest(eventId, coordinatorId, {
+        venueId: retiredVenueId,
+        lines: [{ date: '2026-11-15', timeSlots: ['pm'] }],
+      }),
+    ).rejects.toMatchObject({ code: 'VALIDATION_ERROR', message: expect.stringMatching(/retired/i) });
+    expect(await requestsFor(eventId)).toHaveLength(0);
+    expect(await statusOf(eventId)).toBe('approved');
   });
 
   // SCRUM-142-TC12 to TC16 (AC5)

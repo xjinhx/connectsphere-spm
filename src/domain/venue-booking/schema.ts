@@ -17,7 +17,9 @@ import { TimeSlotEnum, type TimeSlot } from '@/domain/event-request/schema';
 export const EventRequestIdSchema = z.string().uuid();
 
 export const VenueBookingRequestLineInputSchema = z.object({
-  date: z.coerce.date(),
+  // AC5: an empty, blank or missing date coerces to an Invalid Date, which
+  // would otherwise read "Invalid date" rather than say what to do.
+  date: z.coerce.date({ errorMap: () => ({ message: 'Choose a date.' }) }),
   timeSlots: z.array(TimeSlotEnum).min(1, 'Select at least one time slot for this date.'),
 });
 export type VenueBookingRequestLineInput = z.infer<typeof VenueBookingRequestLineInputSchema>;
@@ -27,6 +29,52 @@ export const CreateVenueBookingRequestInputSchema = z.object({
   lines: z.array(VenueBookingRequestLineInputSchema).min(1, 'At least one date is required.'),
 });
 export type CreateVenueBookingRequestInput = z.infer<typeof CreateVenueBookingRequestInputSchema>;
+
+/** One line's missing or invalid fields, as the form shows them beside that line. */
+export interface VenueBookingLineErrors {
+  date?: string[];
+  timeSlots?: string[];
+}
+
+/**
+ * AC5: what a refused request sends back, so the form can name each missing
+ * field. Zod's flatten() files every line's errors under one `lines` key with
+ * no index, so a missing date on the second line could not be told from one on
+ * the first. Here each line's errors stay with that line (`lineErrors`, by
+ * position), and `fieldErrors`/`formErrors` keep the usual flatten() shape for
+ * everything else (the venue, or a request with no lines at all).
+ */
+export interface VenueBookingRequestErrorDetails {
+  formErrors: string[];
+  fieldErrors: { venueId?: string[]; lines?: string[] };
+  lineErrors: VenueBookingLineErrors[];
+}
+
+export function venueBookingRequestErrorDetails(
+  error: z.ZodError<CreateVenueBookingRequestInput>,
+): VenueBookingRequestErrorDetails {
+  const lineErrors: VenueBookingLineErrors[] = [];
+  const otherIssues: z.ZodIssue[] = [];
+
+  for (const issue of error.issues) {
+    const [field, index, lineField] = issue.path;
+    if (field === 'lines' && typeof index === 'number' && (lineField === 'date' || lineField === 'timeSlots')) {
+      const line = (lineErrors[index] ??= {});
+      (line[lineField] ??= []).push(issue.message);
+    } else {
+      otherIssues.push(issue);
+    }
+  }
+
+  // Lines with nothing wrong are holes in the array; JSON would send them as
+  // null, so fill them with an empty object instead.
+  const { formErrors, fieldErrors } = new z.ZodError<CreateVenueBookingRequestInput>(otherIssues).flatten();
+  return {
+    formErrors,
+    fieldErrors: { venueId: fieldErrors.venueId, lines: fieldErrors.lines },
+    lineErrors: Array.from(lineErrors, (line) => line ?? {}),
+  };
+}
 
 // SCRUM-142 only ever creates pending lines. SCRUM-148 adds deciding one:
 // approved or rejected (20261007090000_venue_booking_decision.sql).
