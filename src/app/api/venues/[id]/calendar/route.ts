@@ -7,8 +7,9 @@ import { handleApiError } from '@/lib/api/handler';
 /**
  * /api/venues/[id]/calendar?from=YYYY-MM-DD&to=YYYY-MM-DD
  *
- * GET SCRUM-123: the venue's AM, PM and Night slots on every date in the
- *     range, each with its state.
+ * GET SCRUM-239 AC5: every date in the range with its confirmed, pending,
+ *     held and blocked periods at their exact times (replacing SCRUM-123's
+ *     AM, PM and Night slots), and the venue's opening hours.
  *
  * AC9 and AC10: needs venue_catalogue_view, which Event Coordinators, Venue
  * Staff, Technical Support Staff and Event Operations Managers hold and Event
@@ -17,7 +18,7 @@ import { handleApiError } from '@/lib/api/handler';
  * calendar data. A bad range is a ValidationError (400); an unknown venue is
  * a NotFoundError (404).
  *
- * The signed-in actor is passed on so a Confirmed slot carries its event only
+ * The signed-in actor is passed on so a Confirmed period carries its event only
  * for viewers SCRUM-148 AC3/AC4 allows.
  */
 export async function GET(request: NextRequest, { params }: { params: Promise<{ id: string }> }) {

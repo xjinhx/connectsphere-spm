@@ -58,7 +58,7 @@ export default async function VenueCataloguePage({
         </Link>
         {/* SCRUM-128 */}
         <Link href="/venues/search" className="text-[var(--brand)] underline">
-          Search by date and slot
+          Search by date and time
         </Link>
       </div>
 

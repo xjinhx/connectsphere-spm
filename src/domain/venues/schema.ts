@@ -1,5 +1,6 @@
 import { z } from 'zod';
 import { isISODate } from '@/domain/shared/dates';
+import { ClockRangeSchema } from '@/domain/shared/times';
 
 /**
  * Venue Catalogue (EP-08): data shapes shared by the API routes and the UI.
@@ -213,24 +214,22 @@ export const VenueListQuerySchema = z.object({
 export type VenueListQuery = z.infer<typeof VenueListQuerySchema>;
 
 /**
- * SCRUM-128 AC1: "Given I enter a date and select one or more slots".
+ * SCRUM-239 AC2: search by a date and an exact start and end time, on the
+ * 15-minute unit, replacing SCRUM-128's slots. The times are checked by the
+ * shared ClockRangeSchema, so an off-step time or an end not after the start
+ * is refused the same way as everywhere else.
  *
- * AC5: no booking horizon applies (customer clarification #57), so the date has
- * no upper limit — 5 years ahead is as valid as tomorrow. Nor is it held to the
- * future: the card doesn't say so, and a search commits nothing.
- *
- * At least one slot, because AC1's "every one of the selected slots" is
- * meaningless over none. Repeats are dropped, so [pm, pm] is the PM search.
+ * SCRUM-128 AC5 still holds: no booking horizon applies (customer
+ * clarification #57), so the date has no upper limit, and it isn't held to the
+ * future, since a search commits nothing.
  */
-export const VenueSearchQuerySchema = z.object({
-  date: z
-    .string({ required_error: 'Enter a date.' })
-    .refine(isISODate, 'Enter a real date as YYYY-MM-DD.'),
-  slots: z
-    .array(OperatingSlotSchema, { required_error: 'Select at least one slot.' })
-    .min(1, 'Select at least one slot.')
-    .transform((slots) => OPERATING_SLOTS.filter((slot) => slots.includes(slot))),
-});
+export const VenueSearchQuerySchema = z
+  .object({
+    date: z
+      .string({ required_error: 'Enter a date.' })
+      .refine(isISODate, 'Enter a real date as YYYY-MM-DD.'),
+  })
+  .and(ClockRangeSchema);
 export type VenueSearchQuery = z.infer<typeof VenueSearchQuerySchema>;
 
 /**
@@ -301,69 +300,67 @@ export const VenueSummarySchema = z.object({
 });
 export type VenueSummary = z.infer<typeof VenueSummarySchema>;
 
-/** SCRUM-128: the venues free in every searched slot, echoed with what was searched. */
+/** SCRUM-239 AC2: the venues free for the whole searched period, echoed with what was searched. */
 export const VenueSearchResultSchema = z.object({
   date: z.string(),
-  slots: z.array(OperatingSlotSchema),
+  start: z.string(),
+  end: z.string(),
   venues: z.array(VenueSummarySchema),
 });
 export type VenueSearchResult = z.infer<typeof VenueSearchResultSchema>;
 
 /**
- * SCRUM-123: the state a calendar slot is shown in, from AC2, AC3, AC5, AC6
- * and AC7. Where several apply, policy.ts calendarSlotState picks one.
+ * SCRUM-239 AC5: what a period on the calendar is. Replaces SCRUM-123's
+ * per-slot states (which stays Done on slots, per the Week 7 guide):
+ * - confirmed: a confirmed booking (SCRUM-123 AC5)
+ * - pending: a pending booking request line; not a commitment (SCRUM-123 AC6, AC8)
+ * - held: a hold, once SCRUM-227 adds them (its AC7 adds the expiry label)
+ * - blocked: a period Venue Staff marked unavailable, with its reason (SCRUM-123 AC7)
  */
-export const CALENDAR_SLOT_STATES = [
-  'outside_operating_hours',
-  'blocked',
-  'confirmed',
-  'pending_request',
-  'available',
-] as const;
-export const CalendarSlotStateSchema = z.enum(CALENDAR_SLOT_STATES);
-export type CalendarSlotState = z.infer<typeof CalendarSlotStateSchema>;
+export const CALENDAR_PERIOD_KINDS = ['confirmed', 'pending', 'held', 'blocked'] as const;
+export const CalendarPeriodKindSchema = z.enum(CALENDAR_PERIOD_KINDS);
+export type CalendarPeriodKind = z.infer<typeof CalendarPeriodKindSchema>;
 
-/** The words each state is shown with; AC5, AC6 and AC7 name three of them. */
-export const CALENDAR_SLOT_STATE_LABELS: Record<CalendarSlotState, string> = {
-  outside_operating_hours: 'Outside operating hours',
-  blocked: 'Blocked',
+/** The words each kind of period is shown with. */
+export const CALENDAR_PERIOD_LABELS: Record<CalendarPeriodKind, string> = {
   confirmed: 'Confirmed',
-  pending_request: 'Pending request',
-  available: 'Available',
+  pending: 'Pending request',
+  held: 'Held',
+  blocked: 'Blocked',
 };
 
 /**
- * One slot on one date.
+ * One period on one date, with its exact start and end time (SCRUM-239 AC5).
  *
  * Event details follow SCRUM-148 AC3/AC4, decided by its listVenueBookings():
  * Venue Staff, the event's assigned coordinator and Event Operations Managers
- * see which event holds a Confirmed slot; anyone else sees only that it is
+ * see which event holds a Confirmed period; anyone else sees only that it is
  * Confirmed. Client and coordinator details are never shown (customer
  * clarification #91).
  */
-export const CalendarSlotSchema = z.object({
-  slot: OperatingSlotSchema,
-  state: CalendarSlotStateSchema,
-  /** AC7: the recorded reason, only for a Blocked slot. */
+export const CalendarPeriodSchema = z.object({
+  kind: CalendarPeriodKindSchema,
+  start: z.string(),
+  end: z.string(),
+  /** SCRUM-123 AC7: the recorded reason, only for a Blocked period. */
   reason: z.string().nullable(),
-  /** AC6 and AC8: pending booking requests on this slot, whatever its state. */
-  pendingRequests: z.number().int().min(0),
-  /** SCRUM-148 AC3: the event on a Confirmed slot, when the viewer may see it. */
+  /** SCRUM-148 AC3: the event on a Confirmed period, when the viewer may see it. */
   event: z.object({ id: z.string().uuid(), reference: z.string(), name: z.string() }).nullable(),
 });
-export type CalendarSlot = z.infer<typeof CalendarSlotSchema>;
+export type CalendarPeriod = z.infer<typeof CalendarPeriodSchema>;
 
 export const CalendarDaySchema = z.object({
   date: z.string(),
-  /** AC4: every slot the venue runs that day is committed. */
+  /** SCRUM-123 AC4: committed periods cover the venue's whole opening hours that day. */
   fullyCommitted: z.boolean(),
-  /** Always AM, PM and Night, in that order (AC1). */
-  slots: z.array(CalendarSlotSchema).length(3),
+  /** In start-time order; a day with none is available all through its opening hours. */
+  periods: z.array(CalendarPeriodSchema),
 });
 export type CalendarDay = z.infer<typeof CalendarDaySchema>;
 
 export const VenueCalendarSchema = z.object({
-  venue: z.object({ id: z.string().uuid(), name: z.string() }),
+  /** SCRUM-123 AC3: outside these hours the venue cannot be requested. */
+  venue: z.object({ id: z.string().uuid(), name: z.string(), opensAt: z.string(), closesAt: z.string() }),
   from: z.string(),
   to: z.string(),
   days: z.array(CalendarDaySchema),

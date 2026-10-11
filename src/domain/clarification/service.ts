@@ -8,6 +8,7 @@ import { fetchEventRequestById, type EventRequestRow } from '@/lib/supabase/even
 import { incompleteFields, isOwnRequest } from '@/domain/event-request/policy';
 import { isReviewable } from '@/domain/review/policy';
 import type { EventRequestStatus } from '@/domain/event-request/schema';
+import { fromDatabaseTime } from '@/domain/shared/times';
 import type { Role } from '@/domain/identity/roles';
 import {
   ConflictError,
@@ -174,7 +175,9 @@ export async function respondToClarification(
     purpose: existing.purpose,
     description: existing.description,
     proposedDate: existing.proposed_date,
-    timeSlots: existing.time_slots,
+    // SCRUM-238 — the request's times replaced its slots in the mandatory set.
+    startTime: existing.start_time === null ? null : fromDatabaseTime(existing.start_time),
+    endTime: existing.end_time === null ? null : fromDatabaseTime(existing.end_time),
     expectedAttendance: existing.expected_attendance,
   });
   if (incomplete.length > 0) {
