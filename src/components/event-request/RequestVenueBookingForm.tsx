@@ -112,6 +112,7 @@ export function RequestVenueBookingForm({
     setLines((current) => current.filter((_, i) => i !== index));
     // The remaining lines' errors would now sit against the wrong line.
     setFieldErrors(NO_FIELD_ERRORS);
+    setError(null);
   }
 
   async function onSubmit(event: React.FormEvent) {
