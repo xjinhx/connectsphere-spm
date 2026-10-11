@@ -15,6 +15,9 @@ import {
 import { getCurrentActor } from '@/lib/auth/currentActor';
 import NoVenueAccess from '@/components/venue/NoVenueAccess';
 import { MarkSlotsUnavailableForm } from '@/components/venue/MarkSlotsUnavailableForm';
+import { HoldVenueForm } from '@/components/venue/HoldVenueForm';
+import { listActiveVenueHolds, listHoldableEvents } from '@/domain/venue-hold/service';
+import { formatExpiry } from '@/domain/venue-hold/policy';
 
 /**
  * SCRUM-121 AC2: opening a venue shows its location, capacities, supported
@@ -26,6 +29,10 @@ import { MarkSlotsUnavailableForm } from '@/components/venue/MarkSlotsUnavailabl
  *
  * SCRUM-151 AC1: the venue's upcoming unavailable slots are listed with their
  * reasons, and Venue Staff can mark more from here.
+ *
+ * SCRUM-227 AC1: Venue Staff see the venue's active holds, each with its event
+ * and expiry, and can hold a period for an event from here. A hold that is
+ * closed by a booking (AC5) or has passed its expiry (AC6) drops off.
  *
  * Needs venue_catalogue_view, checked before the venue is read. The "Edit
  * venue" button and the unavailable-slots form only appear for Venue Staff.
@@ -62,6 +69,10 @@ export default async function VenueDetailPage({ params }: { params: Promise<{ id
   }
 
   const unavailableSlots = await listUpcomingUnavailableSlots(venue.id);
+  const managesVenue = canManageVenues(actor.roles);
+  const [holds, holdableEvents] = managesVenue
+    ? await Promise.all([listActiveVenueHolds(venue.id), listHoldableEvents()])
+    : [[], []];
 
   return (
     <main className="mx-auto max-w-3xl p-6">
@@ -167,6 +178,27 @@ export default async function VenueDetailPage({ params }: { params: Promise<{ id
           <MarkSlotsUnavailableForm venueId={venue.id} operatingSlots={venue.operatingSlots} />
         )}
       </section>
+
+      {/* SCRUM-227: holds name the event, so only Venue Staff see them here. */}
+      {managesVenue && (
+        <section className="mt-6 space-y-4 rounded border border-[var(--border)] bg-[var(--surface)] p-4">
+          <h2 className="text-lg font-semibold">Holds</h2>
+          {holds.length === 0 ? (
+            <p className="text-sm text-[var(--text-muted)]">No active holds from today on.</p>
+          ) : (
+            <ul className="space-y-1 text-sm">
+              {holds.map((hold) => (
+                <li key={hold.id}>
+                  {formatSingaporeDate(hold.date)}, {hold.start}-{hold.end}: held for{' '}
+                  <span className="font-medium">{hold.event.reference}</span> {hold.event.name} until{' '}
+                  {formatExpiry(hold.expiresAt)}
+                </li>
+              ))}
+            </ul>
+          )}
+          <HoldVenueForm venueId={venue.id} events={holdableEvents} />
+        </section>
+      )}
     </main>
   );
 }

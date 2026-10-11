@@ -314,7 +314,7 @@ export type VenueSearchResult = z.infer<typeof VenueSearchResultSchema>;
  * per-slot states (which stays Done on slots, per the Week 7 guide):
  * - confirmed: a confirmed booking (SCRUM-123 AC5)
  * - pending: a pending booking request line; not a commitment (SCRUM-123 AC6, AC8)
- * - held: a hold, once SCRUM-227 adds them (its AC7 adds the expiry label)
+ * - held: an active hold, with its expiry (SCRUM-227 AC7)
  * - blocked: a period Venue Staff marked unavailable, with its reason (SCRUM-123 AC7)
  */
 export const CALENDAR_PERIOD_KINDS = ['confirmed', 'pending', 'held', 'blocked'] as const;
@@ -346,6 +346,8 @@ export const CalendarPeriodSchema = z.object({
   reason: z.string().nullable(),
   /** SCRUM-148 AC3: the event on a Confirmed period, when the viewer may see it. */
   event: z.object({ id: z.string().uuid(), reference: z.string(), name: z.string() }).nullable(),
+  /** SCRUM-227 AC7: when the hold expires (an ISO instant), only for a Held period. */
+  expiresAt: z.string().nullable().optional(),
 });
 export type CalendarPeriod = z.infer<typeof CalendarPeriodSchema>;
 

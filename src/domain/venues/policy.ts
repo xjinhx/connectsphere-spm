@@ -92,6 +92,8 @@ export type CalendarCommitmentInput = {
   end: ClockTime;
   eventRequestId: string | null;
   reason: string | null;
+  /** SCRUM-227: a hold's expiry; absent for bookings and unavailable periods. */
+  expiresAt?: string | null;
 };
 
 /** A pending booking request line on one date. */
@@ -145,6 +147,8 @@ export function calendarDay(
       end: c.end,
       reason: c.kind === 'unavailable' ? c.reason : null,
       event: c.kind === 'booking' && c.eventRequestId ? (visibleEvents.get(`${date}|${c.eventRequestId}`) ?? null) : null,
+      // SCRUM-227 AC7: a Held period shows with its expiry time.
+      ...(c.kind === 'hold' ? { expiresAt: c.expiresAt ?? null } : {}),
     }));
   const requested: CalendarPeriod[] = pending
     .filter((p) => p.date === date)

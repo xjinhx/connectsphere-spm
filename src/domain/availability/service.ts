@@ -7,6 +7,7 @@ import {
   fetchUpcomingUnavailableSlots,
   recordUnavailableSlots,
 } from '@/lib/supabase/availability';
+import { fetchActiveHoldPeriods } from '@/lib/supabase/venueHolds';
 import { ConflictError, ValidationError, isUniqueViolation } from '@/domain/shared/errors';
 import { formatSingaporeDate, todayInSingapore, type ISODate } from '@/domain/shared/dates';
 import { getVenue } from '@/domain/venues/service';
@@ -300,7 +301,7 @@ export async function listUpcomingUnavailableSlots(
 
 /**
  * Every committed period at a venue that overlaps [start, end): its confirmed
- * bookings and unavailable periods (holds join them once SCRUM-227 adds them).
+ * bookings, unavailable periods, and active holds (SCRUM-227).
  * The one check behind venue search (SCRUM-239 AC2), booking requests (AC3),
  * approvals (AC4) and the calendar (AC5), and the check SCRUM-227 (holds) and
  * SCRUM-229 (replacement venue) call instead of writing their own. Unavailable
@@ -322,22 +323,32 @@ export async function listUpcomingUnavailableSlots(
  *
  * Only confirmed bookings are read, so a booking SCRUM-231 releases stops
  * committing the venue with no change here.
+ *
+ * SCRUM-227: a hold commits its period while it is active and `now` is before
+ * its expiry (AC3, AC4); once the expiry passes it is simply not returned
+ * (AC6), so nothing has to run at the expiry. A hold is never a booking: it
+ * comes back as kind 'hold', with its event and its expiry. An event's own
+ * holds are still returned; a check made for that event drops them with
+ * withoutOwnHolds (src/domain/venue-hold/policy.ts), so the holder can book
+ * what it holds (AC5).
  */
 export async function getVenueCommitments(
   venueId: string,
   start: SingaporeDateTime,
   end: SingaporeDateTime,
+  now: Date = new Date(),
 ): Promise<VenueCommitment[]> {
   const fromDate = splitDateTime(start).date;
   const toDate = splitDateTime(end).date;
-  const [bookings, unavailable] = await Promise.all([
+  const [bookings, unavailable, holds] = await Promise.all([
     fetchConfirmedBookingPeriods(venueId, fromDate, toDate),
     fetchUnavailablePeriods(venueId, fromDate, toDate),
+    fetchActiveHoldPeriods(venueId, fromDate, toDate, now.toISOString()),
   ]);
-  if (bookings.error || !bookings.data || unavailable.error || !unavailable.data) {
+  if (bookings.error || !bookings.data || unavailable.error || !unavailable.data || holds.error || !holds.data) {
     throw new ValidationError(
       "Could not check the venue's availability.",
-      bookings.error?.message ?? unavailable.error?.message,
+      bookings.error?.message ?? unavailable.error?.message ?? holds.error?.message,
     );
   }
 
@@ -362,6 +373,18 @@ export async function getVenueCommitments(
         end: fromDatabaseTime(row.end_time),
         eventRequestId: null,
         reason: row.reason,
+      }),
+    ),
+    ...holds.data.map((row) =>
+      VenueCommitmentSchema.parse({
+        kind: 'hold',
+        venueId: row.venue_id,
+        date: row.date,
+        start: fromDatabaseTime(row.start_time),
+        end: fromDatabaseTime(row.end_time),
+        eventRequestId: row.event_request_id,
+        reason: null,
+        expiresAt: new Date(row.expires_at).toISOString(),
       }),
     ),
   ];
