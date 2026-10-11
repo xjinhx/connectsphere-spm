@@ -7,6 +7,7 @@ import {
   listSetupTurnaroundAffectedBookings,
   updateVenue,
 } from '@/domain/venues/service';
+import { canViewVenueCatalogue } from '@/domain/venues/policy';
 import { todayInSingapore } from '@/domain/shared/dates';
 import { ensureTestClientOrganisation } from './fixtures/clientOrganisation';
 
@@ -145,6 +146,18 @@ describe('updateVenue: SCRUM-225 AC1, setup and turnaround are stored', () => {
     const saved = await updateVenue(venue.id, { expectedUpdatedAt: venue.updatedAt, setupMinutes: 30, turnaroundMinutes: 45 });
 
     expect(saved).toMatchObject({ setupMinutes: 30, turnaroundMinutes: 45 });
+    expect(await getVenue(venue.id)).toMatchObject({ setupMinutes: 30, turnaroundMinutes: 45 });
+  });
+
+  it('TC-225-02 lets every internal role open the venue and read the saved times', async () => {
+    const venue = await createTestVenue('Setup Seen');
+    await updateVenue(venue.id, { expectedUpdatedAt: venue.updatedAt, setupMinutes: 30, turnaroundMinutes: 45 });
+
+    // The venue page shows its times to anyone it lets in; only the
+    // affected-bookings list is kept to Venue Staff.
+    for (const role of ['coordinator', 'operations_manager', 'technical_support'] as const) {
+      expect(canViewVenueCatalogue([role])).toBe(true);
+    }
     expect(await getVenue(venue.id)).toMatchObject({ setupMinutes: 30, turnaroundMinutes: 45 });
   });
 
