@@ -67,7 +67,7 @@ export function isAffectedByCapacity(expectedAttendance: number | null, maxCapac
 // -----------------------------------------------------------------------------
 // SCRUM-225: setup and turnaround around a booking
 //
-// update_venue (supabase/migrations/20261011193000_...) applies the same rule
+// update_venue (supabase/migrations/20261011211401_...) applies the same rule
 // inside the save, so the list the editor confirms and the check agree.
 // -----------------------------------------------------------------------------
 
