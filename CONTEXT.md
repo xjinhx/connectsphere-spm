@@ -38,6 +38,10 @@ _Avoid_: teardown (folded into turnaround), buffer
 **Affected by a setup or turnaround change**:
 A confirmed booking that a confirmed setup or turnaround change has left too close to another event's booking. It stays confirmed and is flagged for Venue Staff (SCRUM-225 AC5). Kept apart from an _affected booking_, which carries an outstanding action for the coordinator.
 
+**Hold**:
+A period at one venue kept for one event by Venue Staff until an expiry, so the coordinator can finish arranging the booking (SCRUM-227). While it is _active_ it commits the period against every other event; it is _closed_ when that event's booking for the period is confirmed, and _lapsed_ once its expiry passes first. A hold is never a booking.
+_Avoid_: tentative booking, reservation, provisional booking
+
 **Outstanding action**:
 An open item on an event that its coordinator must deal with, such as releasing or replacing an affected booking. It closes when that is done.
 _Avoid_: task, alert
