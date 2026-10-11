@@ -461,6 +461,55 @@ export type Database = {
           },
         ]
       }
+      setup_turnaround_affected_booking: {
+        Row: {
+          booking_id: string
+          flagged_at: string
+          id: string
+          setup_minutes: number
+          turnaround_minutes: number
+          venue_id: string
+        }
+        Insert: {
+          booking_id: string
+          flagged_at?: string
+          id?: string
+          setup_minutes: number
+          turnaround_minutes: number
+          venue_id: string
+        }
+        Update: {
+          booking_id?: string
+          flagged_at?: string
+          id?: string
+          setup_minutes?: number
+          turnaround_minutes?: number
+          venue_id?: string
+        }
+        Relationships: [
+          {
+            foreignKeyName: "setup_turnaround_affected_booking_booking_id_fkey"
+            columns: ["booking_id"]
+            isOneToOne: false
+            referencedRelation: "affected_booking_slot"
+            referencedColumns: ["booking_id"]
+          },
+          {
+            foreignKeyName: "setup_turnaround_affected_booking_booking_id_fkey"
+            columns: ["booking_id"]
+            isOneToOne: false
+            referencedRelation: "venue_booking"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "setup_turnaround_affected_booking_venue_id_fkey"
+            columns: ["venue_id"]
+            isOneToOne: false
+            referencedRelation: "venues"
+            referencedColumns: ["id"]
+          },
+        ]
+      }
       venue_accessibility_features: {
         Row: {
           accessibility_feature_id: string
@@ -1000,6 +1049,7 @@ export type Database = {
       }
     }
     Functions: {
+      clock_minutes: { Args: { p_time: string }; Returns: number }
       create_venue: {
         Args: {
           p_accessibility_feature_ids: string[]
@@ -1043,6 +1093,7 @@ export type Database = {
         Args: {
           p_accessibility_feature_ids?: string[]
           p_confirm_affected_bookings?: boolean
+          p_confirm_setup_turnaround_change?: boolean
           p_expected_updated_at: string
           p_facility_ids?: string[]
           p_layouts?: Json
@@ -1052,7 +1103,9 @@ export type Database = {
           p_needs_setup_slot?: boolean
           p_needs_turnaround_slot?: boolean
           p_operating_slots?: string[]
+          p_setup_minutes?: number
           p_today?: string
+          p_turnaround_minutes?: number
           p_venue_id: string
         }
         Returns: string

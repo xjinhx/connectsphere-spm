@@ -65,6 +65,76 @@ export function isAffectedByCapacity(expectedAttendance: number | null, maxCapac
 }
 
 // -----------------------------------------------------------------------------
+// SCRUM-225: setup and turnaround around a booking
+//
+// update_venue (supabase/migrations/20261011211401_...) applies the same rule
+// inside the save, so the list the editor confirms and the check agree.
+// -----------------------------------------------------------------------------
+
+/** A venue's setup and turnaround, in minutes (SCRUM-225 AC1). */
+export type SetupTurnaround = { setupMinutes: number; turnaroundMinutes: number };
+
+/**
+ * The time a booking commits its venue for, in minutes after midnight: from
+ * its start minus the venue's setup to its end plus its turnaround. Half-open,
+ * like every range (src/domain/shared/times.ts).
+ *
+ * Numbers rather than clock times, because setup can reach back before 00:00
+ * and turnaround past 24:00, which no clock time can say.
+ *
+ * The rule SCRUM-226 applies wherever availability is checked ("one rule,
+ * SCRUM-225's committed time"); this story uses it to find the bookings a
+ * change would make clash.
+ */
+export function committedMinutes(range: ClockRange, { setupMinutes, turnaroundMinutes }: SetupTurnaround) {
+  return { start: toMinutes(range.start) - setupMinutes, end: toMinutes(range.end) + turnaroundMinutes };
+}
+
+/** Whether two bookings' committed times overlap. Touching does not: 10:00-13:00 leaves 13:00 free. */
+export function committedTimesOverlap(a: ClockRange, b: ClockRange, times: SetupTurnaround): boolean {
+  const first = committedMinutes(a, times);
+  const second = committedMinutes(b, times);
+  return first.start < second.end && second.start < first.end;
+}
+
+/** A confirmed booking as SCRUM-225's check reads it: its event, date and times. */
+export type DatedBooking = { bookingId: string; eventId: string; date: string; start: ClockTime; end: ClockTime };
+
+/**
+ * SCRUM-225 AC4: the bookings a change from `current` to `proposed` setup and
+ * turnaround makes clash, in the order they were given.
+ *
+ * A booking is listed when its committed time overlaps another booking's on
+ * the same date with the proposed values but did not with the current ones:
+ * - only the change is judged, so bookings that already clashed are not
+ *   listed again;
+ * - an event's own bookings never clash with each other: one event using a
+ *   room 10:00-12:00 and 13:00-15:00 does not need it reset in between;
+ * - both bookings of a clashing pair are listed (AC4: "both bookings are
+ *   listed").
+ *
+ * Which bookings to pass in (confirmed, from today on) is the caller's choice;
+ * a pending request commits nothing.
+ */
+export function findNewSetupTurnaroundClashes<T extends DatedBooking>(
+  bookings: readonly T[],
+  current: SetupTurnaround,
+  proposed: SetupTurnaround,
+): T[] {
+  const clashing = new Set<string>();
+  for (const [index, a] of bookings.entries()) {
+    for (const b of bookings.slice(index + 1)) {
+      if (a.date !== b.date || a.eventId === b.eventId) continue;
+      if (committedTimesOverlap(a, b, proposed) && !committedTimesOverlap(a, b, current)) {
+        clashing.add(a.bookingId);
+        clashing.add(b.bookingId);
+      }
+    }
+  }
+  return bookings.filter((booking) => clashing.has(booking.bookingId));
+}
+
+// -----------------------------------------------------------------------------
 // SCRUM-239: is a period inside a venue's opening hours
 // -----------------------------------------------------------------------------
 

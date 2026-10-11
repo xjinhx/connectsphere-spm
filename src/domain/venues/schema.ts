@@ -12,6 +12,7 @@ import { ClockRangeSchema } from '@/domain/shared/times';
  * SCRUM-121 Browse and view the venue catalogue
  * SCRUM-128 Search venues by date and slot
  * SCRUM-123 View a venue's calendar with the state of each slot
+ * SCRUM-225 Record setup and turnaround time for each venue
  *
  * Values mirror the check constraints in
  * supabase/migrations/20260911063000_create_venue_catalogue.sql.
@@ -120,6 +121,36 @@ const LayoutListSchema = z
     'Each layout can only be added once per venue.',
   );
 
+/** SCRUM-225 AC1: setup and turnaround are whole minutes on the 15-minute booking unit. */
+export const SETUP_TURNAROUND_STEP_MINUTES = 15;
+
+/**
+ * SCRUM-225 AC1 and AC2: a setup or turnaround time in whole minutes, in
+ * 15-minute steps. 0 is allowed: it is what every venue has until one is set
+ * (AC3). AC2 refuses a negative value or one that is not a multiple of 15, and
+ * "the field is identified", so each field gets one message of its own rather
+ * than several for one typo.
+ *
+ * No upper limit has been agreed; CAPACITY_COLUMN_MAX is only the integer
+ * column's limit, so a huge number is refused here rather than failing in
+ * Postgres with an error the form cannot pin on the field.
+ */
+function setupTurnaroundMinutesSchema(label: 'Setup time' | 'Turnaround time') {
+  const wholeMinutes = `${label} must be a whole number of minutes.`;
+  return z.number({ invalid_type_error: wholeMinutes }).superRefine((minutes, ctx) => {
+    const message = !Number.isInteger(minutes)
+      ? wholeMinutes
+      : minutes < 0
+        ? `${label} cannot be negative.`
+        : minutes % SETUP_TURNAROUND_STEP_MINUTES !== 0
+          ? `${label} must be in 15-minute steps (0, 15, 30, 45 and so on).`
+          : minutes > CAPACITY_COLUMN_MAX
+            ? `${label} is too large.`
+            : null;
+    if (message) ctx.addIssue({ code: z.ZodIssueCode.custom, message });
+  });
+}
+
 // -----------------------------------------------------------------------------
 // Inputs (request bodies and query strings)
 // -----------------------------------------------------------------------------
@@ -163,6 +194,13 @@ export type CreateVenueRequest = z.input<typeof CreateVenueInputSchema>;
  * undoing the save made in between. Found reviewing SCRUM-215, the same kind
  * of bug.
  */
+/** Fields that steer a save rather than change the venue, so they alone are "Nothing to update". */
+const UPDATE_CONTROL_FIELDS: readonly string[] = [
+  'expectedUpdatedAt',
+  'confirmAffectedBookings',
+  'confirmSetupTurnaroundChange',
+];
+
 export const UpdateVenueInputSchema = z
   .object({
     expectedUpdatedAt: z
@@ -182,20 +220,35 @@ export const UpdateVenueInputSchema = z
      * event and a turnaround slot after it. SCRUM-148 applies the actual
      * adjacent-slot-blocking rule using these flags; this schema only
      * carries them.
+     *
+     * Replaced in the app by setupMinutes and turnaroundMinutes (SCRUM-225),
+     * which the venue form edits instead. Still accepted, and still stored,
+     * until the slot columns are dropped with the rest of the slot model
+     * (20261008140500_time_model.sql); SCRUM-119 stays Done.
      */
     needsSetupSlot: z.boolean().optional(),
     needsTurnaroundSlot: z.boolean().optional(),
+    /** SCRUM-225 AC1: minutes the venue needs before an event to set up. */
+    setupMinutes: setupTurnaroundMinutesSchema('Setup time').optional(),
+    /** SCRUM-225 AC1: minutes the venue needs after an event to reset. */
+    turnaroundMinutes: setupTurnaroundMinutesSchema('Turnaround time').optional(),
     /**
      * SCRUM-120 AC2: the user has seen the confirmed future bookings a capacity
      * cut affects and confirmed it. Without it, such a cut is refused with the
      * list of those bookings (AffectedBookingsDetails).
      */
     confirmAffectedBookings: z.boolean().optional(),
+    /**
+     * SCRUM-225 AC4: the user has seen the confirmed bookings a setup or
+     * turnaround change makes clash and confirmed it. Without it, such a change
+     * is refused with the list of those bookings (SetupTurnaroundClashesDetails).
+     */
+    confirmSetupTurnaroundChange: z.boolean().optional(),
   })
   .refine(
     (input) =>
       Object.entries(input).some(
-        ([key, value]) => key !== 'confirmAffectedBookings' && key !== 'expectedUpdatedAt' && value !== undefined,
+        ([key, value]) => !UPDATE_CONTROL_FIELDS.includes(key) && value !== undefined,
       ),
     'Nothing to update.',
   );
@@ -383,6 +436,9 @@ export const VenueDetailSchema = VenueSummarySchema.extend({
   layouts: z.array(VenueLayoutSchema),
   needsSetupSlot: z.boolean(),
   needsTurnaroundSlot: z.boolean(),
+  /** SCRUM-225 AC1 and AC3: 0 until Venue Staff set them. */
+  setupMinutes: z.number().int().min(0),
+  turnaroundMinutes: z.number().int().min(0),
   createdAt: z.string(),
   updatedAt: z.string(),
 });
@@ -411,3 +467,39 @@ export const AffectedBookingsDetailsSchema = z.object({
   bookings: z.array(AffectedBookingSchema),
 });
 export type AffectedBookingsDetails = z.infer<typeof AffectedBookingsDetailsSchema>;
+
+/**
+ * SCRUM-225 AC4: a confirmed booking that a setup or turnaround change would
+ * make clash with another. Venue Staff make the change and may see which event
+ * holds each booking (SCRUM-155 AC1, SCRUM-148 AC3).
+ */
+export const SetupTurnaroundClashBookingSchema = z.object({
+  bookingId: z.string().uuid(),
+  eventId: z.string().uuid(),
+  reference: z.string(),
+  eventName: z.string(),
+  date: z.string(),
+  start: z.string(),
+  end: z.string(),
+});
+export type SetupTurnaroundClashBooking = z.infer<typeof SetupTurnaroundClashBookingSchema>;
+
+/** SCRUM-225 AC4: the details of the 409 that asks the editor to confirm the change. */
+export const SetupTurnaroundClashesDetailsSchema = z.object({
+  reason: z.literal('setup_turnaround_clashes'),
+  setupMinutes: z.number().int(),
+  turnaroundMinutes: z.number().int(),
+  bookings: z.array(SetupTurnaroundClashBookingSchema),
+});
+export type SetupTurnaroundClashesDetails = z.infer<typeof SetupTurnaroundClashesDetailsSchema>;
+
+/**
+ * SCRUM-225 AC5: a confirmed booking flagged as affected by a confirmed setup
+ * or turnaround change, with the values that change set and when.
+ */
+export const SetupTurnaroundAffectedBookingSchema = SetupTurnaroundClashBookingSchema.extend({
+  setupMinutes: z.number().int(),
+  turnaroundMinutes: z.number().int(),
+  flaggedAt: z.string(),
+});
+export type SetupTurnaroundAffectedBooking = z.infer<typeof SetupTurnaroundAffectedBookingSchema>;
