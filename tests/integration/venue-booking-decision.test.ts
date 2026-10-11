@@ -208,6 +208,20 @@ describe('decideVenueBookingRequest (SCRUM-148 AC1, AC2, AC5)', () => {
     expect(await bookingsOf(eventId)).toEqual([]);
   });
 
+  it('AC5: the database itself refuses a rejected line with no reason (SCRUM-244)', async () => {
+    const venue = await createTestVenue('Reasonless Hall');
+    const { requestId, lineIds } = await createRequest(venue.id, [{ date: daysFromToday(19), slots: ['am'] }]);
+
+    // Written straight to the table, past the app's own check, as SCRUM-244's steps do.
+    const { error } = await admin
+      .from('venue_booking_request_line')
+      .update({ status: 'rejected', decided_by: venueStaffId, decided_at: new Date().toISOString(), rejection_reason: null })
+      .eq('id', lineIds[0]!);
+
+    expect(error?.code).toBe('23514');
+    expect(await lineStatuses(requestId)).toEqual(['pending']);
+  });
+
   it('approving every line gives Approved, not Partially Approved', async () => {
     const venue = await createTestVenue('Hall E');
     const date = daysFromToday(12);

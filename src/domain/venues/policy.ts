@@ -2,14 +2,7 @@ import { ValidationError } from '@/domain/shared/errors';
 import { isActionPermitted } from '@/domain/identity/permissions';
 import type { Role } from '@/domain/identity/roles';
 import { toMinutes, type ClockRange, type ClockTime } from '@/domain/shared/times';
-import {
-  CALENDAR_PERIOD_KINDS,
-  OPERATING_SLOTS,
-  type CalendarDay,
-  type CalendarPeriod,
-  type OperatingSlot,
-  type VenueLayoutInput,
-} from './schema';
+import { CALENDAR_PERIOD_KINDS, type CalendarDay, type CalendarPeriod, type VenueLayoutInput } from './schema';
 
 /**
  * Venue Catalogue business rules. Pure functions: no Supabase, no Next.js.
@@ -72,52 +65,19 @@ export function isAffectedByCapacity(expectedAttendance: number | null, maxCapac
 }
 
 // -----------------------------------------------------------------------------
-// SCRUM-128: is a venue free in the searched slots
+// SCRUM-239: is a period inside a venue's opening hours
 // -----------------------------------------------------------------------------
 
-/** A booked or withdrawn slot, read for one date. Slot text is as stored. */
-export type SlotCommitment = { venueId: string; slot: string };
-
 /**
- * The slots each venue is committed in on the searched date.
+ * SCRUM-239 AC1: "a request outside those hours is refused, and search does
+ * not return that venue for it". The whole period must sit inside the venue's
+ * opening hours; touching either end is fine (half-open ranges).
  *
- * Committed means a confirmed booking (AC2, AC3) or a slot recorded as
- * unavailable (AC4). A pending booking request is not a commitment — SCRUM-123
- * AC8 says so outright — so it is never passed in here.
- *
- * AC3 is applied as the card writes it: a booking commits its own slots and no
- * others, so an AM booking leaves the PM slot free. That is the team's Week 7
- * decision for this sprint ("build as carded"). The customer's W7-1 and W7-4
- * changes — setup and turnaround time in minutes per venue, and tentative holds
- * that expire — go to SCRUM-226 (turnaround) and SCRUM-227 (holds). They should
- * use SCRUM-225's occupied time rather than add a copy of it here.
+ * Opening hours come from venues.opens_at / closes_at, filled from the
+ * operating slots by the time-model migration until Venue Staff set them.
  */
-export function committedSlotsByVenue(commitments: SlotCommitment[]): Map<string, Set<OperatingSlot>> {
-  const byVenue = new Map<string, Set<OperatingSlot>>();
-  for (const { venueId, slot } of commitments) {
-    const known = OPERATING_SLOTS.find((s) => s === slot);
-    if (!known) continue;
-    const slots = byVenue.get(venueId) ?? new Set<OperatingSlot>();
-    slots.add(known);
-    byVenue.set(venueId, slots);
-  }
-  return byVenue;
-}
-
-/**
- * AC1: a venue is returned only if it is free in every one of the selected
- * slots, and excluded if it is committed in any one of them.
- *
- * A slot the venue doesn't run (venues.operating_slots, SCRUM-116 AC4) is not
- * free either: SCRUM-123 AC3 shows it as "outside operating hours and cannot be
- * requested", and the story is to find venues "that could actually host it".
- */
-export function isFreeInEverySlot(
-  operatingSlots: readonly string[],
-  searchedSlots: readonly OperatingSlot[],
-  committed: ReadonlySet<OperatingSlot> | undefined,
-): boolean {
-  return searchedSlots.every((slot) => operatingSlots.includes(slot) && !committed?.has(slot));
+export function isWithinOpeningHours(period: ClockRange, hours: { opensAt: ClockTime; closesAt: ClockTime }): boolean {
+  return toMinutes(period.start) >= toMinutes(hours.opensAt) && toMinutes(period.end) <= toMinutes(hours.closesAt);
 }
 
 // -----------------------------------------------------------------------------
