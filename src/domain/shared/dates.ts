@@ -53,21 +53,24 @@ export function isPastDate(date: ISODate, today: ISODate = todayInSingapore()): 
 }
 
 /**
- * The Singapore wall-clock hour (0-23) an instant falls in.
+ * The Singapore wall-clock time an instant falls at, in minutes after
+ * midnight (0-1439).
  *
- * Exists for comparing "now" against a time slot's end hour (SCRUM-77's
- * TIME_SLOT_HOURS) - the same server-clock-vs-Singapore problem todayInSingapore()
- * solves for calendar dates, one level down.
+ * Exists for comparing "now" against a request's start time (SCRUM-238 AC5,
+ * which keeps SCRUM-210's fix) - the same server-clock-vs-Singapore problem
+ * todayInSingapore() solves for calendar dates, one level down. Replaces
+ * currentHourInSingapore(), which compared against a slot's end hour.
  */
-export function currentHourInSingapore(now: Date = new Date()): number {
-  const hour = new Intl.DateTimeFormat('en-CA', {
+export function currentMinutesInSingapore(now: Date = new Date()): number {
+  const parts = new Intl.DateTimeFormat('en-CA', {
     timeZone: SINGAPORE_TIME_ZONE,
     hour: '2-digit',
+    minute: '2-digit',
     hourCycle: 'h23',
-  })
-    .formatToParts(now)
-    .find((part) => part.type === 'hour')?.value;
-  return Number(hour ?? 0);
+  }).formatToParts(now);
+  const valueOf = (type: Intl.DateTimeFormatPartTypes) =>
+    Number(parts.find((part) => part.type === type)?.value ?? 0);
+  return valueOf('hour') * 60 + valueOf('minute');
 }
 
 /** e.g. "17 Sep 2026". */

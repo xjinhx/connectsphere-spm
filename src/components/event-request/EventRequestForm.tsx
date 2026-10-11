@@ -2,7 +2,7 @@
 
 import { useState } from 'react';
 import { useRouter } from 'next/navigation';
-import { TIME_SLOT_LABELS, TIME_SLOT_ORDER, type TimeSlot } from '@/domain/event-request/schema';
+import { END_OF_DAY, END_TIME_OPTIONS, START_TIME_OPTIONS } from '@/domain/shared/times';
 import { ROOM_LAYOUTS, ROOM_LAYOUT_LABELS, type RoomLayout } from '@/domain/venues/schema';
 import type { VenueRequirementOptions } from '@/domain/event-request/service';
 
@@ -14,12 +14,15 @@ import type { VenueRequirementOptions } from '@/domain/event-request/service';
  * with a date they still have to fix. The date rule is applied at submission
  * (SCRUM-82), which happens from the saved request's own page, not this form.
  *
- * SCRUM-77 AC4 — the slot picker is built from TIME_SLOT_ORDER, so the only
- * slots it can offer are the three that exist. Nothing crossing midnight can be
- * chosen because nothing crossing midnight is listed.
+ * SCRUM-238 AC1 — start and end are chosen from lists built from
+ * START_TIME_OPTIONS / END_TIME_OPTIONS, so only :00, :15, :30 and :45 can be
+ * picked. A select rather than <input type="time">, whose `step` the browser
+ * may not enforce in its picker and which cannot show 24:00 (the end of a
+ * former Night slot, AC6). Nothing crossing midnight can be chosen: the last
+ * end on offer is 24:00. Replaces SCRUM-77's slot checkboxes.
  *
  * SCRUM-78 — expected attendance, same permissive-save/strict-submit pattern
- * as the date and slots above: blank is fine to save, and is only enforced as
+ * as the date and times above: blank is fine to save, and is only enforced as
  * a mandatory field at submission (SCRUM-82's incompleteFields()).
  *
  * SCRUM-79 — venue requirements. AC1: the layout select is built from the
@@ -52,7 +55,9 @@ export interface EventRequestFormInitialValues {
   purpose: string;
   description: string;
   proposedDate: string;
-  timeSlots: TimeSlot[];
+  /** SCRUM-238. `HH:MM`; '' while not chosen. */
+  startTime: string;
+  endTime: string;
   expectedAttendance: string;
   /** SCRUM-79 AC1. '' while no layout has been chosen. */
   roomLayout: RoomLayout | '';
@@ -96,7 +101,9 @@ export function EventRequestForm({
   const [purpose, setPurpose] = useState(initial?.purpose ?? '');
   const [description, setDescription] = useState(initial?.description ?? '');
   const [proposedDate, setProposedDate] = useState(initial?.proposedDate ?? '');
-  const [timeSlots, setTimeSlots] = useState<TimeSlot[]>(initial?.timeSlots ?? []);
+  // SCRUM-238. '' is "not yet chosen", read as blank by the server.
+  const [startTime, setStartTime] = useState(initial?.startTime ?? '');
+  const [endTime, setEndTime] = useState(initial?.endTime ?? '');
   // Kept as a string, like proposedDate: an empty input is a valid "not yet
   // entered" save-time state, not a 0. Converted to a number only when sent.
   const [expectedAttendance, setExpectedAttendance] = useState(initial?.expectedAttendance ?? '');
@@ -143,7 +150,8 @@ export function EventRequestForm({
       purpose,
       description,
       proposedDate,
-      timeSlots,
+      startTime,
+      endTime,
       expectedAttendance: expectedAttendance === '' ? undefined : Number(expectedAttendance),
       // SCRUM-79. '' reads as "not stated" on the server (optionalFromBlank).
       roomLayout,
@@ -239,12 +247,6 @@ export function EventRequestForm({
       setError(caught instanceof Error ? caught.message : 'The request could not be saved.');
       setSaving(false);
     }
-  }
-
-  function toggleSlot(slot: TimeSlot) {
-    setTimeSlots((current) =>
-      current.includes(slot) ? current.filter((value) => value !== slot) : [...current, slot],
-    );
   }
 
   function toggleAccessibilityFeature(id: string) {
@@ -356,23 +358,57 @@ export function EventRequestForm({
       </div>
 
       <fieldset>
-        <legend className={labelClass}>Time slots</legend>
-        <div className="mt-2 flex flex-wrap gap-x-6 gap-y-2">
-          {TIME_SLOT_ORDER.map((slot) => (
-            <label key={slot} className="flex items-center gap-2 text-sm">
-              <input
-                type="checkbox"
-                checked={timeSlots.includes(slot)}
-                onChange={() => toggleSlot(slot)}
-              />
-              {TIME_SLOT_LABELS[slot]}
+        <legend className={labelClass}>Time</legend>
+        <div className="mt-1 grid grid-cols-2 gap-4">
+          <div>
+            <label className="block text-xs text-[var(--text-muted)]" htmlFor="startTime">
+              Start
             </label>
-          ))}
+            <select
+              id="startTime"
+              // AC2: a refused range marks both fields, not just one.
+              className={`${fieldClass} ${fieldErrors.startTime?.length ? 'border-[var(--danger)]' : ''}`}
+              value={startTime}
+              onChange={(event) => setStartTime(event.target.value)}
+              aria-invalid={Boolean(fieldErrors.startTime?.length)}
+              aria-describedby="time-hint"
+            >
+              <option value="">Choose a start time</option>
+              {START_TIME_OPTIONS.map((time) => (
+                <option key={time} value={time}>
+                  {time}
+                </option>
+              ))}
+            </select>
+            <FieldError field="startTime" />
+          </div>
+          <div>
+            <label className="block text-xs text-[var(--text-muted)]" htmlFor="endTime">
+              End
+            </label>
+            <select
+              id="endTime"
+              // AC2: a refused range marks both fields, not just one.
+              className={`${fieldClass} ${fieldErrors.endTime?.length ? 'border-[var(--danger)]' : ''}`}
+              value={endTime}
+              onChange={(event) => setEndTime(event.target.value)}
+              aria-invalid={Boolean(fieldErrors.endTime?.length)}
+              aria-describedby="time-hint"
+            >
+              <option value="">Choose an end time</option>
+              {END_TIME_OPTIONS.map((time) => (
+                <option key={time} value={time}>
+                  {time === END_OF_DAY ? '24:00 (midnight)' : time}
+                </option>
+              ))}
+            </select>
+            <FieldError field="endTime" />
+          </div>
         </div>
-        <p className="mt-1 text-xs text-[var(--text-muted)]">
-          Select all three for a full-day booking. At least one is needed to submit.
+        <p id="time-hint" className="mt-1 text-xs text-[var(--text-muted)]">
+          Singapore time, in 15-minute steps. The end must be after the start. Both are needed to
+          submit.
         </p>
-        <FieldError field="timeSlots" />
       </fieldset>
 
       <div>
