@@ -17,7 +17,7 @@ import {
   describeRegistration,
   describeRoomLayout,
   describeTechnicalSupport,
-  describeTimeSlots,
+  describeEventTimes,
 } from '@/domain/event-request/policy';
 import {
   getClarificationExchange,
@@ -180,7 +180,8 @@ export default async function ReviewEventRequestPage({
           label="Proposed date"
           value={request.proposedDate ? formatSingaporeDate(request.proposedDate) : 'Not provided'}
         />
-        <Row label="Time slots" value={describeTimeSlots(request.timeSlots)} />
+        {/* SCRUM-238 AC6/AC7 */}
+        <Row label="Time" value={describeEventTimes(request.startTime, request.endTime)} />
         {/* SCRUM-78. Confirmed missing here in a manual walkthrough
             (2026-09-16) - the API (getReviewDetail) already returned it
             correctly, this row was never added. */}
