@@ -12,12 +12,20 @@ import { commitmentsInRange, commitmentsOverlapping, toCommittedPeriods } from '
 import { getCommittedPeriods, getVenueCommitments } from '@/domain/availability/service';
 import { VenueCommitmentSchema, type VenueCommitment } from '@/domain/availability/schema';
 import { fetchConfirmedBookingPeriods, fetchUnavailablePeriods } from '@/lib/supabase/availability';
+import { fetchActiveHoldPeriods } from '@/lib/supabase/venueHolds';
 
 // The database layer is replaced at its boundary; the service and policy run for real.
 vi.mock('@/lib/supabase/availability', async (importOriginal) => ({
   ...(await importOriginal<typeof import('@/lib/supabase/availability')>()),
   fetchConfirmedBookingPeriods: vi.fn(),
   fetchUnavailablePeriods: vi.fn(),
+}));
+
+// SCRUM-227: getVenueCommitments also reads active holds; replaced the same way,
+// so this file never needs a database.
+vi.mock('@/lib/supabase/venueHolds', async (importOriginal) => ({
+  ...(await importOriginal<typeof import('@/lib/supabase/venueHolds')>()),
+  fetchActiveHoldPeriods: vi.fn(),
 }));
 
 const ok = <T>(data: T) => ({ data, error: null }) as never;
@@ -33,6 +41,7 @@ const bookingRow = (date: string, start: string, end: string) => ({
 beforeEach(() => {
   vi.mocked(fetchConfirmedBookingPeriods).mockReset().mockResolvedValue(ok([]));
   vi.mocked(fetchUnavailablePeriods).mockReset().mockResolvedValue(ok([]));
+  vi.mocked(fetchActiveHoldPeriods).mockReset().mockResolvedValue(ok([]));
 });
 
 /**
@@ -153,6 +162,37 @@ describe('getVenueCommitments (SCRUM-239, replaces D-16)', () => {
     );
     const [period] = await getVenueCommitments(VENUE_A, '2026-11-10T20:00', '2026-11-10T21:00');
     expect(period).toMatchObject({ start: '19:00', end: '24:00' });
+  });
+
+  it('SCRUM-227: returns an active hold as kind hold, with its event and expiry', async () => {
+    vi.mocked(fetchActiveHoldPeriods).mockResolvedValue(
+      ok([
+        {
+          venue_id: VENUE_A,
+          event_request_id: EVENT_ID,
+          date: '2026-11-10',
+          start_time: '10:00:00',
+          end_time: '12:00:00',
+          expires_at: '2026-11-03T09:00:00+00:00',
+        },
+      ]),
+    );
+    const now = new Date('2026-10-10T04:00:00Z');
+
+    expect(await getVenueCommitments(VENUE_A, '2026-11-10T08:00', '2026-11-10T22:00', now)).toEqual([
+      {
+        kind: 'hold',
+        venueId: VENUE_A,
+        date: '2026-11-10',
+        start: '10:00',
+        end: '12:00',
+        eventRequestId: EVENT_ID,
+        reason: null,
+        expiresAt: '2026-11-03T09:00:00.000Z',
+      },
+    ]);
+    // Only holds that have not expired at `now` are asked for (AC6).
+    expect(fetchActiveHoldPeriods).toHaveBeenCalledWith(VENUE_A, '2026-11-10', '2026-11-10', now.toISOString());
   });
 
   it('fails clearly when the database cannot be read', async () => {

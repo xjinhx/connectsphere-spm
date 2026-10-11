@@ -2,16 +2,17 @@ import {
   eventRequestCoreSchema,
   MANDATORY_FIELD_LABELS,
   normaliseTimeSlots,
-  TIME_SLOT_HOURS,
   TIME_SLOT_LABELS,
   TIME_SLOT_ORDER,
+  timeRangeIssues,
   type EquipmentItem,
   type EventRequestStatus,
   type MandatoryField,
   type TimeSlot,
 } from './schema';
+import { formatClockRange, toMinutes, type ClockTime } from '@/domain/shared/times';
 import {
-  currentHourInSingapore,
+  currentMinutesInSingapore,
   formatSingaporeDateTime,
   isPastDate,
   todayInSingapore,
@@ -70,6 +71,9 @@ export function isProposedDateSubmittable(
 // ---------------------------------------------------------------------------
 // SCRUM-77 — Choose the time slots the event needs
 // ---------------------------------------------------------------------------
+// An event request no longer has slots (SCRUM-238, below). These two stay for
+// the booking queue, whose booking request lines are still slots until
+// SCRUM-239 moves them to times.
 
 /**
  * AC2 — all three slots together are a full-day booking requirement. Derived,
@@ -89,35 +93,41 @@ export function describeTimeSlots(slots: readonly TimeSlot[] | null): string {
     .join(', ');
 }
 
-export const PAST_TIME_SLOT_MESSAGE =
-  'The selected time slot has already ended today. Choose a slot still ahead, or a later date.';
+// ---------------------------------------------------------------------------
+// SCRUM-238 — Request event times in 15-minute steps
+// ---------------------------------------------------------------------------
 
 /**
- * AC5 (bug fix, ex-US-76-TC06) — SCRUM-76's date rule only judges the calendar
- * day, so a proposed date of today is accepted at any hour. That is correct
- * for AC4 ("no minimum lead time"), but it leaves a gap the date rule alone
- * cannot close: a slot whose window has already closed today cannot still
- * host the event, even though today itself is still a valid date.
- *
- * Only meaningful for TODAY. Any other future date has the whole day still
- * ahead of it, and a past date is already refused by isProposedDateSubmittable()
- * before this ever runs.
+ * What a request shows for its times: `09:15–11:45`, or "not yet provided".
+ * AC6: a request saved as a slot shows that slot's times, because the time
+ * model migration filled start_time / end_time from the slot (AM 07:00–12:00,
+ * PM 13:00–18:00, Night 19:00–24:00). AC7: shown exactly as stored, Singapore
+ * clock time, so the viewer's own time zone never changes them.
  */
-export function hasTimeSlotEndedToday(slot: TimeSlot, now: Date = new Date()): boolean {
-  return currentHourInSingapore(now) >= TIME_SLOT_HOURS[slot].end;
+export function describeEventTimes(startTime: ClockTime | null, endTime: ClockTime | null): string {
+  if (startTime === null || endTime === null) return 'Not yet provided';
+  return formatClockRange({ start: startTime, end: endTime });
 }
 
+export const PAST_START_TIME_MESSAGE =
+  'The start time has already passed today. Choose a later start time, or a later date.';
+
 /**
- * True once every slot selected for today has already ended - none of them
- * can still host the event that day. A mixed selection (say AM and PM, checked
- * at 16:00) is not blocked: PM is still ahead, so the request is still
- * submittable for it.
+ * AC5 — keeps SCRUM-210's fix (ex-US-76-TC06) under the time model. SCRUM-76's
+ * date rule only judges the calendar day, so a proposed date of today is
+ * accepted at any hour; this closes the gap for a start time already behind
+ * us. Judged in Singapore time.
+ *
+ * A start in the current minute counts as passed: at 10:00:30 an event
+ * starting 10:00 has already begun. Under slots the rule was "the slot has
+ * ended"; the card now says the start time, so a request starting 10:00 is
+ * refused at 10:05 even though the event would still be running.
+ *
+ * Only meaningful for TODAY: a future date has the whole day ahead of it, and
+ * a past date is refused by isProposedDateSubmittable() before this runs.
  */
-export function haveAllTimeSlotsEndedToday(
-  slots: readonly TimeSlot[],
-  now: Date = new Date(),
-): boolean {
-  return slots.length > 0 && slots.every((slot) => hasTimeSlotEndedToday(slot, now));
+export function hasStartTimePassedToday(startTime: ClockTime, now: Date = new Date()): boolean {
+  return toMinutes(startTime) <= currentMinutesInSingapore(now);
 }
 
 // ---------------------------------------------------------------------------
@@ -269,7 +279,9 @@ export interface StoredEventRequestFields {
   purpose: string | null;
   description: string | null;
   proposedDate: string | null;
-  timeSlots: string[] | null;
+  /** SCRUM-238. `HH:MM`, Singapore time; null until entered. */
+  startTime: string | null;
+  endTime: string | null;
   expectedAttendance: number | null;
 }
 
@@ -281,8 +293,11 @@ export interface StoredEventRequestFields {
  * schema refuses it, or - for the proposed date only - if it has already
  * passed (SCRUM-76 AC3: savable, but not submittable).
  *
+ * SCRUM-238 AC2 — an end not after the start is incomplete too, on both
+ * fields. Save already refuses it; this keeps submission from trusting that.
+ *
  * `now` is optional and off by default: passing it also enables the
- * same-day slot-lapsed check above (SCRUM-77 AC5). Existing callers that omit
+ * same-day start-time check above (SCRUM-238 AC5, keeping SCRUM-210). Existing callers that omit
  * it keep the original date-only behaviour rather than becoming dependent on
  * the wall clock at the moment they happen to run - submitEventRequest() is
  * the one caller that should always supply the real current time.
@@ -297,7 +312,8 @@ export function incompleteFields(
     purpose: request.purpose ?? undefined,
     description: request.description ?? undefined,
     proposedDate: request.proposedDate ?? undefined,
-    timeSlots: request.timeSlots ?? undefined,
+    startTime: request.startTime ?? undefined,
+    endTime: request.endTime ?? undefined,
     expectedAttendance: request.expectedAttendance ?? undefined,
   });
 
@@ -320,16 +336,23 @@ export function incompleteFields(
     problems.set('proposedDate', PAST_PROPOSED_DATE_MESSAGE);
   }
 
+  if (!problems.has('startTime') && !problems.has('endTime')) {
+    for (const issue of timeRangeIssues(request.startTime ?? undefined, request.endTime ?? undefined)) {
+      problems.set(issue.field, issue.message);
+    }
+  }
+
   if (
     now &&
-    !problems.has('timeSlots') &&
+    !problems.has('startTime') &&
+    !problems.has('endTime') &&
     !problems.has('proposedDate') &&
     request.proposedDate !== null &&
-    request.timeSlots !== null &&
+    request.startTime !== null &&
     toSingaporeISODate(new Date(request.proposedDate)) === today &&
-    haveAllTimeSlotsEndedToday(request.timeSlots as TimeSlot[], now)
+    hasStartTimePassedToday(request.startTime, now)
   ) {
-    problems.set('timeSlots', PAST_TIME_SLOT_MESSAGE);
+    problems.set('startTime', PAST_START_TIME_MESSAGE);
   }
 
   // Listed in the order the form shows them, not the order the issues arrived.

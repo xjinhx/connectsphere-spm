@@ -175,36 +175,20 @@ export async function fetchConfirmedFutureBookings(venueId: string, today: strin
 }
 
 // -----------------------------------------------------------------------------
-// SCRUM-128: searching by date and slot
+// SCRUM-239: searching by date and time (was SCRUM-128, by slot)
 // -----------------------------------------------------------------------------
 
 /**
- * SCRUM-128: every venue a search could return, with the slots each one runs.
+ * SCRUM-239 AC2: every venue a search could return, with its opening hours.
  * Retired venues are left out, the same default as the catalogue list
  * (SCRUM-121 AC3): a retired venue can't host a new event.
  */
 export async function fetchSearchableVenues() {
   return db()
     .from('venues')
-    .select('id, name, max_capacity, is_retired, operating_slots, locations ( id, name )')
+    .select('id, name, max_capacity, is_retired, opens_at, closes_at, locations ( id, name )')
     .eq('is_retired', false)
     .order('name');
-}
-
-/**
- * SCRUM-128 AC2 and AC3: every confirmed booking on `date`, with the slot it
- * takes. Each booking has its own date and slot (SCRUM-148).
- */
-export async function fetchConfirmedBookingsOn(date: string) {
-  return db().from('venue_booking').select('venue_id, slot').eq('status', 'confirmed').eq('date', date);
-}
-
-/**
- * SCRUM-128 AC4: every slot recorded as unavailable on `date`. SCRUM-151's
- * flow writes these rows (POST /api/venues/[id]/unavailable-slots).
- */
-export async function fetchUnavailableSlotsOn(date: string) {
-  return db().from('venue_unavailable_slot').select('venue_id, slot').eq('date', date);
 }
 
 /**
@@ -223,28 +207,20 @@ export async function fetchUnavailableSlotsForVenue(venueId: string, dates: read
 // SCRUM-123: a venue's calendar over a date range
 // -----------------------------------------------------------------------------
 
-/**
- * SCRUM-123 AC7: the venue's unavailable slots from `from` to `to`, with the
- * recorded reason. Venue Staff record them through SCRUM-151.
- */
-export async function fetchUnavailableSlotsBetween(venueId: string, from: string, to: string) {
-  return db()
-    .from('venue_unavailable_slot')
-    .select('date, slot, reason')
-    .eq('venue_id', venueId)
-    .gte('date', from)
-    .lte('date', to);
+/** SCRUM-239 AC5: the venue's opening hours, which the calendar shows each day. */
+export async function fetchVenueOpeningHours(venueId: string) {
+  return db().from('venues').select('opens_at, closes_at').eq('id', venueId).maybeSingle();
 }
 
 /**
- * SCRUM-123 AC6 and AC8: the venue's pending booking request lines from `from`
- * to `to`. The lines are SCRUM-142's (venue_booking_request_line); this only
- * reads them.
+ * SCRUM-239 AC5 (and SCRUM-123 AC6, AC8): the venue's pending booking request
+ * lines from `from` to `to`, with their start and end times. The lines are
+ * SCRUM-142's (venue_booking_request_line); this only reads them.
  */
 export async function fetchPendingRequestLinesBetween(venueId: string, from: string, to: string) {
   return db()
     .from('venue_booking_request_line')
-    .select('date, time_slots, request:request_id!inner (venue_id)')
+    .select('date, start_time, end_time, request:request_id!inner (venue_id)')
     .eq('request.venue_id', venueId)
     .eq('status', 'pending')
     .gte('date', from)

@@ -1,7 +1,8 @@
 import { ValidationError } from '@/domain/shared/errors';
 import { isActionPermitted } from '@/domain/identity/permissions';
 import type { Role } from '@/domain/identity/roles';
-import { OPERATING_SLOTS, type CalendarSlotState, type OperatingSlot, type VenueLayoutInput } from './schema';
+import { toMinutes, type ClockRange, type ClockTime } from '@/domain/shared/times';
+import { CALENDAR_PERIOD_KINDS, type CalendarDay, type CalendarPeriod, type VenueLayoutInput } from './schema';
 
 /**
  * Venue Catalogue business rules. Pure functions: no Supabase, no Next.js.
@@ -64,107 +65,103 @@ export function isAffectedByCapacity(expectedAttendance: number | null, maxCapac
 }
 
 // -----------------------------------------------------------------------------
-// SCRUM-128: is a venue free in the searched slots
+// SCRUM-239: is a period inside a venue's opening hours
 // -----------------------------------------------------------------------------
 
-/** A booked or withdrawn slot, read for one date. Slot text is as stored. */
-export type SlotCommitment = { venueId: string; slot: string };
-
 /**
- * The slots each venue is committed in on the searched date.
+ * SCRUM-239 AC1: "a request outside those hours is refused, and search does
+ * not return that venue for it". The whole period must sit inside the venue's
+ * opening hours; touching either end is fine (half-open ranges).
  *
- * Committed means a confirmed booking (AC2, AC3) or a slot recorded as
- * unavailable (AC4). A pending booking request is not a commitment — SCRUM-123
- * AC8 says so outright — so it is never passed in here.
- *
- * AC3 is applied as the card writes it: a booking commits its own slots and no
- * others, so an AM booking leaves the PM slot free. That is the team's Week 7
- * decision for this sprint ("build as carded"). The customer's W7-1 and W7-4
- * changes — setup and turnaround time in minutes per venue, and tentative holds
- * that expire — go to SCRUM-226 (turnaround) and SCRUM-227 (holds). They should
- * use SCRUM-225's occupied time rather than add a copy of it here.
+ * Opening hours come from venues.opens_at / closes_at, filled from the
+ * operating slots by the time-model migration until Venue Staff set them.
  */
-export function committedSlotsByVenue(commitments: SlotCommitment[]): Map<string, Set<OperatingSlot>> {
-  const byVenue = new Map<string, Set<OperatingSlot>>();
-  for (const { venueId, slot } of commitments) {
-    const known = OPERATING_SLOTS.find((s) => s === slot);
-    if (!known) continue;
-    const slots = byVenue.get(venueId) ?? new Set<OperatingSlot>();
-    slots.add(known);
-    byVenue.set(venueId, slots);
-  }
-  return byVenue;
-}
-
-/**
- * AC1: a venue is returned only if it is free in every one of the selected
- * slots, and excluded if it is committed in any one of them.
- *
- * A slot the venue doesn't run (venues.operating_slots, SCRUM-116 AC4) is not
- * free either: SCRUM-123 AC3 shows it as "outside operating hours and cannot be
- * requested", and the story is to find venues "that could actually host it".
- */
-export function isFreeInEverySlot(
-  operatingSlots: readonly string[],
-  searchedSlots: readonly OperatingSlot[],
-  committed: ReadonlySet<OperatingSlot> | undefined,
-): boolean {
-  return searchedSlots.every((slot) => operatingSlots.includes(slot) && !committed?.has(slot));
+export function isWithinOpeningHours(period: ClockRange, hours: { opensAt: ClockTime; closesAt: ClockTime }): boolean {
+  return toMinutes(period.start) >= toMinutes(hours.opensAt) && toMinutes(period.end) <= toMinutes(hours.closesAt);
 }
 
 // -----------------------------------------------------------------------------
-// SCRUM-123: the state of each slot on a venue's calendar
+// SCRUM-239 AC5: the periods on a venue's calendar
 // -----------------------------------------------------------------------------
 
-/** What was recorded against one slot on one date. */
-export type CalendarSlotFacts = {
-  operates: boolean;
-  /** The reason a slot was recorded as unavailable, or null if it wasn't (AC7). */
-  unavailableReason: string | null;
-  confirmed: boolean;
-  pendingRequests: number;
+/** A committed period on one date, as getVenueCommitments returns it, plus the event behind a booking. */
+export type CalendarCommitmentInput = {
+  kind: 'booking' | 'hold' | 'unavailable';
+  date: string;
+  start: ClockTime;
+  end: ClockTime;
+  eventRequestId: string | null;
+  reason: string | null;
+  /** SCRUM-227: a hold's expiry; absent for bookings and unavailable periods. */
+  expiresAt?: string | null;
+};
+
+/** A pending booking request line on one date. */
+export type CalendarPendingInput = { date: string; start: ClockTime; end: ClockTime };
+
+/** The event behind a confirmed booking, keyed `${date}|${eventRequestId}`, only where the viewer may see it. */
+export type VisibleEvents = ReadonlyMap<string, { id: string; reference: string; name: string }>;
+
+const KIND_OF: Record<CalendarCommitmentInput['kind'], CalendarPeriod['kind']> = {
+  booking: 'confirmed',
+  hold: 'held',
+  unavailable: 'blocked',
 };
 
 /**
- * The one state a slot is shown in. Where several things are recorded, the
- * first that applies wins:
- *
- * 1. Outside operating hours (AC3): the venue doesn't run the slot, so nothing
- *    else on it can matter.
- * 2. Blocked (AC7): Venue Staff have withdrawn it, even over a booking — the
- *    booking is then SCRUM-151's affected booking, not a working one.
- * 3. Confirmed (AC5).
- * 4. Pending request (AC6) — only when nothing is committed. A request on a
- *    confirmed slot leaves it Confirmed (AC8); the count is still carried on
- *    the slot so the calendar can show it beside the commitment.
- * 5. Available (AC2).
+ * SCRUM-123 AC4 in time ranges: the committed periods leave no gap anywhere
+ * in the opening hours. A pending request is never a commitment (SCRUM-123
+ * AC8), so only confirmed, held and blocked periods count.
  */
-export function calendarSlotState(facts: CalendarSlotFacts): CalendarSlotState {
-  if (!facts.operates) return 'outside_operating_hours';
-  if (facts.unavailableReason !== null) return 'blocked';
-  if (facts.confirmed) return 'confirmed';
-  if (facts.pendingRequests > 0) return 'pending_request';
-  return 'available';
+export function coversOpeningHours(
+  committed: readonly ClockRange[],
+  hours: { opensAt: ClockTime; closesAt: ClockTime },
+): boolean {
+  let reached = toMinutes(hours.opensAt);
+  const closes = toMinutes(hours.closesAt);
+  for (const period of [...committed].sort((a, b) => toMinutes(a.start) - toMinutes(b.start))) {
+    if (toMinutes(period.start) > reached) break;
+    reached = Math.max(reached, toMinutes(period.end));
+    if (reached >= closes) return true;
+  }
+  return reached >= closes;
 }
 
 /**
- * Committed means the same here as in SCRUM-128's search: a confirmed booking
- * or a slot recorded as unavailable. A pending request never is (AC8), so the
- * calendar and the search can't disagree about a slot.
+ * SCRUM-239 AC5: one date on the calendar. Every confirmed, pending, held and
+ * blocked period shows with its exact start and end time, in start order; no
+ * fixed lunch or dinner gap is drawn because nothing here knows about slots.
  */
-export function isCommitted(state: CalendarSlotState): boolean {
-  return state === 'confirmed' || state === 'blocked';
-}
+export function calendarDay(
+  date: string,
+  hours: { opensAt: ClockTime; closesAt: ClockTime },
+  commitments: readonly CalendarCommitmentInput[],
+  pending: readonly CalendarPendingInput[],
+  visibleEvents: VisibleEvents,
+): CalendarDay {
+  const committed: CalendarPeriod[] = commitments
+    .filter((c) => c.date === date)
+    .map((c) => ({
+      kind: KIND_OF[c.kind],
+      start: c.start,
+      end: c.end,
+      reason: c.kind === 'unavailable' ? c.reason : null,
+      event: c.kind === 'booking' && c.eventRequestId ? (visibleEvents.get(`${date}|${c.eventRequestId}`) ?? null) : null,
+      // SCRUM-227 AC7: a Held period shows with its expiry time.
+      ...(c.kind === 'hold' ? { expiresAt: c.expiresAt ?? null } : {}),
+    }));
+  const requested: CalendarPeriod[] = pending
+    .filter((p) => p.date === date)
+    .map((p) => ({ kind: 'pending', start: p.start, end: p.end, reason: null, event: null }));
 
-/**
- * AC4: "committed for all three slots" — read as every slot the venue runs
- * that day. For a venue open AM, PM and Night that is exactly the card's
- * wording; for one that runs AM and PM only, both booked leaves nothing to
- * request, so it is full too. A venue that runs no slot is never "full".
- */
-export function isFullyCommitted(states: readonly CalendarSlotState[]): boolean {
-  const operating = states.filter((state) => state !== 'outside_operating_hours');
-  return operating.length > 0 && operating.every(isCommitted);
+  const kindOrder = CALENDAR_PERIOD_KINDS;
+  const periods = [...committed, ...requested].sort(
+    (a, b) =>
+      toMinutes(a.start) - toMinutes(b.start) ||
+      toMinutes(a.end) - toMinutes(b.end) ||
+      kindOrder.indexOf(a.kind) - kindOrder.indexOf(b.kind),
+  );
+  return { date, fullyCommitted: coversOpeningHours(committed, hours), periods };
 }
 
 /** Every date from `from` to `to`, both included, as YYYY-MM-DD. */
