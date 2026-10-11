@@ -570,11 +570,6 @@ export async function findAffectedFutureBookings(
 // SCRUM-225 AC4 and AC5: bookings a setup or turnaround change makes clash
 // -----------------------------------------------------------------------------
 
-/** A Postgres `time` (`10:00:00`, `24:00:00`) as a clock time (`10:00`, `24:00`). */
-function clockTime(value: string): string {
-  return value.slice(0, 5);
-}
-
 /**
  * SCRUM-225 AC4: the venue's confirmed bookings from today on that a change
  * from `current` to `proposed` setup and turnaround makes clash
@@ -601,8 +596,8 @@ export async function findSetupTurnaroundClashes(
       reference: row.event_request.reference,
       eventName: row.event_request.name,
       date: row.date,
-      start: clockTime(row.start_time),
-      end: clockTime(row.end_time),
+      start: fromDatabaseTime(row.start_time),
+      end: fromDatabaseTime(row.end_time),
     }),
   );
   return findNewSetupTurnaroundClashes(bookings, current, proposed);
@@ -639,8 +634,8 @@ export async function listSetupTurnaroundAffectedBookings(
         reference: booking.event_request.reference,
         eventName: booking.event_request.name,
         date: booking.date,
-        start: clockTime(booking.start_time),
-        end: clockTime(booking.end_time),
+        start: fromDatabaseTime(booking.start_time),
+        end: fromDatabaseTime(booking.end_time),
         setupMinutes: row.setup_minutes,
         turnaroundMinutes: row.turnaround_minutes,
         flaggedAt: row.flagged_at,
