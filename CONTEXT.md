@@ -31,6 +31,10 @@ _Avoid_: reservation (that word is for equipment)
 **Affected booking**:
 A confirmed booking for an upcoming event that sits on a slot that has since become unavailable (SCRUM-151).
 
+**Released booking**:
+A confirmed booking that its event's coordinator has given up, with a reason. It no longer commits the venue; the event and its other bookings are unchanged (SCRUM-231).
+_Avoid_: cancelled booking (cancelling is for a whole event, SCRUM-105)
+
 **Setup time** / **Turnaround time**:
 The minutes a venue needs before an event to prepare the room and after it to reset it, in 15-minute steps, set per venue by Venue Staff (SCRUM-225). A booking commits its venue from its start minus the setup time to its end plus the turnaround time.
 _Avoid_: teardown (folded into turnaround), buffer
