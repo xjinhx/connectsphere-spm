@@ -49,6 +49,12 @@ describe('landingPathForRoles', () => {
     expect(landingPathForRoles(['made-up-role', 'venue_staff'])).toBe('/booking-queue');
   });
 
+  // SCRUM-232 AC1 — TC-232-03.
+  it('sends a Lead who is also a Coordinator to the unassigned queue, whichever role is listed first', () => {
+    expect(landingPathForRoles(['coordinator', 'operations_manager'])).toBe('/assignment-queue');
+    expect(landingPathForRoles(['operations_manager', 'coordinator'])).toBe('/assignment-queue');
+  });
+
   it('falls back to the Attendee landing page for an unrecognised role', () => {
     expect(landingPathForRoles(['made-up-role'])).toBe('/register-events');
   });

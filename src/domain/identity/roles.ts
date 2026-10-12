@@ -32,11 +32,19 @@ export function isRole(value: unknown): value is Role {
 }
 
 /**
- * An account can hold multiple roles (see AccountRolesSchema); login only
- * needs one landing page, so the first role in the account's list wins.
+ * An account can hold multiple roles (see AccountRolesSchema; customer
+ * clarification #56); login only needs one landing page, so the first role in
+ * the account's list wins.
+ *
+ * SCRUM-232 AC1 — except the Event Coordinator Lead (operations_manager): an
+ * account holding it lands on the unassigned queue wherever the role sits in
+ * the list, so a Lead who is also a Coordinator is not sent to their own
+ * assigned events first.
+ *
  * Falls back to the Attendee landing page when the list is empty or unset.
  */
 export function landingPathForRoles(roles: readonly unknown[] | undefined): string {
+  if (roles?.includes('operations_manager')) return ROLE_LANDING_PATH.operations_manager;
   const firstKnownRole = roles?.find(isRole);
   return ROLE_LANDING_PATH[firstKnownRole ?? DEFAULT_ROLE];
 }
