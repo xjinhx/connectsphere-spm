@@ -26,6 +26,9 @@ vi.mock('@/lib/supabase/venueBookings', () => ({
 vi.mock('@/lib/supabase/venues', () => ({
   fetchUnavailableSlotsForVenue: vi.fn(),
 }));
+vi.mock('@/domain/venues/service', () => ({
+  getVenue: vi.fn(),
+}));
 
 import { fetchEventRequestById } from '@/lib/supabase/eventRequests';
 import {
@@ -34,6 +37,7 @@ import {
 } from '@/lib/supabase/venueBookingRequests';
 import { fetchConfirmedSlotsForVenue } from '@/lib/supabase/venueBookings';
 import { fetchUnavailableSlotsForVenue } from '@/lib/supabase/venues';
+import { getVenue } from '@/domain/venues/service';
 import { submitVenueBookingRequest } from '@/domain/venue-booking/service';
 import { assertPermission } from '@/domain/identity/policy';
 import { isActionPermitted } from '@/domain/identity/permissions';
@@ -99,6 +103,7 @@ beforeEach(() => {
   // the clash cases are in venue-booking-slot-clash.test.ts (SCRUM-154).
   vi.mocked(fetchConfirmedSlotsForVenue).mockResolvedValue({ data: [], error: null } as never);
   vi.mocked(fetchUnavailableSlotsForVenue).mockResolvedValue({ data: [], error: null } as never);
+  vi.mocked(getVenue).mockReset().mockResolvedValue({ id: VENUE_ID, isRetired: false } as never);
 });
 
 describe('AC1: assigned coordinator, approved event', () => {
@@ -354,6 +359,26 @@ describe('AC5: mandatory field left empty on an approved event', () => {
     );
 
     expect(error.code).toBe('VALIDATION_ERROR');
+    expect(createVenueBookingRequest).not.toHaveBeenCalled();
+  });
+});
+
+describe('Supplementary: a retired venue cannot be requested', () => {
+  // TC-142-10
+  it('refuses a retired venue, creates nothing and flags the venue', async () => {
+    mockEvent('approved');
+    vi.mocked(getVenue).mockResolvedValue({ id: VENUE_ID, isRetired: true } as never);
+
+    const error = await caught(
+      submitVenueBookingRequest(EVENT_ID, COORDINATOR_ID, {
+        venueId: VENUE_ID,
+        lines: [{ date: '2026-11-15', timeSlots: ['pm'] }],
+      }),
+    );
+
+    expect(error.code).toBe('VALIDATION_ERROR');
+    expect(error.message).toMatch(/retired/i);
+    expect(flaggedFields(error)).toMatch(/venueId/);
     expect(createVenueBookingRequest).not.toHaveBeenCalled();
   });
 });

@@ -18,11 +18,13 @@ vi.mock('@/lib/supabase/venueBookingRequests', () => ({
 }));
 vi.mock('@/lib/supabase/venueBookings', () => ({ fetchConfirmedSlotsForVenue: vi.fn() }));
 vi.mock('@/lib/supabase/venues', () => ({ fetchUnavailableSlotsForVenue: vi.fn() }));
+vi.mock('@/domain/venues/service', () => ({ getVenue: vi.fn() }));
 
 import { fetchEventRequestById } from '@/lib/supabase/eventRequests';
 import { createVenueBookingRequest, fetchVenueBookingRequestById } from '@/lib/supabase/venueBookingRequests';
 import { fetchConfirmedSlotsForVenue } from '@/lib/supabase/venueBookings';
 import { fetchUnavailableSlotsForVenue } from '@/lib/supabase/venues';
+import { getVenue } from '@/domain/venues/service';
 import { submitVenueBookingRequest } from '@/domain/venue-booking/service';
 import { findSlotClashes } from '@/domain/venue-booking/policy';
 import { DomainError } from '@/domain/shared/errors';
@@ -57,6 +59,7 @@ async function refusal(promise: Promise<unknown>): Promise<DomainError> {
 type ClashDetails = { clashes: { date: string; committed: Slot[]; unavailable: Slot[]; available: Slot[] }[] };
 
 beforeEach(() => {
+  vi.mocked(getVenue).mockResolvedValue({ id: VENUE_ID, isRetired: false } as never);
   vi.mocked(fetchEventRequestById).mockResolvedValue({
     data: { id: EVENT_ID, status: 'approved', coordinator_id: COORDINATOR_ID },
     error: null,

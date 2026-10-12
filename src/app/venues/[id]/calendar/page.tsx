@@ -10,6 +10,7 @@ import {
 } from '@/domain/venues/schema';
 import { NotFoundError, ValidationError } from '@/domain/shared/errors';
 import { formatSingaporeDate, todayInSingapore } from '@/domain/shared/dates';
+import { formatExpiry } from '@/domain/venue-hold/policy';
 import { getCurrentActor } from '@/lib/auth/currentActor';
 import NoVenueAccess from '@/components/venue/NoVenueAccess';
 
@@ -22,7 +23,8 @@ import NoVenueAccess from '@/components/venue/NoVenueAccess';
  * drawn. SCRUM-123's rules carry over: the venue's opening hours, outside which
  * it cannot be requested (AC3); Fully committed when committed periods cover
  * them (AC4); a Blocked period with its reason (AC7); a pending request shown
- * beside a commitment, never as one (AC8). AC9/AC10: needs
+ * beside a commitment, never as one (AC8). SCRUM-227 AC7: a Held period with
+ * its expiry time. AC9/AC10: needs
  * venue_catalogue_view, checked before anything is read; the API route
  * enforces the same rule with a 403. SCRUM-148 AC3/AC4: a Confirmed period
  * names its event for Venue Staff, the event's coordinator and Operations
@@ -71,6 +73,9 @@ function PeriodItem({ period }: { period: CalendarPeriod }) {
       {period.kind === 'pending' && <span className="text-xs text-[var(--text-muted)]"> · not a commitment</span>}
       {period.kind === 'blocked' && period.reason && (
         <span className="block text-xs text-[var(--text-muted)]">Reason: {period.reason}</span>
+      )}
+      {period.kind === 'held' && period.expiresAt && (
+        <span className="block text-xs text-[var(--text-muted)]">Expires {formatExpiry(period.expiresAt)}</span>
       )}
       {period.kind === 'confirmed' && period.event && (
         <span className="block text-xs">
