@@ -51,7 +51,8 @@ describe('SCRUM-78 — State expected attendance', () => {
       purpose: 'Networking',
       description: 'Yearly gathering',
       proposedDate: '2026-11-15',
-      timeSlots: ['pm'],
+      startTime: '13:00',
+      endTime: '18:00',
       expectedAttendance: 80,
     });
     expect(result.expectedAttendance).toBe(80);
@@ -69,7 +70,8 @@ describe('SCRUM-78 — State expected attendance', () => {
       purpose: 'Networking',
       description: 'Yearly gathering',
       proposedDate: '2026-11-15',
-      timeSlots: ['pm'],
+      startTime: '13:00',
+      endTime: '18:00',
       expectedAttendance: 200,
     });
     expect(result.expectedAttendance).toBe(200);
@@ -81,7 +83,8 @@ describe('SCRUM-78 — State expected attendance', () => {
       purpose: 'Networking',
       description: 'Yearly gathering',
       proposedDate: '2026-11-15',
-      timeSlots: ['pm'],
+      startTime: '13:00',
+      endTime: '18:00',
     });
     expect(result.success).toBe(true);
   });
@@ -95,7 +98,8 @@ describe('SCRUM-78 — State expected attendance', () => {
       purpose: 'Networking',
       description: 'Yearly gathering',
       proposedDate: '2026-11-15',
-      timeSlots: ['pm'],
+      startTime: '13:00',
+      endTime: '18:00',
       expectedAttendance: null,
     });
     expect(result.success).toBe(true);

@@ -48,7 +48,8 @@ const complete: StoredEventRequestFields = {
   purpose: 'Networking',
   description: 'Yearly gathering',
   proposedDate: '2026-11-15',
-  timeSlots: ['pm'],
+  startTime: '13:00',
+  endTime: '18:00',
   expectedAttendance: 80,
 };
 
@@ -127,12 +128,13 @@ describe('SCRUM-82 — Submit a completed event request', () => {
 
     it('lists every incomplete field, not just the first, in form order', () => {
       const result = incompleteFields(
-        { ...complete, purpose: '', timeSlots: [], expectedAttendance: null },
+        { ...complete, purpose: '', startTime: null, endTime: null, expectedAttendance: null },
         A_MONDAY,
       );
       expect(result.map((item) => item.label)).toEqual([
         'Purpose',
-        'Time slots',
+        'Start time',
+        'End time',
         'Expected attendance',
       ]);
     });
@@ -161,7 +163,8 @@ describe('SCRUM-82 — Submit a completed event request', () => {
         purpose: null,
         description: null,
         proposedDate: null,
-        timeSlots: null,
+        startTime: null,
+        endTime: null,
         expectedAttendance: null,
       };
       const result = incompleteFields(allEmpty, A_MONDAY);

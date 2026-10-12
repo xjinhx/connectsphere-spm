@@ -6,7 +6,6 @@ import {
   getVenueRequirementOptions,
 } from '@/domain/event-request/service';
 import { todayInSingapore } from '@/domain/shared/dates';
-import type { TimeSlot } from '@/domain/event-request/schema';
 
 // Depends on who is signed in and on stored data, so nothing to prerender.
 export const dynamic = 'force-dynamic';
@@ -53,7 +52,9 @@ export default async function EditEventRequestPage({
           description: draft.description ?? '',
           // The date input wants YYYY-MM-DD, which is how the column stores it.
           proposedDate: draft.proposedDate ?? '',
-          timeSlots: (draft.timeSlots ?? []) as TimeSlot[],
+          // SCRUM-238 AC6: an older slot draft opens with its slot's times.
+          startTime: draft.startTime ?? '',
+          endTime: draft.endTime ?? '',
           expectedAttendance:
             draft.expectedAttendance === null ? '' : String(draft.expectedAttendance),
           // SCRUM-79

@@ -26,6 +26,7 @@ import {
   ValidationError,
 } from '@/domain/shared/errors';
 import { isRole, type Role } from '@/domain/identity/roles';
+import { fromDatabaseTime } from '@/domain/shared/times';
 import { EventRequestStatusEnum, type EventRequestStatus } from '@/domain/event-request/schema';
 import {
   AssignCoordinatorInputSchema,
@@ -222,7 +223,9 @@ export interface AssignedEvent {
   status: EventRequestStatus;
   proposedDate: string | null;
   submittedAt: string | null;
-  timeSlots: string[] | null;
+  /** SCRUM-238. `HH:MM` Singapore time; null until the organiser gives them. */
+  startTime: string | null;
+  endTime: string | null;
   assignedAt: string | null;
   /** Null until the organiser has been linked to a client organisation. */
   clientOrganisation: { id: string; name: string } | null;
@@ -258,7 +261,8 @@ export async function listMyAssignedEvents(coordinatorId: string): Promise<Assig
     proposedDate: row.proposed_date,
     assignedAt: row.assigned_at,
     submittedAt: row.submitted_at,
-    timeSlots: row.time_slots,
+    startTime: row.start_time === null ? null : fromDatabaseTime(row.start_time),
+    endTime: row.end_time === null ? null : fromDatabaseTime(row.end_time),
     clientOrganisation: row.client_organisation,
   }));
 }
