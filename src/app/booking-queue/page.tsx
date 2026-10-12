@@ -3,15 +3,16 @@ import { getCurrentActor } from '@/lib/auth/currentActor';
 import { isActionPermitted } from '@/domain/identity/permissions';
 import { listPendingBookingQueue } from '@/domain/venue-booking/service';
 import { BOOKING_QUEUE_SORTS, toBookingQueueSort, type BookingQueueSort } from '@/domain/venue-booking/policy';
-import { describeTimeSlots } from '@/domain/event-request/policy';
+import { formatClockRange } from '@/domain/shared/times';
 import { formatSingaporeDate, toSingaporeISODate } from '@/domain/shared/dates';
 
 /**
  * SCRUM-147 View the pending booking request queue — Venue Staff's landing page.
  *
  * AC1 each pending request is listed with its venue, event, requested date and
- *     slots, and the date it was requested. One row per date-and-slots line,
- *     as each line is decided on its own (SCRUM-148 AC5).
+ *     period, and the date it was requested. One row per date-and-period
+ *     line, as each line is decided on its own (SCRUM-148 AC5). Exact times
+ *     since SCRUM-239 (AC3, AC4); SCRUM-147 stays Done on slots.
  * AC2 "Sort by requested event date" reloads the list with the soonest event
  *     first (?sort=event-date). The default is the order requests arrived.
  * AC3 a decided line is not listed: only pending lines are read.
@@ -89,7 +90,7 @@ export default async function VenueStaffBookingQueuePage({
                 <th scope="col" className="p-3 font-medium">Venue</th>
                 <th scope="col" className="p-3 font-medium">Event</th>
                 <th scope="col" className="p-3 font-medium">Requested date</th>
-                <th scope="col" className="p-3 font-medium">Slots</th>
+                <th scope="col" className="p-3 font-medium">Time</th>
                 <th scope="col" className="p-3 font-medium">Requested on</th>
                 <th scope="col" className="p-3 font-medium">
                   <span className="sr-only">Open</span>
@@ -105,7 +106,7 @@ export default async function VenueStaffBookingQueuePage({
                     <span className="block font-mono text-xs text-[var(--text-muted)]">{entry.eventReference}</span>
                   </td>
                   <td className="p-3">{formatSingaporeDate(entry.date)}</td>
-                  <td className="p-3">{describeTimeSlots(entry.timeSlots)}</td>
+                  <td className="p-3">{formatClockRange(entry)}</td>
                   <td className="p-3">{formatSingaporeDate(toSingaporeISODate(new Date(entry.requestedAt)))}</td>
                   <td className="p-3">
                     <Link href={`/venue-booking-requests/${entry.requestId}`} className="text-[var(--brand)] hover:underline">

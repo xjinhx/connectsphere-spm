@@ -2,7 +2,7 @@
 
 import { useState } from 'react';
 import { useRouter } from 'next/navigation';
-import { TIME_SLOT_ORDER, TIME_SLOT_LABELS, type TimeSlot } from '@/domain/event-request/schema';
+import { END_TIME_OPTIONS, START_TIME_OPTIONS } from '@/domain/shared/times';
 import type { VenueBookingLineErrors, VenueBookingRequestErrorDetails } from '@/domain/venue-booking/schema';
 
 export interface VenueOption {
@@ -12,11 +12,15 @@ export interface VenueOption {
 
 interface Line {
   date: string;
-  timeSlots: TimeSlot[];
+  start: string;
+  end: string;
 }
 
-function emptyLine(): Line {
-  return { date: '', timeSlots: [] };
+/** The event's own date and times (SCRUM-238), which a new request starts from. */
+export interface EventPeriod {
+  date: string | null;
+  start: string | null;
+  end: string | null;
 }
 
 const NO_FIELD_ERRORS: VenueBookingRequestErrorDetails = { formErrors: [], fieldErrors: {}, lineErrors: [] };
@@ -41,7 +45,7 @@ function fieldErrorsFrom(details: unknown): VenueBookingRequestErrorDetails {
     lineErrors: Array.isArray(lineErrors)
       ? lineErrors.map((line): VenueBookingLineErrors => {
           const record = (typeof line === 'object' && line !== null ? line : {}) as Record<string, unknown>;
-          return { date: messagesFrom(record.date), timeSlots: messagesFrom(record.timeSlots) };
+          return { date: messagesFrom(record.date), start: messagesFrom(record.start), end: messagesFrom(record.end) };
         })
       : [],
   };
@@ -57,31 +61,41 @@ function FieldError({ id, messages }: { id: string; messages: string[] | undefin
 }
 
 /**
- * SCRUM-142 AC1, AC3 — the Coordinator's "request a venue" action.
+ * SCRUM-142 AC1, AC3 — the Coordinator's "request a venue" action, in exact
+ * times since SCRUM-239 AC3.
  *
  * One venue for the whole request (AC1: "naming one venue"); one or more
- * date/slot lines under it (AC3: "the same venue on several dates... every
- * requested date and slot is carried on the one request"). Each line reuses
- * the same three time slots event_request's own form already uses
- * (TIME_SLOT_ORDER/LABELS), rather than inventing a second copy of them.
+ * date-and-period lines under it (AC3: "the same venue on several dates...
+ * every requested date is carried on the one request"). Each line has a start
+ * and an end time chosen from the 15-minute options SCRUM-238's event form
+ * uses (START_TIME_OPTIONS / END_TIME_OPTIONS), so a time off the unit cannot
+ * be picked.
+ *
+ * The first line starts as the event's own date and times (SCRUM-238), and a
+ * line added later starts with the event's times and no date; the coordinator
+ * changes only what differs.
  *
  * Same request/response shape as RejectRequestForm/ApproveRequestButton: on
  * success the page is refreshed so the created request's status (Pending)
  * comes from the server, not assumed here; on refusal the message the API
- * sent (AC2's "the event must be approved..." or a validation error) is
- * shown as-is. AC5: a validation error also names each missing field, shown
- * beside that field on the line it belongs to.
+ * sent is shown as-is (AC2's "the event must be approved...", a clash naming
+ * the committed period, or a validation error). AC5: a validation error also
+ * names each missing field, shown beside that field on the line it belongs to;
+ * a clash or a period outside opening hours is shown beside the line's times.
  */
 export function RequestVenueBookingForm({
   requestId,
   venues,
+  eventPeriod,
 }: {
   requestId: string;
   venues: readonly VenueOption[];
+  eventPeriod: EventPeriod;
 }) {
   const router = useRouter();
+  const firstLine = (): Line => ({ date: eventPeriod.date ?? '', start: eventPeriod.start ?? '', end: eventPeriod.end ?? '' });
   const [venueId, setVenueId] = useState(venues[0]?.id ?? '');
-  const [lines, setLines] = useState<Line[]>([emptyLine()]);
+  const [lines, setLines] = useState<Line[]>(() => [firstLine()]);
   const [submitting, setSubmitting] = useState(false);
   const [error, setError] = useState<string | null>(null);
   const [fieldErrors, setFieldErrors] = useState<VenueBookingRequestErrorDetails>(NO_FIELD_ERRORS);
@@ -91,21 +105,8 @@ export function RequestVenueBookingForm({
     setLines((current) => current.map((line, i) => (i === index ? { ...line, ...next } : line)));
   }
 
-  function toggleSlot(index: number, slot: TimeSlot) {
-    setLines((current) =>
-      current.map((line, i) => {
-        if (i !== index) return line;
-        const has = line.timeSlots.includes(slot);
-        return {
-          ...line,
-          timeSlots: has ? line.timeSlots.filter((s) => s !== slot) : [...line.timeSlots, slot],
-        };
-      }),
-    );
-  }
-
   function addLine() {
-    setLines((current) => [...current, emptyLine()]);
+    setLines((current) => [...current, { date: '', start: eventPeriod.start ?? '', end: eventPeriod.end ?? '' }]);
   }
 
   function removeLine(index: number) {
@@ -138,7 +139,7 @@ export function RequestVenueBookingForm({
         throw new Error(payload?.message ?? 'The venue booking request could not be created.');
       }
       setSubmittedCount(payload?.lines?.length ?? lines.length);
-      setLines([emptyLine()]);
+      setLines([firstLine()]);
       router.refresh();
     } catch (caught) {
       setError(
@@ -184,7 +185,7 @@ export function RequestVenueBookingForm({
       </div>
 
       <div className="space-y-3">
-        <p className="text-sm font-medium">Dates and slots needed</p>
+        <p className="text-sm font-medium">Dates and times needed</p>
         {lines.map((line, index) => {
           const lineErrors = fieldErrors.lineErrors[index] ?? {};
           return (
@@ -216,19 +217,54 @@ export function RequestVenueBookingForm({
               </div>
               <FieldError id={`venue-booking-date-${index}-error`} messages={lineErrors.date} />
 
-              <div className="mt-2 flex flex-wrap gap-4">
-                {TIME_SLOT_ORDER.map((slot) => (
-                  <label key={slot} className="flex items-center gap-2 text-sm">
-                    <input
-                      type="checkbox"
-                      checked={line.timeSlots.includes(slot)}
-                      onChange={() => toggleSlot(index, slot)}
-                    />
-                    {TIME_SLOT_LABELS[slot]}
+              <div className="mt-2 flex flex-wrap gap-3">
+                <div>
+                  <label className="block text-xs text-[var(--text-muted)]" htmlFor={`venue-booking-start-${index}`}>
+                    Start time
                   </label>
-                ))}
+                  <select
+                    id={`venue-booking-start-${index}`}
+                    value={line.start}
+                    onChange={(event) => updateLine(index, { start: event.target.value })}
+                    aria-invalid={lineErrors.start ? true : undefined}
+                    aria-describedby={lineErrors.start ? `venue-booking-start-${index}-error` : undefined}
+                    className="mt-1 rounded-md border border-[var(--border)] bg-[var(--surface)] px-3 py-2 text-sm"
+                  >
+                    <option value="">Choose</option>
+                    {START_TIME_OPTIONS.map((time) => (
+                      <option key={time} value={time}>
+                        {time}
+                      </option>
+                    ))}
+                  </select>
+                </div>
+                <div>
+                  <label className="block text-xs text-[var(--text-muted)]" htmlFor={`venue-booking-end-${index}`}>
+                    End time
+                  </label>
+                  <select
+                    id={`venue-booking-end-${index}`}
+                    value={line.end}
+                    onChange={(event) => updateLine(index, { end: event.target.value })}
+                    aria-invalid={lineErrors.end ? true : undefined}
+                    aria-describedby={lineErrors.end ? `venue-booking-end-${index}-error` : undefined}
+                    className="mt-1 rounded-md border border-[var(--border)] bg-[var(--surface)] px-3 py-2 text-sm"
+                  >
+                    <option value="">Choose</option>
+                    {END_TIME_OPTIONS.map((time) => (
+                      <option key={time} value={time}>
+                        {time}
+                      </option>
+                    ))}
+                  </select>
+                </div>
               </div>
-              <FieldError id={`venue-booking-slots-${index}-error`} messages={lineErrors.timeSlots} />
+              <FieldError id={`venue-booking-start-${index}-error`} messages={lineErrors.start} />
+              <FieldError
+                id={`venue-booking-end-${index}-error`}
+                // The same message on both fields (e.g. "end must be after start") is shown once.
+                messages={lineErrors.end?.filter((message) => !lineErrors.start?.includes(message))}
+              />
             </div>
           );
         })}

@@ -226,7 +226,8 @@ export default async function ReviewEventRequestPage({
       ) : null}
 
       {/* SCRUM-142 AC1-AC4 — "As an Event Coordinator, I want to request a
-          specific venue for the slots my event needs". Gated on
+          specific venue for the times my event needs" (in exact times since
+          SCRUM-239 AC3). Gated on
           canCreateBookingRequest, SCRUM-142's own rule, the same way the
           Approve section above is gated on canBeApproved: the screen can
           never offer an action the API would refuse. */}
@@ -234,7 +235,12 @@ export default async function ReviewEventRequestPage({
         <section className="mt-6 rounded-lg border border-[var(--border)] bg-[var(--surface)] p-4">
           <h2 className="text-sm font-semibold">Request a venue</h2>
           <div className="mt-3">
-            <RequestVenueBookingForm requestId={request.id} venues={venues} />
+            {/* SCRUM-239 AC3: the request starts from the event's own date and times (SCRUM-238). */}
+            <RequestVenueBookingForm
+              requestId={request.id}
+              venues={venues}
+              eventPeriod={{ date: request.proposedDate, start: request.startTime, end: request.endTime }}
+            />
           </div>
         </section>
       ) : null}

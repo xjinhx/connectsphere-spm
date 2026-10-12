@@ -1,7 +1,11 @@
-import { TIME_SLOT_ORDER, type EventRequestStatus, type TimeSlot } from '@/domain/event-request/schema';
+import type { EventRequestStatus } from '@/domain/event-request/schema';
 import { isActionPermitted } from '@/domain/identity/permissions';
 import type { Role } from '@/domain/identity/roles';
 import { formatSingaporeDate } from '@/domain/shared/dates';
+import { formatClockRange, rangesOverlap, type ClockRange, type ClockTime } from '@/domain/shared/times';
+import { isWithinOpeningHours } from '@/domain/venues/policy';
+import type { CommittedPeriod, VenueCommitment } from '@/domain/availability/schema';
+import { formatExpiry } from '@/domain/venue-hold/policy';
 import type { VenueBookingRequestLineStatus, VenueBookingRequestStatus } from './schema';
 import { describeAccessibility } from '@/domain/event-request/policy';
 import { ROOM_LAYOUT_LABELS, RoomLayoutSchema } from '@/domain/venues/schema';
@@ -26,83 +30,79 @@ export function canCreateBookingRequest(status: EventRequestStatus): boolean {
 }
 
 // ---------------------------------------------------------------------------
-// SCRUM-154 — Block a booking request that clashes with a booking or an
-// unavailable slot
+// SCRUM-239 AC1, AC3, AC8 — refuse a request that is outside the venue's
+// opening hours or overlaps a committed period. SCRUM-154's rules, carried
+// into time ranges (SCRUM-154 stays Done on slots).
 // ---------------------------------------------------------------------------
 
-/** A venue's slot on one date, as stored: a confirmed booking or an unavailable slot. */
-export type DatedSlot = { date: string; slot: string };
+/** "10 Nov 2026 11:00–13:00". */
+export function describePeriod(period: { date: string } & ClockRange): string {
+  return `${formatSingaporeDate(period.date)} ${formatClockRange(period)}`;
+}
 
 /**
- * One requested date where at least one slot cannot be had. `committed` holds
- * a confirmed booking (AC1, AC3), `unavailable` a slot Venue Staff withdrew
- * (AC4); `available` is every other slot asked for on that date (AC3).
- *
- * It carries slots only, never who holds them: AC1 says no event name, client
- * organisation, coordinator or status of the other booking is shown.
+ * AC1: a requested period that starts before the venue opens or ends after it
+ * closes. The same rule search uses (isWithinOpeningHours, Part 1), so a venue
+ * search leaves out is never one a request accepts, and the other way round.
  */
-export interface SlotClash {
+export function isOutsideOpeningHours(period: ClockRange, hours: { opensAt: ClockTime; closesAt: ClockTime }): boolean {
+  return !isWithinOpeningHours(period, hours);
+}
+
+/** AC1: "Outside this venue's opening hours (08:00–22:00)." */
+export function outsideOpeningHoursMessage(hours: { opensAt: ClockTime; closesAt: ClockTime }): string {
+  return `Outside this venue's opening hours (${formatClockRange({ start: hours.opensAt, end: hours.closesAt })}).`;
+}
+
+/**
+ * Two lines of one request asking for overlapping periods on the same date:
+ * the second of each pair, by position. They could never both be booked, so
+ * the request is refused before anything is written.
+ */
+export function overlappingLines(lines: readonly ({ date: string } & ClockRange)[]): number[] {
+  return lines.flatMap((line, index) =>
+    lines.slice(0, index).some((earlier) => earlier.date === line.date && rangesOverlap(earlier, line)) ? [index] : [],
+  );
+}
+
+export const OVERLAPPING_LINES_MESSAGE = 'Overlaps another period on the same date in this request.';
+
+/**
+ * AC3, AC8: one requested line that overlaps committed periods, with the
+ * periods only: no event, organiser, client or reason (AC3: "without any
+ * other event's details").
+ */
+export interface PeriodClash {
+  /** The line's position in the request, so the form can show the clash beside it. */
+  lineIndex: number;
   date: string;
-  committed: TimeSlot[];
-  unavailable: TimeSlot[];
-  available: TimeSlot[];
+  start: string;
+  end: string;
+  committed: CommittedPeriod[];
+}
+
+function listPeriods(periods: readonly ClockRange[]): string {
+  const ranges = periods.map(formatClockRange);
+  return ranges.length > 1 ? `${ranges.slice(0, -1).join(', ')} and ${ranges[ranges.length - 1]}` : (ranges[0] ?? '');
 }
 
 /**
- * AC1 to AC5: the requested dates that clash, and how.
- *
- * Slots are compared one by one on the same date, so an AM booking leaves PM
- * free (AC2, AC5), and a clash on one date says nothing about another. A
- * pending booking request commits nothing, so only confirmed bookings are
- * passed in. A slot that is both booked and unavailable is reported as
- * committed.
+ * AC3, AC8: the refusal the coordinator reads. Each requested period that
+ * clashes, and the committed period it clashes with:
+ * "This venue cannot be requested for that time. 10 Nov 2026 11:00–13:00
+ * clashes with 10:00–12:00, which is already committed."
  */
-export function findSlotClashes(
-  lines: readonly { date: string; timeSlots: readonly TimeSlot[] }[],
-  confirmed: readonly DatedSlot[],
-  unavailable: readonly DatedSlot[],
-): SlotClash[] {
-  const holds = (list: readonly DatedSlot[], date: string, slot: TimeSlot) =>
-    list.some((row) => row.date === date && row.slot === slot);
-
-  const clashes: SlotClash[] = [];
-  for (const line of lines) {
-    const asked = TIME_SLOT_ORDER.filter((slot) => line.timeSlots.includes(slot));
-    const committed = asked.filter((slot) => holds(confirmed, line.date, slot));
-    const withdrawn = asked.filter((slot) => !committed.includes(slot) && holds(unavailable, line.date, slot));
-    if (committed.length === 0 && withdrawn.length === 0) continue;
-    clashes.push({
-      date: line.date,
-      committed,
-      unavailable: withdrawn,
-      available: asked.filter((slot) => !committed.includes(slot) && !withdrawn.includes(slot)),
-    });
-  }
-  return clashes;
+export function describePeriodClashes(clashes: readonly PeriodClash[]): string {
+  const parts = clashes.map(
+    (clash) =>
+      `${describePeriod(clash)} clashes with ${listPeriods(clash.committed)}, which ${clash.committed.length > 1 ? 'are' : 'is'} already committed`,
+  );
+  return `This venue cannot be requested for that time. ${parts.join('. ')}.`;
 }
 
-const SLOT_NAMES: Record<TimeSlot, string> = { am: 'AM', pm: 'PM', night: 'Night' };
-
-function slotNames(slots: readonly TimeSlot[]): string {
-  const names = slots.map((slot) => SLOT_NAMES[slot]);
-  return names.length > 1 ? `${names.slice(0, -1).join(', ')} and ${names[names.length - 1]}` : (names[0] ?? '');
-}
-
-/**
- * The refusal the coordinator reads: per date, which slots are committed or
- * unavailable and which are still available (AC1, AC3, AC4).
- */
-export function describeSlotClashes(clashes: readonly SlotClash[]): string {
-  const parts = clashes.map((clash) => {
-    const reasons = [
-      clash.committed.length > 0 && `${slotNames(clash.committed)} already committed`,
-      clash.unavailable.length > 0 && `${slotNames(clash.unavailable)} unavailable`,
-    ].filter(Boolean);
-    const free =
-      clash.available.length > 0 ? `; ${slotNames(clash.available)} still available` : '';
-    return `${clash.date}: ${reasons.join(', ')}${free}`;
-  });
-  return `This venue cannot be requested for those slots. ${parts.join('. ')}.`;
+/** What the form shows beside the clashing line's times. */
+export function periodClashFieldMessage(clash: PeriodClash): string {
+  return `Clashes with ${listPeriods(clash.committed)}, already committed.`;
 }
 
 // ---------------------------------------------------------------------------
@@ -144,22 +144,20 @@ export function canSeeBookingDetails(
 
 /**
  * AC2: what the event's coordinator is told when their booking request is
- * decided: the outcome, the dates and slots, and each rejected line's reason.
+ * decided: the outcome, the dates and periods, and each rejected line's reason.
  */
 export function bookingDecisionMessage(
   venueName: string,
   decision: {
     status: VenueBookingRequestStatus;
-    lines: readonly {
+    lines: readonly ({
       date: string;
-      timeSlots: readonly string[];
       status: VenueBookingRequestLineStatus;
       rejectionReason: string | null;
-    }[];
+    } & ClockRange)[];
   },
 ): string {
-  const when = (line: { date: string; timeSlots: readonly string[] }) =>
-    `${formatSingaporeDate(line.date)} ${line.timeSlots.map((slot) => SLOT_NAMES[slot as TimeSlot] ?? slot).join(' + ')}`;
+  const when = describePeriod;
   const approved = decision.lines.filter((line) => line.status === 'approved').map(when);
   const rejected = decision.lines
     .filter((line) => line.status === 'rejected')
@@ -263,57 +261,82 @@ export function canViewBookingRequest(
 // ---------------------------------------------------------------------------
 
 /** AC4: the reason a competing request's line is rejected with (also in the database function). */
-export const SLOT_COMMITTED_REASON = 'This slot is committed to another event.';
+export const PERIOD_COMMITTED_REASON = 'This period is committed to another event.';
 
-/** AC1 and AC5: one slot of a line being approved that clashes, and with what. */
-export type ApprovalConflict =
-  | { lineId: string; date: string; slot: string; kind: 'booked'; event: { reference: string; name: string } | null }
-  | { lineId: string; date: string; slot: string; kind: 'unavailable'; reason: string };
+type EventName = { reference: string; name: string };
 
 /**
- * AC1 and AC5: the slots of these lines that clash: a confirmed booking, or a
- * slot recorded as unavailable. Same venue, same date, same slot, the rule
- * SCRUM-154 applies when a coordinator requests a slot. Venue Staff also see
- * which event holds the slot and why it is unavailable.
+ * SCRUM-239 AC4 (SCRUM-155 AC1 and AC5 in time ranges): what one line being
+ * approved clashes with. Venue Staff see which event holds a booked or held
+ * period (SCRUM-155 AC1) and why a period is unavailable (AC5). `start` and
+ * `end` are the clashing period's times, not the line's.
  */
-export function findApprovalConflicts(
-  lines: readonly { id: string; date: string; timeSlots: readonly string[] }[],
-  bookings: readonly { date: string; slot: string; event: { reference: string; name: string } | null }[],
-  unavailable: readonly { date: string; slot: string; reason: string }[],
-): ApprovalConflict[] {
-  const conflicts: ApprovalConflict[] = [];
-  for (const line of lines) {
-    for (const slot of line.timeSlots) {
-      const booking = bookings.find((b) => b.date === line.date && b.slot === slot);
-      if (booking) {
-        conflicts.push({ lineId: line.id, date: line.date, slot, kind: 'booked', event: booking.event });
-        continue;
-      }
-      const withdrawn = unavailable.find((u) => u.date === line.date && u.slot === slot);
-      if (withdrawn) {
-        conflicts.push({ lineId: line.id, date: line.date, slot, kind: 'unavailable', reason: withdrawn.reason });
-      }
-    }
-  }
-  return conflicts;
+export type ApprovalConflict =
+  | ({ lineId: string; date: string; kind: 'booked'; event: EventName | null } & ClockRange)
+  | ({ lineId: string; date: string; kind: 'held'; event: EventName | null; expiresAt: string | null } & ClockRange)
+  | ({ lineId: string; date: string; kind: 'unavailable'; reason: string } & ClockRange)
+  | ({ lineId: string; date: string; kind: 'non_adjacent_slots' } & ClockRange);
+
+/**
+ * A line requested before the switch to times that asks for AM and Night but
+ * not PM: two separate periods, which cannot be booked as one. Decided on PR
+ * #89's follow-ups: refuse, rather than book 07:00-24:00 and take PM as well.
+ */
+export function isNonAdjacentSlots(slots: readonly string[] | null): boolean {
+  return slots !== null && slots.includes('am') && slots.includes('night') && !slots.includes('pm');
 }
 
-/** AC1: "AM on 15 Nov 2026 is already booked for EVT-2026-0101 (Tech Summit)." AC5: "... is unavailable: Aircon repair." */
+/**
+ * AC4: a line's conflicts, from what getVenueCommitments returned for its
+ * period with the event's own holds already left out (SCRUM-227 AC5,
+ * withoutOwnHolds). Each event is named from `events`, by id.
+ */
+export function approvalConflictsFor(
+  line: { id: string; date: string; legacySlots: readonly string[] | null } & ClockRange,
+  commitments: readonly VenueCommitment[],
+  events: ReadonlyMap<string, EventName>,
+): ApprovalConflict[] {
+  if (isNonAdjacentSlots(line.legacySlots)) {
+    return [{ lineId: line.id, date: line.date, start: line.start, end: line.end, kind: 'non_adjacent_slots' }];
+  }
+  return commitments
+    .filter((c) => c.date === line.date && rangesOverlap(c, line))
+    .map((c): ApprovalConflict => {
+      const base = { lineId: line.id, date: c.date, start: c.start, end: c.end };
+      const event = c.eventRequestId ? (events.get(c.eventRequestId) ?? null) : null;
+      switch (c.kind) {
+        case 'booking':
+          return { ...base, kind: 'booked', event };
+        case 'hold':
+          return { ...base, kind: 'held', event, expiresAt: c.expiresAt ?? null };
+        case 'unavailable':
+          return { ...base, kind: 'unavailable', reason: c.reason ?? '' };
+      }
+    });
+}
+
+/**
+ * AC4: "10:00–12:00 on 15 Nov 2026 is already booked for EVT-2026-0101 (Tech
+ * Summit)." AC8 and SCRUM-155 AC5: "14:00–16:30 on 15 Nov 2026 is unavailable:
+ * Aircon repair."
+ */
 export function describeApprovalConflict(conflict: ApprovalConflict): string {
-  const when = `${SLOT_NAMES[conflict.slot as TimeSlot] ?? conflict.slot} on ${formatSingaporeDate(conflict.date)}`;
-  if (conflict.kind === 'unavailable') return `${when} is unavailable: ${conflict.reason}.`;
-  return conflict.event
-    ? `${when} is already booked for ${conflict.event.reference} (${conflict.event.name}).`
-    : `${when} is already booked.`;
+  const when = `${formatClockRange(conflict)} on ${formatSingaporeDate(conflict.date)}`;
+  switch (conflict.kind) {
+    case 'booked':
+      return `${when} is already booked${conflict.event ? ` for ${conflict.event.reference} (${conflict.event.name})` : ''}.`;
+    case 'held':
+      return `${when} is held${conflict.event ? ` for ${conflict.event.reference} (${conflict.event.name})` : ''}${
+        conflict.expiresAt ? ` until ${formatExpiry(conflict.expiresAt)}` : ''
+      }.`;
+    case 'unavailable':
+      return `${when} is unavailable${conflict.reason ? `: ${conflict.reason}` : ''}.`;
+    case 'non_adjacent_slots':
+      return `This line was requested as AM and Night on ${formatSingaporeDate(conflict.date)}, which are not next to each other, so it cannot be booked as one period. Reject it and ask the coordinator to request each period separately.`;
+  }
 }
 
 /** AC4: what a competing request's coordinator is told. */
-export function slotCommittedMessage(
-  venueName: string,
-  lines: readonly { date: string; timeSlots: readonly string[] }[],
-): string {
-  const when = lines
-    .map((line) => `${formatSingaporeDate(line.date)} ${line.timeSlots.map((slot) => SLOT_NAMES[slot as TimeSlot] ?? slot).join(' + ')}`)
-    .join(', ');
-  return `Your booking request for ${venueName} was rejected for ${when}: the slot is now committed to another event.`;
+export function periodCommittedMessage(venueName: string, lines: readonly ({ date: string } & ClockRange)[]): string {
+  return `Your booking request for ${venueName} was rejected for ${lines.map(describePeriod).join(', ')}: the period is now committed to another event.`;
 }
