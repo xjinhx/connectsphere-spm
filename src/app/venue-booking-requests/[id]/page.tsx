@@ -167,7 +167,7 @@ export default async function VenueBookingRequestPage({ params }: { params: Prom
                     <div className="mt-2 rounded-md border border-[var(--border)] px-3 py-2">
                       <p>
                         Suggested instead: {line.suggestion.venueName}, {formatSingaporeDate(line.suggestion.date)} ·{' '}
-                        {formatClockRange(line.suggestion)}
+                        {line.suggestion.periods.map(formatClockRange).join(' and ')}
                       </p>
                       {isCoordinator ? (
                         <Link

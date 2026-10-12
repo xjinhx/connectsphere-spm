@@ -28,6 +28,7 @@ import {
   overlappingLines,
   OVERLAPPING_LINES_MESSAGE,
   PERIOD_COMMITTED_REASON,
+  legacySuggestionPeriods,
   periodClashFieldMessage,
   periodCommittedMessage,
   requestStatusOf,
@@ -296,9 +297,30 @@ type DecisionRow = {
     suggested_date: string | null;
     suggested_start_time: string | null;
     suggested_end_time: string | null;
+    suggested_slots: string[] | null;
     suggested_venue: { name: string } | null;
   }[];
 };
+
+/**
+ * SCRUM-150 AC1: a rejected line's suggestion. One made before the switch to
+ * times for AM and Night (no PM) has no period of its own and is shown as its
+ * two slots' periods (legacySuggestionPeriods).
+ */
+function toSuggestion(line: DecisionRow['venue_booking_request_line'][number]): DecidedVenueBookingRequestLine['suggestion'] {
+  if (!line.suggested_venue_id || !line.suggested_date) return null;
+  const periods =
+    line.suggested_start_time && line.suggested_end_time
+      ? [{ start: fromDatabaseTime(line.suggested_start_time), end: fromDatabaseTime(line.suggested_end_time) }]
+      : legacySuggestionPeriods(line.suggested_slots ?? []);
+  if (periods.length === 0) return null;
+  return {
+    venueId: line.suggested_venue_id,
+    venueName: line.suggested_venue?.name ?? 'Venue',
+    date: line.suggested_date,
+    periods,
+  };
+}
 
 /** Lines in date order, then start time: the order the days run in. */
 function toDecision(row: DecisionRow, deciderNames: ReadonlyMap<string, string | null>): VenueBookingDecision {
@@ -316,16 +338,7 @@ function toDecision(row: DecisionRow, deciderNames: ReadonlyMap<string, string |
         decidedByName: line.decided_by ? (deciderNames.get(line.decided_by) ?? null) : null,
         decidedAt: line.decided_at,
         rejectionReason: line.rejection_reason,
-        suggestion:
-          line.suggested_venue_id && line.suggested_date && line.suggested_start_time && line.suggested_end_time
-            ? {
-                venueId: line.suggested_venue_id,
-                venueName: line.suggested_venue?.name ?? 'Venue',
-                date: line.suggested_date,
-                start: fromDatabaseTime(line.suggested_start_time),
-                end: fromDatabaseTime(line.suggested_end_time),
-              }
-            : null,
+        suggestion: toSuggestion(line),
       }),
     );
 

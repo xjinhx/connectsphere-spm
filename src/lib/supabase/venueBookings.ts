@@ -21,7 +21,7 @@ export async function fetchVenueBookingDecision(id: string) {
   return db()
     .from('venue_booking_request')
     .select(
-      'id, event_request_id, venue_id, event_request:event_request_id (coordinator_id), venue_booking_request_line (id, date, start_time, end_time, time_slots, status, decided_by, decided_at, rejection_reason, suggested_venue_id, suggested_date, suggested_start_time, suggested_end_time, suggested_venue:suggested_venue_id (name))',
+      'id, event_request_id, venue_id, event_request:event_request_id (coordinator_id), venue_booking_request_line (id, date, start_time, end_time, time_slots, status, decided_by, decided_at, rejection_reason, suggested_venue_id, suggested_date, suggested_start_time, suggested_end_time, suggested_slots, suggested_venue:suggested_venue_id (name))',
     )
     .eq('id', id)
     .maybeSingle();

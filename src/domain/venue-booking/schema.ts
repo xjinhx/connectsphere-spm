@@ -224,8 +224,12 @@ export interface DecidedVenueBookingRequestLine {
   decidedByName: string | null;
   decidedAt: string | null;
   rejectionReason: string | null;
-  /** SCRUM-150 AC1: what Venue Staff suggested instead, on a rejected line; null if nothing. */
-  suggestion: { venueId: string; venueName: string; date: string; start: string; end: string } | null;
+  /**
+   * SCRUM-150 AC1: what Venue Staff suggested instead, on a rejected line; null
+   * if nothing. One period, except a suggestion of AM and Night (no PM) made
+   * before the switch to times, which is its two periods.
+   */
+  suggestion: { venueId: string; venueName: string; date: string; periods: readonly { start: string; end: string }[] } | null;
 }
 
 /** A booking request with its status and decided lines. */

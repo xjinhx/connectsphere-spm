@@ -286,6 +286,25 @@ export function isNonAdjacentSlots(slots: readonly string[] | null): boolean {
   return slots !== null && slots.includes('am') && slots.includes('night') && !slots.includes('pm');
 }
 
+/** Each slot's times, as 20261008140500_time_model.sql filled them in. */
+const LEGACY_SLOT_PERIODS: Readonly<Record<string, ClockRange>> = {
+  am: { start: '07:00', end: '12:00' },
+  pm: { start: '13:00', end: '18:00' },
+  night: { start: '19:00', end: '24:00' },
+};
+
+/**
+ * PR #100 review: a suggestion made before the switch to times, in slots, has
+ * no period of its own when it is AM and Night without PM (the migration
+ * leaves it in slots rather than offer 07:00-24:00). It is shown as each
+ * slot's period, in day order, so PM is not offered.
+ */
+export function legacySuggestionPeriods(slots: readonly string[]): ClockRange[] {
+  return Object.entries(LEGACY_SLOT_PERIODS)
+    .filter(([slot]) => slots.includes(slot))
+    .map(([, period]) => ({ ...period }));
+}
+
 /**
  * AC4: a line's conflicts, from what getVenueCommitments returned for its
  * period with the event's own holds already left out (SCRUM-227 AC5,

@@ -597,13 +597,13 @@ describe('suggesting an alternative (SCRUM-150)', () => {
     expect(seen.status).toBe('rejected');
     expect(seen.lines[0]).toMatchObject({
       rejectionReason: 'Too small',
-      suggestion: { venueId: suggested.id, venueName: suggested.name, date, ...PM },
+      suggestion: { venueId: suggested.id, venueName: suggested.name, date, periods: [PM] },
     });
   });
 
   it("AC2: shows it to the event's coordinator (TC-150-02)", async () => {
     const seen = await viewVenueBookingRequest(requestId, { userId: coordinatorId, roles: ['coordinator'] });
-    expect(seen.lines[0]?.suggestion).toMatchObject({ venueName: suggested.name, date, ...PM });
+    expect(seen.lines[0]?.suggestion).toMatchObject({ venueName: suggested.name, date, periods: [PM] });
   });
 
   it('AC3: books nothing and requests nothing at the suggested venue (TC-150-04)', async () => {
@@ -639,6 +639,45 @@ describe('suggesting an alternative (SCRUM-150)', () => {
       decisions: [{ lineId: plain.lineIds[0], decision: 'reject', reason: 'Private function' }],
     });
     expect(decided.lines[0]?.suggestion).toBeNull();
+  });
+
+  it('PR #100 review: a suggestion of AM and Night made in slots is shown as its two periods, not 07:00-24:00', async () => {
+    const venue = await createTestVenue('Hall Y');
+    const legacyDate = daysFromToday(32);
+    const legacy = await createRequest(venue.id, [{ date: legacyDate, ...AM }]);
+    await decideVenueBookingRequest(legacy.requestId, venueStaffId, {
+      decisions: [{ lineId: legacy.lineIds[0], decision: 'reject', reason: 'Booked out' }],
+    });
+    // As 20261012090000 leaves one written before the switch: slots, no period.
+    const { error } = await admin
+      .from('venue_booking_request_line')
+      .update({ suggested_venue_id: suggested.id, suggested_date: legacyDate, suggested_slots: ['am', 'night'] })
+      .eq('id', legacy.lineIds[0]!);
+    expect(error).toBeNull();
+
+    const seen = await viewVenueBookingRequest(legacy.requestId, { userId: coordinatorId, roles: ['coordinator'] });
+    expect(seen.lines[0]?.suggestion).toEqual({
+      venueId: suggested.id,
+      venueName: suggested.name,
+      date: legacyDate,
+      periods: [
+        { start: '07:00', end: '12:00' },
+        { start: '19:00', end: '24:00' },
+      ],
+    });
+  });
+
+  it('PR #100 review: a suggestion with a date but neither a period nor slots is refused by the database', async () => {
+    const venue = await createTestVenue('Hall Z');
+    const plain = await createRequest(venue.id, [{ date: daysFromToday(33), ...AM }]);
+    await decideVenueBookingRequest(plain.requestId, venueStaffId, {
+      decisions: [{ lineId: plain.lineIds[0], decision: 'reject', reason: 'Booked out' }],
+    });
+    const { error } = await admin
+      .from('venue_booking_request_line')
+      .update({ suggested_venue_id: suggested.id, suggested_date: daysFromToday(33) })
+      .eq('id', plain.lineIds[0]!);
+    expect(error?.code).toBe('23514');
   });
 });
 

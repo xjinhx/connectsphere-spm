@@ -3,6 +3,7 @@ import {
   approvalConflictsFor,
   describeApprovalConflict,
   isNonAdjacentSlots,
+  legacySuggestionPeriods,
   periodCommittedMessage,
 } from '@/domain/venue-booking/policy';
 import { DecisionResultSchema } from '@/domain/venue-booking/schema';
@@ -82,6 +83,19 @@ describe('isNonAdjacentSlots (PR #89 follow-up: AM + Night is refused)', () => {
     [null, false],
   ])('%j -> %s', (slots, expected) => {
     expect(isNonAdjacentSlots(slots)).toBe(expected);
+  });
+});
+
+describe('legacySuggestionPeriods (PR #100 review: AM + Night suggestion is not 07:00-24:00)', () => {
+  it('gives each slot its own period, so PM is not offered', () => {
+    expect(legacySuggestionPeriods(['night', 'am'])).toEqual([
+      { start: '07:00', end: '12:00' },
+      { start: '19:00', end: '24:00' },
+    ]);
+  });
+
+  it('gives nothing for no slots', () => {
+    expect(legacySuggestionPeriods([])).toEqual([]);
   });
 });
 

@@ -85,17 +85,23 @@ alter table venue_booking_request_line
   add column suggested_start_time time,
   add column suggested_end_time time;
 
+-- A suggestion of AM and Night without PM is two periods, and Venue Staff left
+-- PM out on purpose, so it keeps its slots and gets no single period
+-- (07:00-24:00 would offer PM as well). The app shows it as its two periods.
 update venue_booking_request_line set
   suggested_start_time = (select min(slot_start_time(s)) from unnest(suggested_slots) as s),
   suggested_end_time = (select max(slot_end_time(s)) from unnest(suggested_slots) as s)
-where suggested_slots is not null;
+where suggested_slots is not null
+  and not (suggested_slots @> array['am', 'night']::text[] and not suggested_slots @> array['pm']::text[]);
 
 alter table venue_booking_request_line
   drop constraint venue_booking_request_line_suggestion_complete,
   add constraint venue_booking_request_line_suggestion_complete check (
     (suggested_venue_id is null) = (suggested_date is null)
-    and (suggested_date is null) = (suggested_start_time is null)
     and (suggested_start_time is null) = (suggested_end_time is null)
+    and (suggested_start_time is null or suggested_date is not null)
+    -- a suggestion has its period, unless it is a legacy AM + Night one
+    and (suggested_date is null or suggested_start_time is not null or suggested_slots is not null)
   ),
   add constraint venue_booking_request_line_suggested_times_valid check (
     suggested_start_time is null
