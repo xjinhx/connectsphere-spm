@@ -9,6 +9,7 @@ import {
   type BookedSlot,
   type BookingQueueEntry,
   type BookingRequestRequirements,
+  type EventBookingRequest,
   type VenueBookingDecision,
   type VenueBookingRequestOutcome,
 } from './schema';
@@ -30,6 +31,7 @@ import {
 } from './policy';
 import { isCurrentCoordinator } from '@/domain/assignment/policy';
 import { TimeSlotEnum, type TimeSlot } from '@/domain/event-request/schema';
+import { fromDatabaseTime } from '@/domain/shared/times';
 import type { Role } from '@/domain/identity/roles';
 import { notifyBestEffort } from '@/domain/notification/service';
 import { getVenue } from '@/domain/venues/service';
@@ -40,9 +42,11 @@ import type { EventRequestRow } from '@/lib/supabase/eventRequests';
 import {
   createVenueBookingRequest,
   fetchBookingRequestRequirements,
+  fetchEventBookingRequests,
   fetchPendingBookingLines,
   fetchVenueBookingRequestById,
   type BookingRequestRequirementsRow,
+  type EventBookingRequestRow,
   type PendingBookingLineRow,
   type VenueBookingRequestRow,
 } from '@/lib/supabase/venueBookingRequests';
@@ -306,6 +310,38 @@ export async function viewVenueBookingRequest(
     throw new ForbiddenError("Only Venue Staff and the event's coordinator can view this booking request.");
   }
   return decision;
+}
+
+/**
+ * SCRUM-236 AC1 and AC3: every booking request made for the event, newest
+ * first, each with its venue, its requested dates with their start and end
+ * times, and its status. The status is worked out from the lines the same way
+ * as on the request page (requestStatusOf), so the two never disagree. An
+ * event with no requests gets an empty list.
+ *
+ * No access check of its own, the same as listAffectedBookings (SCRUM-151):
+ * its only caller is the coordinator's event page, which calls it after
+ * getReviewDetail has refused anyone the event is not theirs to see.
+ */
+export async function listEventBookingRequests(eventRequestId: string): Promise<EventBookingRequest[]> {
+  const { data, error } = await fetchEventBookingRequests(eventRequestId);
+  if (error || !data) throw new ValidationError("Could not read the event's booking requests.", error?.message);
+
+  return (data as unknown as EventBookingRequestRow[]).map((row) => {
+    const lines = [...row.venue_booking_request_line].sort(
+      (a, b) => a.date.localeCompare(b.date) || a.start_time.localeCompare(b.start_time),
+    );
+    return {
+      id: row.id,
+      venueName: row.venues?.name ?? 'Unknown venue',
+      status: requestStatusOf(lines.map((line) => VenueBookingRequestLineStatusEnum.parse(line.status))),
+      lines: lines.map((line) => ({
+        date: line.date,
+        startTime: fromDatabaseTime(line.start_time),
+        endTime: fromDatabaseTime(line.end_time),
+      })),
+    };
+  });
 }
 
 /**
