@@ -282,6 +282,13 @@ export interface UnassignedEvent {
   name: string;
   proposedDate: string | null;
   submittedAt: string | null;
+  // SCRUM-232 AC2 — the rest of what the Lead sees before assigning.
+  /** Null until the organiser has been linked to a client organisation. */
+  clientOrganisation: { id: string; name: string } | null;
+  /** SCRUM-238. `HH:MM` Singapore time; null until the organiser gives them. */
+  startTime: string | null;
+  endTime: string | null;
+  expectedAttendance: number | null;
 }
 
 /**
@@ -307,6 +314,10 @@ export async function listUnassignedEvents(): Promise<UnassignedEvent[]> {
     name: row.name,
     proposedDate: row.proposed_date,
     submittedAt: row.submitted_at,
+    clientOrganisation: row.client_organisation,
+    startTime: row.start_time === null ? null : fromDatabaseTime(row.start_time),
+    endTime: row.end_time === null ? null : fromDatabaseTime(row.end_time),
+    expectedAttendance: row.expected_attendance,
   }));
 }
 
