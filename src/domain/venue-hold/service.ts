@@ -182,7 +182,7 @@ async function eventNames(ids: readonly string[]): Promise<Map<string, { referen
  * were sent.
  *
  * The check itself is the database function notify_hold_expiries
- * (supabase/migrations/20261010140000_...), so the timer and the rule live in
+ * (supabase/migrations/20261013010941_...), so the timer and the rule live in
  * one place; this is for tests, and for anything in the app that wants to run
  * it now rather than at the next tick.
  */

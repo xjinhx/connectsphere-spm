@@ -104,7 +104,7 @@ export async function fetchEventNames(eventRequestIds: readonly string[]) {
 
 /**
  * SCRUM-228 AC1 and AC2: one run of the hold-expiry check, the database
- * function pg_cron runs every 5 minutes (20261010140000_...). `now` is for
+ * function pg_cron runs every 5 minutes (20261013010941_...). `now` is for
  * tests; left out, the database's own clock is used. Resolves to how many
  * notifications were sent.
  */
