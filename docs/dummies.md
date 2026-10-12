@@ -403,7 +403,7 @@ switch them the next time they edit those files.
   `AffectedBookingsNotice`, re-run SCRUM-151 AC3, then remove the markers.
 - **Status:** Replaced (SCRUM-231, branch `venue-booking-release`). A booking
   now has a `released` status with its reason, who released it and when
-  (`20261010143000_venue_booking_release.sql`). The event's assigned
+  (`20261011140000_venue_booking_release.sql`). The event's assigned
   coordinator releases it from the event page's Venue bookings list
   (`releaseVenueBooking()`, `POST /api/venue-bookings/[id]/release`).
   `listAffectedBookings()` did not change: a released booking is no longer

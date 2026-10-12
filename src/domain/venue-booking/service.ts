@@ -645,7 +645,7 @@ export async function listEventVenueBookings(eventRequestId: string, actorId: st
  * AC1: the event's assigned coordinator releases one booking, giving a
  * reason. It becomes Released and its time is free again, because everything
  * that treats a venue as committed reads confirmed bookings only (migration
- * 20261010143000). AC2: nothing else changes, not the event, its status or
+ * 20261011140000). AC2: nothing else changes, not the event, its status or
  * its other bookings. AC4: an affected booking's outstanding action closes for
  * the same reason, since affected_booking_slot lists confirmed bookings only.
  *
