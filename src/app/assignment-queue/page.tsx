@@ -1,3 +1,4 @@
+import Link from 'next/link';
 import { getCurrentActor } from '@/lib/auth/currentActor';
 import { assertPermission } from '@/domain/identity/policy';
 import { ForbiddenError } from '@/domain/shared/errors';
@@ -98,7 +99,13 @@ export default async function EventOpsManagerAssignmentQueuePage() {
             <tbody>
               {events.map((event) => (
                 <tr key={event.id} className="border-b border-[var(--border)] last:border-b-0">
-                  <td className="p-3 font-medium">{event.name}</td>
+                  <td className="p-3 font-medium">
+                    {/* SCRUM-232 AC3 — the event's assignment page, where the
+                        record is shown and the event can be reassigned later. */}
+                    <Link href={`/assignment-queue/${event.id}`} className="text-[var(--brand)] hover:underline">
+                      {event.name}
+                    </Link>
+                  </td>
                   <td className="p-3 font-mono text-xs text-[var(--text-muted)]">{event.reference}</td>
                   <td className="p-3">{event.clientOrganisation?.name ?? '—'}</td>
                   <td className="p-3">

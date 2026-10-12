@@ -26,6 +26,7 @@ import {
   ValidationError,
 } from '@/domain/shared/errors';
 import { isRole, type Role } from '@/domain/identity/roles';
+import { assertPermission } from '@/domain/identity/policy';
 import { fromDatabaseTime } from '@/domain/shared/times';
 import { EventRequestStatusEnum, type EventRequestStatus } from '@/domain/event-request/schema';
 import {
@@ -319,6 +320,105 @@ export async function listUnassignedEvents(): Promise<UnassignedEvent[]> {
     endTime: row.end_time === null ? null : fromDatabaseTime(row.end_time),
     expectedAttendance: row.expected_attendance,
   }));
+}
+
+// ---------------------------------------------------------------------------
+// SCRUM-232 — the Lead's assignment record for one event
+// ---------------------------------------------------------------------------
+
+/** One replaced assignment, with who made each change (AC3's "my name"). */
+export interface AssignmentRecordEntry {
+  coordinatorName: string | null;
+  assignedByName: string | null;
+  assignedAt: string;
+  replacedByCoordinatorName: string | null;
+  /** The Lead who made the reassignment. */
+  replacedByName: string | null;
+  replacedAt: string;
+}
+
+export interface AssignmentRecord {
+  event: UnassignedEvent & { status: EventRequestStatus };
+  /** Null until a coordinator is assigned. */
+  current: {
+    coordinatorId: string;
+    coordinatorName: string | null;
+    assignedByName: string | null;
+    assignedAt: string;
+  } | null;
+  /** Oldest first. */
+  history: AssignmentRecordEntry[];
+}
+
+/**
+ * AC3 — an event's assignment as the Lead sees it: who it is assigned to, who
+ * assigned it and when, and every reassignment before that with who made it.
+ * AC4 — only an account with the Lead's permission may read it; the page shows
+ * everyone else that it is not for their role.
+ *
+ * The assignment and its history come from one read (fetchEventAssignmentWithHistory),
+ * so they always agree, for the reason given on getCoordinatorView. The event's
+ * own details are a second read; they are not what a reassignment changes.
+ */
+export async function getAssignmentRecord(
+  eventRequestId: string,
+  actor: { roles: Role[] },
+): Promise<AssignmentRecord> {
+  assertPermission(actor.roles, 'coordinator_assignment');
+
+  const parsedId = EventRequestIdSchema.safeParse(eventRequestId);
+  if (!parsedId.success) throw new NotFoundError('Event request');
+
+  const [assignment, details] = await Promise.all([
+    fetchEventAssignmentWithHistory(parsedId.data),
+    fetchEventRequestById(parsedId.data),
+  ]);
+  if (assignment.error) throw new ValidationError('The event request could not be read.', assignment.error.message);
+  if (details.error) throw new ValidationError('The event request could not be read.', details.error.message);
+  if (!assignment.data || !details.data) throw new NotFoundError('Event request');
+
+  const event = assignment.data as unknown as EventAssignmentWithHistoryRow;
+  const row = details.data as unknown as EventRequestRow;
+  const historyRows: CoordinatorHistoryRow[] = event.event_request_coordinator_history ?? [];
+
+  const people = await readContactProfiles([
+    ...(event.coordinator_id ? [event.coordinator_id] : []),
+    ...(event.assigned_by ? [event.assigned_by] : []),
+    ...historyRows.flatMap((h) => [h.coordinator_id, h.assigned_by, h.replaced_by, h.replaced_by_coordinator_id]),
+  ]);
+  const nameOf = (id: string) => people.get(id)?.full_name ?? null;
+
+  return {
+    event: {
+      id: row.id,
+      reference: row.reference,
+      name: row.name,
+      status: row.status,
+      proposedDate: row.proposed_date,
+      submittedAt: row.submitted_at,
+      clientOrganisation: row.client_organisation,
+      startTime: row.start_time === null ? null : fromDatabaseTime(row.start_time),
+      endTime: row.end_time === null ? null : fromDatabaseTime(row.end_time),
+      expectedAttendance: row.expected_attendance,
+    },
+    current:
+      event.coordinator_id && event.assigned_at
+        ? {
+            coordinatorId: event.coordinator_id,
+            coordinatorName: nameOf(event.coordinator_id),
+            assignedByName: event.assigned_by ? nameOf(event.assigned_by) : null,
+            assignedAt: event.assigned_at,
+          }
+        : null,
+    history: historyRows.map((h) => ({
+      coordinatorName: nameOf(h.coordinator_id),
+      assignedByName: nameOf(h.assigned_by),
+      assignedAt: h.assigned_at,
+      replacedByCoordinatorName: nameOf(h.replaced_by_coordinator_id),
+      replacedByName: nameOf(h.replaced_by),
+      replacedAt: h.replaced_at,
+    })),
+  };
 }
 
 // ---------------------------------------------------------------------------
