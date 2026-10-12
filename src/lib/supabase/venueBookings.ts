@@ -86,3 +86,47 @@ export async function fetchConfirmedBookingsBetween(venueId: string, from: strin
     .lte('date', to)
     .order('date');
 }
+
+// -----------------------------------------------------------------------------
+// SCRUM-231 — Release one venue booking
+// -----------------------------------------------------------------------------
+
+/** AC1, AC2: an event's bookings, released ones included, with the event's coordinator (AC3). */
+export async function fetchEventVenueBookings(eventRequestId: string) {
+  return db()
+    .from('venue_booking')
+    .select(
+      'id, date, start_time, end_time, status, release_reason, venue:venue_id (name), event_request:event_request_id (coordinator_id)',
+    )
+    .eq('event_request_id', eventRequestId)
+    .order('date')
+    .order('start_time');
+}
+
+/** AC3: a booking with its event's assigned coordinator, to check who may release it. */
+export async function fetchVenueBookingForRelease(bookingId: string) {
+  return db()
+    .from('venue_booking')
+    .select('id, event_request:event_request_id (coordinator_id)')
+    .eq('id', bookingId)
+    .maybeSingle();
+}
+
+/**
+ * AC1: releases a booking that is still confirmed. A booking already released
+ * (a second click, another tab) is not changed and no row comes back.
+ */
+export async function releaseConfirmedVenueBooking(bookingId: string, release: { reason: string; releasedBy: string }) {
+  return db()
+    .from('venue_booking')
+    .update({
+      status: 'released',
+      release_reason: release.reason,
+      released_by: release.releasedBy,
+      released_at: new Date().toISOString(),
+    })
+    .eq('id', bookingId)
+    .eq('status', 'confirmed')
+    .select('id')
+    .maybeSingle();
+}

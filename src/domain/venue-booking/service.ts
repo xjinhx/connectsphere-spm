@@ -3,15 +3,19 @@ import {
   DecideVenueBookingRequestInputSchema,
   DecisionResultSchema,
   EventRequestIdSchema,
+  ReleaseVenueBookingInputSchema,
+  VenueBookingIdSchema,
   VenueBookingRangeSchema,
   VenueBookingRequestIdSchema,
   VenueBookingRequestLineStatusEnum,
+  VenueBookingStatusEnum,
   lineErrorsFrom,
   venueBookingRequestErrorDetails,
   type BookedPeriod,
   type BookingQueueEntry,
   type BookingRequestRequirements,
   type DecidedVenueBookingRequestLine,
+  type EventVenueBooking,
   type VenueBookingDecision,
   type VenueBookingRequestOutcome,
 } from './schema';
@@ -62,7 +66,10 @@ import {
 import {
   decideVenueBookingRequestLines,
   fetchConfirmedBookingsBetween,
+  fetchEventVenueBookings,
   fetchVenueBookingDecision,
+  fetchVenueBookingForRelease,
+  releaseConfirmedVenueBooking,
 } from '@/lib/supabase/venueBookings';
 import {
   ConflictError,
@@ -541,10 +548,11 @@ export async function decideVenueBookingRequest(
  * database closes the hold. A line from before the switch to times asking for
  * AM and Night is refused as well (isNonAdjacentSlots).
  *
- * SCRUM-155 AC3: a booking that has been released or cancelled is no longer
- * confirmed, so getVenueCommitments no longer returns it.
- * DUMMY(SCRUM-231) D-15: nothing releases or cancels a single booking yet;
- * testers remove it by hand.
+ * SCRUM-155 AC3: a booking that has been released (SCRUM-231) or cancelled is
+ * no longer confirmed, so getVenueCommitments no longer returns it and the
+ * approval goes through.
+ * DUMMY(SCRUM-105) D-15: nothing cancels an event's bookings yet; testers
+ * remove the booking by hand for the cancelled case.
  */
 async function conflictsFor(
   venueId: string,
@@ -709,4 +717,86 @@ export async function getBookingRequestRequirements(requestId: string): Promise<
     ),
     accessibilityNotes: event.accessibility_notes,
   };
+}
+
+// ---------------------------------------------------------------------------
+// SCRUM-231 — Release one venue booking without affecting the event's others
+// ---------------------------------------------------------------------------
+
+type EventVenueBookingRow = {
+  id: string;
+  date: string;
+  start_time: string;
+  end_time: string;
+  status: string;
+  release_reason: string | null;
+  venue: { name: string } | null;
+  event_request: { coordinator_id: string | null } | null;
+};
+
+/**
+ * AC1, AC2: the event's venue bookings, confirmed and released, for its event
+ * page. canRelease marks the ones the viewer may release (AC3): still
+ * confirmed, and the viewer is the event's assigned coordinator.
+ *
+ * No access check of its own, the same as listAffectedBookings (SCRUM-151):
+ * its only caller is the coordinator's review page, which calls it after
+ * getReviewDetail has refused anyone the request is not theirs to see.
+ */
+export async function listEventVenueBookings(eventRequestId: string, actorId: string): Promise<EventVenueBooking[]> {
+  const { data, error } = await fetchEventVenueBookings(eventRequestId);
+  if (error || !data) throw new ValidationError("Could not read the event's venue bookings.", error?.message);
+
+  return (data as unknown as EventVenueBookingRow[]).map((row) => {
+    const status = VenueBookingStatusEnum.parse(row.status);
+    return {
+      id: row.id,
+      venueName: row.venue?.name ?? 'Unknown venue',
+      date: row.date,
+      // Postgres `time` (10:00:00) as a clock time (10:00).
+      startTime: row.start_time.slice(0, 5),
+      endTime: row.end_time.slice(0, 5),
+      status,
+      releaseReason: row.release_reason,
+      canRelease: status === 'confirmed' && isCurrentCoordinator(row.event_request?.coordinator_id ?? null, actorId),
+    };
+  });
+}
+
+/**
+ * AC1: the event's assigned coordinator releases one booking, giving a
+ * reason. It becomes Released and its time is free again, because everything
+ * that treats a venue as committed reads confirmed bookings only (migration
+ * 20261012100000). AC2: nothing else changes, not the event, its status or
+ * its other bookings. AC4: an affected booking's outstanding action closes for
+ * the same reason, since affected_booking_slot lists confirmed bookings only.
+ *
+ * `actorId` is whoever is signed in, from the route, never from the body.
+ */
+export async function releaseVenueBooking(bookingId: string, actorId: string, input: unknown): Promise<void> {
+  if (!VenueBookingIdSchema.safeParse(bookingId).success) throw new NotFoundError('Venue booking');
+
+  const { data, error } = await fetchVenueBookingForRelease(bookingId);
+  if (error) throw new ValidationError('The venue booking could not be read.', error.message);
+  if (!data) throw new NotFoundError('Venue booking');
+
+  // AC3: checked before the reason, so a coordinator the event is not
+  // assigned to learns nothing more about the booking. The same order as
+  // submitVenueBookingRequest.
+  const coordinatorId = (data as unknown as Pick<EventVenueBookingRow, 'event_request'>).event_request?.coordinator_id ?? null;
+  if (!isCurrentCoordinator(coordinatorId, actorId)) {
+    throw new ForbiddenError('This event is not assigned to you.');
+  }
+
+  const parsed = ReleaseVenueBookingInputSchema.safeParse(input);
+  if (!parsed.success) {
+    throw new ValidationError(parsed.error.issues[0]?.message ?? 'The release is not valid.', parsed.error.flatten());
+  }
+
+  const { data: released, error: releaseError } = await releaseConfirmedVenueBooking(bookingId, {
+    reason: parsed.data.reason,
+    releasedBy: actorId,
+  });
+  if (releaseError) throw new ValidationError('The venue booking could not be released.', releaseError.message);
+  if (!released) throw new ConflictError('This booking has already been released.');
 }

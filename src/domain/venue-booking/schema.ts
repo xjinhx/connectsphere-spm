@@ -327,3 +327,34 @@ export const DecisionResultSchema = z.object({
   outcome: z.enum(['decided', 'already_decided', 'incomplete', 'unavailable', 'held', 'non_adjacent_slots']),
   autoRejectedRequestIds: z.array(z.string().uuid()).default([]),
 });
+
+// ---------------------------------------------------------------------------
+// SCRUM-231 — Release one venue booking without affecting the event's others
+// ---------------------------------------------------------------------------
+
+export const VenueBookingIdSchema = z.string().uuid();
+
+export const RELEASE_REASON_REQUIRED = 'A reason is required to release a booking.';
+
+/** AC1: the coordinator releases a booking "and gives a reason". */
+export const ReleaseVenueBookingInputSchema = z.object({
+  reason: z.string({ required_error: RELEASE_REASON_REQUIRED }).trim().min(1, RELEASE_REASON_REQUIRED),
+});
+
+export const VenueBookingStatusEnum = z.enum(['confirmed', 'released']);
+export type VenueBookingStatus = z.infer<typeof VenueBookingStatusEnum>;
+
+/** AC1, AC2: one of an event's venue bookings, as its event page lists it. */
+export interface EventVenueBooking {
+  id: string;
+  venueName: string;
+  /** YYYY-MM-DD. */
+  date: string;
+  /** HH:MM, Singapore time. */
+  startTime: string;
+  endTime: string;
+  status: VenueBookingStatus;
+  releaseReason: string | null;
+  /** AC3: true only for a confirmed booking, shown to the event's assigned coordinator. */
+  canRelease: boolean;
+}

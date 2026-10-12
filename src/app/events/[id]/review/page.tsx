@@ -8,7 +8,9 @@ import { RequestClarificationForm } from '@/components/event-request/RequestClar
 import { AffectedBookingsNotice } from '@/components/venue/AffectedBookingsNotice';
 import { listAffectedBookings } from '@/domain/availability/service';
 import { RequestVenueBookingForm } from '@/components/event-request/RequestVenueBookingForm';
+import { EventVenueBookings } from '@/components/venue-booking/EventVenueBookings';
 import { canCreateBookingRequest } from '@/domain/venue-booking/policy';
+import { listEventVenueBookings } from '@/domain/venue-booking/service';
 import { listVenues } from '@/domain/venues/service';
 import {
   describeAccessibility,
@@ -117,6 +119,8 @@ export default async function ReviewEventRequestPage({
   // SCRUM-151 AC3. Read only now, after getReviewDetail above has refused
   // anyone the request is not theirs to see.
   const affectedBookings = await listAffectedBookings(request.id);
+  // SCRUM-231 AC1-AC3, read for the same reason after getReviewDetail.
+  const venueBookings = await listEventVenueBookings(request.id, actor.userId);
 
   // SCRUM-142 AC1/AC2 — a venue can only be requested once the event is
   // Approved or in Planning. Fetched only when
@@ -224,6 +228,11 @@ export default async function ReviewEventRequestPage({
           <ApproveRequestButton requestId={request.id} />
         </section>
       ) : null}
+
+      {/* SCRUM-231 AC1-AC4 — the event's venue bookings, each released on its
+          own with a reason. Releasing an affected one closes the outstanding
+          action at the top of the page. */}
+      <EventVenueBookings bookings={venueBookings} />
 
       {/* SCRUM-142 AC1-AC4 — "As an Event Coordinator, I want to request a
           specific venue for the times my event needs" (in exact times since
