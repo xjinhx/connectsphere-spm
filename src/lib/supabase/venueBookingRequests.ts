@@ -12,13 +12,14 @@ function db(): SupabaseClient {
   return createAdminClient();
 }
 
-const LINE_COLUMNS = 'id, date, time_slots, status';
+const LINE_COLUMNS = 'id, date, start_time, end_time, status';
 const REQUEST_COLUMNS = `id, event_request_id, venue_id, requested_by, created_at, venue_booking_request_line ( ${LINE_COLUMNS} )`;
 
 export interface VenueBookingRequestLineRow {
   id: string;
   date: string;
-  time_slots: string[];
+  start_time: string;
+  end_time: string;
   status: 'pending' | 'approved' | 'rejected';
 }
 
@@ -33,20 +34,21 @@ export interface VenueBookingRequestRow {
 
 /**
  * AC1, AC3 — create the request and every one of its lines in one
- * transaction (create_venue_booking_request(),
- * 20261006090000_venue_booking_request.sql). Returns the new request's id.
+ * transaction (create_venue_booking_request(), as SCRUM-239 left it in
+ * 20261012090000_booking_requests_in_time_ranges.sql). Each line is a date
+ * and a start and end time. Returns the new request's id.
  */
 export async function createVenueBookingRequest(input: {
   eventRequestId: string;
   venueId: string;
   requestedBy: string;
-  lines: readonly { date: string; timeSlots: readonly string[] }[];
+  lines: readonly { date: string; start: string; end: string }[];
 }) {
   return db().rpc('create_venue_booking_request', {
     p_event_request_id: input.eventRequestId,
     p_venue_id: input.venueId,
     p_requested_by: input.requestedBy,
-    p_lines: input.lines.map((line) => ({ date: line.date, time_slots: line.timeSlots })),
+    p_lines: input.lines.map((line) => ({ date: line.date, start: line.start, end: line.end })),
   });
 }
 
@@ -63,7 +65,8 @@ export async function fetchVenueBookingRequestById(id: string) {
 export interface PendingBookingLineRow {
   id: string;
   date: string;
-  time_slots: string[];
+  start_time: string;
+  end_time: string;
   venue_booking_request: {
     id: string;
     created_at: string;
@@ -83,7 +86,7 @@ export async function fetchPendingBookingLines() {
   return db()
     .from('venue_booking_request_line')
     .select(
-      'id, date, time_slots, venue_booking_request ( id, created_at, venues ( name ), event_request ( name, reference ) )',
+      'id, date, start_time, end_time, venue_booking_request ( id, created_at, venues ( name ), event_request ( name, reference ) )',
     )
     .eq('status', 'pending');
 }

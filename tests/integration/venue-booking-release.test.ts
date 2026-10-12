@@ -79,13 +79,21 @@ async function createEvent(date: string, coordinator = coordinatorId): Promise<s
   return data.id;
 }
 
-/** Requests `slot` at the venue for the event, and Venue Staff approve it. Returns the booking's id. */
+// Since SCRUM-239 Part 3 (#100) requests are made in times; each slot's times
+// as 20261008140500_time_model.sql maps them.
+const SLOT_TIMES: Record<string, { start: string; end: string }> = {
+  am: { start: '07:00', end: '12:00' },
+  pm: { start: '13:00', end: '18:00' },
+};
+
+/** Requests `slot`'s times at the venue for the event, and Venue Staff approve it. Returns the booking's id. */
 async function book(eventId: string, venueId: string, date: string, slot: string, coordinator = coordinatorId): Promise<string> {
+  const { start, end } = SLOT_TIMES[slot]!;
   const { data: requestId, error } = await admin.rpc('create_venue_booking_request', {
     p_event_request_id: eventId,
     p_venue_id: venueId,
     p_requested_by: coordinator,
-    p_lines: [{ date, time_slots: [slot] }],
+    p_lines: [{ date, start, end }],
   });
   if (error || !requestId) throw new Error(`could not create test request: ${error?.message}`);
   const { data: line } = await admin.from('venue_booking_request_line').select('id').eq('request_id', requestId).single();
@@ -96,7 +104,7 @@ async function book(eventId: string, venueId: string, date: string, slot: string
     .eq('event_request_id', eventId)
     .eq('venue_id', venueId)
     .eq('date', date)
-    .eq('slot', slot)
+    .eq('start_time', start)
     .single();
   return booking!.id;
 }
@@ -169,7 +177,7 @@ describe('releaseVenueBooking (SCRUM-231)', () => {
     const venueId = await createTestVenue('Freed');
     const booking = await book(await createEvent(date), venueId, date, 'am');
     const otherEvent = await createEvent(date, otherCoordinatorId);
-    const request = { venueId, lines: [{ date, timeSlots: ['am'] }] };
+    const request = { venueId, lines: [{ date, ...SLOT_TIMES.am! }] };
 
     // Before the release, SCRUM-154 refuses the request: the slot is committed.
     await expect(submitVenueBookingRequest(otherEvent, otherCoordinatorId, request)).rejects.toThrow(ConflictError);
@@ -245,6 +253,11 @@ describe('releaseVenueBooking (SCRUM-231)', () => {
     const venueId = await createTestVenue('Affected');
     const eventId = await createEvent(date);
     const booking = await book(eventId, venueId, date, 'am');
+    // SCRUM-151's affected-booking flag still matches a booking by its slot
+    // until SCRUM-239 Part 4 (AC6) moves it to times, and a booking approved
+    // since Part 3 (#100) has times only. Give this one its slot, as a booking
+    // from before the switch has.
+    await admin.from('venue_booking').update({ slot: 'am' }).eq('id', booking);
     await admin.from('venue_unavailable_slot').insert({ venue_id: venueId, date, slot: 'am', reason: 'Aircon repair' });
     expect(await listAffectedBookings(eventId)).toHaveLength(1);
 

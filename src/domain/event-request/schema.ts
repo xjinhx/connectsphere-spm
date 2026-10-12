@@ -12,8 +12,6 @@ import {
 // NOTE: `status` (draft/submitted) belongs to SCRUM-84's story, and `coordinatorId`
 // belongs to SCRUM-94/95/96 — intentionally left out of this schema to avoid collisions.
 
-export const TimeSlotEnum = z.enum(['am', 'pm', 'night']); // 7am-12pm, 1pm-6pm, 7pm-12am
-
 export const eventRequestCoreSchema = z.object({
   name: z.string().min(1, 'Event name is required'),
   purpose: z.string().min(1, 'Purpose is required'),
@@ -68,43 +66,14 @@ export type EventRequestBasicDetails = z.infer<typeof eventRequestBasicDetailsSc
 // ---------------------------------------------------------------------------
 // SCRUM-77 — Choose the time slots the event needs
 // ---------------------------------------------------------------------------
-// Superseded for event requests by SCRUM-238 (customer change Week 7 #1): a
-// request now carries a start and end time, below. The slot definitions stay
-// because venue booking requests (SCRUM-142) and the old rows they describe
-// still use them until SCRUM-239 moves those over.
-//
-// AC4: these three are the only slots that exist (customer clarification #50).
-// Venues are booked in these fixed blocks, so a request cannot ask for a slot
-// that crosses midnight - there is no such slot to ask for.
-
-export type TimeSlot = z.infer<typeof TimeSlotEnum>;
-
-/** The slots in the order a day runs. Also the order they are stored and shown. */
-export const TIME_SLOT_ORDER: readonly TimeSlot[] = TimeSlotEnum.options;
-
-export const TIME_SLOT_HOURS: Record<TimeSlot, { start: number; end: number }> = {
-  am: { start: 7, end: 12 },
-  pm: { start: 13, end: 18 },
-  night: { start: 19, end: 24 },
-};
-
-export const TIME_SLOT_LABELS: Record<TimeSlot, string> = {
-  am: 'AM (07:00–12:00)',
-  pm: 'PM (13:00–18:00)',
-  night: 'Night (19:00–24:00)',
-};
-
-/** A selection is a set: duplicates collapse, and the order is the day's order. */
-export function normaliseTimeSlots(slots: readonly TimeSlot[]): TimeSlot[] {
-  return TIME_SLOT_ORDER.filter((slot) => slots.includes(slot));
-}
-
-/**
- * AC1: what is saved with the request. Any number of slots, including none -
- * AC3 blocks submission without a slot, not saving. `.min(1)` stays on the
- * core schema, where the completeness check (SCRUM-82) reads it.
- */
-export const timeSlotsSchema = z.array(TimeSlotEnum).transform(normaliseTimeSlots);
+// Superseded by SCRUM-238 (customer change Week 7 #1): a request carries a
+// start and end time, below. The slot definitions (TimeSlotEnum,
+// TIME_SLOT_HOURS, TIME_SLOT_LABELS, timeSlotsSchema) were removed by
+// SCRUM-239 Part 3, once venue booking requests moved to times and nothing
+// showed slots. SCRUM-77 stays Done (Week 7 guide, scenario 2). Old rows keep
+// their time_slots column, with times filled from it by
+// 20261008140500_time_model.sql (AM 07:00-12:00, PM 13:00-18:00, Night
+// 19:00-24:00).
 
 // ---------------------------------------------------------------------------
 // SCRUM-238 — Request event times in 15-minute steps

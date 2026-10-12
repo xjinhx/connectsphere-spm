@@ -1,8 +1,7 @@
 import Link from 'next/link';
 import { notFound } from 'next/navigation';
 import { VenueBookingDecisionForm } from '@/components/venue-booking/VenueBookingDecisionForm';
-import { describeTimeSlots } from '@/domain/event-request/policy';
-import { TimeSlotEnum } from '@/domain/event-request/schema';
+import { formatClockRange } from '@/domain/shared/times';
 import { isActionPermitted } from '@/domain/identity/permissions';
 import { formatSingaporeDate, formatSingaporeDateTime } from '@/domain/shared/dates';
 import { ForbiddenError, NotFoundError } from '@/domain/shared/errors';
@@ -26,11 +25,13 @@ import { getCurrentActor } from '@/lib/auth/currentActor';
  * approve or reject each line, a rejected line with a reason. Once decided,
  * each line shows who decided, when, and why if rejected.
  *
- * SCRUM-155 AC2 — a pending line that clashes with a confirmed booking or an
- * unavailable slot shows what it clashes with, and offers Reject only.
+ * SCRUM-239 AC4 (SCRUM-155 AC2 in time ranges) — each line shows its date and
+ * exact times; a pending line that overlaps a confirmed booking, another
+ * event's hold or an unavailable period shows what it clashes with, when, and
+ * which event holds it, and offers Reject only.
  *
  * SCRUM-150 AC1, AC2 — a rejected line may carry a suggested venue, date and
- * slots. It is shown under the line, and the event's coordinator gets a link to
+ * period. It is shown under the line, and the event's coordinator gets a link to
  * the event's own page, where a new booking request is made. Nothing is booked
  * or requested by the suggestion itself (AC3).
  *
@@ -39,7 +40,7 @@ import { getCurrentActor } from '@/lib/auth/currentActor';
  * The decision form is for Venue Staff (venue_administration, the permission
  * the decision route asserts).
  *
- * SCRUM-143 AC1 — with the requested dates and slots listed by the decision
+ * SCRUM-143 AC1 — with the requested dates and times listed by the decision
  * below, the event's reference and the requesting coordinator are shown.
  * SCRUM-143 AC2 — the event's attendance, layout and accessibility needs are
  * shown as recorded on the event; AC4 — one never recorded reads "Not
@@ -59,7 +60,7 @@ const STATUS_LABELS: Record<VenueBookingRequestStatus, string> = {
 };
 
 function lineLabel(line: DecidedVenueBookingRequestLine): string {
-  return `${formatSingaporeDate(line.date)} · ${describeTimeSlots(TimeSlotEnum.array().parse(line.timeSlots))}`;
+  return `${formatSingaporeDate(line.date)} · ${formatClockRange(line)}`;
 }
 
 export default async function VenueBookingRequestPage({ params }: { params: Promise<{ id: string }> }) {
@@ -135,7 +136,8 @@ export default async function VenueBookingRequestPage({ params }: { params: Prom
                 id: line.id,
                 label: lineLabel(line),
                 date: line.date,
-                timeSlots: line.timeSlots,
+                start: line.start,
+                end: line.end,
                 blockedReason: clashes.length > 0 ? clashes.map(describeApprovalConflict).join(' ') : undefined,
               };
             })}
@@ -165,7 +167,7 @@ export default async function VenueBookingRequestPage({ params }: { params: Prom
                     <div className="mt-2 rounded-md border border-[var(--border)] px-3 py-2">
                       <p>
                         Suggested instead: {line.suggestion.venueName}, {formatSingaporeDate(line.suggestion.date)} ·{' '}
-                        {describeTimeSlots(TimeSlotEnum.array().parse(line.suggestion.slots))}
+                        {line.suggestion.periods.map(formatClockRange).join(' and ')}
                       </p>
                       {isCoordinator ? (
                         <Link

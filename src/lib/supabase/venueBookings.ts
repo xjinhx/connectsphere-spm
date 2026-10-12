@@ -21,7 +21,7 @@ export async function fetchVenueBookingDecision(id: string) {
   return db()
     .from('venue_booking_request')
     .select(
-      'id, event_request_id, venue_id, event_request:event_request_id (coordinator_id), venue_booking_request_line (id, date, time_slots, status, decided_by, decided_at, rejection_reason, suggested_venue_id, suggested_date, suggested_slots, suggested_venue:suggested_venue_id (name))',
+      'id, event_request_id, venue_id, event_request:event_request_id (coordinator_id), venue_booking_request_line (id, date, start_time, end_time, time_slots, status, decided_by, decided_at, rejection_reason, suggested_venue_id, suggested_date, suggested_start_time, suggested_end_time, suggested_slots, suggested_venue:suggested_venue_id (name))',
     )
     .eq('id', id)
     .maybeSingle();
@@ -29,13 +29,14 @@ export async function fetchVenueBookingDecision(id: string) {
 
 /**
  * AC1, AC2 and AC5: one call to decide_venue_booking_request
- * (20261007090000_venue_booking_decision.sql), which records every line's
- * decision and creates a confirmed booking per approved slot in one
- * transaction. supabase-js has no transactions of its own.
+ * (as SCRUM-239 left it in 20261012090000_booking_requests_in_time_ranges.sql),
+ * which records every line's decision and creates a confirmed booking for each
+ * approved line's period in one transaction. supabase-js has no transactions
+ * of its own.
  *
- * Resolves to {"outcome": ..., "autoRejectedRequestIds": [...]} (SCRUM-155:
- * 20261007130000_venue_booking_conflicts.sql). A slot that already holds a
- * confirmed booking fails the whole call with a unique violation.
+ * Resolves to {"outcome": ..., "autoRejectedRequestIds": [...]} (SCRUM-155).
+ * A period that overlaps a confirmed booking fails the whole call with an
+ * exclusion violation (venue_booking_no_overlap).
  */
 export async function decideVenueBookingRequestLines(
   requestId: string,
@@ -43,7 +44,7 @@ export async function decideVenueBookingRequestLines(
     lineId: string;
     decision: 'approve' | 'reject';
     reason?: string;
-    suggestion?: { venueId: string; date: string; slots: readonly string[] };
+    suggestion?: { venueId: string; date: string; start: string; end: string };
   }[],
   decidedBy: string,
 ) {
@@ -54,7 +55,9 @@ export async function decideVenueBookingRequestLines(
       decision: d.decision,
       reason: d.reason ?? null,
       // SCRUM-150 AC1: saved on the rejected line with the decision.
-      suggestion: d.suggestion ? { venue_id: d.suggestion.venueId, date: d.suggestion.date, slots: [...d.suggestion.slots] } : null,
+      suggestion: d.suggestion
+        ? { venue_id: d.suggestion.venueId, date: d.suggestion.date, start: d.suggestion.start, end: d.suggestion.end }
+        : null,
     })),
     p_decided_by: decidedBy,
   });
@@ -72,35 +75,16 @@ export async function countConfirmedBookingsForEvent(eventRequestId: string) {
     .eq('status', 'confirmed');
 }
 
-/**
- * SCRUM-154 AC1 to AC3: which slots a venue holds confirmed bookings in on the
- * given dates. Date and slot only: nothing about the booking's event is read,
- * so nothing about it can reach the coordinator being refused.
- */
-export async function fetchConfirmedSlotsForVenue(venueId: string, dates: readonly string[]) {
-  return db()
-    .from('venue_booking')
-    .select('date, slot')
-    .eq('venue_id', venueId)
-    .eq('status', 'confirmed')
-    .in('date', [...dates]);
-}
-
-/** AC3 and AC4: a venue's confirmed bookings from `from` to `to` (YYYY-MM-DD), with each booking's event. */
+/** AC3 and AC4: a venue's confirmed bookings from `from` to `to` (YYYY-MM-DD), with each booking's times and event. */
 export async function fetchConfirmedBookingsBetween(venueId: string, from: string, to: string) {
   return db()
     .from('venue_booking')
-    .select('date, slot, event_request:event_request_id (id, reference, name, coordinator_id)')
+    .select('date, start_time, end_time, event_request:event_request_id (id, reference, name, coordinator_id)')
     .eq('venue_id', venueId)
     .eq('status', 'confirmed')
     .gte('date', from)
     .lte('date', to)
     .order('date');
-}
-
-/** SCRUM-155 AC5: one venue's slots recorded as unavailable on these dates, with each one's reason. */
-export async function fetchUnavailableSlotsWithReasons(venueId: string, dates: readonly string[]) {
-  return db().from('venue_unavailable_slot').select('date, slot, reason').eq('venue_id', venueId).in('date', [...dates]);
 }
 
 // -----------------------------------------------------------------------------

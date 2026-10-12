@@ -551,7 +551,7 @@ export type Database = {
           released_at: string | null
           released_by: string | null
           request_line_id: string | null
-          slot: string
+          slot: string | null
           start_time: string
           status: string
           venue_id: string
@@ -566,7 +566,7 @@ export type Database = {
           released_at?: string | null
           released_by?: string | null
           request_line_id?: string | null
-          slot: string
+          slot?: string | null
           start_time: string
           status?: string
           venue_id: string
@@ -581,7 +581,7 @@ export type Database = {
           released_at?: string | null
           released_by?: string | null
           request_line_id?: string | null
-          slot?: string
+          slot?: string | null
           start_time?: string
           status?: string
           venue_id?: string
@@ -662,9 +662,11 @@ export type Database = {
           start_time: string
           status: string
           suggested_date: string | null
+          suggested_end_time: string | null
           suggested_slots: string[] | null
+          suggested_start_time: string | null
           suggested_venue_id: string | null
-          time_slots: string[]
+          time_slots: string[] | null
         }
         Insert: {
           created_at?: string
@@ -678,9 +680,11 @@ export type Database = {
           start_time: string
           status?: string
           suggested_date?: string | null
+          suggested_end_time?: string | null
           suggested_slots?: string[] | null
+          suggested_start_time?: string | null
           suggested_venue_id?: string | null
-          time_slots: string[]
+          time_slots?: string[] | null
         }
         Update: {
           created_at?: string
@@ -694,9 +698,11 @@ export type Database = {
           start_time?: string
           status?: string
           suggested_date?: string | null
+          suggested_end_time?: string | null
           suggested_slots?: string[] | null
+          suggested_start_time?: string | null
           suggested_venue_id?: string | null
-          time_slots?: string[]
+          time_slots?: string[] | null
         }
         Relationships: [
           {

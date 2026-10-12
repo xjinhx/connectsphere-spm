@@ -240,18 +240,6 @@ export async function fetchSearchableVenues() {
     .order('name');
 }
 
-/**
- * SCRUM-154 AC4 and AC5: one venue's slots recorded as unavailable on the
- * given dates. The reason is not read: the refusal names the slot only.
- */
-export async function fetchUnavailableSlotsForVenue(venueId: string, dates: readonly string[]) {
-  return db()
-    .from('venue_unavailable_slot')
-    .select('date, slot')
-    .eq('venue_id', venueId)
-    .in('date', [...dates]);
-}
-
 // -----------------------------------------------------------------------------
 // SCRUM-123: a venue's calendar over a date range
 // -----------------------------------------------------------------------------

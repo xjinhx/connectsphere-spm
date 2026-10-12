@@ -132,7 +132,7 @@ describe('searchVenues: SCRUM-239 AC1, opening hours', () => {
     expect(await found('07:00', '09:00')).toEqual([]);
   });
 
-  it('TC-239-17: returns it for a period exactly matching its opening hours', async () => {
+  it('returns it for a period exactly matching its opening hours (as TC-239-17 for a request)', async () => {
     vi.mocked(fetchSearchableVenues).mockResolvedValue(ok([venueRow(VENUE_A, 'Venue A', '08:00:00', '22:00:00')]));
     expect(await found('08:00', '22:00')).toEqual(['Venue A']);
   });
