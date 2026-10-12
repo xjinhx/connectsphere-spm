@@ -4,16 +4,19 @@ import { useRouter } from 'next/navigation';
 import { useRef, useState } from 'react';
 import {
   AffectedBookingsDetailsSchema,
+  SetupTurnaroundClashesDetailsSchema,
   OPERATING_SLOTS,
   OPERATING_SLOT_LABELS,
   ROOM_LAYOUTS,
   ROOM_LAYOUT_LABELS,
   type AffectedBookingsDetails,
+  type SetupTurnaroundClashesDetails,
   type OperatingSlot,
   type RoomLayout,
   type VenueDetail,
   type VenueFormOptions,
 } from '@/domain/venues/schema';
+import { formatSingaporeDate } from '@/domain/shared/dates';
 import { capacityToSend } from './capacityInput';
 
 /**
@@ -29,6 +32,11 @@ import { capacityToSend } from './capacityInput';
  * SCRUM-120 AC1 editing saves changed values
  * SCRUM-120 AC2 a capacity cut that affects confirmed future bookings lists
  *               them and is only applied once the editor confirms
+ * SCRUM-225 AC1 setup and turnaround minutes, on the edit form (the card is
+ *               about editing; a new venue starts at 0 and 0, AC3)
+ * SCRUM-225 AC2 a bad value flags its own field
+ * SCRUM-225 AC4 a change that makes confirmed bookings clash lists them and
+ *               is only applied once the editor confirms
  *
  * Capacity inputs are type="text" with a numeric hint rather than
  * type="number". A number input makes it impossible to type "abc", which would
@@ -43,6 +51,17 @@ import { capacityToSend } from './capacityInput';
 type LayoutRow = { key: number; layout: RoomLayout; capacity: string };
 
 type ApiErrorBody = { error?: string; message?: string; details?: unknown };
+
+/**
+ * What the editor has confirmed so far: a capacity cut (SCRUM-120 AC2) and a
+ * setup and turnaround change (SCRUM-225 AC4). A save can need both, one
+ * after the other, so the first confirmation is kept while the second is
+ * asked. Each only counts while the form still holds the values confirmed.
+ */
+type Confirmations = {
+  cut: number | null;
+  times: { setupMinutes: number; turnaroundMinutes: number } | null;
+};
 
 /** Pulls Zod's flattened fieldErrors out of an error body without casting to any. */
 function fieldErrorsFrom(details: unknown): Record<string, string[]> {
@@ -88,10 +107,11 @@ export default function VenueForm({
   const [locationId, setLocationId] = useState(venue?.location.id ?? '');
   const [maxCapacity, setMaxCapacity] = useState(venue ? String(venue.maxCapacity) : '');
 
-  // SCRUM-119 (revised): whether the venue needs a setup slot and a
-  // turnaround slot. A new venue defaults to false for both.
-  const [needsSetupSlot, setNeedsSetupSlot] = useState(venue?.needsSetupSlot ?? false);
-  const [needsTurnaroundSlot, setNeedsTurnaroundSlot] = useState(venue?.needsTurnaroundSlot ?? false);
+  // SCRUM-225 AC1: minutes of setup before an event and turnaround after it.
+  // Text inputs like capacity, so a bad value reaches the server and is named
+  // there (AC2). Only on the edit form.
+  const [setupMinutes, setSetupMinutes] = useState(venue ? String(venue.setupMinutes) : '0');
+  const [turnaroundMinutes, setTurnaroundMinutes] = useState(venue ? String(venue.turnaroundMinutes) : '0');
 
   // SCRUM-116 AC4: a new venue starts with all three slots selected.
   const [slots, setSlots] = useState<OperatingSlot[]>(venue ? venue.operatingSlots : [...OPERATING_SLOTS]);
@@ -116,6 +136,9 @@ export default function VenueForm({
   // SCRUM-120 AC2: the bookings a capacity cut would affect, shown until the
   // editor confirms the cut or changes the form.
   const [affected, setAffected] = useState<AffectedBookingsDetails | null>(null);
+  // SCRUM-225 AC4: the bookings a setup or turnaround change makes clash.
+  const [clashes, setClashes] = useState<SetupTurnaroundClashesDetails | null>(null);
+  const [confirmed, setConfirmed] = useState<Confirmations>({ cut: null, times: null });
 
   function toggle<T>(list: T[], value: T): T[] {
     return list.includes(value) ? list.filter((item) => item !== value) : [...list, value];
@@ -133,39 +156,66 @@ export default function VenueForm({
 
   async function handleSubmit(event: React.FormEvent<HTMLFormElement>) {
     event.preventDefault();
-    await save(false);
+    await save(confirmed);
   }
 
   /**
    * SCRUM-120 AC2: confirm the cut the editor was shown. If the capacity has
    * been changed since, it is a different cut with possibly different bookings,
-   * so it is sent unconfirmed and checked again rather than confirmed blind.
+   * so save() sends it unconfirmed and it is checked again rather than
+   * confirmed blind.
    */
   async function confirmCut() {
-    await save(affected !== null && capacityToSend(maxCapacity) === affected.maxCapacity);
+    if (!affected) return;
+    const next = { ...confirmed, cut: affected.maxCapacity };
+    setConfirmed(next);
+    await save(next);
   }
 
-  async function save(confirmAffectedBookings: boolean) {
+  /** SCRUM-225 AC4: confirm the setup and turnaround change, the same way. */
+  async function confirmTimes() {
+    if (!clashes) return;
+    const next = {
+      ...confirmed,
+      times: { setupMinutes: clashes.setupMinutes, turnaroundMinutes: clashes.turnaroundMinutes },
+    };
+    setConfirmed(next);
+    await save(next);
+  }
+
+  async function save(confirmations: Confirmations) {
     setSaving(true);
     setFieldErrors({});
     setFormError(null);
     setAffected(null);
+    setClashes(null);
+
+    // capacityToSend converts any whole number typed into a box, not only a
+    // capacity: minutes go the same way, so "15.5" or "abc" reaches the server
+    // as typed and is refused there with the field named.
+    const capacity = capacityToSend(maxCapacity);
+    const setup = capacityToSend(setupMinutes);
+    const turnaround = capacityToSend(turnaroundMinutes);
+    const confirmsCut = confirmations.cut !== null && capacity === confirmations.cut;
+    const confirmsTimes =
+      confirmations.times !== null &&
+      setup === confirmations.times.setupMinutes &&
+      turnaround === confirmations.times.turnaroundMinutes;
 
     const payload = {
       name,
       locationId,
-      maxCapacity: capacityToSend(maxCapacity),
+      maxCapacity: capacity,
       operatingSlots: slots,
       facilityIds,
       accessibilityFeatureIds: featureIds,
       layouts: layouts.map((row) => ({ layout: row.layout, capacity: capacityToSend(row.capacity) })),
-      needsSetupSlot,
-      needsTurnaroundSlot,
       // SCRUM-120: the version this form was loaded with, so a save from a
       // form that has gone out of date is refused instead of undoing someone
       // else's newer save.
-      ...(isEdit && { expectedUpdatedAt: venue.updatedAt }),
-      ...(confirmAffectedBookings && { confirmAffectedBookings: true }),
+      ...(isEdit && { expectedUpdatedAt: venue.updatedAt, setupMinutes: setup, turnaroundMinutes: turnaround }),
+      ...(confirmsCut && { confirmAffectedBookings: true }),
+      ...(confirmsTimes && { confirmSetupTurnaroundChange: true }),
     };
 
     try {
@@ -184,6 +234,14 @@ export default function VenueForm({
         const cut = AffectedBookingsDetailsSchema.safeParse(error.details);
         if (error.error === 'CONFLICT' && cut.success) {
           setAffected(cut.data);
+          setSaving(false);
+          return;
+        }
+
+        // SCRUM-225 AC4: the same, for a setup or turnaround change.
+        const clash = SetupTurnaroundClashesDetailsSchema.safeParse(error.details);
+        if (error.error === 'CONFLICT' && clash.success) {
+          setClashes(clash.data);
           setSaving(false);
           return;
         }
@@ -276,27 +334,42 @@ export default function VenueForm({
         <FieldError messages={fieldErrors.maxCapacity} />
       </div>
 
-      {/* SCRUM-119 (revised): whether an approved booking blocks the adjacent
-          slot before/after it. SCRUM-148 applies the actual rule. */}
-      <fieldset className="flex flex-col gap-2">
-        <legend className="mb-1 text-sm font-medium">Adjacent slot requirements</legend>
-        <label className="flex items-center gap-2 text-sm">
-          <input
-            type="checkbox"
-            checked={needsSetupSlot}
-            onChange={(event) => setNeedsSetupSlot(event.target.checked)}
-          />
-          Needs setup slot
-        </label>
-        <label className="flex items-center gap-2 text-sm">
-          <input
-            type="checkbox"
-            checked={needsTurnaroundSlot}
-            onChange={(event) => setNeedsTurnaroundSlot(event.target.checked)}
-          />
-          Needs turnaround slot
-        </label>
-      </fieldset>
+      {/* SCRUM-225 AC1: replaces SCRUM-119's yes/no slot flags. */}
+      {isEdit && (
+        <fieldset className="flex flex-col gap-3">
+          <legend className="mb-1 text-sm font-medium">Setup and turnaround</legend>
+          <p className="text-sm text-[var(--text-muted)]">
+            Whole minutes in 15-minute steps (0, 15, 30, 45 and so on). The venue is committed for this long
+            before and after every booking.
+          </p>
+          <div>
+            <label htmlFor="venue-setup-minutes" className="mb-1 block text-sm">
+              Setup time (minutes)
+            </label>
+            <input
+              id="venue-setup-minutes"
+              className={inputClass}
+              inputMode="numeric"
+              value={setupMinutes}
+              onChange={(event) => setSetupMinutes(event.target.value)}
+            />
+            <FieldError messages={fieldErrors.setupMinutes} />
+          </div>
+          <div>
+            <label htmlFor="venue-turnaround-minutes" className="mb-1 block text-sm">
+              Turnaround time (minutes)
+            </label>
+            <input
+              id="venue-turnaround-minutes"
+              className={inputClass}
+              inputMode="numeric"
+              value={turnaroundMinutes}
+              onChange={(event) => setTurnaroundMinutes(event.target.value)}
+            />
+            <FieldError messages={fieldErrors.turnaroundMinutes} />
+          </div>
+        </fieldset>
+      )}
 
       <fieldset>
         <legend className="mb-1 text-sm font-medium">Operating slots</legend>
@@ -453,6 +526,46 @@ export default function VenueForm({
               {saving ? 'Saving...' : 'Confirm and save'}
             </button>
             <button type="button" onClick={() => setAffected(null)} className="text-sm underline">
+              Go back and edit
+            </button>
+          </div>
+        </section>
+      )}
+
+      {clashes && (
+        <section
+          role="alert"
+          aria-labelledby="setup-turnaround-clashes-heading"
+          className="rounded border border-[var(--danger)] p-4 text-sm"
+        >
+          <h2 id="setup-turnaround-clashes-heading" className="font-semibold">
+            A setup time of {clashes.setupMinutes} minutes and a turnaround time of {clashes.turnaroundMinutes}{' '}
+            minutes make {clashes.bookings.length} confirmed bookings clash
+          </h2>
+          <p className="mt-1 text-[var(--text-muted)]">
+            With the new times, these bookings no longer leave the venue enough time to set up and reset between
+            them. If you confirm, the change is applied, every booking stays confirmed, and each one listed is
+            flagged as affected.
+          </p>
+          <ul className="mt-3 flex flex-col gap-2">
+            {clashes.bookings.map((booking) => (
+              <li key={booking.bookingId} className="rounded border border-[var(--border)] p-2">
+                <span className="font-medium">{booking.reference}</span> {booking.eventName}
+                <br />
+                {formatSingaporeDate(booking.date)} · {booking.start}-{booking.end}
+              </li>
+            ))}
+          </ul>
+          <div className="mt-3 flex items-center gap-3">
+            <button
+              type="button"
+              onClick={confirmTimes}
+              disabled={saving}
+              className="rounded bg-[var(--danger)] px-4 py-2 text-sm font-medium text-white disabled:opacity-60"
+            >
+              {saving ? 'Saving...' : 'Confirm and save'}
+            </button>
+            <button type="button" onClick={() => setClashes(null)} className="text-sm underline">
               Go back and edit
             </button>
           </div>

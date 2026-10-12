@@ -86,7 +86,7 @@ describe('SCRUM-79 — State venue and accessibility requirements', () => {
     });
 
     it('is not needed to submit - the mandatory set is unchanged', () => {
-      const complete = { ...basicDetails, timeSlots: ['pm'], expectedAttendance: 80 };
+      const complete = { ...basicDetails, startTime: '13:00', endTime: '18:00', expectedAttendance: 80 };
       expect(incompleteFields(complete, A_MONDAY)).toEqual([]);
     });
 

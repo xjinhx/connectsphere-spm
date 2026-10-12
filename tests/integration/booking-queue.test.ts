@@ -73,7 +73,7 @@ async function approvedEvent(name: string): Promise<string> {
 }
 
 /** Raise a pending request through SCRUM-142; returns the request id. */
-async function raise(eventName: string, venueId: string, lines: { date: string; timeSlots: string[] }[]) {
+async function raise(eventName: string, venueId: string, lines: { date: string; start: string; end: string }[]) {
   const eventId = await approvedEvent(eventName);
   return (await submitVenueBookingRequest(eventId, coordinatorId, { venueId, lines })).id;
 }
@@ -120,24 +120,25 @@ afterAll(async () => {
 });
 
 describe('SCRUM-147 AC1 — each pending request is listed with its details', () => {
-  it('TC-147-01 / TC-147-02: lists each request once with its own venue, event, date, slots and request date', async () => {
+  it('TC-147-01 / TC-147-02: lists each request once with its own venue, event, date, period and request date', async () => {
     const ballroom = await venue('Marina Bay Ballroom');
     const seminar = await venue('Bugis Seminar Room');
     const training = await venue('Jurong East Training Room');
-    await raise('Product Launch', ballroom, [{ date: '2026-10-15', timeSlots: ['pm'] }]);
-    await raise('Annual Townhall', seminar, [{ date: '2026-11-20', timeSlots: ['am'] }]);
-    await raise('Team Workshop', training, [{ date: '2026-10-12', timeSlots: ['am', 'pm'] }]);
+    await raise('Product Launch', ballroom, [{ date: '2026-10-15', start: '13:00', end: '18:00' }]);
+    await raise('Annual Townhall', seminar, [{ date: '2026-11-20', start: '07:00', end: '12:00' }]);
+    await raise('Team Workshop', training, [{ date: '2026-10-12', start: '07:00', end: '18:00' }]);
 
     const queue = await myQueue();
+    // In exact times since SCRUM-239 (the slots these were written with: PM, AM, AM + PM).
     const expected = [
-      ['Product Launch', 'Marina Bay Ballroom', '2026-10-15', ['pm']],
-      ['Annual Townhall', 'Bugis Seminar Room', '2026-11-20', ['am']],
-      ['Team Workshop', 'Jurong East Training Room', '2026-10-12', ['am', 'pm']],
+      ['Product Launch', 'Marina Bay Ballroom', '2026-10-15', '13:00', '18:00'],
+      ['Annual Townhall', 'Bugis Seminar Room', '2026-11-20', '07:00', '12:00'],
+      ['Team Workshop', 'Jurong East Training Room', '2026-10-12', '07:00', '18:00'],
     ] as const;
-    for (const [event, venueName, date, slots] of expected) {
+    for (const [event, venueName, date, start, end] of expected) {
       const rows = named(queue, event);
       expect(rows).toHaveLength(1);
-      expect(rows[0]).toMatchObject({ venueName: `${venueName} ${RUN}`, date, timeSlots: slots });
+      expect(rows[0]).toMatchObject({ venueName: `${venueName} ${RUN}`, date, start, end });
       expect(rows[0]?.eventReference).toMatch(/^EVT-\d{4}-\d{4}$/);
       expect(Number.isNaN(Date.parse(rows[0]?.requestedAt ?? ''))).toBe(false);
     }
@@ -146,8 +147,8 @@ describe('SCRUM-147 AC1 — each pending request is listed with its details', ()
   it('lists a request with two dates as two lines, one per date', async () => {
     const hall = await venue('Two Date Hall');
     await raise('Two Day Summit', hall, [
-      { date: '2026-12-01', timeSlots: ['am'] },
-      { date: '2026-12-02', timeSlots: ['pm'] },
+      { date: '2026-12-01', start: '07:00', end: '12:00' },
+      { date: '2026-12-02', start: '13:00', end: '18:00' },
     ]);
 
     const rows = named(await myQueue(), 'Two Day Summit');
@@ -159,9 +160,9 @@ describe('SCRUM-147 AC2 — sorting by requested event date', () => {
   it('TC-147-04: puts the soonest event first across a year end, read from Postgres', async () => {
     const venueId = await venue('Sort Room');
     // Added in the sheet's order, so the arrival order is the reverse of the event-date order.
-    await raise('New Year Kickoff', venueId, [{ date: '2027-01-02', timeSlots: ['am'] }]);
-    await raise('Year-End Party', venueId, [{ date: '2026-12-30', timeSlots: ['night'] }]);
-    await raise('Team Workshop', venueId, [{ date: '2026-10-12', timeSlots: ['am', 'pm'] }]);
+    await raise('New Year Kickoff', venueId, [{ date: '2027-01-02', start: '07:00', end: '12:00' }]);
+    await raise('Year-End Party', venueId, [{ date: '2026-12-30', start: '19:00', end: '24:00' }]);
+    await raise('Team Workshop', venueId, [{ date: '2026-10-12', start: '07:00', end: '18:00' }]);
 
     const mine = (await listPendingBookingQueue('event-date')).filter(
       (entry) => entry.venueName === `Sort Room ${RUN}`,
@@ -177,8 +178,8 @@ describe('SCRUM-147 AC2 — sorting by requested event date', () => {
 describe('SCRUM-147 AC3 — a decided request is no longer listed (decided through SCRUM-148)', () => {
   it('TC-147-05: an approved request leaves the queue; another stays', async () => {
     const venueId = await venue('Approve Room');
-    const r1 = await raise('Approve Me', venueId, [{ date: '2026-10-15', timeSlots: ['pm'] }]);
-    await raise('Keep Pending A', venueId, [{ date: '2026-11-20', timeSlots: ['am'] }]);
+    const r1 = await raise('Approve Me', venueId, [{ date: '2026-10-15', start: '13:00', end: '18:00' }]);
+    await raise('Keep Pending A', venueId, [{ date: '2026-11-20', start: '07:00', end: '12:00' }]);
 
     await decide(r1, 'approve');
 
@@ -189,8 +190,8 @@ describe('SCRUM-147 AC3 — a decided request is no longer listed (decided throu
 
   it('TC-147-06: a rejected request leaves the queue; another stays', async () => {
     const venueId = await venue('Reject Room');
-    await raise('Keep Pending B', venueId, [{ date: '2026-10-15', timeSlots: ['pm'] }]);
-    const r2 = await raise('Reject Me', venueId, [{ date: '2026-11-20', timeSlots: ['am'] }]);
+    await raise('Keep Pending B', venueId, [{ date: '2026-10-15', start: '13:00', end: '18:00' }]);
+    const r2 = await raise('Reject Me', venueId, [{ date: '2026-11-20', start: '07:00', end: '12:00' }]);
 
     await decide(r2, 'reject');
 
@@ -204,7 +205,7 @@ describe('SCRUM-147 AC4 — every venue, for any Venue Staff member', () => {
   it('TC-147-07: lists a pending request at every venue that has one', async () => {
     const venues = [await venue('North Room'), await venue('South Room'), await venue('Harbour View Room')];
     for (const [i, venueId] of venues.entries()) {
-      await raise(`Every Venue ${i}`, venueId, [{ date: '2026-11-20', timeSlots: ['pm'] }]);
+      await raise(`Every Venue ${i}`, venueId, [{ date: '2026-11-20', start: '13:00', end: '18:00' }]);
     }
 
     const queue = await myQueue();

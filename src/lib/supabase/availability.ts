@@ -83,3 +83,28 @@ export async function fetchUpcomingUnavailableSlots(venueId: string, today: stri
     .eq('venue_id', venueId)
     .gte('date', today);
 }
+
+/**
+ * SCRUM-239: a venue's confirmed bookings from `fromDate` to `toDate`
+ * (YYYY-MM-DD, inclusive), with their start and end times. For
+ * getVenueCommitments; the time-range check itself is the service's.
+ */
+export async function fetchConfirmedBookingPeriods(venueId: string, fromDate: string, toDate: string) {
+  return db()
+    .from('venue_booking')
+    .select('venue_id, event_request_id, date, start_time, end_time')
+    .eq('venue_id', venueId)
+    .eq('status', 'confirmed')
+    .gte('date', fromDate)
+    .lte('date', toDate);
+}
+
+/** SCRUM-239: a venue's unavailable periods from `fromDate` to `toDate` (inclusive), with their reasons. */
+export async function fetchUnavailablePeriods(venueId: string, fromDate: string, toDate: string) {
+  return db()
+    .from('venue_unavailable_slot')
+    .select('venue_id, date, start_time, end_time, reason')
+    .eq('venue_id', venueId)
+    .gte('date', fromDate)
+    .lte('date', toDate);
+}
