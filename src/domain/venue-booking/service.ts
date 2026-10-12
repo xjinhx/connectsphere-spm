@@ -508,7 +508,10 @@ export async function decideVenueBookingRequest(
   }
 
   // SCRUM-155 AC4: each other event whose pending line overlapped a period
-  // this approval booked is told, through its coordinator.
+  // this approval booked is told, through its coordinator. Only lines this
+  // approval rejected carry PERIOD_COMMITTED_REASON: one rejected before
+  // PR #100 has the old "This slot is committed..." reason, and was already
+  // told when it was rejected, so it is rightly left out here.
   const booked = saved.lines.filter((line) => line.status === 'approved');
   for (const otherId of result.autoRejectedRequestIds) {
     const other = await readDecision(otherId);
@@ -540,6 +543,8 @@ export async function decideVenueBookingRequest(
  *
  * SCRUM-155 AC3: a booking that has been released or cancelled is no longer
  * confirmed, so getVenueCommitments no longer returns it.
+ * DUMMY(SCRUM-231) D-15: nothing releases or cancels a single booking yet;
+ * testers remove it by hand.
  */
 async function conflictsFor(
   venueId: string,
