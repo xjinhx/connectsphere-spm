@@ -1,7 +1,8 @@
 import { afterAll, beforeAll, describe, expect, it } from 'vitest';
 import { createAdminClient } from '@/lib/supabase/admin';
-import { createVenue } from '@/domain/venues/service';
+import { createVenue, searchVenues } from '@/domain/venues/service';
 import { listAffectedBookings } from '@/domain/availability/service';
+import { getVenueCalendar } from '@/domain/venues/calendar';
 import {
   decideVenueBookingRequest,
   listEventVenueBookings,
@@ -143,6 +144,24 @@ describe('releaseVenueBooking (SCRUM-231)', () => {
       released_by: coordinatorId,
     });
     expect((await bookingRow(bugis)).released_at).not.toBeNull();
+  });
+
+  it('AC1: the released time shows free in time-based search and on the calendar (TC-231-02)', async () => {
+    const date = daysFromToday(30);
+    const venueId = await createTestVenue('Searchable');
+    const booking = await book(await createEvent(date), venueId, date, 'am');
+    const found = async () => (await searchVenues({ date, start: '07:00', end: '12:00' })).venues.map((v) => v.id);
+    const periods = async () =>
+      (await getVenueCalendar(venueId, { from: date, to: date }, { userId: coordinatorId, roles: ['coordinator'] })).days[0]!.periods.map(
+        (p) => `${p.start}-${p.end} ${p.kind}`,
+      );
+    expect(await found()).not.toContain(venueId);
+    expect(await periods()).toContain('07:00-12:00 confirmed');
+
+    await releaseVenueBooking(booking, coordinatorId, { reason: 'No longer needed' });
+
+    expect(await found()).toContain(venueId);
+    expect(await periods()).toEqual([]);
   });
 
   it('AC1: the released time is free again: another event can request it and be approved (TC-231-03)', async () => {
