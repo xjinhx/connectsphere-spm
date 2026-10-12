@@ -1,4 +1,4 @@
-import { describe, expect, it } from 'vitest';
+import { beforeEach, describe, expect, it, vi } from 'vitest';
 import {
   ClockRangeSchema,
   datesBetween,
@@ -8,17 +8,50 @@ import {
   splitDateTime,
   toMinutes,
 } from '@/domain/shared/times';
-import { commitmentsOverlapping, toCommittedPeriods } from '@/domain/availability/policy';
+import { commitmentsInRange, commitmentsOverlapping, toCommittedPeriods } from '@/domain/availability/policy';
 import { getCommittedPeriods, getVenueCommitments } from '@/domain/availability/service';
 import { VenueCommitmentSchema, type VenueCommitment } from '@/domain/availability/schema';
+import { fetchConfirmedBookingPeriods, fetchUnavailablePeriods } from '@/lib/supabase/availability';
+import { fetchActiveHoldPeriods } from '@/lib/supabase/venueHolds';
+
+// The database layer is replaced at its boundary; the service and policy run for real.
+vi.mock('@/lib/supabase/availability', async (importOriginal) => ({
+  ...(await importOriginal<typeof import('@/lib/supabase/availability')>()),
+  fetchConfirmedBookingPeriods: vi.fn(),
+  fetchUnavailablePeriods: vi.fn(),
+}));
+
+// SCRUM-227: getVenueCommitments also reads active holds; replaced the same way,
+// so this file never needs a database.
+vi.mock('@/lib/supabase/venueHolds', async (importOriginal) => ({
+  ...(await importOriginal<typeof import('@/lib/supabase/venueHolds')>()),
+  fetchActiveHoldPeriods: vi.fn(),
+}));
+
+const ok = <T>(data: T) => ({ data, error: null }) as never;
+const EVENT_ID = '22222222-2222-4222-8222-222222222222';
+const bookingRow = (date: string, start: string, end: string) => ({
+  venue_id: '11111111-1111-4111-8111-111111111111',
+  event_request_id: EVENT_ID,
+  date,
+  start_time: `${start}:00`,
+  end_time: `${end}:00`,
+});
+
+beforeEach(() => {
+  vi.mocked(fetchConfirmedBookingPeriods).mockReset().mockResolvedValue(ok([]));
+  vi.mocked(fetchUnavailablePeriods).mockReset().mockResolvedValue(ok([]));
+  vi.mocked(fetchActiveHoldPeriods).mockReset().mockResolvedValue(ok([]));
+});
 
 /**
  * SCRUM-239 Check venue availability in 15-minute time ranges (Jira,
  * authoritative). Test case IDs are from ConnectSphere_TestCases_Sprint3_238_239_226.xlsx.
  *
- * This file covers the shared contract only: clock times, the half-open
- * overlap rule, and the getVenueCommitments stub (D-16). Search, request,
- * approval and calendar are tested once they call it.
+ * This file covers the shared contract: clock times, the half-open overlap
+ * rule, and getVenueCommitments with the database layer mocked. The same check
+ * against a real database is tests/integration/venue-commitments.test.ts.
+ * Search, request, approval and calendar are tested once they call it.
  */
 
 const VENUE_A = '11111111-1111-4111-8111-111111111111';
@@ -83,21 +116,90 @@ describe('commitmentsOverlapping', () => {
   });
 });
 
-describe('getVenueCommitments stub (D-16)', () => {
-  it('returns the fixture: the venue confirmed 10:00-12:00', async () => {
-    const result = await getVenueCommitments(VENUE_A, '2026-11-10T09:00', '2026-11-10T13:00');
-    expect(result).toEqual([
-      expect.objectContaining({ kind: 'booking', venueId: VENUE_A, date: '2026-11-10', start: '10:00', end: '12:00' }),
-    ]);
+describe('commitmentsInRange', () => {
+  const commitments = [
+    booking('2026-11-11', '10:00', '12:00'),
+    booking('2026-11-10', '14:00', '15:00'),
+    booking('2026-11-10', '10:00', '12:00'),
+    booking('2026-11-12', '10:00', '12:00'),
+  ];
+
+  it('keeps only what overlaps the window, half-open (TC-239-05, 06)', () => {
+    expect(commitmentsInRange(commitments, '2026-11-10T12:00', '2026-11-10T14:00')).toEqual([]);
+    expect(commitmentsInRange(commitments, '2026-11-10T11:45', '2026-11-10T13:00')).toEqual([commitments[2]]);
   });
 
-  it('returns nothing for a range that only touches the booking', async () => {
+  it('opens on the first date at the start time and closes on the last at the end time', () => {
+    const result = commitmentsInRange(commitments, '2026-11-10T13:00', '2026-11-12T10:30');
+    expect(result.map((c) => `${c.date} ${c.start}`)).toEqual(['2026-11-10 14:00', '2026-11-11 10:00', '2026-11-12 10:00']);
+  });
+});
+
+describe('getVenueCommitments (SCRUM-239, replaces D-16)', () => {
+  it('returns confirmed bookings and unavailable periods as commitments, times as HH:MM', async () => {
+    vi.mocked(fetchConfirmedBookingPeriods).mockResolvedValue(ok([bookingRow('2026-11-10', '10:00', '12:00')]));
+    vi.mocked(fetchUnavailablePeriods).mockResolvedValue(
+      ok([{ venue_id: VENUE_A, date: '2026-11-10', start_time: '14:00:00', end_time: '16:30:00', reason: 'Ceiling repair' }]),
+    );
+
+    const result = await getVenueCommitments(VENUE_A, '2026-11-10T08:00', '2026-11-10T22:00');
+
+    expect(result).toEqual([
+      { kind: 'booking', venueId: VENUE_A, date: '2026-11-10', start: '10:00', end: '12:00', eventRequestId: EVENT_ID, reason: null },
+      { kind: 'unavailable', venueId: VENUE_A, date: '2026-11-10', start: '14:00', end: '16:30', eventRequestId: null, reason: 'Ceiling repair' },
+    ]);
+    expect(fetchConfirmedBookingPeriods).toHaveBeenCalledWith(VENUE_A, '2026-11-10', '2026-11-10');
+  });
+
+  it('TC-239-05: a booking that only touches the range is not returned', async () => {
+    vi.mocked(fetchConfirmedBookingPeriods).mockResolvedValue(ok([bookingRow('2026-11-10', '10:00', '12:00')]));
     expect(await getVenueCommitments(VENUE_A, '2026-11-10T12:00', '2026-11-10T14:00')).toEqual([]);
   });
 
-  it('returns one booking per date across a multi-day range, sorted by date', async () => {
-    const result = await getVenueCommitments(VENUE_A, '2026-11-10T11:00', '2026-11-12T10:30');
-    expect(result.map((c) => c.date)).toEqual(['2026-11-10', '2026-11-11', '2026-11-12']);
+  it('reads a 24:00:00 end as 24:00 (former Night slot)', async () => {
+    vi.mocked(fetchUnavailablePeriods).mockResolvedValue(
+      ok([{ venue_id: VENUE_A, date: '2026-11-10', start_time: '19:00:00', end_time: '24:00:00', reason: 'Event setup' }]),
+    );
+    const [period] = await getVenueCommitments(VENUE_A, '2026-11-10T20:00', '2026-11-10T21:00');
+    expect(period).toMatchObject({ start: '19:00', end: '24:00' });
+  });
+
+  it('SCRUM-227: returns an active hold as kind hold, with its event and expiry', async () => {
+    vi.mocked(fetchActiveHoldPeriods).mockResolvedValue(
+      ok([
+        {
+          venue_id: VENUE_A,
+          event_request_id: EVENT_ID,
+          date: '2026-11-10',
+          start_time: '10:00:00',
+          end_time: '12:00:00',
+          expires_at: '2026-11-03T09:00:00+00:00',
+        },
+      ]),
+    );
+    const now = new Date('2026-10-10T04:00:00Z');
+
+    expect(await getVenueCommitments(VENUE_A, '2026-11-10T08:00', '2026-11-10T22:00', now)).toEqual([
+      {
+        kind: 'hold',
+        venueId: VENUE_A,
+        date: '2026-11-10',
+        start: '10:00',
+        end: '12:00',
+        eventRequestId: EVENT_ID,
+        reason: null,
+        expiresAt: '2026-11-03T09:00:00.000Z',
+      },
+    ]);
+    // Only holds that have not expired at `now` are asked for (AC6).
+    expect(fetchActiveHoldPeriods).toHaveBeenCalledWith(VENUE_A, '2026-11-10', '2026-11-10', now.toISOString());
+  });
+
+  it('fails clearly when the database cannot be read', async () => {
+    vi.mocked(fetchConfirmedBookingPeriods).mockResolvedValue({ data: null, error: { message: 'boom' } } as never);
+    await expect(getVenueCommitments(VENUE_A, '2026-11-10T08:00', '2026-11-10T22:00')).rejects.toThrow(
+      "Could not check the venue's availability.",
+    );
   });
 });
 
@@ -183,9 +285,10 @@ describe('review fixes (PR #88)', () => {
     expect(JSON.stringify(periods)).not.toMatch(/2222|Ceiling|eventRequestId|reason|kind/);
   });
 
-  it('getCommittedPeriods returns the stub booking as a bare period', async () => {
-    expect(await getCommittedPeriods(VENUE_A, '2026-11-10T09:00', '2026-11-10T13:00')).toEqual([
-      { date: '2026-11-10', start: '10:00', end: '12:00' },
-    ]);
+  it('getCommittedPeriods returns real bookings as bare periods, with no event id', async () => {
+    vi.mocked(fetchConfirmedBookingPeriods).mockResolvedValue(ok([bookingRow('2026-11-10', '10:00', '12:00')]));
+    const periods = await getCommittedPeriods(VENUE_A, '2026-11-10T09:00', '2026-11-10T13:00');
+    expect(periods).toEqual([{ date: '2026-11-10', start: '10:00', end: '12:00' }]);
+    expect(JSON.stringify(periods)).not.toContain(EVENT_ID);
   });
 });

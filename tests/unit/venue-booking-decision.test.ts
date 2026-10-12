@@ -99,17 +99,19 @@ describe('VenueBookingRangeSchema (AC3, AC4)', () => {
   });
 });
 
-describe('bookingDecisionMessage (AC2)', () => {
-  const line = (date: string, slot: string, status: 'approved' | 'rejected', reason: string | null = null) => ({
+describe('bookingDecisionMessage (AC2), in exact times since SCRUM-239', () => {
+  const PERIODS = { am: ['07:00', '12:00'], night: ['19:00', '24:00'] } as const;
+  const line = (date: string, slot: keyof typeof PERIODS, status: 'approved' | 'rejected', reason: string | null = null) => ({
     date,
-    timeSlots: [slot],
+    start: PERIODS[slot][0],
+    end: PERIODS[slot][1],
     status,
     rejectionReason: reason,
   });
 
   it('tells the coordinator an approved request was approved', () => {
     expect(bookingDecisionMessage('Bugis Seminar Room', { status: 'approved', lines: [line('2026-10-26', 'am', 'approved')] })).toBe(
-      'Your booking request for Bugis Seminar Room was approved: 26 Oct 2026 AM.',
+      'Your booking request for Bugis Seminar Room was approved: 26 Oct 2026 07:00–12:00.',
     );
   });
 
@@ -120,7 +122,7 @@ describe('bookingDecisionMessage (AC2)', () => {
         lines: [line('2026-10-28', 'am', 'approved'), line('2026-10-28', 'night', 'rejected', 'No security staff after 10pm')],
       }),
     ).toBe(
-      'Your booking request for Marina Bay Ballroom was partially approved. Approved: 28 Oct 2026 AM. Rejected: 28 Oct 2026 Night (No security staff after 10pm).',
+      'Your booking request for Marina Bay Ballroom was partially approved. Approved: 28 Oct 2026 07:00–12:00. Rejected: 28 Oct 2026 19:00–24:00 (No security staff after 10pm).',
     );
   });
 
@@ -130,6 +132,6 @@ describe('bookingDecisionMessage (AC2)', () => {
         status: 'rejected',
         lines: [line('2026-10-30', 'am', 'rejected', 'Venue under maintenance')],
       }),
-    ).toBe('Your booking request for Jurong East Training Room was rejected: 30 Oct 2026 AM (Venue under maintenance).');
+    ).toBe('Your booking request for Jurong East Training Room was rejected: 30 Oct 2026 07:00–12:00 (Venue under maintenance).');
   });
 });

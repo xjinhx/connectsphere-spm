@@ -21,7 +21,7 @@ import { ensureTestClientOrganisation, TEST_CLIENT_ORGANISATION_ID } from './fix
  * SCRUM-143 sheet of the Sprint 2 test case workbook (TC-143-NN). Runs against
  * the local Supabase stack. Requests are raised through SCRUM-142's real
  * submitVenueBookingRequest; the admin client only arranges rows. The page is
- * SCRUM-148's decision page: its requested dates and slots come from
+ * SCRUM-148's decision page: its requested dates and times come from
  * getVenueBookingDecision, and SCRUM-143's details from
  * getBookingRequestRequirements.
  */
@@ -75,8 +75,8 @@ async function featureId(name: string): Promise<string> {
   return created.id as string;
 }
 
-async function requestFor(eventId: string, date: string, timeSlots: string[]) {
-  return (await submitVenueBookingRequest(eventId, coordinatorId, { venueId, lines: [{ date, timeSlots }] })).id;
+async function requestFor(eventId: string, date: string, start: string, end: string) {
+  return (await submitVenueBookingRequest(eventId, coordinatorId, { venueId, lines: [{ date, start, end }] })).id;
 }
 
 beforeAll(async () => {
@@ -100,10 +100,10 @@ afterAll(async () => {
   }
 });
 
-describe('SCRUM-143 AC1 — reference, requested dates and slots, requesting coordinator', () => {
-  it('TC-143-01: shows the event reference, each requested date with its slots, and Casey Tan', async () => {
+describe('SCRUM-143 AC1 — reference, requested dates and times, requesting coordinator', () => {
+  it('TC-143-01: shows the event reference, each requested date with its times, and Casey Tan', async () => {
     const eventId = await approvedEvent('Annual Partner Gala');
-    const requestId = await requestFor(eventId, '2026-10-20', ['pm', 'night']);
+    const requestId = await requestFor(eventId, '2026-10-20', '13:00', '24:00');
 
     const requirements = await getBookingRequestRequirements(requestId);
     const decision = await getVenueBookingDecision(requestId);
@@ -112,7 +112,9 @@ describe('SCRUM-143 AC1 — reference, requested dates and slots, requesting coo
     expect(requirements.eventReference).toBe(event?.reference);
     expect(requirements.eventName).toBe(`Annual Partner Gala ${RUN}`);
     expect(requirements.requestedByName).toBe('Casey Tan');
-    expect(decision.lines).toEqual([expect.objectContaining({ date: '2026-10-20', timeSlots: ['pm', 'night'], status: 'pending' })]);
+    expect(decision.lines).toEqual([
+      expect.objectContaining({ date: '2026-10-20', start: '13:00', end: '24:00', legacySlots: null, status: 'pending' }),
+    ]);
   });
 
   it('reports an unknown or malformed request id as not found', async () => {
@@ -137,7 +139,7 @@ describe('SCRUM-143 AC2 — attendance, layout and accessibility as recorded on 
     const { error } = await admin.from('event_request_accessibility_features').insert(links);
     if (error) throw new Error(`could not record accessibility features: ${error.message}`);
 
-    const requirements = await getBookingRequestRequirements(await requestFor(eventId, '2026-10-20', ['pm', 'night']));
+    const requirements = await getBookingRequestRequirements(await requestFor(eventId, '2026-10-20', '13:00', '24:00'));
 
     expect(requirements.expectedAttendance).toBe(120);
     expect(describeLayoutForVenueStaff(requirements.roomLayout)).toBe('Banquet');
@@ -154,7 +156,7 @@ describe('SCRUM-143 AC2 — attendance, layout and accessibility as recorded on 
       accessibility_required: false,
     });
 
-    const requirements = await getBookingRequestRequirements(await requestFor(eventId, '2026-10-21', ['night']));
+    const requirements = await getBookingRequestRequirements(await requestFor(eventId, '2026-10-21', '19:00', '24:00'));
 
     expect(requirements.expectedAttendance).toBe(80);
     expect(describeLayoutForVenueStaff(requirements.roomLayout)).toBe('Theatre');
@@ -166,7 +168,7 @@ describe('SCRUM-143 AC4 — not specified rather than blank', () => {
   it('TC-143-07: an event with no layout and no accessibility answer reads Not specified for both', async () => {
     const eventId = await approvedEvent('Quarterly Team Briefing', { expected_attendance: 30 });
 
-    const requirements = await getBookingRequestRequirements(await requestFor(eventId, '2026-10-23', ['am']));
+    const requirements = await getBookingRequestRequirements(await requestFor(eventId, '2026-10-23', '07:00', '12:00'));
 
     expect(requirements.expectedAttendance).toBe(30);
     expect(describeLayoutForVenueStaff(requirements.roomLayout)).toBe(NOT_SPECIFIED);

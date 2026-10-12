@@ -30,9 +30,9 @@ import {
   type EventRequestDraftInput,
   type EventRequestSaveInput,
   type EventRequestStatus,
-  type TimeSlot,
   type VenueRequirementsInput,
 } from './schema';
+import { fromDatabaseTime, type ClockTime } from '@/domain/shared/times';
 import {
   canBeSubmitted,
   canViewRequest,
@@ -61,8 +61,12 @@ export interface EventRequest {
   purpose: string | null;
   description: string | null;
   proposedDate: string | null;
-  /** SCRUM-77. Null until at least one slot has been chosen. */
-  timeSlots: TimeSlot[] | null;
+  /**
+   * SCRUM-238. `HH:MM` Singapore clock time (AC7); null until entered. A
+   * request saved as a slot reads back as that slot's times (AC6).
+   */
+  startTime: ClockTime | null;
+  endTime: ClockTime | null;
   /** SCRUM-78's column, read here for SCRUM-82's completeness check. */
   expectedAttendance: number | null;
   // SCRUM-82
@@ -114,8 +118,8 @@ export function toEventRequest(row: EventRequestRow): EventRequest {
     purpose: row.purpose,
     description: row.description,
     proposedDate: row.proposed_date,
-    // The database constraint guarantees only am/pm/night are ever stored.
-    timeSlots: row.time_slots as TimeSlot[] | null,
+    startTime: row.start_time === null ? null : fromDatabaseTime(row.start_time),
+    endTime: row.end_time === null ? null : fromDatabaseTime(row.end_time),
     expectedAttendance: row.expected_attendance,
     status: row.status,
     submittedAt: row.submitted_at,
@@ -232,8 +236,10 @@ function toWrite(input: EventRequestSaveInput): EventRequestWrite {
     description: input.description,
     // Stored as a calendar date, not an instant.
     proposed_date: input.proposedDate.toISOString().slice(0, 10),
-    // SCRUM-77 AC1: the chosen slots, already deduplicated and in day order.
-    time_slots: input.timeSlots.length > 0 ? input.timeSlots : null,
+    // SCRUM-238 — the times replace the slots (see EventRequestWrite).
+    time_slots: null,
+    start_time: input.startTime ?? null,
+    end_time: input.endTime ?? null,
     // SCRUM-78. Was previously dropped on the create path entirely - the
     // draft path (toDraftWrite, SCRUM-83) already wrote this correctly.
     expected_attendance: input.expectedAttendance ?? null,
@@ -387,8 +393,10 @@ function toDraftWrite(input: EventRequestDraftInput): EventRequestWrite {
     purpose: input.purpose ?? null,
     description: input.description ?? null,
     proposed_date: input.proposedDate ? input.proposedDate.toISOString().slice(0, 10) : null,
-    // SCRUM-77's constraint: no slots is NULL, never an empty array.
-    time_slots: input.timeSlots.length > 0 ? input.timeSlots : null,
+    // SCRUM-238 — as in toWrite(): times, never slots.
+    time_slots: null,
+    start_time: input.startTime ?? null,
+    end_time: input.endTime ?? null,
     expected_attendance: input.expectedAttendance ?? null,
     ...toVenueRequirementsWrite(input),
   };
@@ -483,7 +491,7 @@ export async function submitEventRequest(id: string): Promise<EventRequest> {
     throw new InvalidTransitionError(existing.status, 'submitted');
   }
 
-  // `now` enables the same-day slot-lapsed check (SCRUM-77 AC5) alongside the
+  // `now` enables the same-day start-time check (SCRUM-238 AC5) alongside the
   // date-only rules; incompleteFields() defaults `today` itself when omitted.
   const incomplete = incompleteFields(existing, undefined, new Date());
   if (incomplete.length > 0) {

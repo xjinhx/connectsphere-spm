@@ -1,38 +1,47 @@
 import { describe, it, expect } from 'vitest';
 import {
-  calendarSlotState,
+  calendarDay,
   canViewVenueCatalogue,
+  coversOpeningHours,
   datesInRange,
-  isCommitted,
-  isFullyCommitted,
-  type CalendarSlotFacts,
+  type CalendarCommitmentInput,
 } from '@/domain/venues/policy';
 import { CALENDAR_MAX_DAYS, VenueCalendarQuerySchema, daysInRange } from '@/domain/venues/schema';
 
 /**
- * SCRUM-123 View a venue's calendar with the state of each slot — the pure
- * rules. tests/integration/venue-calendar.test.ts runs the same criteria
- * against Postgres.
+ * SCRUM-239 AC5 View a venue's calendar in exact time ranges — the pure rules.
+ * tests/integration/venue-calendar.test.ts runs the same criteria against
+ * Postgres.
  *
- * AC1 "... each date shows its AM, PM and Night slots with the current state of each."
- * AC2 open, nothing recorded → available.
- * AC3 outside operating hours, cannot be requested.
- * AC4 committed for all three slots → fully committed.
- * AC5 confirmed booking → Confirmed. AC6 pending request → Pending request.
- * AC7 recorded unavailable → Blocked, with the reason.
- * AC8 a second request on a confirmed slot is a pending request, not a commitment.
- * AC9 Event Organiser or Attendee → denied. AC10 four internal roles → displayed.
+ * AC5 (Jira): "Given I view a venue's calendar for a day, when it loads, then
+ * confirmed, pending, held and blocked periods each show with their exact
+ * start and end times, and no fixed lunch or dinner gap is drawn."
  *
- * Test case IDs are from Self_Owned_ScrumsTest.xlsx, sheet SCRUM-123.
+ * SCRUM-123's rules (Done on slots) carry over in time ranges and keep their
+ * test case IDs as regression checks: AC1 the date range, AC4 fully committed,
+ * AC7 a Blocked period's reason, AC8 a pending request is not a commitment,
+ * AC9/AC10 who may view.
+ *
+ * Test case IDs: TC-239-xx from ConnectSphere_TestCases_Sprint3_238_239_226.xlsx;
+ * TC-123-xx from Self_Owned_ScrumsTest.xlsx, sheet SCRUM-123.
  */
 
-const facts = (over: Partial<CalendarSlotFacts> = {}): CalendarSlotFacts => ({
-  operates: true,
-  unavailableReason: null,
-  confirmed: false,
-  pendingRequests: 0,
+const DATE = '2026-11-10';
+const HOURS = { opensAt: '08:00', closesAt: '22:00' };
+const EVENT_ID = '22222222-2222-4222-8222-222222222222';
+const EVENT = { id: EVENT_ID, reference: 'EVT-2026-0001', name: 'Annual Dinner' };
+
+const commitment = (over: Partial<CalendarCommitmentInput>): CalendarCommitmentInput => ({
+  kind: 'booking',
+  date: DATE,
+  start: '10:00',
+  end: '12:00',
+  eventRequestId: EVENT_ID,
+  reason: null,
   ...over,
 });
+
+const NO_EVENTS = new Map();
 
 describe('VenueCalendarQuerySchema: SCRUM-123 AC1, a date range', () => {
   it('TC-123-01: accepts a five-day range', () => {
@@ -69,58 +78,104 @@ describe('VenueCalendarQuerySchema: SCRUM-123 AC1, a date range', () => {
   });
 });
 
-describe('calendarSlotState: SCRUM-123 AC2, AC3, AC5 to AC8', () => {
-  it('TC-123-05: open with nothing recorded is available (AC2)', () => {
-    expect(calendarSlotState(facts())).toBe('available');
-  });
-
-  it('TC-123-06 / TC-123-07: a slot the venue does not run is outside operating hours (AC3)', () => {
-    expect(calendarSlotState(facts({ operates: false }))).toBe('outside_operating_hours');
-    // Nothing recorded on a closed slot can make it look requestable.
-    expect(calendarSlotState(facts({ operates: false, unavailableReason: 'Repairs', confirmed: true }))).toBe(
-      'outside_operating_hours',
+describe('calendarDay: SCRUM-239 AC5, periods with exact times', () => {
+  it('TC-239-12: shows confirmed, pending, held and blocked periods each with their exact times, in time order', () => {
+    const day = calendarDay(
+      DATE,
+      HOURS,
+      [
+        commitment({ kind: 'unavailable', start: '15:00', end: '16:30', eventRequestId: null, reason: 'Ceiling repair' }),
+        commitment({ kind: 'booking', start: '08:00', end: '10:00' }),
+        commitment({ kind: 'hold', start: '13:00', end: '14:00', eventRequestId: null }),
+      ],
+      [{ date: DATE, start: '10:30', end: '11:15' }],
+      NO_EVENTS,
     );
+    expect(day.periods.map((p) => `${p.start}-${p.end} ${p.kind}`)).toEqual([
+      '08:00-10:00 confirmed',
+      '10:30-11:15 pending',
+      '13:00-14:00 held',
+      '15:00-16:30 blocked',
+    ]);
   });
 
-  it('TC-123-10: a confirmed booking is Confirmed (AC5)', () => {
-    expect(calendarSlotState(facts({ confirmed: true }))).toBe('confirmed');
+  it('TC-239-13: draws a booking across the old lunch break as one period, with no gap', () => {
+    const day = calendarDay(DATE, HOURS, [commitment({ start: '11:30', end: '13:30' })], [], NO_EVENTS);
+    expect(day.periods).toEqual([{ kind: 'confirmed', start: '11:30', end: '13:30', reason: null, event: null }]);
   });
 
-  it('TC-123-11: a pending request on a free slot is Pending request (AC6)', () => {
-    expect(calendarSlotState(facts({ pendingRequests: 1 }))).toBe('pending_request');
+  it('shows only the given date', () => {
+    const day = calendarDay(DATE, HOURS, [commitment({ date: '2026-11-11' })], [{ date: '2026-11-11', start: '09:00', end: '10:00' }], NO_EVENTS);
+    expect(day.periods).toEqual([]);
   });
 
-  it('TC-123-12: a slot recorded as unavailable is Blocked, even over a booking (AC7)', () => {
-    expect(calendarSlotState(facts({ unavailableReason: 'Annual maintenance' }))).toBe('blocked');
-    expect(calendarSlotState(facts({ unavailableReason: 'Annual maintenance', confirmed: true }))).toBe('blocked');
+  it('TC-123-12: a Blocked period carries its reason; nothing else does', () => {
+    const day = calendarDay(
+      DATE,
+      HOURS,
+      [commitment({}), commitment({ kind: 'unavailable', start: '14:00', end: '16:30', eventRequestId: null, reason: 'Ceiling repair' })],
+      [],
+      NO_EVENTS,
+    );
+    expect(day.periods.map((p) => p.reason)).toEqual([null, 'Ceiling repair']);
   });
 
-  it('TC-123-13: a second request on a confirmed slot leaves it Confirmed (AC8)', () => {
-    expect(calendarSlotState(facts({ confirmed: true, pendingRequests: 1 }))).toBe('confirmed');
+  it('SCRUM-148 AC3: names the event on a Confirmed period only when the viewer may see it', () => {
+    const visible = new Map([[`${DATE}|${EVENT_ID}`, EVENT]]);
+    expect(calendarDay(DATE, HOURS, [commitment({})], [], visible).periods[0]?.event).toEqual(EVENT);
+    expect(calendarDay(DATE, HOURS, [commitment({})], [], NO_EVENTS).periods[0]?.event).toBeNull();
+  });
+
+  it('TC-123-13: a pending request on a confirmed period is shown beside it, not instead of it (AC8)', () => {
+    const day = calendarDay(DATE, HOURS, [commitment({})], [{ date: DATE, start: '10:00', end: '12:00' }], NO_EVENTS);
+    expect(day.periods.map((p) => p.kind)).toEqual(['confirmed', 'pending']);
   });
 });
 
-describe('isFullyCommitted: SCRUM-123 AC4 and AC8', () => {
-  it('TC-123-08: committed in all three slots is fully committed (AC4)', () => {
-    expect(isFullyCommitted(['confirmed', 'confirmed', 'confirmed'])).toBe(true);
+describe('fully committed: SCRUM-123 AC4 in time ranges', () => {
+  it('TC-123-08: committed periods covering the whole opening hours make the day fully committed', () => {
+    const day = calendarDay(
+      DATE,
+      HOURS,
+      [
+        commitment({ start: '08:00', end: '12:00' }),
+        commitment({ kind: 'unavailable', start: '12:00', end: '17:00', eventRequestId: null, reason: 'Repair' }),
+        commitment({ kind: 'hold', start: '17:00', end: '22:00', eventRequestId: null }),
+      ],
+      [],
+      NO_EVENTS,
+    );
+    expect(day.fullyCommitted).toBe(true);
   });
 
-  it('TC-123-09: committed in two of three is not (AC4)', () => {
-    expect(isFullyCommitted(['confirmed', 'confirmed', 'available'])).toBe(false);
+  it('TC-123-09: a 15-minute gap anywhere leaves the day not fully committed', () => {
+    expect(
+      coversOpeningHours(
+        [
+          { start: '08:00', end: '12:00' },
+          { start: '12:15', end: '22:00' },
+        ],
+        HOURS,
+      ),
+    ).toBe(false);
   });
 
-  it('TC-123-14: a pending request does not make a date fully committed (AC8)', () => {
-    expect(isCommitted('pending_request')).toBe(false);
-    expect(isFullyCommitted(['confirmed', 'confirmed', 'pending_request'])).toBe(false);
+  it('TC-123-14: a pending request does not count towards fully committed (AC8)', () => {
+    const day = calendarDay(DATE, HOURS, [commitment({ start: '08:00', end: '20:00' })], [{ date: DATE, start: '20:00', end: '22:00' }], NO_EVENTS);
+    expect(day.fullyCommitted).toBe(false);
   });
 
-  it('counts a Blocked slot as committed, the same as SCRUM-128 search does', () => {
-    expect(isFullyCommitted(['confirmed', 'blocked', 'confirmed'])).toBe(true);
-  });
-
-  it('judges only the slots the venue runs', () => {
-    expect(isFullyCommitted(['confirmed', 'confirmed', 'outside_operating_hours'])).toBe(true);
-    expect(isFullyCommitted(['outside_operating_hours', 'outside_operating_hours', 'outside_operating_hours'])).toBe(false);
+  it('copes with overlapping commitments and ones outside the opening hours', () => {
+    expect(
+      coversOpeningHours(
+        [
+          { start: '07:00', end: '13:00' },
+          { start: '10:00', end: '23:00' },
+        ],
+        HOURS,
+      ),
+    ).toBe(true);
+    expect(coversOpeningHours([], HOURS)).toBe(false);
   });
 });
 

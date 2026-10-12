@@ -401,7 +401,17 @@ switch them the next time they edit those files.
   released status). `listAffectedBookings()` does not change, because it only
   lists confirmed bookings. Add the action beside each entry in
   `AffectedBookingsNotice`, re-run SCRUM-151 AC3, then remove the markers.
-- **Status:** Active
+- **Status:** Replaced (SCRUM-231, branch `venue-booking-release`). A booking
+  now has a `released` status with its reason, who released it and when
+  (`20261012100000_venue_booking_release.sql`). The event's assigned
+  coordinator releases it from the event page's Venue bookings list
+  (`releaseVenueBooking()`, `POST /api/venue-bookings/[id]/release`).
+  `listAffectedBookings()` did not change: a released booking is no longer
+  confirmed, so its entry clears. The release sits in the bookings list rather
+  than beside each entry, and the notice points there, so there is one Release
+  button per booking. The markers are removed. Re-check with TC-151-09
+  (release) and TC-151-10 (book elsewhere, then release the old booking), both
+  through the app.
 
 ### D-13 — A booking decision's "notification" is only the recorded decision
 
@@ -469,7 +479,7 @@ switch them the next time they edit those files.
 - **Waiting on:** SCRUM-231 Release an affected booking (Sprint 3), and
   SCRUM-105 (cancel an event, which releases its bookings)
 - **Where:** `src/domain/venue-booking/service.ts` — `conflictsFor()`
-  (`DUMMY(SCRUM-231) D-15`)
+  (`DUMMY(SCRUM-105) D-15`; first `DUMMY(SCRUM-231) D-15`)
 - **What is real and what is faked:** the approval check is real: a booking
   that is no longer confirmed no longer clashes, so the approval goes through.
   Only the release or cancellation is faked: testers delete the clashing
@@ -477,7 +487,12 @@ switch them the next time they edit those files.
 - **To replace:** once a booking can be released or cancelled through the app,
   re-run SCRUM-155 AC3 (TC-155-04 and TC-155-05) through that action, then
   remove the marker.
-- **Status:** Active
+- **Status:** Release half replaced (SCRUM-231, branch
+  `venue-booking-release`): a booking is released through the app, so
+  TC-155-04 no longer needs the helper; re-check it that way. Still active for
+  cancellation: nothing cancels an event's bookings until SCRUM-105, so
+  TC-155-05 still removes the booking by hand. The marker now names
+  SCRUM-105.
 
 ### D-16 — getVenueCommitments returns a fixture booking
 
@@ -486,8 +501,8 @@ switch them the next time they edit those files.
 - **Waiting on:** SCRUM-239 Check venue availability in 15-minute time ranges
   (its own real query, due Sprint 3 day 4, once the shared time-model migration
   is merged)
-- **Where:** `src/domain/availability/service.ts` — `getVenueCommitments()`
-  (`DUMMY(SCRUM-239) D-16`)
+- **Where:** ~~`src/domain/availability/service.ts` — `getVenueCommitments()`
+  (`DUMMY(SCRUM-239) D-16`)~~ — marker removed
 - **What it does:** returns one confirmed booking, 10:00–12:00, at the venue
   asked about on every date in the range, filtered to the range like the real
   check will be. It reads nothing from the database. The signature, the
@@ -499,4 +514,11 @@ switch them the next time they edit those files.
   by their start and end times, add holds once SCRUM-227 has them, and keep
   the same return shape. Re-run `tests/unit/venue-commitments.test.ts`, then
   ask the SCRUM-227 and SCRUM-229 owners to re-run the ACs that use the check.
-- **Status:** Active
+- **Status:** Replaced (SCRUM-239, PR #92). `getVenueCommitments()` now
+  reads confirmed bookings (`venue_booking`) and unavailable periods
+  (`venue_unavailable_slot`) by their start and end times, added by the
+  time-model migration (`20261008140500_time_model.sql`, PR #89). Same
+  signature and return shape. Holds join once SCRUM-227 adds them. Re-checked
+  with `tests/unit/venue-commitments.test.ts` and
+  `tests/integration/venue-commitments.test.ts`; SCRUM-227 and SCRUM-229
+  owners to re-run the ACs that use it.

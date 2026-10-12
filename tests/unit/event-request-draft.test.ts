@@ -90,14 +90,15 @@ describe('SCRUM-83 — Save an incomplete request as a draft', () => {
         purpose: 'Networking',
         description: 'Yearly gathering',
         proposedDate: '2026-11-15',
-        timeSlots: ['pm'],
+        startTime: '13:00',
+        endTime: '18:00',
         expectedAttendance: 80,
       });
 
       expect(result.success).toBe(true);
       const draft = (result as { data: EventRequestDraftInput }).data;
       expect(draft.purpose).toBe('Networking');
-      expect(draft.timeSlots).toEqual(['pm']);
+      expect([draft.startTime, draft.endTime]).toEqual(['13:00', '18:00']);
       expect(draft.expectedAttendance).toBe(80);
     });
   });
@@ -126,9 +127,9 @@ describe('SCRUM-83 — Save an incomplete request as a draft', () => {
       ).toBe(false);
     });
 
-    it('refuses a slot that does not exist', () => {
+    it('refuses a time off the 15-minute unit (SCRUM-238 AC4)', () => {
       expect(
-        eventRequestDraftSchema.safeParse({ name: 'Gala', timeSlots: ['MIDNIGHT'] }).success,
+        eventRequestDraftSchema.safeParse({ name: 'Gala', startTime: '10:10', endTime: '12:00' }).success,
       ).toBe(false);
     });
 
@@ -209,7 +210,8 @@ describe('SCRUM-87 — Submit a draft for review', () => {
     purpose: 'Networking',
     description: 'Yearly gathering',
     proposedDate: '2026-11-15',
-    timeSlots: ['pm'],
+    startTime: '13:00',
+    endTime: '18:00',
     expectedAttendance: 80,
   };
 
@@ -218,7 +220,8 @@ describe('SCRUM-87 — Submit a draft for review', () => {
     purpose: null,
     description: null,
     proposedDate: null,
-    timeSlots: null,
+    startTime: null,
+    endTime: null,
     expectedAttendance: null,
   };
 
@@ -244,7 +247,8 @@ describe('SCRUM-87 — Submit a draft for review', () => {
         'purpose',
         'description',
         'proposedDate',
-        'timeSlots',
+        'startTime',
+        'endTime',
         'expectedAttendance',
       ]);
     });
