@@ -2,32 +2,37 @@ import {
   createVenueWithLists,
   fetchAccessibilityFeatureIdsIn,
   fetchAccessibilityFeatures,
-  fetchConfirmedBookingsOn,
   fetchConfirmedFutureBookings,
+  fetchConfirmedFutureBookingTimes,
   fetchFacilities,
   fetchFacilityIdsIn,
   fetchLocationById,
   fetchLocations,
   fetchSearchableVenues,
-  fetchUnavailableSlotsOn,
+  fetchSetupTurnaroundAffectedBookings,
   fetchVenueDetail,
   fetchVenueSummaries,
   saveVenueChanges,
 } from '@/lib/supabase/venues';
 import { ConflictError, NotFoundError, ValidationError, isUniqueViolation } from '@/domain/shared/errors';
 import { todayInSingapore, type ISODate } from '@/domain/shared/dates';
+import { fromDatabaseTime } from '@/domain/shared/times';
+import { getCommittedPeriods } from '@/domain/availability/service';
 import {
   assertLayoutsWithinMaxCapacity,
-  committedSlotsByVenue,
+  findNewSetupTurnaroundClashes,
   isAffectedByCapacity,
   isCapacityCut,
-  isFreeInEverySlot,
+  isWithinOpeningHours,
+  type SetupTurnaround,
 } from './policy';
 import {
   AffectedBookingSchema,
   CreateVenueInputSchema,
   OPERATING_SLOTS,
   ROOM_LAYOUTS,
+  SetupTurnaroundAffectedBookingSchema,
+  SetupTurnaroundClashBookingSchema,
   UpdateVenueInputSchema,
   VenueDetailSchema,
   VenueFormOptionsSchema,
@@ -37,6 +42,9 @@ import {
   VenueSummarySchema,
   type AffectedBooking,
   type AffectedBookingsDetails,
+  type SetupTurnaroundAffectedBooking,
+  type SetupTurnaroundClashBooking,
+  type SetupTurnaroundClashesDetails,
   type VenueDetail,
   type VenueFormOptions,
   type VenueLayoutInput,
@@ -50,7 +58,7 @@ import {
  * SCRUM-116 Add a venue          SCRUM-120 Update venue information
  * SCRUM-117 Facilities/access    SCRUM-121 Browse and view the catalogue
  * SCRUM-118 Room layouts       SCRUM-128 Search by date and slot
- *                              (SCRUM-123's calendar is in calendar.ts)
+ * SCRUM-225 Setup/turnaround   (SCRUM-123's calendar is in calendar.ts)
  *
  * Orchestration only. Every query lives in src/lib/supabase/venues.ts, every
  * rule that compares two values lives in policy.ts, and every single-field
@@ -107,50 +115,50 @@ export async function listVenues(includeRetired = false): Promise<VenueSummary[]
  * a mistyped link instead of showing not-found.
  */
 /**
- * SCRUM-128 Search venues by date and slot.
+ * SCRUM-239 AC2 and AC8: search venues by a date and an exact start and end time,
+ * replacing SCRUM-128's slots (which stays Done on slots, per the Week 7 guide).
  *
- * AC1: a venue is returned only if it is free in every selected slot.
- * AC2/AC3: a confirmed booking commits its slot (SCRUM-148's bookings).
- * AC4: a slot recorded as unavailable commits it (SCRUM-151 records them).
- * AC5: any valid date, however far ahead — VenueSearchQuerySchema sets no limit.
+ * A venue is returned only if the whole period is inside its opening hours
+ * (AC1: "search does not return that venue for it") and nothing commits any of
+ * it. Commitments come from getCommittedPeriods, the one availability check
+ * agreed on day 1: confirmed bookings (AC2) and periods Venue Staff marked
+ * unavailable (AC8, carrying SCRUM-128 AC4 to time ranges). A pending request
+ * commits nothing.
+ * SCRUM-128 AC5 (no booking horizon) still holds: the schema sets no limit.
  *
- * The three reads are independent, so they run together; the rule that
- * combines them is isFreeInEverySlot (policy.ts).
+ * One availability check per open venue. The catalogue is small, so this is
+ * simpler than a second, catalogue-wide copy of the overlap rule.
  */
 export async function searchVenues(input: unknown): Promise<VenueSearchResult> {
   const parsed = VenueSearchQuerySchema.safeParse(input);
   if (!parsed.success) {
     throw new ValidationError('The search could not be run.', parsed.error.flatten());
   }
-  const { date, slots } = parsed.data;
+  const { date, start, end } = parsed.data;
 
-  const [venues, bookings, unavailable] = await Promise.all([
-    fetchSearchableVenues(),
-    fetchConfirmedBookingsOn(date),
-    fetchUnavailableSlotsOn(date),
-  ]);
+  const venues = await fetchSearchableVenues();
   if (venues.error || !venues.data) {
     throw new ValidationError('Could not load the venue catalogue.', venues.error?.message);
   }
-  if (bookings.error || !bookings.data) {
-    throw new ValidationError('Could not load bookings for that date.', bookings.error?.message);
-  }
-  if (unavailable.error || !unavailable.data) {
-    throw new ValidationError('Could not load unavailable slots for that date.', unavailable.error?.message);
-  }
 
-  const committed = committedSlotsByVenue([
-    ...bookings.data.map((booking) => ({ venueId: booking.venue_id, slot: booking.slot })),
-    ...unavailable.data.map((row) => ({ venueId: row.venue_id, slot: row.slot })),
-  ]);
-
-  const free = venues.data.filter((venue) =>
-    isFreeInEverySlot(venue.operating_slots, slots, committed.get(venue.id)),
+  const open = venues.data.filter((venue) =>
+    isWithinOpeningHours(
+      { start, end },
+      { opensAt: fromDatabaseTime(venue.opens_at), closesAt: fromDatabaseTime(venue.closes_at) },
+    ),
   );
+  const checked = await Promise.all(
+    open.map(async (venue) => ({
+      venue,
+      committed: await getCommittedPeriods(venue.id, `${date}T${start}`, `${date}T${end}`),
+    })),
+  );
+  const free = checked.filter(({ committed }) => committed.length === 0).map(({ venue }) => venue);
 
   return VenueSearchResultSchema.parse({
     date,
-    slots,
+    start,
+    end,
     venues: free.map((row) => ({
       id: row.id,
       name: row.name,
@@ -189,6 +197,8 @@ export async function getVenue(venueId: string): Promise<VenueDetail> {
     layouts: data.venue_layouts.map((row) => ({ layout: row.layout, capacity: row.capacity })),
     needsSetupSlot: data.needs_setup_slot,
     needsTurnaroundSlot: data.needs_turnaround_slot,
+    setupMinutes: data.setup_minutes,
+    turnaroundMinutes: data.turnaround_minutes,
     createdAt: data.created_at,
     updatedAt: data.updated_at,
   });
@@ -336,6 +346,32 @@ function affectedBookingsError(maxCapacity: number, bookings: AffectedBooking[])
   );
 }
 
+/** "0 minutes", "15 minutes". */
+function minutes(value: number): string {
+  return `${value} minute${value === 1 ? '' : 's'}`;
+}
+
+/**
+ * SCRUM-225 AC4: the 409 that lists the confirmed bookings a setup or
+ * turnaround change makes clash and asks the editor to confirm it. `reason`
+ * tells the form this apart from the other venue 409s.
+ */
+function setupTurnaroundClashesError(
+  proposed: SetupTurnaround,
+  bookings: SetupTurnaroundClashBooking[],
+): ConflictError {
+  const details: SetupTurnaroundClashesDetails = {
+    reason: 'setup_turnaround_clashes',
+    setupMinutes: proposed.setupMinutes,
+    turnaroundMinutes: proposed.turnaroundMinutes,
+    bookings,
+  };
+  return new ConflictError(
+    `A setup time of ${minutes(proposed.setupMinutes)} and a turnaround time of ${minutes(proposed.turnaroundMinutes)} make ${bookings.length} confirmed bookings clash. Confirm to apply the change; each booking stays confirmed and is flagged as affected.`,
+    details,
+  );
+}
+
 
 /**
  * SCRUM-120 AC1 to AC4, SCRUM-117 AC3, SCRUM-118.
@@ -359,13 +395,23 @@ function affectedBookingsError(maxCapacity: number, bookings: AffectedBooking[])
  * event's coordinator (AC4). The service checks first so it can show the list;
  * update_venue checks again inside the save, so a booking confirmed in between
  * is still caught, and the cut and its notices are one transaction.
+ *
+ * SCRUM-225 AC1 to AC5, the same way: a setup or turnaround change that makes
+ * confirmed future bookings clash is refused with the list of those bookings
+ * until the editor confirms it (AC4); a confirmed change is saved together
+ * with a flag on each of them, and every booking stays confirmed (AC5).
  */
 export async function updateVenue(venueId: string, input: unknown): Promise<VenueDetail> {
   const parsed = UpdateVenueInputSchema.safeParse(input);
   if (!parsed.success) {
     throw new ValidationError('The venue could not be updated.', parsed.error.flatten());
   }
-  const { expectedUpdatedAt, confirmAffectedBookings = false, ...changes } = parsed.data;
+  const {
+    expectedUpdatedAt,
+    confirmAffectedBookings = false,
+    confirmSetupTurnaroundChange = false,
+    ...changes
+  } = parsed.data;
 
   // Throws NotFoundError if the venue is not there.
   const current = await getVenue(venueId);
@@ -408,6 +454,23 @@ export async function updateVenue(venueId: string, input: unknown): Promise<Venu
     }
   }
 
+  // SCRUM-225 AC4, after the capacity check for the same reason. A field left
+  // out keeps its current value.
+  const currentTimes: SetupTurnaround = { setupMinutes: current.setupMinutes, turnaroundMinutes: current.turnaroundMinutes };
+  const proposedTimes: SetupTurnaround = {
+    setupMinutes: changes.setupMinutes ?? current.setupMinutes,
+    turnaroundMinutes: changes.turnaroundMinutes ?? current.turnaroundMinutes,
+  };
+  const changesTimes =
+    proposedTimes.setupMinutes !== currentTimes.setupMinutes ||
+    proposedTimes.turnaroundMinutes !== currentTimes.turnaroundMinutes;
+  if (changesTimes && !confirmSetupTurnaroundChange) {
+    const clashing = await findSetupTurnaroundClashes(current.id, currentTimes, proposedTimes, today);
+    if (clashing.length > 0) {
+      throw setupTurnaroundClashesError(proposedTimes, clashing);
+    }
+  }
+
   const { data: outcome, error } = await saveVenueChanges(
     current.id,
     expectedUpdatedAt,
@@ -421,8 +484,10 @@ export async function updateVenue(venueId: string, input: unknown): Promise<Venu
       layouts: changes.layouts,
       needsSetupSlot: changes.needsSetupSlot,
       needsTurnaroundSlot: changes.needsTurnaroundSlot,
+      setupMinutes: changes.setupMinutes,
+      turnaroundMinutes: changes.turnaroundMinutes,
     },
-    { confirmAffectedBookings, today },
+    { confirmAffectedBookings, confirmSetupTurnaroundChange, today },
   );
 
   if (error) {
@@ -443,6 +508,13 @@ export async function updateVenue(venueId: string, input: unknown): Promise<Venu
     const affected = await findAffectedFutureBookings(current.id, proposedMaxCapacity, today);
     if (affected.length > 0) {
       throw affectedBookingsError(proposedMaxCapacity, affected);
+    }
+  }
+  // The same for SCRUM-225: a booking confirmed in between now clashes.
+  if (outcome === 'setup_turnaround_clashes' && changesTimes) {
+    const clashing = await findSetupTurnaroundClashes(current.id, currentTimes, proposedTimes, today);
+    if (clashing.length > 0) {
+      throw setupTurnaroundClashesError(proposedTimes, clashing);
     }
   }
   if (outcome !== 'updated') {
@@ -492,4 +564,83 @@ export async function findAffectedFutureBookings(
         coordinatorId: event.coordinator_id,
       }),
     );
+}
+
+// -----------------------------------------------------------------------------
+// SCRUM-225 AC4 and AC5: bookings a setup or turnaround change makes clash
+// -----------------------------------------------------------------------------
+
+/**
+ * SCRUM-225 AC4: the venue's confirmed bookings from today on that a change
+ * from `current` to `proposed` setup and turnaround makes clash
+ * (findNewSetupTurnaroundClashes), each with its event, soonest first.
+ *
+ * "Today" is Singapore's date, as for SCRUM-120: a booking that has already
+ * happened cannot clash with anything.
+ */
+export async function findSetupTurnaroundClashes(
+  venueId: string,
+  current: SetupTurnaround,
+  proposed: SetupTurnaround,
+  today: ISODate = todayInSingapore(),
+): Promise<SetupTurnaroundClashBooking[]> {
+  const { data, error } = await fetchConfirmedFutureBookingTimes(venueId, today);
+  if (error || !data) {
+    throw new ValidationError("Could not check the venue's bookings.", error?.message);
+  }
+
+  const bookings = data.map((row) =>
+    SetupTurnaroundClashBookingSchema.parse({
+      bookingId: row.id,
+      eventId: row.event_request.id,
+      reference: row.event_request.reference,
+      eventName: row.event_request.name,
+      date: row.date,
+      start: fromDatabaseTime(row.start_time),
+      end: fromDatabaseTime(row.end_time),
+    }),
+  );
+  return findNewSetupTurnaroundClashes(bookings, current, proposed);
+}
+
+/**
+ * SCRUM-225 AC5: the venue's bookings flagged as affected by a setup or
+ * turnaround change, while they are still confirmed and from today on,
+ * soonest first. A booking flagged by two changes is listed once, with the
+ * latest.
+ *
+ * Event details are shown, so the venue page only shows this to Venue Staff
+ * (SCRUM-148 AC3: they may see which event holds a booking).
+ */
+export async function listSetupTurnaroundAffectedBookings(
+  venueId: string,
+  today: ISODate = todayInSingapore(),
+): Promise<SetupTurnaroundAffectedBooking[]> {
+  const { data, error } = await fetchSetupTurnaroundAffectedBookings(venueId, today);
+  if (error || !data) {
+    throw new ValidationError("Could not load the venue's affected bookings.", error?.message);
+  }
+
+  // Newest flag first (the query's order), so the first seen is the latest.
+  const latest = new Map<string, SetupTurnaroundAffectedBooking>();
+  for (const row of data) {
+    const booking = row.venue_booking;
+    if (latest.has(booking.id)) continue;
+    latest.set(
+      booking.id,
+      SetupTurnaroundAffectedBookingSchema.parse({
+        bookingId: booking.id,
+        eventId: booking.event_request.id,
+        reference: booking.event_request.reference,
+        eventName: booking.event_request.name,
+        date: booking.date,
+        start: fromDatabaseTime(booking.start_time),
+        end: fromDatabaseTime(booking.end_time),
+        setupMinutes: row.setup_minutes,
+        turnaroundMinutes: row.turnaround_minutes,
+        flaggedAt: row.flagged_at,
+      }),
+    );
+  }
+  return [...latest.values()].sort((a, b) => a.date.localeCompare(b.date) || a.start.localeCompare(b.start));
 }

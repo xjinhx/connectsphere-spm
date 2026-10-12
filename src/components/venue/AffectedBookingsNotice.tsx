@@ -6,8 +6,9 @@ import { SLOT_NAMES, type BookingOnUnavailableSlot } from '@/domain/availability
  * listed with an outstanding action (CONTEXT.md) until the booking is released
  * or replaced. Renders nothing when no booking is affected.
  *
- * DUMMY(SCRUM-231) D-12: nothing in the app releases a single booking yet, so
- * the action is stated rather than offered as a button.
+ * SCRUM-231 releases the booking from the event's Venue bookings list, further
+ * down the page, and that closes this entry (AC4). The action points there
+ * rather than repeating the button.
  */
 export function AffectedBookingsNotice({ bookings }: { bookings: BookingOnUnavailableSlot[] }) {
   if (bookings.length === 0) return null;
@@ -33,7 +34,7 @@ export function AffectedBookingsNotice({ bookings }: { bookings: BookingOnUnavai
                 </li>
               ))}
             </ul>
-            <p className="mt-1">Action needed: release or replace this booking.</p>
+            <p className="mt-1">Action needed: release this booking under Venue bookings, or replace it.</p>
           </li>
         ))}
       </ul>

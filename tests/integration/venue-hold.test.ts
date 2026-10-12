@@ -1,6 +1,7 @@
 import { afterAll, beforeAll, describe, expect, it } from 'vitest';
 import { createAdminClient } from '@/lib/supabase/admin';
-import { createVenue } from '@/domain/venues/service';
+import { createVenue, searchVenues } from '@/domain/venues/service';
+import { getVenueCalendar } from '@/domain/venues/calendar';
 import { getCommittedPeriods, getVenueCommitments } from '@/domain/availability/service';
 import { createVenueHold, getVenueHold, listActiveVenueHolds } from '@/domain/venue-hold/service';
 import { decideVenueBookingRequest } from '@/domain/venue-booking/service';
@@ -28,13 +29,17 @@ import { ensureTestClientOrganisation } from './fixtures/clientOrganisation';
  *        the a start and end time is searched, requested or shown on the
  *        calendar, then it is available again and the hold is never counted
  *        as a confirmed booking."
+ *   AC7 "Given a start and end time has an active hold, when it is shown on
+ *        the venue calendar with held period labelled Held with its expiry
+ *        time."
  *
  * AC3, AC4 and AC6 reach the user through SCRUM-239's search, request,
  * approval and calendar, which ask getVenueCommitments. Here they are tested
  * where this story changes things: an active hold is a commitment of another
  * event's (with its event and expiry, for Venue Staff; as a bare period for a
- * coordinator), and an expired one is not. The end-to-end checks are re-run
- * once SCRUM-239 switches those screens to times.
+ * coordinator), and an expired one is not. Search (#97) and the calendar (#99)
+ * are in time ranges on main and are tested end to end below; the request and
+ * approval checks are re-run once SCRUM-239 switches those to times.
  *
  * AC5 goes through SCRUM-148's real approval: the approved line's booking
  * closes the hold, in the same transaction (close_holds_on_booking).
@@ -276,6 +281,44 @@ describe('getVenueCommitments: SCRUM-227 AC3 and AC4, an active hold commits its
     await createVenueHold(venue.id, { eventRequestId: await createEvent(), date: DATE, start: '10:00', end: '12:00', expiresAt: singaporeInHours(72) }, venueStaffId);
 
     expect(await getCommittedPeriods(venue.id, `${DATE}T10:00`, `${DATE}T12:00`)).toEqual([{ date: DATE, start: '10:00', end: '12:00' }]);
+  });
+});
+
+describe('search and calendar: SCRUM-227 AC3, AC6 and AC7, through SCRUM-239 search (#97) and calendar (#99)', () => {
+  const venueStaff = () => ({ userId: venueStaffId, roles: ['venue_staff' as const] });
+  const found = async (start: string, end: string) => (await searchVenues({ date: DATE, start, end })).venues.map((v) => v.id);
+
+  it('TC-227-06 leaves a held venue out of a search for the held period, but not the period after it', async () => {
+    const venue = await createTestVenue('Hold Search');
+    await createVenueHold(venue.id, { eventRequestId: await createEvent(), date: DATE, start: '10:00', end: '12:00', expiresAt: singaporeInHours(72) }, venueStaffId);
+
+    expect(await found('10:00', '12:00')).not.toContain(venue.id);
+    expect(await found('11:00', '13:00')).not.toContain(venue.id);
+    expect(await found('12:00', '14:00')).toContain(venue.id);
+  });
+
+  it('TC-227-15 shows the held period on the calendar, labelled Held with its expiry', async () => {
+    const venue = await createTestVenue('Hold Calendar');
+    const hold = await createVenueHold(venue.id, { eventRequestId: await createEvent(), date: DATE, start: '10:00', end: '12:00', expiresAt: singaporeInHours(72) }, venueStaffId);
+
+    const calendar = await getVenueCalendar(venue.id, { from: DATE, to: DATE }, venueStaff());
+
+    expect(calendar.days[0]?.periods).toEqual([
+      { kind: 'held', start: '10:00', end: '12:00', reason: null, event: null, expiresAt: hold.expiresAt },
+    ]);
+  });
+
+  it('TC-227-12 / TC-227-14 shows an expired hold as free in search and nowhere on the calendar', async () => {
+    const venue = await createTestVenue('Hold Expired Search');
+    await insertHold(venue.id, await createEvent(), {
+      start: '10:00',
+      end: '12:00',
+      expiresAt: new Date(Date.now() - 3_600_000).toISOString(),
+      createdAt: new Date(Date.now() - 2 * 3_600_000).toISOString(),
+    });
+
+    expect(await found('10:00', '12:00')).toContain(venue.id);
+    expect((await getVenueCalendar(venue.id, { from: DATE, to: DATE }, venueStaff())).days[0]?.periods).toEqual([]);
   });
 });
 

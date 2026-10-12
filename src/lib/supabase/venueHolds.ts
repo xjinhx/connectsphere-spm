@@ -11,7 +11,7 @@ import type { Database } from './database.types';
  *
  * "Active" in a read means status 'active' and an expiry after `now`: a hold
  * past its expiry commits nothing (AC6), whatever its status says
- * (20261010130000_venue_hold.sql).
+ * (20261011193100_venue_hold.sql).
  */
 
 /** createAdminClient memoises its client, so calling it per query is free. */

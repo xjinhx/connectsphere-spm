@@ -3,13 +3,14 @@ import { DecideVenueBookingRequestInputSchema } from '@/domain/venue-booking/sch
 
 /**
  * SCRUM-150 Suggest an alternative venue or arrangement (Jira, authoritative).
- * AC1: rejecting a line may add a suggested venue, date and slots, kept with
- * the decision. The suggestion is optional and never replaces the reason.
+ * AC1: rejecting a line may add a suggested venue, date and period (a start
+ * and end time since SCRUM-239), kept with the decision. The suggestion is
+ * optional and never replaces the reason.
  */
 
 const LINE = '33333333-3333-4333-8333-333333333333';
 const VENUE = '44444444-4444-4444-8444-444444444444';
-const SUGGESTION = { venueId: VENUE, date: '2026-10-24', slots: ['pm'] };
+const SUGGESTION = { venueId: VENUE, date: '2026-10-24', start: '13:00', end: '18:00' };
 
 function firstMessage(decision: Record<string, unknown>): string | undefined {
   const result = DecideVenueBookingRequestInputSchema.safeParse({ decisions: [{ lineId: LINE, ...decision }] });
@@ -41,9 +42,16 @@ describe('a suggestion on a rejected line (AC1)', () => {
     );
   });
 
-  it('refuses a suggestion with no slot', () => {
-    expect(firstMessage({ decision: 'reject', reason: 'Too small', suggestion: { ...SUGGESTION, slots: [] } })).toBe(
-      'Choose at least one slot to suggest.',
+  it('refuses a suggestion with no start time', () => {
+    const { start: _start, ...withoutStart } = SUGGESTION;
+    expect(firstMessage({ decision: 'reject', reason: 'Too small', suggestion: withoutStart })).toBe(
+      'Choose a start time to suggest.',
     );
+  });
+
+  it('refuses a suggested period that ends before it starts', () => {
+    expect(
+      firstMessage({ decision: 'reject', reason: 'Too small', suggestion: { ...SUGGESTION, start: '18:00', end: '13:00' } }),
+    ).toBe('The end time must be after the start time.');
   });
 });

@@ -1,18 +1,26 @@
 import { z } from 'zod';
 import { RoomLayoutSchema } from '@/domain/venues/schema';
+import {
+  EndTimeSchema,
+  isQuarterHourEnd,
+  isQuarterHourStart,
+  StartTimeSchema,
+  toMinutes,
+} from '@/domain/shared/times';
 
 // Agreed shape for the base event request — confirmed with owner of SCRUM-76/77.
 // NOTE: `status` (draft/submitted) belongs to SCRUM-84's story, and `coordinatorId`
 // belongs to SCRUM-94/95/96 — intentionally left out of this schema to avoid collisions.
-
-export const TimeSlotEnum = z.enum(['am', 'pm', 'night']); // 7am-12pm, 1pm-6pm, 7pm-12am
 
 export const eventRequestCoreSchema = z.object({
   name: z.string().min(1, 'Event name is required'),
   purpose: z.string().min(1, 'Purpose is required'),
   description: z.string().min(1, 'Description is required'),
   proposedDate: z.coerce.date(),
-  timeSlots: z.array(TimeSlotEnum).min(1, 'Select at least one time slot'),
+  // SCRUM-238 — the event's own start and end, Singapore clock time on the
+  // 15-minute unit. Replaces SCRUM-77's timeSlots in the mandatory set.
+  startTime: z.string({ required_error: 'Start time is required' }).pipe(StartTimeSchema),
+  endTime: z.string({ required_error: 'End time is required' }).pipe(EndTimeSchema),
   expectedAttendance: z
     .number({
       required_error: 'Expected attendance is required',
@@ -58,38 +66,65 @@ export type EventRequestBasicDetails = z.infer<typeof eventRequestBasicDetailsSc
 // ---------------------------------------------------------------------------
 // SCRUM-77 — Choose the time slots the event needs
 // ---------------------------------------------------------------------------
-// AC4: these three are the only slots that exist (customer clarification #50).
-// Venues are booked in these fixed blocks, so a request cannot ask for a slot
-// that crosses midnight - there is no such slot to ask for.
+// Superseded by SCRUM-238 (customer change Week 7 #1): a request carries a
+// start and end time, below. The slot definitions (TimeSlotEnum,
+// TIME_SLOT_HOURS, TIME_SLOT_LABELS, timeSlotsSchema) were removed by
+// SCRUM-239 Part 3, once venue booking requests moved to times and nothing
+// showed slots. SCRUM-77 stays Done (Week 7 guide, scenario 2). Old rows keep
+// their time_slots column, with times filled from it by
+// 20261008140500_time_model.sql (AM 07:00-12:00, PM 13:00-18:00, Night
+// 19:00-24:00).
 
-export type TimeSlot = z.infer<typeof TimeSlotEnum>;
+// ---------------------------------------------------------------------------
+// SCRUM-238 — Request event times in 15-minute steps
+// ---------------------------------------------------------------------------
+// AC4: a time off the 15-minute unit (10:10, 10:15:30) is refused by the
+// shared StartTimeSchema / EndTimeSchema (src/domain/shared/times.ts), the
+// same rule every time-taking route uses. AC7: the times are Singapore clock
+// times with no zone - stored in Postgres `time` columns and shown as typed,
+// so nothing converts them through the browser's time zone.
 
-/** The slots in the order a day runs. Also the order they are stored and shown. */
-export const TIME_SLOT_ORDER: readonly TimeSlot[] = TimeSlotEnum.options;
-
-export const TIME_SLOT_HOURS: Record<TimeSlot, { start: number; end: number }> = {
-  am: { start: 7, end: 12 },
-  pm: { start: 13, end: 18 },
-  night: { start: 19, end: 24 },
-};
-
-export const TIME_SLOT_LABELS: Record<TimeSlot, string> = {
-  am: 'AM (07:00–12:00)',
-  pm: 'PM (13:00–18:00)',
-  night: 'Night (19:00–24:00)',
-};
-
-/** A selection is a set: duplicates collapse, and the order is the day's order. */
-export function normaliseTimeSlots(slots: readonly TimeSlot[]): TimeSlot[] {
-  return TIME_SLOT_ORDER.filter((slot) => slots.includes(slot));
-}
+export const END_NOT_AFTER_START_MESSAGE = 'The end time must be after the start time.';
 
 /**
- * AC1: what is saved with the request. Any number of slots, including none -
- * AC3 blocks submission without a slot, not saving. `.min(1)` stays on the
- * core schema, where the completeness check (SCRUM-82) reads it.
+ * AC2 — the issues to raise when a start and end are both given but the end
+ * is not after the start: one on each field, so both are identified. Also
+ * raises one on whichever half is missing when only one was given, because a
+ * request stores both or neither (event_request_times_together).
+ *
+ * Used by both saves here and by the submission check (incompleteFields in
+ * policy.ts), so the rule is written once.
  */
-export const timeSlotsSchema = z.array(TimeSlotEnum).transform(normaliseTimeSlots);
+export function timeRangeIssues(
+  startTime: string | undefined,
+  endTime: string | undefined,
+): { field: 'startTime' | 'endTime'; message: string }[] {
+  if (startTime === undefined && endTime === undefined) return [];
+  if (startTime === undefined) return [{ field: 'startTime', message: 'Enter a start time as well as the end time.' }];
+  if (endTime === undefined) return [{ field: 'endTime', message: 'Enter an end time as well as the start time.' }];
+  // Zod still runs the refinement when a field has already failed (AC4), and
+  // toMinutes throws on an off-step time, so only compare two valid times.
+  if (!isQuarterHourStart(startTime) || !isQuarterHourEnd(endTime)) return [];
+  if (toMinutes(endTime) <= toMinutes(startTime)) {
+    return [
+      { field: 'startTime', message: END_NOT_AFTER_START_MESSAGE },
+      { field: 'endTime', message: END_NOT_AFTER_START_MESSAGE },
+    ];
+  }
+  return [];
+}
+
+/** The two time fields as both saves accept them: blank is "not yet entered". */
+const eventTimesShape = {
+  startTime: optionalFromBlank(StartTimeSchema),
+  endTime: optionalFromBlank(EndTimeSchema),
+};
+
+function refineTimeRange(value: { startTime?: string; endTime?: string }, ctx: z.RefinementCtx): void {
+  for (const issue of timeRangeIssues(value.startTime, value.endTime)) {
+    ctx.addIssue({ code: z.ZodIssueCode.custom, path: [issue.field], message: issue.message });
+  }
+}
 
 // ---------------------------------------------------------------------------
 // SCRUM-79 — State venue and accessibility requirements
@@ -202,20 +237,24 @@ export type VenueRequirementsInput = z.infer<typeof venueRequirementsSchema>;
  * The whole form as it is saved: SCRUM-76's basic details, SCRUM-77's slots,
  * SCRUM-78's attendance, and US-5.2's optional block (SCRUM-79, 80, 81).
  */
-export const eventRequestSaveSchema = eventRequestBasicDetailsSchema.extend({
-  timeSlots: timeSlotsSchema.default([]),
-  // SCRUM-78. Optional here, same as timeSlots: AC3's date rule already
-  // establishes that "Save request" doesn't enforce the mandatory set - only
-  // submission does (incompleteFields, SCRUM-82). Reuses the core schema's
-  // stricter rule (whole number, greater than 0) via
-  // schema.shape.expectedAttendance, so a real value is still validated the
-  // same way everywhere; optionalFromBlank additionally lets a blank or
-  // explicit null through as "not entered", matching the draft schema's
-  // handling of the same situation rather than treating save and draft
-  // differently for no reason.
-  expectedAttendance: optionalFromBlank(eventRequestCoreSchema.shape.expectedAttendance),
-  ...venueRequirementsSchema.shape,
-});
+export const eventRequestSaveSchema = eventRequestBasicDetailsSchema
+  .extend({
+    // SCRUM-238. Optional on save, like attendance below: only submission
+    // enforces the mandatory set. AC2's end-after-start rule does apply on save.
+    ...eventTimesShape,
+    // SCRUM-78. Optional here, same as the times: AC3's date rule already
+    // establishes that "Save request" doesn't enforce the mandatory set - only
+    // submission does (incompleteFields, SCRUM-82). Reuses the core schema's
+    // stricter rule (whole number, greater than 0) via
+    // schema.shape.expectedAttendance, so a real value is still validated the
+    // same way everywhere; optionalFromBlank additionally lets a blank or
+    // explicit null through as "not entered", matching the draft schema's
+    // handling of the same situation rather than treating save and draft
+    // differently for no reason.
+    expectedAttendance: optionalFromBlank(eventRequestCoreSchema.shape.expectedAttendance),
+    ...venueRequirementsSchema.shape,
+  })
+  .superRefine(refineTimeRange);
 
 export type EventRequestSaveInput = z.infer<typeof eventRequestSaveSchema>;
 
@@ -313,16 +352,20 @@ export const EVENT_REQUEST_STATUS_DEFINITIONS: Record<EventRequestStatus, string
 // helper that reads a blank input as "not entered", is defined near the top
 // of this file.)
 
-export const eventRequestDraftSchema = z.object({
-  name: eventRequestCoreSchema.shape.name,
-  purpose: optionalFromBlank(eventRequestCoreSchema.shape.purpose),
-  description: optionalFromBlank(eventRequestCoreSchema.shape.description),
-  proposedDate: optionalFromBlank(eventRequestCoreSchema.shape.proposedDate),
-  expectedAttendance: optionalFromBlank(eventRequestCoreSchema.shape.expectedAttendance),
-  timeSlots: timeSlotsSchema.default([]),
-  // SCRUM-79 / 80 / 81 — a draft keeps whatever requirements were stated so far.
-  ...venueRequirementsSchema.shape,
-});
+export const eventRequestDraftSchema = z
+  .object({
+    name: eventRequestCoreSchema.shape.name,
+    purpose: optionalFromBlank(eventRequestCoreSchema.shape.purpose),
+    description: optionalFromBlank(eventRequestCoreSchema.shape.description),
+    proposedDate: optionalFromBlank(eventRequestCoreSchema.shape.proposedDate),
+    expectedAttendance: optionalFromBlank(eventRequestCoreSchema.shape.expectedAttendance),
+    // SCRUM-238 AC2 ("when I save or submit") — the end-after-start rule is a
+    // check on values entered, so it applies to a draft too.
+    ...eventTimesShape,
+    // SCRUM-79 / 80 / 81 — a draft keeps whatever requirements were stated so far.
+    ...venueRequirementsSchema.shape,
+  })
+  .superRefine(refineTimeRange);
 
 export type EventRequestDraftInput = z.infer<typeof eventRequestDraftSchema>;
 
@@ -335,7 +378,9 @@ export const MANDATORY_FIELD_LABELS = {
   purpose: 'Purpose',
   description: 'Description',
   proposedDate: 'Proposed date',
-  timeSlots: 'Time slots',
+  // SCRUM-238 — replaces SCRUM-77's 'Time slots'.
+  startTime: 'Start time',
+  endTime: 'End time',
   expectedAttendance: 'Expected attendance',
 } as const satisfies Record<keyof EventRequestCore, string>;
 

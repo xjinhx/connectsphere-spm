@@ -1,5 +1,6 @@
 import { z } from 'zod';
 import { isISODate } from '@/domain/shared/dates';
+import { ClockRangeSchema } from '@/domain/shared/times';
 
 /**
  * Venue Catalogue (EP-08): data shapes shared by the API routes and the UI.
@@ -11,6 +12,7 @@ import { isISODate } from '@/domain/shared/dates';
  * SCRUM-121 Browse and view the venue catalogue
  * SCRUM-128 Search venues by date and slot
  * SCRUM-123 View a venue's calendar with the state of each slot
+ * SCRUM-225 Record setup and turnaround time for each venue
  *
  * Values mirror the check constraints in
  * supabase/migrations/20260911063000_create_venue_catalogue.sql.
@@ -119,6 +121,36 @@ const LayoutListSchema = z
     'Each layout can only be added once per venue.',
   );
 
+/** SCRUM-225 AC1: setup and turnaround are whole minutes on the 15-minute booking unit. */
+export const SETUP_TURNAROUND_STEP_MINUTES = 15;
+
+/**
+ * SCRUM-225 AC1 and AC2: a setup or turnaround time in whole minutes, in
+ * 15-minute steps. 0 is allowed: it is what every venue has until one is set
+ * (AC3). AC2 refuses a negative value or one that is not a multiple of 15, and
+ * "the field is identified", so each field gets one message of its own rather
+ * than several for one typo.
+ *
+ * No upper limit has been agreed; CAPACITY_COLUMN_MAX is only the integer
+ * column's limit, so a huge number is refused here rather than failing in
+ * Postgres with an error the form cannot pin on the field.
+ */
+function setupTurnaroundMinutesSchema(label: 'Setup time' | 'Turnaround time') {
+  const wholeMinutes = `${label} must be a whole number of minutes.`;
+  return z.number({ invalid_type_error: wholeMinutes }).superRefine((minutes, ctx) => {
+    const message = !Number.isInteger(minutes)
+      ? wholeMinutes
+      : minutes < 0
+        ? `${label} cannot be negative.`
+        : minutes % SETUP_TURNAROUND_STEP_MINUTES !== 0
+          ? `${label} must be in 15-minute steps (0, 15, 30, 45 and so on).`
+          : minutes > CAPACITY_COLUMN_MAX
+            ? `${label} is too large.`
+            : null;
+    if (message) ctx.addIssue({ code: z.ZodIssueCode.custom, message });
+  });
+}
+
 // -----------------------------------------------------------------------------
 // Inputs (request bodies and query strings)
 // -----------------------------------------------------------------------------
@@ -162,6 +194,13 @@ export type CreateVenueRequest = z.input<typeof CreateVenueInputSchema>;
  * undoing the save made in between. Found reviewing SCRUM-215, the same kind
  * of bug.
  */
+/** Fields that steer a save rather than change the venue, so they alone are "Nothing to update". */
+const UPDATE_CONTROL_FIELDS: readonly string[] = [
+  'expectedUpdatedAt',
+  'confirmAffectedBookings',
+  'confirmSetupTurnaroundChange',
+];
+
 export const UpdateVenueInputSchema = z
   .object({
     expectedUpdatedAt: z
@@ -181,20 +220,35 @@ export const UpdateVenueInputSchema = z
      * event and a turnaround slot after it. SCRUM-148 applies the actual
      * adjacent-slot-blocking rule using these flags; this schema only
      * carries them.
+     *
+     * Replaced in the app by setupMinutes and turnaroundMinutes (SCRUM-225),
+     * which the venue form edits instead. Still accepted, and still stored,
+     * until the slot columns are dropped with the rest of the slot model
+     * (20261008140500_time_model.sql); SCRUM-119 stays Done.
      */
     needsSetupSlot: z.boolean().optional(),
     needsTurnaroundSlot: z.boolean().optional(),
+    /** SCRUM-225 AC1: minutes the venue needs before an event to set up. */
+    setupMinutes: setupTurnaroundMinutesSchema('Setup time').optional(),
+    /** SCRUM-225 AC1: minutes the venue needs after an event to reset. */
+    turnaroundMinutes: setupTurnaroundMinutesSchema('Turnaround time').optional(),
     /**
      * SCRUM-120 AC2: the user has seen the confirmed future bookings a capacity
      * cut affects and confirmed it. Without it, such a cut is refused with the
      * list of those bookings (AffectedBookingsDetails).
      */
     confirmAffectedBookings: z.boolean().optional(),
+    /**
+     * SCRUM-225 AC4: the user has seen the confirmed bookings a setup or
+     * turnaround change makes clash and confirmed it. Without it, such a change
+     * is refused with the list of those bookings (SetupTurnaroundClashesDetails).
+     */
+    confirmSetupTurnaroundChange: z.boolean().optional(),
   })
   .refine(
     (input) =>
       Object.entries(input).some(
-        ([key, value]) => key !== 'confirmAffectedBookings' && key !== 'expectedUpdatedAt' && value !== undefined,
+        ([key, value]) => !UPDATE_CONTROL_FIELDS.includes(key) && value !== undefined,
       ),
     'Nothing to update.',
   );
@@ -213,24 +267,22 @@ export const VenueListQuerySchema = z.object({
 export type VenueListQuery = z.infer<typeof VenueListQuerySchema>;
 
 /**
- * SCRUM-128 AC1: "Given I enter a date and select one or more slots".
+ * SCRUM-239 AC2: search by a date and an exact start and end time, on the
+ * 15-minute unit, replacing SCRUM-128's slots. The times are checked by the
+ * shared ClockRangeSchema, so an off-step time or an end not after the start
+ * is refused the same way as everywhere else.
  *
- * AC5: no booking horizon applies (customer clarification #57), so the date has
- * no upper limit — 5 years ahead is as valid as tomorrow. Nor is it held to the
- * future: the card doesn't say so, and a search commits nothing.
- *
- * At least one slot, because AC1's "every one of the selected slots" is
- * meaningless over none. Repeats are dropped, so [pm, pm] is the PM search.
+ * SCRUM-128 AC5 still holds: no booking horizon applies (customer
+ * clarification #57), so the date has no upper limit, and it isn't held to the
+ * future, since a search commits nothing.
  */
-export const VenueSearchQuerySchema = z.object({
-  date: z
-    .string({ required_error: 'Enter a date.' })
-    .refine(isISODate, 'Enter a real date as YYYY-MM-DD.'),
-  slots: z
-    .array(OperatingSlotSchema, { required_error: 'Select at least one slot.' })
-    .min(1, 'Select at least one slot.')
-    .transform((slots) => OPERATING_SLOTS.filter((slot) => slots.includes(slot))),
-});
+export const VenueSearchQuerySchema = z
+  .object({
+    date: z
+      .string({ required_error: 'Enter a date.' })
+      .refine(isISODate, 'Enter a real date as YYYY-MM-DD.'),
+  })
+  .and(ClockRangeSchema);
 export type VenueSearchQuery = z.infer<typeof VenueSearchQuerySchema>;
 
 /**
@@ -301,69 +353,69 @@ export const VenueSummarySchema = z.object({
 });
 export type VenueSummary = z.infer<typeof VenueSummarySchema>;
 
-/** SCRUM-128: the venues free in every searched slot, echoed with what was searched. */
+/** SCRUM-239 AC2: the venues free for the whole searched period, echoed with what was searched. */
 export const VenueSearchResultSchema = z.object({
   date: z.string(),
-  slots: z.array(OperatingSlotSchema),
+  start: z.string(),
+  end: z.string(),
   venues: z.array(VenueSummarySchema),
 });
 export type VenueSearchResult = z.infer<typeof VenueSearchResultSchema>;
 
 /**
- * SCRUM-123: the state a calendar slot is shown in, from AC2, AC3, AC5, AC6
- * and AC7. Where several apply, policy.ts calendarSlotState picks one.
+ * SCRUM-239 AC5: what a period on the calendar is. Replaces SCRUM-123's
+ * per-slot states (which stays Done on slots, per the Week 7 guide):
+ * - confirmed: a confirmed booking (SCRUM-123 AC5)
+ * - pending: a pending booking request line; not a commitment (SCRUM-123 AC6, AC8)
+ * - held: an active hold, with its expiry (SCRUM-227 AC7)
+ * - blocked: a period Venue Staff marked unavailable, with its reason (SCRUM-123 AC7)
  */
-export const CALENDAR_SLOT_STATES = [
-  'outside_operating_hours',
-  'blocked',
-  'confirmed',
-  'pending_request',
-  'available',
-] as const;
-export const CalendarSlotStateSchema = z.enum(CALENDAR_SLOT_STATES);
-export type CalendarSlotState = z.infer<typeof CalendarSlotStateSchema>;
+export const CALENDAR_PERIOD_KINDS = ['confirmed', 'pending', 'held', 'blocked'] as const;
+export const CalendarPeriodKindSchema = z.enum(CALENDAR_PERIOD_KINDS);
+export type CalendarPeriodKind = z.infer<typeof CalendarPeriodKindSchema>;
 
-/** The words each state is shown with; AC5, AC6 and AC7 name three of them. */
-export const CALENDAR_SLOT_STATE_LABELS: Record<CalendarSlotState, string> = {
-  outside_operating_hours: 'Outside operating hours',
-  blocked: 'Blocked',
+/** The words each kind of period is shown with. */
+export const CALENDAR_PERIOD_LABELS: Record<CalendarPeriodKind, string> = {
   confirmed: 'Confirmed',
-  pending_request: 'Pending request',
-  available: 'Available',
+  pending: 'Pending request',
+  held: 'Held',
+  blocked: 'Blocked',
 };
 
 /**
- * One slot on one date.
+ * One period on one date, with its exact start and end time (SCRUM-239 AC5).
  *
  * Event details follow SCRUM-148 AC3/AC4, decided by its listVenueBookings():
  * Venue Staff, the event's assigned coordinator and Event Operations Managers
- * see which event holds a Confirmed slot; anyone else sees only that it is
+ * see which event holds a Confirmed period; anyone else sees only that it is
  * Confirmed. Client and coordinator details are never shown (customer
  * clarification #91).
  */
-export const CalendarSlotSchema = z.object({
-  slot: OperatingSlotSchema,
-  state: CalendarSlotStateSchema,
-  /** AC7: the recorded reason, only for a Blocked slot. */
+export const CalendarPeriodSchema = z.object({
+  kind: CalendarPeriodKindSchema,
+  start: z.string(),
+  end: z.string(),
+  /** SCRUM-123 AC7: the recorded reason, only for a Blocked period. */
   reason: z.string().nullable(),
-  /** AC6 and AC8: pending booking requests on this slot, whatever its state. */
-  pendingRequests: z.number().int().min(0),
-  /** SCRUM-148 AC3: the event on a Confirmed slot, when the viewer may see it. */
+  /** SCRUM-148 AC3: the event on a Confirmed period, when the viewer may see it. */
   event: z.object({ id: z.string().uuid(), reference: z.string(), name: z.string() }).nullable(),
+  /** SCRUM-227 AC7: when the hold expires (an ISO instant), only for a Held period. */
+  expiresAt: z.string().nullable().optional(),
 });
-export type CalendarSlot = z.infer<typeof CalendarSlotSchema>;
+export type CalendarPeriod = z.infer<typeof CalendarPeriodSchema>;
 
 export const CalendarDaySchema = z.object({
   date: z.string(),
-  /** AC4: every slot the venue runs that day is committed. */
+  /** SCRUM-123 AC4: committed periods cover the venue's whole opening hours that day. */
   fullyCommitted: z.boolean(),
-  /** Always AM, PM and Night, in that order (AC1). */
-  slots: z.array(CalendarSlotSchema).length(3),
+  /** In start-time order; a day with none is available all through its opening hours. */
+  periods: z.array(CalendarPeriodSchema),
 });
 export type CalendarDay = z.infer<typeof CalendarDaySchema>;
 
 export const VenueCalendarSchema = z.object({
-  venue: z.object({ id: z.string().uuid(), name: z.string() }),
+  /** SCRUM-123 AC3: outside these hours the venue cannot be requested. */
+  venue: z.object({ id: z.string().uuid(), name: z.string(), opensAt: z.string(), closesAt: z.string() }),
   from: z.string(),
   to: z.string(),
   days: z.array(CalendarDaySchema),
@@ -384,6 +436,9 @@ export const VenueDetailSchema = VenueSummarySchema.extend({
   layouts: z.array(VenueLayoutSchema),
   needsSetupSlot: z.boolean(),
   needsTurnaroundSlot: z.boolean(),
+  /** SCRUM-225 AC1 and AC3: 0 until Venue Staff set them. */
+  setupMinutes: z.number().int().min(0),
+  turnaroundMinutes: z.number().int().min(0),
   createdAt: z.string(),
   updatedAt: z.string(),
 });
@@ -412,3 +467,39 @@ export const AffectedBookingsDetailsSchema = z.object({
   bookings: z.array(AffectedBookingSchema),
 });
 export type AffectedBookingsDetails = z.infer<typeof AffectedBookingsDetailsSchema>;
+
+/**
+ * SCRUM-225 AC4: a confirmed booking that a setup or turnaround change would
+ * make clash with another. Venue Staff make the change and may see which event
+ * holds each booking (SCRUM-155 AC1, SCRUM-148 AC3).
+ */
+export const SetupTurnaroundClashBookingSchema = z.object({
+  bookingId: z.string().uuid(),
+  eventId: z.string().uuid(),
+  reference: z.string(),
+  eventName: z.string(),
+  date: z.string(),
+  start: z.string(),
+  end: z.string(),
+});
+export type SetupTurnaroundClashBooking = z.infer<typeof SetupTurnaroundClashBookingSchema>;
+
+/** SCRUM-225 AC4: the details of the 409 that asks the editor to confirm the change. */
+export const SetupTurnaroundClashesDetailsSchema = z.object({
+  reason: z.literal('setup_turnaround_clashes'),
+  setupMinutes: z.number().int(),
+  turnaroundMinutes: z.number().int(),
+  bookings: z.array(SetupTurnaroundClashBookingSchema),
+});
+export type SetupTurnaroundClashesDetails = z.infer<typeof SetupTurnaroundClashesDetailsSchema>;
+
+/**
+ * SCRUM-225 AC5: a confirmed booking flagged as affected by a confirmed setup
+ * or turnaround change, with the values that change set and when.
+ */
+export const SetupTurnaroundAffectedBookingSchema = SetupTurnaroundClashBookingSchema.extend({
+  setupMinutes: z.number().int(),
+  turnaroundMinutes: z.number().int(),
+  flaggedAt: z.string(),
+});
+export type SetupTurnaroundAffectedBooking = z.infer<typeof SetupTurnaroundAffectedBookingSchema>;

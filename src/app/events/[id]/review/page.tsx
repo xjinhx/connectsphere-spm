@@ -8,7 +8,9 @@ import { RequestClarificationForm } from '@/components/event-request/RequestClar
 import { AffectedBookingsNotice } from '@/components/venue/AffectedBookingsNotice';
 import { listAffectedBookings } from '@/domain/availability/service';
 import { RequestVenueBookingForm } from '@/components/event-request/RequestVenueBookingForm';
+import { EventVenueBookings } from '@/components/venue-booking/EventVenueBookings';
 import { canCreateBookingRequest } from '@/domain/venue-booking/policy';
+import { listEventVenueBookings } from '@/domain/venue-booking/service';
 import { listVenues } from '@/domain/venues/service';
 import {
   describeAccessibility,
@@ -17,7 +19,7 @@ import {
   describeRegistration,
   describeRoomLayout,
   describeTechnicalSupport,
-  describeTimeSlots,
+  describeEventTimes,
 } from '@/domain/event-request/policy';
 import {
   getClarificationExchange,
@@ -117,6 +119,8 @@ export default async function ReviewEventRequestPage({
   // SCRUM-151 AC3. Read only now, after getReviewDetail above has refused
   // anyone the request is not theirs to see.
   const affectedBookings = await listAffectedBookings(request.id);
+  // SCRUM-231 AC1-AC3, read for the same reason after getReviewDetail.
+  const venueBookings = await listEventVenueBookings(request.id, actor.userId);
 
   // SCRUM-142 AC1/AC2 — a venue can only be requested once the event is
   // Approved or in Planning. Fetched only when
@@ -180,7 +184,8 @@ export default async function ReviewEventRequestPage({
           label="Proposed date"
           value={request.proposedDate ? formatSingaporeDate(request.proposedDate) : 'Not provided'}
         />
-        <Row label="Time slots" value={describeTimeSlots(request.timeSlots)} />
+        {/* SCRUM-238 AC6/AC7 */}
+        <Row label="Time" value={describeEventTimes(request.startTime, request.endTime)} />
         {/* SCRUM-78. Confirmed missing here in a manual walkthrough
             (2026-09-16) - the API (getReviewDetail) already returned it
             correctly, this row was never added. */}
@@ -224,8 +229,14 @@ export default async function ReviewEventRequestPage({
         </section>
       ) : null}
 
+      {/* SCRUM-231 AC1-AC4 — the event's venue bookings, each released on its
+          own with a reason. Releasing an affected one closes the outstanding
+          action at the top of the page. */}
+      <EventVenueBookings bookings={venueBookings} />
+
       {/* SCRUM-142 AC1-AC4 — "As an Event Coordinator, I want to request a
-          specific venue for the slots my event needs". Gated on
+          specific venue for the times my event needs" (in exact times since
+          SCRUM-239 AC3). Gated on
           canCreateBookingRequest, SCRUM-142's own rule, the same way the
           Approve section above is gated on canBeApproved: the screen can
           never offer an action the API would refuse. */}
@@ -233,7 +244,12 @@ export default async function ReviewEventRequestPage({
         <section className="mt-6 rounded-lg border border-[var(--border)] bg-[var(--surface)] p-4">
           <h2 className="text-sm font-semibold">Request a venue</h2>
           <div className="mt-3">
-            <RequestVenueBookingForm requestId={request.id} venues={venues} />
+            {/* SCRUM-239 AC3: the request starts from the event's own date and times (SCRUM-238). */}
+            <RequestVenueBookingForm
+              requestId={request.id}
+              venues={venues}
+              eventPeriod={{ date: request.proposedDate, start: request.startTime, end: request.endTime }}
+            />
           </div>
         </section>
       ) : null}

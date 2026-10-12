@@ -51,6 +51,8 @@ function basicDetails(name: string) {
     description: 'Yearly gathering',
     proposed_date: '2026-11-15',
     time_slots: null,
+    start_time: null,
+    end_time: null,
     room_layout: null,
     accessibility_required: null,
     accessibility_notes: null,

@@ -9,6 +9,8 @@ import {
   withoutOwnHolds,
 } from '@/domain/venue-hold/policy';
 import type { VenueCommitment } from '@/domain/availability/schema';
+import { calendarDay } from '@/domain/venues/policy';
+import { CALENDAR_PERIOD_LABELS } from '@/domain/venues/schema';
 
 /**
  * SCRUM-227 Hold a venue until an expiry: the rules that need no database.
@@ -25,6 +27,9 @@ import type { VenueCommitment } from '@/domain/availability/schema';
  *   AC6 "Given a hold's expiry has passed without an approved booking ... then
  *        it is available again and the hold is never counted as a confirmed
  *        booking."
+ *   AC7 "Given a start and end time has an active hold, when it is shown on
+ *        the venue calendar with held period labelled Held with its expiry
+ *        time."
  *
  * Test case IDs are from Joshua's Sprint 3 sheet (TC-227-nn).
  */
@@ -144,6 +149,40 @@ describe('naming a hold: SCRUM-227 AC4 and AC7', () => {
         { reference: 'EVT-2026-0101', name: 'S227 A' },
       ),
     ).toBe('10:00-12:00 on 20 Nov 2026 is held for EVT-2026-0101 (S227 A) until 13 Nov 2026 17:00.');
+  });
+});
+
+describe('calendarDay: SCRUM-227 AC7, a held period is labelled Held with its expiry', () => {
+  const HOURS = { opensAt: '07:00', closesAt: '22:00' };
+  const EXPIRY = '2026-11-13T09:00:00.000Z';
+
+  it('TC-227-15 shows the held period with its exact times, labelled Held, with its expiry', () => {
+    const day = calendarDay(
+      '2026-11-20',
+      HOURS,
+      [{ kind: 'hold', date: '2026-11-20', start: '10:00', end: '12:00', eventRequestId: EVENT_A, reason: null, expiresAt: EXPIRY }],
+      [],
+      new Map(),
+    );
+
+    expect(day.periods).toEqual([{ kind: 'held', start: '10:00', end: '12:00', reason: null, event: null, expiresAt: EXPIRY }]);
+    expect(CALENDAR_PERIOD_LABELS.held).toBe('Held');
+    expect(formatExpiry(EXPIRY)).toBe('13 Nov 2026 17:00');
+  });
+
+  it('gives a confirmed or blocked period no expiry', () => {
+    const day = calendarDay(
+      '2026-11-20',
+      HOURS,
+      [
+        { kind: 'booking', date: '2026-11-20', start: '08:00', end: '09:00', eventRequestId: EVENT_B, reason: null },
+        { kind: 'unavailable', date: '2026-11-20', start: '13:00', end: '14:00', eventRequestId: null, reason: 'Repairs' },
+      ],
+      [],
+      new Map(),
+    );
+
+    expect(day.periods.map((p) => 'expiresAt' in p)).toEqual([false, false]);
   });
 });
 

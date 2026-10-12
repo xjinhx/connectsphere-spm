@@ -20,11 +20,14 @@ vi.mock('@/lib/supabase/venueBookingRequests', () => ({
   fetchVenueBookingRequestById: vi.fn(),
 }));
 
-vi.mock('@/lib/supabase/venueBookings', () => ({
-  fetchConfirmedSlotsForVenue: vi.fn(),
-}));
 vi.mock('@/lib/supabase/venues', () => ({
-  fetchUnavailableSlotsForVenue: vi.fn(),
+  fetchVenueOpeningHours: vi.fn(),
+}));
+vi.mock('@/domain/availability/service', () => ({
+  getVenueCommitments: vi.fn(),
+}));
+vi.mock('@/domain/venues/service', () => ({
+  getVenue: vi.fn(),
 }));
 
 import { fetchEventRequestById } from '@/lib/supabase/eventRequests';
@@ -32,8 +35,9 @@ import {
   createVenueBookingRequest,
   fetchVenueBookingRequestById,
 } from '@/lib/supabase/venueBookingRequests';
-import { fetchConfirmedSlotsForVenue } from '@/lib/supabase/venueBookings';
-import { fetchUnavailableSlotsForVenue } from '@/lib/supabase/venues';
+import { fetchVenueOpeningHours } from '@/lib/supabase/venues';
+import { getVenueCommitments } from '@/domain/availability/service';
+import { getVenue } from '@/domain/venues/service';
 import { submitVenueBookingRequest } from '@/domain/venue-booking/service';
 import { assertPermission } from '@/domain/identity/policy';
 import { isActionPermitted } from '@/domain/identity/permissions';
@@ -55,7 +59,7 @@ function mockEvent(status: string, coordinatorId: string | null = COORDINATOR_ID
 /** Echo back whatever lines were written, the way the real read-back does. */
 function mockWriteAndReadBack() {
   vi.mocked(createVenueBookingRequest).mockImplementation((async (input: {
-    lines: readonly { date: string; timeSlots: readonly string[] }[];
+    lines: readonly { date: string; start: string; end: string }[];
   }) => {
     vi.mocked(fetchVenueBookingRequestById).mockResolvedValue({
       data: {
@@ -67,7 +71,8 @@ function mockWriteAndReadBack() {
         venue_booking_request_line: input.lines.map((line, i) => ({
           id: `line-${i}`,
           date: line.date,
-          time_slots: [...line.timeSlots],
+          start_time: `${line.start}:00`,
+          end_time: `${line.end}:00`,
           status: 'pending',
         })),
       },
@@ -95,10 +100,12 @@ beforeEach(() => {
   vi.mocked(fetchEventRequestById).mockReset();
   vi.mocked(createVenueBookingRequest).mockReset();
   vi.mocked(fetchVenueBookingRequestById).mockReset();
-  // SCRUM-142's cases run against a venue with nothing booked or withdrawn;
-  // the clash cases are in venue-booking-slot-clash.test.ts (SCRUM-154).
-  vi.mocked(fetchConfirmedSlotsForVenue).mockResolvedValue({ data: [], error: null } as never);
-  vi.mocked(fetchUnavailableSlotsForVenue).mockResolvedValue({ data: [], error: null } as never);
+  // SCRUM-142's cases run against a venue open all day with nothing
+  // committed; the clash and opening-hours cases (SCRUM-239 AC1, AC3, AC8,
+  // with SCRUM-154 carried over) are in venue-booking-request-clash.test.ts.
+  vi.mocked(fetchVenueOpeningHours).mockResolvedValue({ data: { opens_at: '07:00:00', closes_at: '24:00:00' }, error: null } as never);
+  vi.mocked(getVenueCommitments).mockResolvedValue([]);
+  vi.mocked(getVenue).mockReset().mockResolvedValue({ id: VENUE_ID, isRetired: false } as never);
 });
 
 describe('AC1: assigned coordinator, approved event', () => {
@@ -109,7 +116,7 @@ describe('AC1: assigned coordinator, approved event', () => {
 
     const outcome = await submitVenueBookingRequest(EVENT_ID, COORDINATOR_ID, {
       venueId: VENUE_ID,
-      lines: [{ date: '2026-11-15', timeSlots: ['pm'] }],
+      lines: [{ date: '2026-11-15', start: '13:00', end: '18:00' }],
     });
 
     expect(createVenueBookingRequest).toHaveBeenCalledOnce();
@@ -117,7 +124,7 @@ describe('AC1: assigned coordinator, approved event', () => {
       eventRequestId: EVENT_ID,
       venueId: VENUE_ID,
       requestedBy: COORDINATOR_ID,
-      lines: [{ date: '2026-11-15', timeSlots: ['pm'] }],
+      lines: [{ date: '2026-11-15', start: '13:00', end: '18:00' }],
     });
     expect(outcome.venueId).toBe(VENUE_ID);
     expect(outcome.eventRequestId).toBe(EVENT_ID);
@@ -125,18 +132,24 @@ describe('AC1: assigned coordinator, approved event', () => {
     expect(outcome.lines[0]?.status).toBe('pending');
   });
 
-  // SCRUM-142-TC06
-  it('carries two slots on the same date as slot lines, each Pending', async () => {
+  // SCRUM-142-TC06, in times: two periods on the same date are two lines.
+  it('carries two periods on the same date as two lines, each Pending', async () => {
     mockEvent('approved');
     mockWriteAndReadBack();
 
     const outcome = await submitVenueBookingRequest(EVENT_ID, COORDINATOR_ID, {
       venueId: VENUE_ID,
-      lines: [{ date: '2026-11-15', timeSlots: ['am', 'pm'] }],
+      lines: [
+        { date: '2026-11-15', start: '09:00', end: '11:00' },
+        { date: '2026-11-15', start: '14:00', end: '16:00' },
+      ],
     });
 
     expect(createVenueBookingRequest).toHaveBeenCalledOnce();
-    expect(outcome.lines[0]?.timeSlots).toEqual(['am', 'pm']);
+    expect(outcome.lines.map((line) => [line.start, line.end])).toEqual([
+      ['09:00', '11:00'],
+      ['14:00', '16:00'],
+    ]);
     expect(outcome.lines.every((line) => line.status === 'pending')).toBe(true);
   });
 
@@ -147,7 +160,7 @@ describe('AC1: assigned coordinator, approved event', () => {
 
     const outcome = await submitVenueBookingRequest(EVENT_ID, COORDINATOR_ID, {
       venueId: VENUE_ID,
-      lines: [{ date: '2026-11-15', timeSlots: ['pm'] }],
+      lines: [{ date: '2026-11-15', start: '13:00', end: '18:00' }],
     });
 
     expect(createVenueBookingRequest).toHaveBeenCalledOnce();
@@ -165,7 +178,7 @@ describe('AC2: event has not been approved', () => {
       const error = await caught(
         submitVenueBookingRequest(EVENT_ID, COORDINATOR_ID, {
           venueId: VENUE_ID,
-          lines: [{ date: '2026-11-15', timeSlots: ['pm'] }],
+          lines: [{ date: '2026-11-15', start: '13:00', end: '18:00' }],
         }),
       );
 
@@ -185,15 +198,15 @@ describe('AC3: several dates on one request', () => {
     const outcome = await submitVenueBookingRequest(EVENT_ID, COORDINATOR_ID, {
       venueId: VENUE_ID,
       lines: [
-        { date: '2026-11-15', timeSlots: ['pm'] },
-        { date: '2026-11-16', timeSlots: ['am'] },
+        { date: '2026-11-15', start: '13:00', end: '18:00' },
+        { date: '2026-11-16', start: '09:00', end: '11:00' },
       ],
     });
 
     expect(createVenueBookingRequest).toHaveBeenCalledOnce();
     expect(outcome.id).toBe(REQUEST_ID);
     expect(outcome.lines.map((line) => line.date)).toEqual(['2026-11-15', '2026-11-16']);
-    expect(outcome.lines.map((line) => line.timeSlots)).toEqual([['pm'], ['am']]);
+    expect(outcome.lines.map((line) => `${line.start}-${line.end}`)).toEqual(['13:00-18:00', '09:00-11:00']);
     expect(outcome.lines.map((line) => line.status)).toEqual(['pending', 'pending']);
     expect(new Set(outcome.lines.map((line) => line.id)).size).toBe(2);
   });
@@ -207,7 +220,7 @@ describe('AC4: coordinator not assigned to the event', () => {
     const error = await caught(
       submitVenueBookingRequest(EVENT_ID, COORDINATOR_ID, {
         venueId: VENUE_ID,
-        lines: [{ date: '2026-11-15', timeSlots: ['pm'] }],
+        lines: [{ date: '2026-11-15', start: '13:00', end: '18:00' }],
       }),
     );
 
@@ -221,7 +234,7 @@ describe('AC4: coordinator not assigned to the event', () => {
     const error = await caught(
       submitVenueBookingRequest(EVENT_ID, COORDINATOR_ID, {
         venueId: VENUE_ID,
-        lines: [{ date: '2026-11-15', timeSlots: ['pm'] }],
+        lines: [{ date: '2026-11-15', start: '13:00', end: '18:00' }],
       }),
     );
 
@@ -236,7 +249,7 @@ describe('AC4: coordinator not assigned to the event', () => {
     const error = await caught(
       submitVenueBookingRequest(EVENT_ID, COORDINATOR_ID, {
         venueId: VENUE_ID,
-        lines: [{ date: '2026-11-15', timeSlots: ['pm'] }],
+        lines: [{ date: '2026-11-15', start: '13:00', end: '18:00' }],
       }),
     );
 
@@ -250,7 +263,7 @@ describe('AC4: coordinator not assigned to the event', () => {
     const error = await caught(
       submitVenueBookingRequest(EVENT_ID, COORDINATOR_ID, {
         venueId: VENUE_ID,
-        lines: [{ date: '2026-11-15', timeSlots: ['pm'] }],
+        lines: [{ date: '2026-11-15', start: '13:00', end: '18:00' }],
       }),
     );
 
@@ -291,7 +304,7 @@ describe('AC5: mandatory field left empty on an approved event', () => {
     const error = await caught(
       submitVenueBookingRequest(EVENT_ID, COORDINATOR_ID, {
         venueId: VENUE_ID,
-        lines: [{ date, timeSlots: ['pm'] }],
+        lines: [{ date, start: '13:00', end: '18:00' }],
       }),
     );
 
@@ -300,17 +313,18 @@ describe('AC5: mandatory field left empty on an approved event', () => {
     expect(createVenueBookingRequest).not.toHaveBeenCalled();
   });
 
-  // SCRUM-142-TC13
-  it('refuses a request with no slot, creates nothing and flags the slot', async () => {
+  // SCRUM-142-TC13, in times: the start and end replace the slot.
+  it('refuses a request with no times, creates nothing and flags the start and end', async () => {
     const error = await caught(
       submitVenueBookingRequest(EVENT_ID, COORDINATOR_ID, {
         venueId: VENUE_ID,
-        lines: [{ date: '2026-11-15', timeSlots: [] }],
+        lines: [{ date: '2026-11-15', start: '', end: '' }],
       }),
     );
 
     expect(error.code).toBe('VALIDATION_ERROR');
-    expect(flaggedFields(error)).toMatch(/slot/i);
+    expect(flaggedFields(error)).toMatch(/"start"/);
+    expect(flaggedFields(error)).toMatch(/"end"/);
     expect(createVenueBookingRequest).not.toHaveBeenCalled();
   });
 
@@ -323,7 +337,7 @@ describe('AC5: mandatory field left empty on an approved event', () => {
     const error = await caught(
       submitVenueBookingRequest(EVENT_ID, COORDINATOR_ID, {
         venueId,
-        lines: [{ date: '2026-11-15', timeSlots: ['pm'] }],
+        lines: [{ date: '2026-11-15', start: '13:00', end: '18:00' }],
       }),
     );
 
@@ -337,23 +351,43 @@ describe('AC5: mandatory field left empty on an approved event', () => {
     const error = await caught(
       submitVenueBookingRequest(EVENT_ID, COORDINATOR_ID, {
         venueId: '',
-        lines: [{ date: '', timeSlots: [] }],
+        lines: [{ date: '', start: '', end: '' }],
       }),
     );
 
     const flagged = flaggedFields(error);
     expect(flagged).toMatch(/venue/i);
     expect(flagged).toMatch(/date/i);
-    expect(flagged).toMatch(/slot/i);
+    expect(flagged).toMatch(/"start"/);
     expect(createVenueBookingRequest).not.toHaveBeenCalled();
   });
 
-  it('refuses a request with no date/slot lines at all', async () => {
+  it('refuses a request with no lines at all', async () => {
     const error = await caught(
       submitVenueBookingRequest(EVENT_ID, COORDINATOR_ID, { venueId: VENUE_ID, lines: [] }),
     );
 
     expect(error.code).toBe('VALIDATION_ERROR');
+    expect(createVenueBookingRequest).not.toHaveBeenCalled();
+  });
+});
+
+describe('Supplementary: a retired venue cannot be requested', () => {
+  // TC-142-10
+  it('refuses a retired venue, creates nothing and flags the venue', async () => {
+    mockEvent('approved');
+    vi.mocked(getVenue).mockResolvedValue({ id: VENUE_ID, isRetired: true } as never);
+
+    const error = await caught(
+      submitVenueBookingRequest(EVENT_ID, COORDINATOR_ID, {
+        venueId: VENUE_ID,
+        lines: [{ date: '2026-11-15', start: '13:00', end: '18:00' }],
+      }),
+    );
+
+    expect(error.code).toBe('VALIDATION_ERROR');
+    expect(error.message).toMatch(/retired/i);
+    expect(flaggedFields(error)).toMatch(/venueId/);
     expect(createVenueBookingRequest).not.toHaveBeenCalled();
   });
 });
@@ -368,7 +402,7 @@ describe('AC2 + AC5: the approval check takes priority over the missing-field ch
     const error = await caught(
       submitVenueBookingRequest(EVENT_ID, COORDINATOR_ID, {
         venueId: '',
-        lines: [{ date: '', timeSlots: [] }],
+        lines: [{ date: '', start: '', end: '' }],
       }),
     );
 
