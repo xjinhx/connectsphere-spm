@@ -3,7 +3,12 @@ import { isWithinOpeningHours } from '@/domain/venues/policy';
 import { VenueSearchQuerySchema } from '@/domain/venues/schema';
 import { searchVenues } from '@/domain/venues/service';
 import { fetchSearchableVenues } from '@/lib/supabase/venues';
-import { fetchConfirmedBookingPeriods, fetchUnavailablePeriods } from '@/lib/supabase/availability';
+import {
+  fetchConfirmedBookingPeriods,
+  fetchUnavailablePeriods,
+  fetchVenueSetupTurnaround,
+} from '@/lib/supabase/availability';
+import { fetchActiveHoldPeriods } from '@/lib/supabase/venueHolds';
 
 /**
  * SCRUM-239 Check venue availability in 15-minute time ranges: venue search
@@ -34,6 +39,13 @@ vi.mock('@/lib/supabase/availability', async (importOriginal) => ({
   ...(await importOriginal<typeof import('@/lib/supabase/availability')>()),
   fetchConfirmedBookingPeriods: vi.fn(),
   fetchUnavailablePeriods: vi.fn(),
+  // SCRUM-226: getVenueCommitments also reads the venue's setup and turnaround.
+  fetchVenueSetupTurnaround: vi.fn(),
+}));
+// SCRUM-227: getVenueCommitments also reads active holds.
+vi.mock('@/lib/supabase/venueHolds', async (importOriginal) => ({
+  ...(await importOriginal<typeof import('@/lib/supabase/venueHolds')>()),
+  fetchActiveHoldPeriods: vi.fn(),
 }));
 
 const ok = <T>(data: T) => ({ data, error: null }) as never;
@@ -73,6 +85,10 @@ beforeEach(() => {
   vi.mocked(fetchSearchableVenues).mockReset();
   vi.mocked(fetchConfirmedBookingPeriods).mockReset().mockResolvedValue(ok([]));
   vi.mocked(fetchUnavailablePeriods).mockReset().mockResolvedValue(ok([]));
+  vi.mocked(fetchActiveHoldPeriods).mockReset().mockResolvedValue(ok([]));
+  vi.mocked(fetchVenueSetupTurnaround)
+    .mockReset()
+    .mockResolvedValue(ok({ setup_minutes: 0, turnaround_minutes: 0 }));
 });
 
 describe('searchVenues: SCRUM-239 AC2, exact time ranges', () => {
@@ -125,7 +141,7 @@ describe('searchVenues: SCRUM-239 AC1, opening hours', () => {
     expect(await found('07:00', '09:00')).toEqual([]);
   });
 
-  it('TC-239-17: returns it for a period exactly matching its opening hours', async () => {
+  it('returns it for a period exactly matching its opening hours (as TC-239-17 for a request)', async () => {
     vi.mocked(fetchSearchableVenues).mockResolvedValue(ok([venueRow(VENUE_A, 'Venue A', '08:00:00', '22:00:00')]));
     expect(await found('08:00', '22:00')).toEqual(['Venue A']);
   });

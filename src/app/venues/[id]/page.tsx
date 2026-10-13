@@ -1,6 +1,6 @@
 import Link from 'next/link';
 import { notFound } from 'next/navigation';
-import { getVenue } from '@/domain/venues/service';
+import { getVenue, listSetupTurnaroundAffectedBookings } from '@/domain/venues/service';
 import { canManageVenues, canViewVenueCatalogue } from '@/domain/venues/policy';
 import { listUpcomingUnavailableSlots } from '@/domain/availability/service';
 import { SLOT_NAMES } from '@/domain/availability/schema';
@@ -15,17 +15,28 @@ import {
 import { getCurrentActor } from '@/lib/auth/currentActor';
 import NoVenueAccess from '@/components/venue/NoVenueAccess';
 import { MarkSlotsUnavailableForm } from '@/components/venue/MarkSlotsUnavailableForm';
+import { HoldVenueForm } from '@/components/venue/HoldVenueForm';
+import { listActiveVenueHolds, listHoldableEvents } from '@/domain/venue-hold/service';
+import { formatExpiry } from '@/domain/venue-hold/policy';
 
 /**
  * SCRUM-121 AC2: opening a venue shows its location, capacities, supported
  * layouts, facilities, accessibility features, operating slots and turnaround
  * values.
  *
- * The turnaround values are read-only here. Entering them is SCRUM-119, which
- * is deferred out of Sprint 1, so they only ever show what seed data set.
+ * SCRUM-225 AC1 and AC3: the setup and turnaround times, in minutes, shown to
+ * every internal user who can open the venue; 0 and 0 until Venue Staff set
+ * them on the edit form. They replace SCRUM-119's yes/no slot flags.
+ *
+ * SCRUM-225 AC5: Venue Staff also see the confirmed bookings a setup or
+ * turnaround change flagged as affected, with the event holding each.
  *
  * SCRUM-151 AC1: the venue's upcoming unavailable slots are listed with their
  * reasons, and Venue Staff can mark more from here.
+ *
+ * SCRUM-227 AC1: Venue Staff see the venue's active holds, each with its event
+ * and expiry, and can hold a period for an event from here. A hold that is
+ * closed by a booking (AC5) or has passed its expiry (AC6) drops off.
  *
  * Needs venue_catalogue_view, checked before the venue is read. The "Edit
  * venue" button and the unavailable-slots form only appear for Venue Staff.
@@ -62,6 +73,14 @@ export default async function VenueDetailPage({ params }: { params: Promise<{ id
   }
 
   const unavailableSlots = await listUpcomingUnavailableSlots(venue.id);
+  const canManage = canManageVenues(actor.roles);
+  const [setupTurnaroundAffected, holds, holdableEvents] = canManage
+    ? await Promise.all([
+        listSetupTurnaroundAffectedBookings(venue.id),
+        listActiveVenueHolds(venue.id),
+        listHoldableEvents(),
+      ])
+    : [[], [], []];
 
   return (
     <main className="mx-auto max-w-3xl p-6">
@@ -79,7 +98,7 @@ export default async function VenueDetailPage({ params }: { params: Promise<{ id
           >
             View calendar
           </Link>
-          {canManageVenues(actor.roles) && (
+          {canManage && (
             <Link
               href={`/venues/${venue.id}/edit`}
               className="rounded bg-[var(--brand)] px-4 py-2 text-sm font-medium text-white hover:bg-[var(--brand-dark)]"
@@ -145,9 +164,29 @@ export default async function VenueDetailPage({ params }: { params: Promise<{ id
             : venue.accessibilityFeatures.map((feature) => feature.name).join(', ')}
         </Row>
 
-        <Row label="Needs setup slot">{venue.needsSetupSlot ? 'Yes' : 'No'}</Row>
-        <Row label="Needs turnaround slot">{venue.needsTurnaroundSlot ? 'Yes' : 'No'}</Row>
+        <Row label="Setup time">{venue.setupMinutes} minutes</Row>
+        <Row label="Turnaround time">{venue.turnaroundMinutes} minutes</Row>
       </dl>
+
+      {/* SCRUM-225 AC5: bookings a confirmed setup or turnaround change made
+          clash. They stay confirmed; the flag says why to look at them. */}
+      {canManage && setupTurnaroundAffected.length > 0 && (
+        <section className="mt-6 space-y-2 rounded border border-[var(--danger)] bg-[var(--surface)] p-4">
+          <h2 className="text-lg font-semibold">Bookings affected by a setup or turnaround change</h2>
+          <p className="text-sm text-[var(--text-muted)]">
+            These bookings are still confirmed, but no longer leave enough time to set up and reset between them.
+          </p>
+          <ul className="space-y-1 text-sm">
+            {setupTurnaroundAffected.map((booking) => (
+              <li key={booking.bookingId}>
+                <span className="font-medium">{booking.reference}</span> {booking.eventName},{' '}
+                {formatSingaporeDate(booking.date)} {booking.start}-{booking.end} (flagged when setup was set to{' '}
+                {booking.setupMinutes} and turnaround to {booking.turnaroundMinutes} minutes)
+              </li>
+            ))}
+          </ul>
+        </section>
+      )}
 
       {/* SCRUM-151 AC1: slots withdrawn on specific dates, from today on. */}
       <section className="mt-6 space-y-4 rounded border border-[var(--border)] bg-[var(--surface)] p-4">
@@ -163,10 +202,31 @@ export default async function VenueDetailPage({ params }: { params: Promise<{ id
             ))}
           </ul>
         )}
-        {canManageVenues(actor.roles) && (
+        {canManage && (
           <MarkSlotsUnavailableForm venueId={venue.id} operatingSlots={venue.operatingSlots} />
         )}
       </section>
+
+      {/* SCRUM-227: holds name the event, so only Venue Staff see them here. */}
+      {canManage && (
+        <section className="mt-6 space-y-4 rounded border border-[var(--border)] bg-[var(--surface)] p-4">
+          <h2 className="text-lg font-semibold">Holds</h2>
+          {holds.length === 0 ? (
+            <p className="text-sm text-[var(--text-muted)]">No active holds from today on.</p>
+          ) : (
+            <ul className="space-y-1 text-sm">
+              {holds.map((hold) => (
+                <li key={hold.id}>
+                  {formatSingaporeDate(hold.date)}, {hold.start}-{hold.end}: held for{' '}
+                  <span className="font-medium">{hold.event.reference}</span> {hold.event.name} until{' '}
+                  {formatExpiry(hold.expiresAt)}
+                </li>
+              ))}
+            </ul>
+          )}
+          <HoldVenueForm venueId={venue.id} events={holdableEvents} />
+        </section>
+      )}
     </main>
   );
 }

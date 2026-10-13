@@ -8,13 +8,14 @@ import {
   fetchUpcomingUnavailableSlots,
   recordUnavailableSlots,
 } from '@/lib/supabase/availability';
+import { fetchActiveHoldPeriods } from '@/lib/supabase/venueHolds';
 import { ConflictError, ValidationError, isUniqueViolation } from '@/domain/shared/errors';
 import { formatSingaporeDate, todayInSingapore, type ISODate } from '@/domain/shared/dates';
 import { getVenue } from '@/domain/venues/service';
 import { notifyBestEffort } from '@/domain/notification/service';
 import { OPERATING_SLOTS, OperatingSlotSchema, type OperatingSlot } from '@/domain/venues/schema';
 import { END_OF_DAY, fromDatabaseTime, splitDateTime, type SingaporeDateTime } from '@/domain/shared/times';
-// DUMMY(SCRUM-225) D-17: swap for SCRUM-225's occupied-time rule once merged.
+// DUMMY(SCRUM-225) D-17: swap for SCRUM-225's committed-time rule once merged.
 import { occupiedPeriod, type SetupTurnaround } from './occupiedPeriodDummy';
 import { affectedBookingMessage, commitmentsInRange, findNonOperatingSlots, toCommittedPeriods } from './policy';
 import {
@@ -238,9 +239,8 @@ const AffectedBookingSlotRowSchema = z.object({
  * another venue or slot, then release this one): "until they release or
  * replace it". Upcoming events only, on the Singapore date, like AC2's notices.
  *
- * DUMMY(SCRUM-231) D-12: nothing in the app releases a single booking yet;
- * SCRUM-231 (Release an affected booking) adds it. Testers remove the booking
- * by hand to see the entry clear.
+ * SCRUM-231 releases a booking (releaseVenueBooking), which ends its confirmed
+ * status, so the entry clears with no change here.
  *
  * No access check of its own: its only caller is the coordinator's review
  * page, which calls it after getReviewDetail has refused anyone the request is
@@ -303,14 +303,14 @@ export async function listUpcomingUnavailableSlots(
 
 /**
  * Every committed period at a venue that a booking for [start, end) would
- * clash with: its confirmed bookings and unavailable periods (holds join them
- * once SCRUM-227 adds them). The one check behind venue search (SCRUM-239 AC2),
- * booking requests (AC3), approvals (AC4) and the calendar (AC5), and the check
+ * clash with: its confirmed bookings, unavailable periods, and active holds
+ * (SCRUM-227). The one check behind venue search (SCRUM-239 AC2), booking
+ * requests (AC3), approvals (AC4) and the calendar (AC5), and the check
  * SCRUM-227 (holds) and SCRUM-229 (replacement venue) call instead of writing
  * their own. Unavailable periods are included because the story builds on
  * SCRUM-151 and SCRUM-154, which keep a withdrawn period from being booked.
  *
- * SCRUM-226: setup and turnaround are occupied, applied here so no caller adds
+ * SCRUM-226: setup and turnaround are committed, applied here so no caller adds
  * them. Two things widen, both by the venue's setup before and turnaround after
  * (SCRUM-225's rule, occupiedPeriod):
  *   - each confirmed booking, so 10:00-12:00 with 30 min setup and 45 min
@@ -318,9 +318,9 @@ export async function listUpcomingUnavailableSlots(
  *   - the range asked about, because the new booking needs its own setup and
  *     turnaround too (AC5: 13:00 is refused, its setup would start at 12:30
  *     inside the turnaround; 13:15 is free, its setup starts at 12:45).
- * Unavailable periods are not widened: nothing is set up for a withdrawn
- * period. A venue with 0 and 0 (the default, PO 8 Oct 2026) behaves exactly as
- * before.
+ * Unavailable periods and holds are returned as recorded: CLAUDE.md lists
+ * setup/turnaround as committed "around a booking". A venue with 0 and 0 (the
+ * default, PO 8 Oct 2026) behaves exactly as before.
  *
  * So a caller passes the range it wants to book or search and treats any
  * result as a clash. Re-filtering the result against the bare range (e.g. with
@@ -340,23 +340,41 @@ export async function listUpcomingUnavailableSlots(
  *
  * Only confirmed bookings are read, so a booking SCRUM-231 releases stops
  * committing the venue with no change here.
+ *
+ * SCRUM-227: a hold commits its period while it is active and `now` is before
+ * its expiry (AC3, AC4); once the expiry passes it is simply not returned
+ * (AC6), so nothing has to run at the expiry. A hold is never a booking: it
+ * comes back as kind 'hold', with its event and its expiry. An event's own
+ * holds are still returned; a check made for that event drops them with
+ * withoutOwnHolds (src/domain/venue-hold/policy.ts), so the holder can book
+ * what it holds (AC5).
  */
 export async function getVenueCommitments(
   venueId: string,
   start: SingaporeDateTime,
   end: SingaporeDateTime,
+  now: Date = new Date(),
 ): Promise<VenueCommitment[]> {
   const fromDate = splitDateTime(start).date;
   const toDate = splitDateTime(end).date;
-  const [bookings, unavailable, venue] = await Promise.all([
+  const [bookings, unavailable, holds, venue] = await Promise.all([
     fetchConfirmedBookingPeriods(venueId, fromDate, toDate),
     fetchUnavailablePeriods(venueId, fromDate, toDate),
+    fetchActiveHoldPeriods(venueId, fromDate, toDate, now.toISOString()),
     fetchVenueSetupTurnaround(venueId),
   ]);
-  if (bookings.error || !bookings.data || unavailable.error || !unavailable.data || venue.error) {
+  if (
+    bookings.error ||
+    !bookings.data ||
+    unavailable.error ||
+    !unavailable.data ||
+    holds.error ||
+    !holds.data ||
+    venue.error
+  ) {
     throw new ValidationError(
       "Could not check the venue's availability.",
-      bookings.error?.message ?? unavailable.error?.message ?? venue.error?.message,
+      bookings.error?.message ?? unavailable.error?.message ?? holds.error?.message ?? venue.error?.message,
     );
   }
   // An unknown venue has no bookings either; 0 and 0 keeps it a no-op.
@@ -389,6 +407,18 @@ export async function getVenueCommitments(
         end: fromDatabaseTime(row.end_time),
         eventRequestId: null,
         reason: row.reason,
+      }),
+    ),
+    ...holds.data.map((row) =>
+      VenueCommitmentSchema.parse({
+        kind: 'hold',
+        venueId: row.venue_id,
+        date: row.date,
+        start: fromDatabaseTime(row.start_time),
+        end: fromDatabaseTime(row.end_time),
+        eventRequestId: row.event_request_id,
+        reason: null,
+        expiresAt: new Date(row.expires_at).toISOString(),
       }),
     ),
   ];

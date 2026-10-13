@@ -23,7 +23,7 @@ const VENUE_SUMMARY_SELECT = 'id, name, max_capacity, is_retired, locations ( id
 
 /** SCRUM-121 AC2: the full venue page, including turnaround values. */
 const VENUE_DETAIL_SELECT =
-  'id, name, max_capacity, is_retired, operating_slots, needs_setup_slot, needs_turnaround_slot, created_at, updated_at, locations ( id, name ), venue_facilities ( facilities ( id, name ) ), venue_accessibility_features ( accessibility_features ( id, name ) ), venue_layouts ( layout, capacity )';
+  'id, name, max_capacity, is_retired, operating_slots, needs_setup_slot, needs_turnaround_slot, setup_minutes, turnaround_minutes, created_at, updated_at, locations ( id, name ), venue_facilities ( facilities ( id, name ) ), venue_accessibility_features ( accessibility_features ( id, name ) ), venue_layouts ( layout, capacity )';
 
 // -----------------------------------------------------------------------------
 // Reading the catalogue
@@ -111,12 +111,18 @@ export async function createVenueWithLists(venue: {
  *
  * A field left undefined is not sent and stays as it is. A list that is sent
  * replaces the whole list, so an empty one removes them all (SCRUM-117 AC3).
- * Resolves to 'updated', 'stale', 'not_found' or 'affected_bookings'; the last
- * three write nothing.
+ * Resolves to 'updated', 'stale', 'not_found', 'affected_bookings' or
+ * 'setup_turnaround_clashes'; all but the first write nothing.
  *
  * SCRUM-120 AC2 to AC4: a capacity cut that affects a confirmed future booking
  * resolves to 'affected_bookings' unless `confirmAffectedBookings` is true, in
  * which case the cut is saved together with a notice per affected event.
+ *
+ * SCRUM-225 AC4 and AC5: a setup or turnaround change that makes confirmed
+ * future bookings clash resolves to 'setup_turnaround_clashes' unless
+ * `confirmSetupTurnaroundChange` is true, in which case it is saved together
+ * with a flag on each of those bookings.
+ *
  * `today` is the Singapore date (YYYY-MM-DD) "future" is judged against; left
  * out, the function works out the Singapore date itself.
  */
@@ -133,8 +139,14 @@ export async function saveVenueChanges(
     layouts?: VenueLayoutRow[];
     needsSetupSlot?: boolean;
     needsTurnaroundSlot?: boolean;
+    setupMinutes?: number;
+    turnaroundMinutes?: number;
   },
-  { confirmAffectedBookings = false, today }: { confirmAffectedBookings?: boolean; today?: string } = {},
+  {
+    confirmAffectedBookings = false,
+    confirmSetupTurnaroundChange = false,
+    today,
+  }: { confirmAffectedBookings?: boolean; confirmSetupTurnaroundChange?: boolean; today?: string } = {},
 ) {
   return db().rpc('update_venue', {
     p_venue_id: venueId,
@@ -150,7 +162,10 @@ export async function saveVenueChanges(
       p_accessibility_feature_ids: changes.accessibilityFeatureIds,
     }),
     ...(changes.layouts !== undefined && { p_layouts: changes.layouts }),
+    ...(changes.setupMinutes !== undefined && { p_setup_minutes: changes.setupMinutes }),
+    ...(changes.turnaroundMinutes !== undefined && { p_turnaround_minutes: changes.turnaroundMinutes }),
     p_confirm_affected_bookings: confirmAffectedBookings,
+    p_confirm_setup_turnaround_change: confirmSetupTurnaroundChange,
     ...(today !== undefined && { p_today: today }),
   });
 }
@@ -174,6 +189,40 @@ export async function fetchConfirmedFutureBookings(venueId: string, today: strin
     .gte('date', today);
 }
 
+/**
+ * SCRUM-225 AC4: a venue's confirmed bookings on or after `today` (a Singapore
+ * date), each with its own times and its event, for working out which ones a
+ * setup or turnaround change would make clash.
+ */
+export async function fetchConfirmedFutureBookingTimes(venueId: string, today: string) {
+  return db()
+    .from('venue_booking')
+    .select('id, date, start_time, end_time, event_request:event_request_id!inner (id, reference, name)')
+    .eq('venue_id', venueId)
+    .eq('status', 'confirmed')
+    .gte('date', today)
+    .order('date')
+    .order('start_time');
+}
+
+/**
+ * SCRUM-225 AC5: the venue's bookings flagged by a setup or turnaround change
+ * that are still confirmed and on or after `today`, with the values that
+ * flagged them. A booking flagged twice comes back twice; the service keeps
+ * the latest.
+ */
+export async function fetchSetupTurnaroundAffectedBookings(venueId: string, today: string) {
+  return db()
+    .from('setup_turnaround_affected_booking')
+    .select(
+      'setup_minutes, turnaround_minutes, flagged_at, venue_booking!inner (id, date, start_time, end_time, status, event_request:event_request_id!inner (id, reference, name))',
+    )
+    .eq('venue_id', venueId)
+    .eq('venue_booking.status', 'confirmed')
+    .gte('venue_booking.date', today)
+    .order('flagged_at', { ascending: false });
+}
+
 // -----------------------------------------------------------------------------
 // SCRUM-239: searching by date and time (was SCRUM-128, by slot)
 // -----------------------------------------------------------------------------
@@ -189,18 +238,6 @@ export async function fetchSearchableVenues() {
     .select('id, name, max_capacity, is_retired, opens_at, closes_at, locations ( id, name )')
     .eq('is_retired', false)
     .order('name');
-}
-
-/**
- * SCRUM-154 AC4 and AC5: one venue's slots recorded as unavailable on the
- * given dates. The reason is not read: the refusal names the slot only.
- */
-export async function fetchUnavailableSlotsForVenue(venueId: string, dates: readonly string[]) {
-  return db()
-    .from('venue_unavailable_slot')
-    .select('date, slot')
-    .eq('venue_id', venueId)
-    .in('date', [...dates]);
 }
 
 // -----------------------------------------------------------------------------

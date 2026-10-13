@@ -177,7 +177,7 @@ describe('getVenueCommitments against the database: SCRUM-226 setup and turnarou
     return venue;
   }
 
-  it('TC-226-01..05: a confirmed 10:00-12:00 booking occupies 09:30-12:45', async () => {
+  it('TC-226-01..05: a confirmed 10:00-12:00 booking commits 09:30-12:45', async () => {
     const venue = await createCardVenue('Venue V');
     const date = daysFromToday(50);
     const eventId = await book(venue.id, date, 'am', { start: '10:00', end: '12:00' });
