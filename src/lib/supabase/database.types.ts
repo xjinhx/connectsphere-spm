@@ -1078,14 +1078,14 @@ export type Database = {
       create_venue: {
         Args: {
           p_accessibility_feature_ids: string[]
+          p_closes_at?: string
           p_facility_ids: string[]
           p_layouts: Json
           p_location_id: string
           p_max_capacity: number
           p_name: string
-          p_closes_at?: string
-          p_operating_slots: string[]
           p_opens_at?: string
+          p_operating_slots: string[]
         }
         Returns: string
       }
