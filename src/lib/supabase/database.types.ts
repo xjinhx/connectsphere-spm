@@ -886,31 +886,37 @@ export type Database = {
         Row: {
           coordinator_id: string
           created_at: string
+          end_time: string | null
           event_request_id: string
           id: string
           reason: string
           slot_date: string
-          slots: string[]
+          slots: string[] | null
+          start_time: string | null
           venue_id: string
         }
         Insert: {
           coordinator_id: string
           created_at?: string
+          end_time?: string | null
           event_request_id: string
           id?: string
           reason: string
           slot_date: string
-          slots: string[]
+          slots?: string[] | null
+          start_time?: string | null
           venue_id: string
         }
         Update: {
           coordinator_id?: string
           created_at?: string
+          end_time?: string | null
           event_request_id?: string
           id?: string
           reason?: string
           slot_date?: string
-          slots?: string[]
+          slots?: string[] | null
+          start_time?: string | null
           venue_id?: string
         }
         Relationships: [
@@ -938,7 +944,7 @@ export type Database = {
           id: string
           reason: string
           recorded_by: string | null
-          slot: string
+          slot: string | null
           start_time: string
           venue_id: string
         }
@@ -949,7 +955,7 @@ export type Database = {
           id?: string
           reason: string
           recorded_by?: string | null
-          slot: string
+          slot?: string | null
           start_time: string
           venue_id: string
         }
@@ -960,7 +966,7 @@ export type Database = {
           id?: string
           reason?: string
           recorded_by?: string | null
-          slot?: string
+          slot?: string | null
           start_time?: string
           venue_id?: string
         }
@@ -1039,10 +1045,14 @@ export type Database = {
         Row: {
           booking_id: string | null
           coordinator_id: string | null
+          end_time: string | null
           event_request_id: string | null
           reason: string | null
           slot: string | null
           slot_date: string | null
+          start_time: string | null
+          unavailable_end_time: string | null
+          unavailable_start_time: string | null
           venue_id: string | null
         }
         Relationships: [
@@ -1093,12 +1103,13 @@ export type Database = {
         Returns: Json
       }
       is_quarter_hour: { Args: { p_time: string }; Returns: boolean }
-      mark_slots_unavailable: {
+      mark_period_unavailable: {
         Args: {
+          p_date: string
+          p_end: string
           p_reason: string
           p_recorded_by: string
-          p_slot_date: string
-          p_slots: string[]
+          p_start: string
           p_today?: string
           p_venue_id: string
         }
