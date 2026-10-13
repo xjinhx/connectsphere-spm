@@ -157,7 +157,8 @@ export default function AddEquipmentForm() {
         <FieldError messages={fieldErrors.currentLocation} />
       </label>
 
-      {error ? (
+      {/* The summary repeats the first field error, so show it only when no field owns the problem. */}
+      {error && Object.keys(fieldErrors).length === 0 ? (
         <p role="alert" className="text-sm text-[var(--danger)]">
           {error}
         </p>
