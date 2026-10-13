@@ -50,6 +50,19 @@ _Avoid_: tentative booking, reservation, provisional booking
 An open item on an event that its coordinator must deal with, such as releasing or replacing an affected booking. It closes when that is done.
 _Avoid_: task, alert
 
+### Equipment
+
+**Equipment catalogue**:
+The record of the equipment ConnectSphere owns, maintained by Technical Support Staff: each item with its name, category, quantity held, current location and operational status (SCRUM-240, customer clarifications #2, #9, #13, #23). It says what exists, not what is free on a date.
+_Avoid_: equipment list, inventory, stock list
+
+**Catalogue item**:
+One line of the equipment catalogue. It is what a coordinator's equipment requirement names (SCRUM-240 AC5), and is kept apart from the free-text equipment an Event Organiser types on an event request (SCRUM-80).
+
+**Operational status**:
+Whether a catalogue item can be used: _Available_, _Unavailable_, _Damaged_ or _Under maintenance_ (SCRUM-240 AC2, customer clarification #23). A property of the item itself, not of a date — a Damaged item can still be named by a requirement.
+_Avoid_: condition, state, availability (that word is for a venue on a date)
+
 ### Access
 
 **Anyone with access** (to an event):
