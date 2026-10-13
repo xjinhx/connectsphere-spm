@@ -6,12 +6,8 @@ import { listUpcomingUnavailableSlots } from '@/domain/availability/service';
 import { SLOT_NAMES } from '@/domain/availability/schema';
 import { NotFoundError } from '@/domain/shared/errors';
 import { formatSingaporeDate } from '@/domain/shared/dates';
-import {
-  OPERATING_SLOTS,
-  OPERATING_SLOT_LABELS,
-  ROOM_LAYOUT_LABELS,
-  type VenueDetail,
-} from '@/domain/venues/schema';
+import { ROOM_LAYOUT_LABELS, type VenueDetail } from '@/domain/venues/schema';
+import { formatClockRange } from '@/domain/shared/times';
 import { getCurrentActor } from '@/lib/auth/currentActor';
 import NoVenueAccess from '@/components/venue/NoVenueAccess';
 import { MarkSlotsUnavailableForm } from '@/components/venue/MarkSlotsUnavailableForm';
@@ -21,7 +17,8 @@ import { formatExpiry } from '@/domain/venue-hold/policy';
 
 /**
  * SCRUM-121 AC2: opening a venue shows its location, capacities, supported
- * layouts, facilities, accessibility features, operating slots and turnaround
+ * layouts, facilities, accessibility features, opening hours (SCRUM-239 AC1,
+ * in place of operating slots) and turnaround
  * values.
  *
  * SCRUM-225 AC1 and AC3: the setup and turnaround times, in minutes, shown to
@@ -119,23 +116,11 @@ export default async function VenueDetailPage({ params }: { params: Promise<{ id
         <Row label="Location">{venue.location.name}</Row>
         <Row label="Maximum capacity">{venue.maxCapacity}</Row>
 
-        {/* SCRUM-116 AC4: the selected slots apply identically to every day, so all
-            three are listed and an unselected slot is shown as not operating
-            rather than silently left out (US-11.1-TC05a). */}
-        <Row label="Operating slots">
-          <p className="mb-1 text-[var(--text-muted)]">Applies to every day of the week.</p>
-          <ul>
-            {OPERATING_SLOTS.map((slot) => (
-              <li key={slot}>
-                {OPERATING_SLOT_LABELS[slot]}:{' '}
-                {venue.operatingSlots.includes(slot) ? (
-                  <span className="text-[var(--success)]">Operating</span>
-                ) : (
-                  <span className="text-[var(--text-muted)]">Not operating</span>
-                )}
-              </li>
-            ))}
-          </ul>
+        {/* SCRUM-239 AC1: the opening hours replace SCRUM-116 AC4's operating
+            slots, and apply to every day of the week. */}
+        <Row label="Opening hours">
+          <p>{formatClockRange({ start: venue.opensAt, end: venue.closesAt })}</p>
+          <p className="text-[var(--text-muted)]">Applies to every day of the week.</p>
         </Row>
 
         <Row label="Supported layouts">

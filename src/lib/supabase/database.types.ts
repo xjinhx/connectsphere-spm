@@ -1073,7 +1073,9 @@ export type Database = {
           p_location_id: string
           p_max_capacity: number
           p_name: string
+          p_closes_at?: string
           p_operating_slots: string[]
+          p_opens_at?: string
         }
         Returns: string
       }
@@ -1107,6 +1109,7 @@ export type Database = {
       update_venue: {
         Args: {
           p_accessibility_feature_ids?: string[]
+          p_closes_at?: string
           p_confirm_affected_bookings?: boolean
           p_confirm_setup_turnaround_change?: boolean
           p_expected_updated_at: string
@@ -1117,6 +1120,7 @@ export type Database = {
           p_name?: string
           p_needs_setup_slot?: boolean
           p_needs_turnaround_slot?: boolean
+          p_opens_at?: string
           p_operating_slots?: string[]
           p_setup_minutes?: number
           p_today?: string
