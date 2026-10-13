@@ -547,4 +547,11 @@ switch them the next time they edit those files.
   `widenedWindow`). Re-run `tests/unit/venue-commitments.test.ts` and
   `tests/integration/venue-commitments.test.ts` (the SCRUM-226 cases) and
   SCRUM-226's manual test cases, then remove the markers.
-- **Status:** Active
+- **Status:** Replaced (SCRUM-226, branch `setup-turnaround-occupied`, once
+  SCRUM-225 merged). `getVenueCommitments` now calls SCRUM-225's
+  `committedMinutes` (`src/domain/venues/policy.ts`), kept within the day by
+  `committedPeriod`; `occupiedPeriodDummy.ts` is deleted and the markers are
+  removed. Venue Staff set the minutes through SCRUM-225's venue form. Re-checked
+  with `tests/unit/venue-commitments.test.ts`,
+  `tests/integration/venue-commitments.test.ts` and SCRUM-226's manual test
+  cases.

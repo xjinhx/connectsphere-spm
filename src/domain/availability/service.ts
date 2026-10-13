@@ -14,9 +14,17 @@ import { formatSingaporeDate, todayInSingapore, type ISODate } from '@/domain/sh
 import { getVenue } from '@/domain/venues/service';
 import { notifyBestEffort } from '@/domain/notification/service';
 import { OPERATING_SLOTS, OperatingSlotSchema, type OperatingSlot } from '@/domain/venues/schema';
-import { END_OF_DAY, fromDatabaseTime, splitDateTime, type SingaporeDateTime } from '@/domain/shared/times';
-// DUMMY(SCRUM-225) D-17: swap for SCRUM-225's committed-time rule once merged.
-import { occupiedPeriod, type SetupTurnaround } from './occupiedPeriodDummy';
+import {
+  END_OF_DAY,
+  fromDatabaseTime,
+  fromMinutes,
+  splitDateTime,
+  toMinutes,
+  type ClockRange,
+  type SingaporeDateTime,
+} from '@/domain/shared/times';
+// SCRUM-225's committed-time rule, which SCRUM-226 applies to every check.
+import { committedMinutes, type SetupTurnaround } from '@/domain/venues/policy';
 import { affectedBookingMessage, commitmentsInRange, findNonOperatingSlots, toCommittedPeriods } from './policy';
 import {
   BookingOnUnavailableSlotSchema,
@@ -312,7 +320,7 @@ export async function listUpcomingUnavailableSlots(
  *
  * SCRUM-226: setup and turnaround are committed, applied here so no caller adds
  * them. Two things widen, both by the venue's setup before and turnaround after
- * (SCRUM-225's rule, occupiedPeriod):
+ * (SCRUM-225's committedMinutes):
  *   - each confirmed booking, so 10:00-12:00 with 30 min setup and 45 min
  *     turnaround is returned as 09:30-12:45 (AC4, the calendar shows that);
  *   - the range asked about, because the new booking needs its own setup and
@@ -390,7 +398,7 @@ export async function getVenueCommitments(
         venueId: row.venue_id,
         date: row.date,
         // SCRUM-226 AC1-AC4: the booking plus its setup and turnaround.
-        ...occupiedPeriod(
+        ...committedPeriod(
           { start: fromDatabaseTime(row.start_time), end: fromDatabaseTime(row.end_time) },
           setupTurnaround,
         ),
@@ -427,6 +435,16 @@ export async function getVenueCommitments(
 }
 
 /**
+ * SCRUM-225's committed time as clock times on one date. committedMinutes can
+ * run before 00:00 or past 24:00; a commitment stays within its date (opening
+ * hours end by 24:00, PO 8 Oct 2026), so the ends are kept inside the day.
+ */
+function committedPeriod(range: ClockRange, venue: SetupTurnaround): ClockRange {
+  const { start, end } = committedMinutes(range, venue);
+  return { start: fromMinutes(Math.max(0, start)), end: fromMinutes(Math.min(toMinutes(END_OF_DAY), end)) };
+}
+
+/**
  * SCRUM-226 AC5: the range asked about, plus the new booking's own setup
  * before its start and turnaround after its end. Each end is widened on its
  * own date, so a window spanning several days (the calendar) keeps its days.
@@ -438,9 +456,9 @@ function widenedWindow(
 ): { start: SingaporeDateTime; end: SingaporeDateTime } {
   const from = splitDateTime(start);
   const to = splitDateTime(end);
-  const widenedStart = occupiedPeriod({ start: from.time, end: END_OF_DAY }, venue).start;
+  const widenedStart = committedPeriod({ start: from.time, end: END_OF_DAY }, venue).start;
   // An end of 00:00 closes the window at the start of that day: nothing to widen.
-  const widenedEnd = to.time === '00:00' ? to.time : occupiedPeriod({ start: '00:00', end: to.time }, venue).end;
+  const widenedEnd = to.time === '00:00' ? to.time : committedPeriod({ start: '00:00', end: to.time }, venue).end;
   return { start: `${from.date}T${widenedStart}`, end: `${to.date}T${widenedEnd}` };
 }
 
