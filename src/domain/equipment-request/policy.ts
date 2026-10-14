@@ -1,4 +1,7 @@
+import { isCurrentCoordinator } from '@/domain/assignment/policy';
 import type { EventRequestStatus } from '@/domain/event-request/schema';
+import { isActionPermitted } from '@/domain/identity/permissions';
+import type { Role } from '@/domain/identity/roles';
 
 /**
  * Equipment request rules (SCRUM-160 Record the equipment an event needs).
@@ -37,4 +40,23 @@ export function linesOfSameType<T extends { id: string; equipmentId: string }>(
   added: { id: string; equipmentId: string },
 ): T[] {
   return lines.filter((line) => line.id !== added.id && line.equipmentId === added.equipmentId);
+}
+
+/**
+ * Who may open an event's equipment request.
+ *
+ * AC6: "Given technical requirements have been entered, when Technical Support
+ * Staff open the request, then the notes are displayed with the equipment
+ * list" - they hold equipment_request_view. The event's assigned coordinator,
+ * who records it, may open it too. Nobody else: access follows role and
+ * relationship to the event (customer clarification #91), so a coordinator the
+ * event is not assigned to is refused, as for every edit (AC4).
+ */
+export function canViewEquipmentRequest(
+  actor: { userId: string; roles: readonly Role[] },
+  eventCoordinatorId: string | null,
+): boolean {
+  return (
+    isActionPermitted(actor.roles, 'equipment_request_view') || isCurrentCoordinator(eventCoordinatorId, actor.userId)
+  );
 }

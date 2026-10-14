@@ -53,6 +53,10 @@ export const ACTIONS = [
   // coordinator, AC4) needs the event, so it is in the service, the same split
   // as venue_booking_request.
   'equipment_request',
+  // SCRUM-160 AC6 — "when Technical Support Staff open the request, then the
+  // notes are displayed with the equipment list". Reading only: recording and
+  // changing the request stays equipment_request, the coordinator's.
+  'equipment_request_view',
 ] as const;
 
 export type Action = (typeof ACTIONS)[number];
@@ -84,7 +88,8 @@ export const ROLE_PERMISSIONS: Record<Role, readonly Action[]> = {
   ],
   operations_manager: ['venue_catalogue_view', 'coordinator_assignment', 'account_role_management'],
   venue_staff: ['venue_administration', 'venue_catalogue_view'],
-  technical_support: ['venue_catalogue_view', 'equipment_administration'],
+  // SCRUM-160 AC6: open an event's equipment request to see what to arrange.
+  technical_support: ['venue_catalogue_view', 'equipment_administration', 'equipment_request_view'],
   attendee: [],
 };
 

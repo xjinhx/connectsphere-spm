@@ -1,5 +1,5 @@
 import { describe, expect, it } from 'vitest';
-import { acceptsEquipmentRequest, linesOfSameType } from '@/domain/equipment-request/policy';
+import { acceptsEquipmentRequest, canViewEquipmentRequest, linesOfSameType } from '@/domain/equipment-request/policy';
 import {
   AddEquipmentLineInputSchema,
   SaveTechnicalRequirementsInputSchema,
@@ -128,5 +128,25 @@ describe('AC5: technical requirements are stored as typed', () => {
   it('refuses more than 1000 characters', () => {
     expect(save('x'.repeat(1000)).success).toBe(true);
     expect(save('x'.repeat(1001)).success).toBe(false);
+  });
+});
+
+describe('AC6: who may open an equipment request', () => {
+  const ASSIGNED = 'aaaaaaaa-aaaa-4aaa-8aaa-aaaaaaaaaaaa';
+  const OTHER = 'bbbbbbbb-bbbb-4bbb-8bbb-bbbbbbbbbbbb';
+
+  it('TC-160-16 lets Technical Support Staff open any event\'s request', () => {
+    expect(canViewEquipmentRequest({ userId: OTHER, roles: ['technical_support'] }, ASSIGNED)).toBe(true);
+  });
+
+  it("lets the event's assigned coordinator open it", () => {
+    expect(canViewEquipmentRequest({ userId: ASSIGNED, roles: ['coordinator'] }, ASSIGNED)).toBe(true);
+  });
+
+  it('refuses a coordinator the event is not assigned to, and every other role', () => {
+    expect(canViewEquipmentRequest({ userId: OTHER, roles: ['coordinator'] }, ASSIGNED)).toBe(false);
+    for (const role of ['venue_staff', 'event_organiser', 'attendee', 'operations_manager'] as const) {
+      expect(canViewEquipmentRequest({ userId: OTHER, roles: [role] }, ASSIGNED)).toBe(false);
+    }
   });
 });

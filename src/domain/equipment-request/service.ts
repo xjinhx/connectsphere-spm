@@ -13,7 +13,12 @@ import {
   updateEquipmentRequestLineQuantity,
   upsertTechnicalRequirements,
 } from '@/lib/supabase/equipmentRequests';
-import { EVENT_NOT_OPEN_FOR_EQUIPMENT_MESSAGE, acceptsEquipmentRequest, linesOfSameType } from './policy';
+import {
+  EVENT_NOT_OPEN_FOR_EQUIPMENT_MESSAGE,
+  acceptsEquipmentRequest,
+  canViewEquipmentRequest,
+  linesOfSameType,
+} from './policy';
 import {
   AddEquipmentLineInputSchema,
   AddEquipmentLineOutcomeSchema,
@@ -138,14 +143,21 @@ async function readLines(eventRequestId: string): Promise<EquipmentRequestLine[]
  * from the stored rows (TC-160-01: "still shows after the reload"), with its
  * technical requirements (AC5).
  *
- * Open to the event's assigned coordinator.
+ * AC6: Technical Support Staff open it to see the notes with the equipment
+ * list (TC-160-16); a request with no notes still shows its list
+ * (TC-160-17), and each request shows only its own notes (TC-160-18). The
+ * event's assigned coordinator may open it too (canViewEquipmentRequest).
+ *
+ * canEdit is true only for the assigned coordinator while the event is
+ * Approved or in Planning, the same rules every edit applies, so the page
+ * never offers an edit the API would refuse. Technical Support Staff read it.
  */
 export async function getEquipmentRequest(eventRequestId: string, actor: Actor): Promise<EquipmentRequestView> {
   const event = await readEvent(eventRequestId);
-  const isCoordinator = isCurrentCoordinator(event.coordinator_id, actor.userId);
-  if (!isCoordinator) {
-    throw new ForbiddenError("Only the event's assigned coordinator can view its equipment request.");
+  if (!canViewEquipmentRequest(actor, event.coordinator_id)) {
+    throw new ForbiddenError("Only Technical Support Staff and the event's assigned coordinator can view its equipment request.");
   }
+  const isCoordinator = isCurrentCoordinator(event.coordinator_id, actor.userId);
 
   return EquipmentRequestViewSchema.parse({
     eventRequestId: event.id,
@@ -155,7 +167,7 @@ export async function getEquipmentRequest(eventRequestId: string, actor: Actor):
     proposedDate: event.proposed_date,
     lines: await readLines(event.id),
     technicalRequirements: await readTechnicalRequirements(event.id),
-    canEdit: acceptsEquipmentRequest(event.status),
+    canEdit: isCoordinator && acceptsEquipmentRequest(event.status),
   });
 }
 

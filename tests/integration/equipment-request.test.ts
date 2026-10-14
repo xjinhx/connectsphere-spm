@@ -41,6 +41,9 @@ import { ensureTestClientOrganisation, TEST_CLIENT_ORGANISATION_ID } from './fix
  *   AC5 "Given I am editing an equipment request, when I enter free-text
  *        technical requirements and save, then the notes are stored with the
  *        request."
+ *   AC6 "Given technical requirements have been entered, when Technical
+ *        Support Staff open the request, then the notes are displayed with the
+ *        equipment list."
  *   AC7 "Given an equipment item has not yet been reserved, when I change its
  *        quantity or remove it, then the change is saved immediately."
  *
@@ -287,9 +290,12 @@ describe('SCRUM-160 AC3: adding the same equipment type again', () => {
     const stored = await storedLines(event);
     expect(stored.map((line) => line.quantity)).toEqual([2, 3]);
     expect(stored.every((line) => line.equipment_id === projector)).toBe(true);
-    // And a fresh read of the request shows both, still apart.
-    const request = await getEquipmentRequest(event, coordinatorA);
-    expect(request.lines.map((line) => line.quantity)).toEqual([2, 3]);
+    // And a fresh read of the request shows both, still apart, to the
+    // coordinator and to Technical Support Staff.
+    for (const viewer of [coordinatorA, technicalSupport]) {
+      const request = await getEquipmentRequest(event, viewer);
+      expect(request.lines.map((line) => line.quantity)).toEqual([2, 3]);
+    }
   });
 
   it('TC-160-09 shows no existing line when a different type is added', async () => {
@@ -417,6 +423,58 @@ describe('SCRUM-160 AC5: technical requirements', () => {
     await saveTechnicalRequirements(event, coordinatorA.userId, { technicalRequirements: 'Rear projection only' });
 
     expect(await storedLines(event)).toEqual([{ id: line.id, equipment_id: projector, quantity: 2 }]);
+  });
+});
+
+// -----------------------------------------------------------------------------
+// AC6 — Technical Support Staff see the notes with the equipment list
+// -----------------------------------------------------------------------------
+
+describe('SCRUM-160 AC6: Technical Support Staff open the request', () => {
+  it('TC-160-16 shows both lines with their quantities and the notes, together', async () => {
+    const event = await createEvent('planning');
+    await addEquipmentLine(event, coordinatorA.userId, { equipmentId: projector, quantity: 2 });
+    await addEquipmentLine(event, coordinatorA.userId, { equipmentId: wirelessMic, quantity: 4 });
+    const notes = 'HDMI to the stage lectern; 2 handheld mics with spare batteries';
+    await saveTechnicalRequirements(event, coordinatorA.userId, { technicalRequirements: notes });
+
+    const request = await getEquipmentRequest(event, technicalSupport);
+
+    expect(request.lines).toMatchObject([
+      { equipmentName: `Projector P-100 ${RUN}`, quantity: 2 },
+      { equipmentName: `Wireless mic WM-3 ${RUN}`, quantity: 4 },
+    ]);
+    expect(request.technicalRequirements).toBe(notes);
+    // Read-only for them: recording it is the coordinator's.
+    expect(request.canEdit).toBe(false);
+  });
+
+  it('TC-160-17 shows the list of a request with no notes, and the notes as empty', async () => {
+    const event = await createEvent('approved');
+    await addEquipmentLine(event, coordinatorA.userId, { equipmentId: wirelessMic, quantity: 4 });
+
+    const request = await getEquipmentRequest(event, technicalSupport);
+
+    expect(request.lines).toMatchObject([{ equipmentName: `Wireless mic WM-3 ${RUN}`, quantity: 4 }]);
+    expect(request.technicalRequirements).toBeNull();
+  });
+
+  it('TC-160-18 shows each request only its own notes', async () => {
+    const first = await createEvent('planning');
+    const second = await createEvent('planning');
+    await saveTechnicalRequirements(first, coordinatorA.userId, { technicalRequirements: 'Outdoor, need weatherproof covers' });
+    await saveTechnicalRequirements(second, coordinatorA.userId, { technicalRequirements: 'HDMI to lectern' });
+
+    expect((await getEquipmentRequest(first, technicalSupport)).technicalRequirements).toBe(
+      'Outdoor, need weatherproof covers',
+    );
+    expect((await getEquipmentRequest(second, technicalSupport)).technicalRequirements).toBe('HDMI to lectern');
+  });
+
+  it('refuses a coordinator the event is not assigned to', async () => {
+    const event = await createEvent('planning');
+
+    await expect(getEquipmentRequest(event, coordinatorB)).rejects.toMatchObject({ code: 'FORBIDDEN' });
   });
 });
 
