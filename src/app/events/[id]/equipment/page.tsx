@@ -1,7 +1,9 @@
 import Link from 'next/link';
 import { notFound } from 'next/navigation';
+import AddEquipmentLineForm from '@/components/equipment-request/AddEquipmentLineForm';
 import { EventRequestStatusBadge } from '@/components/event-request/EventRequestStatusBadge';
 import { EQUIPMENT_CATEGORY_LABELS } from '@/domain/equipment/schema';
+import { listEquipmentOptions } from '@/domain/equipment/service';
 import type { EquipmentRequestView } from '@/domain/equipment-request/schema';
 import { getEquipmentRequest } from '@/domain/equipment-request/service';
 import { isActionPermitted } from '@/domain/identity/permissions';
@@ -57,6 +59,10 @@ export default async function EventEquipmentRequestPage({ params }: { params: Pr
       ? { href: '/equipment-queue', label: '← Equipment requests' }
       : { href: `/events/${id}/review`, label: '← Back to the event' };
 
+  // AC1: the catalogue the coordinator chooses from (SCRUM-240 AC5). Read only
+  // when the add form will render.
+  const options = request.canEdit ? await listEquipmentOptions() : [];
+
   return (
     <main className="mx-auto max-w-3xl px-4 py-8">
       <Link href={backLink.href} className="text-sm text-[var(--brand)] hover:underline">
@@ -111,6 +117,13 @@ export default async function EventEquipmentRequestPage({ params }: { params: Pr
           </div>
         )}
       </section>
+
+      {request.canEdit ? (
+        <section className="mt-6 rounded-lg border border-[var(--border)] bg-[var(--surface)] p-4">
+          <h2 className="mb-3 text-sm font-semibold">Add equipment</h2>
+          <AddEquipmentLineForm eventRequestId={request.eventRequestId} options={options} />
+        </section>
+      ) : null}
 
       {/* AC6: the notes, shown with the equipment list. Kept as typed, line
           breaks included (AC5, TC-160-14). */}
