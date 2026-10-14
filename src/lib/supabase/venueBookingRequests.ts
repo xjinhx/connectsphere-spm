@@ -112,6 +112,11 @@ export interface BookingRequestRequirementsRow {
   id: string;
   created_at: string;
   requested_by: string;
+  // SCRUM-230: the request's own venue requirements; null is "use the event's".
+  expected_attendance: number | null;
+  room_layout: string | null;
+  accessibility_required: boolean | null;
+  accessibility_notes: string | null;
   event_request: {
     name: string;
     reference: string;
@@ -128,7 +133,7 @@ export async function fetchBookingRequestRequirements(id: string) {
   return db()
     .from('venue_booking_request')
     .select(
-      'id, created_at, requested_by, ' +
+      'id, created_at, requested_by, expected_attendance, room_layout, accessibility_required, accessibility_notes, ' +
         'event_request ( name, reference, expected_attendance, room_layout, accessibility_required, accessibility_notes, ' +
         'event_request_accessibility_features ( accessibility_features ( name ) ) )',
     )

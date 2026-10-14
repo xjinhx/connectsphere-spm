@@ -340,6 +340,11 @@ export interface BookingRequestRequirements {
   accessibilityRequired: boolean | null;
   accessibilityFeatures: readonly { name: string }[];
   accessibilityNotes: string | null;
+  /**
+   * SCRUM-230 AC2, AC3: what the request goes by. Its own venue requirements,
+   * and the event's (the fields above) for any it left empty.
+   */
+  venueRequirements: VenueRequirementsInUse;
 }
 
 // ---------------------------------------------------------------------------

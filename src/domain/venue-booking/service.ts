@@ -36,6 +36,7 @@ import {
   periodClashFieldMessage,
   periodCommittedMessage,
   requestStatusOf,
+  venueRequirementsOf,
   sortBookingQueue,
   type ApprovalConflict,
   type BookingQueueSort,
@@ -718,11 +719,7 @@ export async function getBookingRequestRequirements(requestId: string): Promise<
     throw new ValidationError('The requesting coordinator could not be read.', requesterError.message);
   }
 
-  return {
-    eventName: event.name,
-    eventReference: event.reference,
-    requestedByName: requester?.[0]?.full_name ?? null,
-    requestedAt: row.created_at,
+  const eventRequirements = {
     expectedAttendance: event.expected_attendance,
     roomLayout: event.room_layout,
     accessibilityRequired: event.accessibility_required,
@@ -730,6 +727,24 @@ export async function getBookingRequestRequirements(requestId: string): Promise<
       link.accessibility_features ? [{ name: link.accessibility_features.name }] : [],
     ),
     accessibilityNotes: event.accessibility_notes,
+  };
+
+  return {
+    eventName: event.name,
+    eventReference: event.reference,
+    requestedByName: requester?.[0]?.full_name ?? null,
+    requestedAt: row.created_at,
+    ...eventRequirements,
+    // SCRUM-230 AC2, AC3: the request's own, else the event's.
+    venueRequirements: venueRequirementsOf(
+      {
+        expectedAttendance: row.expected_attendance,
+        roomLayout: row.room_layout,
+        accessibilityRequired: row.accessibility_required,
+        accessibilityNotes: row.accessibility_notes,
+      },
+      eventRequirements,
+    ),
   };
 }
 

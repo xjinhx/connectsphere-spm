@@ -272,6 +272,14 @@ export function venueRequirementsOf(own: OwnVenueRequirements, event: EventVenue
   };
 }
 
+/**
+ * AC2: a value taken from the event is "shown as the event's". One the event
+ * never recorded reads "Not specified" alone (SCRUM-143 AC4).
+ */
+export function markIfEvents(description: string, requirement: { fromEvent: boolean }): string {
+  return requirement.fromEvent && description !== NOT_SPECIFIED ? `${description} (event's)` : description;
+}
+
 // ---------------------------------------------------------------------------
 // SCRUM-149 — Reject a booking request with a reason
 // ---------------------------------------------------------------------------

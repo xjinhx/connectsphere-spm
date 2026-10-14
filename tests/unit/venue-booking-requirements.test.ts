@@ -1,6 +1,6 @@
 import { describe, it, expect } from 'vitest';
 import { CreateVenueBookingRequestInputSchema, venueBookingRequestErrorDetails } from '@/domain/venue-booking/schema';
-import { venueRequirementsOf } from '@/domain/venue-booking/policy';
+import { markIfEvents, venueRequirementsOf } from '@/domain/venue-booking/policy';
 
 /**
  * SCRUM-230 Give each venue booking its own attendance and requirements (Jira,
@@ -116,5 +116,19 @@ describe('venueRequirementsOf: own, or the event\'s (AC2)', () => {
       notes: null,
       fromEvent: false,
     });
+  });
+});
+
+describe('markIfEvents: shown as the event\'s (AC2)', () => {
+  it("marks a value taken from the event (TC-230-03)", () => {
+    expect(markIfEvents('250', { fromEvent: true })).toBe("250 (event's)");
+  });
+
+  it('leaves the request\'s own value unmarked (TC-230-01)', () => {
+    expect(markIfEvents('40', { fromEvent: false })).toBe('40');
+  });
+
+  it('shows one the event never recorded as "Not specified" alone (SCRUM-143 AC4)', () => {
+    expect(markIfEvents('Not specified', { fromEvent: true })).toBe('Not specified');
   });
 });

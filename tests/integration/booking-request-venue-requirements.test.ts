@@ -1,7 +1,7 @@
 import { afterAll, beforeAll, describe, expect, it } from 'vitest';
 import { createAdminClient } from '@/lib/supabase/admin';
 import { createVenue } from '@/domain/venues/service';
-import { submitVenueBookingRequest } from '@/domain/venue-booking/service';
+import { getBookingRequestRequirements, submitVenueBookingRequest } from '@/domain/venue-booking/service';
 import { todayInSingapore } from '@/domain/shared/dates';
 import { ensureTestClientOrganisation } from './fixtures/clientOrganisation';
 
@@ -181,6 +181,58 @@ describe("a request's own venue requirements (SCRUM-230)", () => {
 
     expect(zero.error?.code).toBe('23514');
     expect(notesAlone.error?.code).toBe('23514');
+  });
+});
+
+describe('what Venue Staff see on each request (SCRUM-230 AC2, AC3)', () => {
+  it('AC1: shows the venue requirements entered for it (TC-230-01)', async () => {
+    const eventId = await createEvent();
+    const { id } = await submitVenueBookingRequest(eventId, coordinatorId, {
+      venueId: meetingRoomId,
+      lines: [{ date: daysFromToday(45), start: '10:00', end: '13:00' }],
+      expectedAttendance: 40,
+      roomLayout: 'classroom',
+      accessibilityRequired: true,
+      accessibilityNotes: 'Hearing loop',
+    });
+
+    expect((await getBookingRequestRequirements(id)).venueRequirements).toEqual({
+      expectedAttendance: { value: 40, fromEvent: false },
+      roomLayout: { value: 'classroom', fromEvent: false },
+      accessibility: { required: true, features: [], notes: 'Hearing loop', fromEvent: false },
+    });
+  });
+
+  it("AC2: left empty, shows the event's, marked as the event's (TC-230-03)", async () => {
+    const eventId = await createEvent();
+    const { id } = await submitVenueBookingRequest(eventId, coordinatorId, {
+      venueId: meetingRoomId,
+      lines: [{ date: daysFromToday(46), start: '10:00', end: '13:00' }],
+    });
+
+    expect((await getBookingRequestRequirements(id)).venueRequirements).toEqual({
+      expectedAttendance: { value: 250, fromEvent: true },
+      roomLayout: { value: 'theatre', fromEvent: true },
+      accessibility: { required: true, features: [], notes: 'Wheelchair access', fromEvent: true },
+    });
+  });
+
+  it('AC3: two requests for one event each show their own attendance (TC-230-05)', async () => {
+    const eventId = await createEvent();
+    const date = daysFromToday(47);
+    const ballroom = await submitVenueBookingRequest(eventId, coordinatorId, {
+      venueId: ballroomId,
+      lines: [{ date, start: '10:00', end: '13:00' }],
+      expectedAttendance: 250,
+    });
+    const meetingRoom = await submitVenueBookingRequest(eventId, coordinatorId, {
+      venueId: meetingRoomId,
+      lines: [{ date, start: '10:00', end: '13:00' }],
+      expectedAttendance: 40,
+    });
+
+    expect((await getBookingRequestRequirements(ballroom.id)).venueRequirements.expectedAttendance.value).toBe(250);
+    expect((await getBookingRequestRequirements(meetingRoom.id)).venueRequirements.expectedAttendance.value).toBe(40);
   });
 });
 
