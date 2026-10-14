@@ -808,7 +808,9 @@ export type Database = {
           end_time: string
           event_request_id: string
           expires_at: string
+          expiry_warning_sent_at: string | null
           id: string
+          lapse_notified_at: string | null
           start_time: string
           status: string
           venue_id: string
@@ -821,7 +823,9 @@ export type Database = {
           end_time: string
           event_request_id: string
           expires_at: string
+          expiry_warning_sent_at?: string | null
           id?: string
+          lapse_notified_at?: string | null
           start_time: string
           status?: string
           venue_id: string
@@ -834,7 +838,9 @@ export type Database = {
           end_time?: string
           event_request_id?: string
           expires_at?: string
+          expiry_warning_sent_at?: string | null
           id?: string
+          lapse_notified_at?: string | null
           start_time?: string
           status?: string
           venue_id?: string
@@ -1090,6 +1096,16 @@ export type Database = {
         Args: { p_decided_by: string; p_decisions: Json; p_request_id: string }
         Returns: Json
       }
+      describe_hold_period: {
+        Args: {
+          p_date: string
+          p_end: string
+          p_start: string
+          p_venue_name: string
+        }
+        Returns: string
+      }
+      format_singapore_instant: { Args: { p_instant: string }; Returns: string }
       is_quarter_hour: { Args: { p_time: string }; Returns: boolean }
       mark_slots_unavailable: {
         Args: {
@@ -1102,6 +1118,7 @@ export type Database = {
         }
         Returns: Json
       }
+      notify_hold_expiries: { Args: { p_now?: string }; Returns: number }
       slot_end_time: { Args: { p_slot: string }; Returns: string }
       slot_start_time: { Args: { p_slot: string }; Returns: string }
       update_venue: {
