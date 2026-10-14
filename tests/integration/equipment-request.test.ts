@@ -1,6 +1,6 @@
 import { afterAll, beforeAll, describe, expect, it } from 'vitest';
 import { createAdminClient } from '@/lib/supabase/admin';
-import { assignCoordinator } from '@/domain/assignment/service';
+import { assignCoordinator, reassignCoordinator } from '@/domain/assignment/service';
 import { createEquipmentItem } from '@/domain/equipment/service';
 import {
   addEquipmentLine,
@@ -34,6 +34,9 @@ import { ensureTestClientOrganisation, TEST_CLIENT_ORGANISATION_ID } from './fix
  *        when I save, then a separate line is created and the existing line
  *        is shown to me so that I can merge them if that was my intent; lines
  *        are never merged automatically."
+ *   AC4 "Given I am an Event Coordinator who is not assigned to the event,
+ *        when I invoke an equipment-request edit on it, then it is refused
+ *        and the request is unchanged."
  *   AC7 "Given an equipment item has not yet been reserved, when I change its
  *        quantity or remove it, then the change is saved immediately."
  *
@@ -53,6 +56,8 @@ let manager: Account;
 let organiser: Account;
 let technicalSupport: Account;
 let coordinatorA: Account;
+let coordinatorB: Account;
+let coordinatorC: Account;
 
 let projector: string;
 let wirelessMic: string;
@@ -134,6 +139,8 @@ beforeAll(async () => {
   organiser = await createAccount('organiser', ['event_organiser']);
   technicalSupport = await createAccount('technical-support', ['technical_support']);
   coordinatorA = await createAccount('coordinator-a', ['coordinator']);
+  coordinatorB = await createAccount('coordinator-b', ['coordinator']);
+  coordinatorC = await createAccount('coordinator-c', ['coordinator']);
 
   projector = await addItem('Projector P-100');
   wirelessMic = await addItem('Wireless mic WM-3');
@@ -223,7 +230,7 @@ describe('SCRUM-160 AC2: a quantity of zero or below', () => {
     const event = await createEvent('planning');
     const { line } = await addEquipmentLine(event, coordinatorA.userId, { equipmentId: projector, quantity: 2 });
 
-    await expect(updateEquipmentLineQuantity(event, line.id, { quantity: 0 })).rejects.toMatchObject({
+    await expect(updateEquipmentLineQuantity(event, line.id, coordinatorA.userId, { quantity: 0 })).rejects.toMatchObject({
       code: 'VALIDATION_ERROR',
       message: 'Quantity must be at least one.',
     });
@@ -292,6 +299,56 @@ describe('SCRUM-160 AC3: adding the same equipment type again', () => {
 });
 
 // -----------------------------------------------------------------------------
+// AC4 — a coordinator not assigned to the event is refused
+// -----------------------------------------------------------------------------
+
+describe('SCRUM-160 AC4: a coordinator who is not assigned to the event', () => {
+  it('TC-160-10 cannot add an item, and the request is unchanged', async () => {
+    const event = await createEvent('planning');
+
+    await expect(
+      addEquipmentLine(event, coordinatorB.userId, { equipmentId: projector, quantity: 2 }),
+    ).rejects.toMatchObject({ code: 'FORBIDDEN', message: 'This event is not assigned to you.' });
+    expect(await storedLines(event)).toEqual([]);
+  });
+
+  it('TC-160-11 cannot change a quantity or remove a line, and the line is unchanged', async () => {
+    const event = await createEvent('planning');
+    const { line } = await addEquipmentLine(event, coordinatorA.userId, { equipmentId: projector, quantity: 2 });
+
+    await expect(updateEquipmentLineQuantity(event, line.id, coordinatorB.userId, { quantity: 5 })).rejects.toMatchObject({
+      code: 'FORBIDDEN',
+    });
+    await expect(removeEquipmentLine(event, line.id, coordinatorB.userId)).rejects.toMatchObject({ code: 'FORBIDDEN' });
+    expect(await storedLines(event)).toEqual([{ id: line.id, equipment_id: projector, quantity: 2 }]);
+  });
+
+  it('TC-160-12 refuses a coordinator reassigned away, and lets the new one add', async () => {
+    const event = await createEvent('planning');
+    await reassignCoordinator(event, {
+      coordinatorId: coordinatorC.userId,
+      fromCoordinatorId: coordinatorA.userId,
+      actorId: manager.userId,
+    });
+
+    await expect(
+      addEquipmentLine(event, coordinatorA.userId, { equipmentId: lectern, quantity: 1 }),
+    ).rejects.toMatchObject({ code: 'FORBIDDEN' });
+    await addEquipmentLine(event, coordinatorC.userId, { equipmentId: lectern, quantity: 1 });
+
+    expect(await storedLines(event)).toMatchObject([{ equipment_id: lectern, quantity: 1 }]);
+  });
+
+  it('is refused before the status check: an unassigned coordinator is not told the event is closed', async () => {
+    const event = await createEvent('cancelled');
+
+    await expect(
+      addEquipmentLine(event, coordinatorB.userId, { equipmentId: projector, quantity: 2 }),
+    ).rejects.toMatchObject({ code: 'FORBIDDEN' });
+  });
+});
+
+// -----------------------------------------------------------------------------
 // AC7 — an unreserved item is changed or removed immediately
 // -----------------------------------------------------------------------------
 
@@ -302,8 +359,8 @@ describe('SCRUM-160 AC7: changing or removing an unreserved item', () => {
     const { line: micLine } = await addEquipmentLine(event, coordinatorA.userId, { equipmentId: wirelessMic, quantity: 4 });
 
     // One call each: nothing asks for a confirmation first.
-    await updateEquipmentLineQuantity(event, projectorLine.id, { quantity: 5 });
-    await removeEquipmentLine(event, micLine.id);
+    await updateEquipmentLineQuantity(event, projectorLine.id, coordinatorA.userId, { quantity: 5 });
+    await removeEquipmentLine(event, micLine.id, coordinatorA.userId);
 
     expect(await storedLines(event)).toEqual([{ id: projectorLine.id, equipment_id: projector, quantity: 5 }]);
   });
@@ -312,7 +369,7 @@ describe('SCRUM-160 AC7: changing or removing an unreserved item', () => {
     const event = await createEvent('planning');
     const { line } = await addEquipmentLine(event, coordinatorA.userId, { equipmentId: projector, quantity: 5 });
 
-    const changed = await updateEquipmentLineQuantity(event, line.id, { quantity: 3 });
+    const changed = await updateEquipmentLineQuantity(event, line.id, coordinatorA.userId, { quantity: 3 });
 
     expect(changed.quantity).toBe(3);
     expect(await storedLines(event)).toMatchObject([{ id: line.id, quantity: 3 }]);
@@ -323,8 +380,8 @@ describe('SCRUM-160 AC7: changing or removing an unreserved item', () => {
     const other = await createEvent('planning');
     const { line } = await addEquipmentLine(other, coordinatorA.userId, { equipmentId: projector, quantity: 2 });
 
-    await expect(updateEquipmentLineQuantity(event, line.id, { quantity: 9 })).rejects.toMatchObject({ code: 'NOT_FOUND' });
-    await expect(removeEquipmentLine(event, line.id)).rejects.toMatchObject({ code: 'NOT_FOUND' });
+    await expect(updateEquipmentLineQuantity(event, line.id, coordinatorA.userId, { quantity: 9 })).rejects.toMatchObject({ code: 'NOT_FOUND' });
+    await expect(removeEquipmentLine(event, line.id, coordinatorA.userId)).rejects.toMatchObject({ code: 'NOT_FOUND' });
     expect(await storedLines(other)).toMatchObject([{ id: line.id, quantity: 2 }]);
   });
 });

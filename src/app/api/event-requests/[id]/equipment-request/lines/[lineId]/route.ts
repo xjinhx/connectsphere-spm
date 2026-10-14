@@ -23,7 +23,7 @@ export async function PATCH(req: NextRequest, { params }: Params) {
     const actor = await getCurrentActor();
     assertPermission(actor.roles, 'equipment_request');
     const body = await req.json();
-    return NextResponse.json(await updateEquipmentLineQuantity(id, lineId, body));
+    return NextResponse.json(await updateEquipmentLineQuantity(id, lineId, actor.userId, body));
   } catch (error) {
     return handleApiError(error);
   }
@@ -34,7 +34,7 @@ export async function DELETE(_req: NextRequest, { params }: Params) {
     const { id, lineId } = await params;
     const actor = await getCurrentActor();
     assertPermission(actor.roles, 'equipment_request');
-    await removeEquipmentLine(id, lineId);
+    await removeEquipmentLine(id, lineId, actor.userId);
     return new NextResponse(null, { status: 204 });
   } catch (error) {
     return handleApiError(error);

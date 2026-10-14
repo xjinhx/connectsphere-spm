@@ -86,9 +86,26 @@ async function readEvent(eventRequestId: string): Promise<EventRequestRow> {
   return data as unknown as EventRequestRow;
 }
 
-/** The event, refused unless it is still open to equipment request edits (AC1's statuses). */
-async function readOpenEvent(eventRequestId: string): Promise<EventRequestRow> {
+export const NOT_ASSIGNED_MESSAGE = 'This event is not assigned to you.';
+
+/**
+ * The event, refused unless `actorId` may edit its equipment request now.
+ *
+ * AC4: "Given I am an Event Coordinator who is not assigned to the event, when
+ * I invoke an equipment-request edit on it, then it is refused and the request
+ * is unchanged." Checked against the event's current coordinator, so one
+ * reassigned away is refused too (TC-160-12). Every edit - add, change, remove
+ * - comes through here before anything is written.
+ *
+ * Refused before AC1's status check, the same order as SCRUM-142's
+ * submitVenueBookingRequest: a coordinator the event is not assigned to learns
+ * nothing about it, not even its status.
+ */
+async function readEventForEdit(eventRequestId: string, actorId: string): Promise<EventRequestRow> {
   const event = await readEvent(eventRequestId);
+  if (!isCurrentCoordinator(event.coordinator_id, actorId)) {
+    throw new ForbiddenError(NOT_ASSIGNED_MESSAGE);
+  }
   if (!acceptsEquipmentRequest(event.status)) {
     throw new ValidationError(EVENT_NOT_OPEN_FOR_EQUIPMENT_MESSAGE);
   }
@@ -154,7 +171,7 @@ export async function addEquipmentLine(
   actorId: string,
   input: unknown,
 ): Promise<AddEquipmentLineOutcome> {
-  const event = await readOpenEvent(eventRequestId);
+  const event = await readEventForEdit(eventRequestId, actorId);
 
   const parsed = AddEquipmentLineInputSchema.safeParse(input);
   if (!parsed.success) throw validationError(parsed.error, 'The equipment item is not valid.');
@@ -201,9 +218,10 @@ function parseLineId(lineId: string): string {
 export async function updateEquipmentLineQuantity(
   eventRequestId: string,
   lineId: string,
+  actorId: string,
   input: unknown,
 ): Promise<EquipmentRequestLine> {
-  const event = await readOpenEvent(eventRequestId);
+  const event = await readEventForEdit(eventRequestId, actorId);
   const id = parseLineId(lineId);
 
   const parsed = UpdateEquipmentLineInputSchema.safeParse(input);
@@ -222,8 +240,8 @@ export async function updateEquipmentLineQuantity(
  * AC7: "Given an equipment item has not yet been reserved, when I ... remove
  * it, then the change is saved immediately" (TC-160-19).
  */
-export async function removeEquipmentLine(eventRequestId: string, lineId: string): Promise<void> {
-  const event = await readOpenEvent(eventRequestId);
+export async function removeEquipmentLine(eventRequestId: string, lineId: string, actorId: string): Promise<void> {
+  const event = await readEventForEdit(eventRequestId, actorId);
   const id = parseLineId(lineId);
 
   const { data, error } = await deleteEquipmentRequestLine(event.id, id);
