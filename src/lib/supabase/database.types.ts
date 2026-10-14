@@ -82,6 +82,42 @@ export type Database = {
         }
         Relationships: []
       }
+      equipment: {
+        Row: {
+          category: string
+          created_at: string
+          created_by: string
+          current_location: string
+          id: string
+          name: string
+          operational_status: string
+          quantity: number
+          updated_at: string
+        }
+        Insert: {
+          category: string
+          created_at?: string
+          created_by: string
+          current_location: string
+          id?: string
+          name: string
+          operational_status?: string
+          quantity: number
+          updated_at?: string
+        }
+        Update: {
+          category?: string
+          created_at?: string
+          created_by?: string
+          current_location?: string
+          id?: string
+          name?: string
+          operational_status?: string
+          quantity?: number
+          updated_at?: string
+        }
+        Relationships: []
+      }
       event_request: {
         Row: {
           accessibility_notes: string | null
