@@ -2,26 +2,22 @@ import Link from 'next/link';
 import { notFound } from 'next/navigation';
 import { getVenue, listSetupTurnaroundAffectedBookings } from '@/domain/venues/service';
 import { canManageVenues, canViewVenueCatalogue } from '@/domain/venues/policy';
-import { listUpcomingUnavailableSlots } from '@/domain/availability/service';
-import { SLOT_NAMES } from '@/domain/availability/schema';
+import { listUpcomingUnavailablePeriods } from '@/domain/availability/service';
 import { NotFoundError } from '@/domain/shared/errors';
 import { formatSingaporeDate } from '@/domain/shared/dates';
-import {
-  OPERATING_SLOTS,
-  OPERATING_SLOT_LABELS,
-  ROOM_LAYOUT_LABELS,
-  type VenueDetail,
-} from '@/domain/venues/schema';
+import { ROOM_LAYOUT_LABELS, type VenueDetail } from '@/domain/venues/schema';
+import { formatClockRange } from '@/domain/shared/times';
 import { getCurrentActor } from '@/lib/auth/currentActor';
 import NoVenueAccess from '@/components/venue/NoVenueAccess';
-import { MarkSlotsUnavailableForm } from '@/components/venue/MarkSlotsUnavailableForm';
+import { MarkPeriodUnavailableForm } from '@/components/venue/MarkPeriodUnavailableForm';
 import { HoldVenueForm } from '@/components/venue/HoldVenueForm';
 import { listActiveVenueHolds, listHoldableEvents } from '@/domain/venue-hold/service';
 import { formatExpiry } from '@/domain/venue-hold/policy';
 
 /**
  * SCRUM-121 AC2: opening a venue shows its location, capacities, supported
- * layouts, facilities, accessibility features, operating slots and turnaround
+ * layouts, facilities, accessibility features, opening hours (SCRUM-239 AC1,
+ * in place of operating slots) and turnaround
  * values.
  *
  * SCRUM-225 AC1 and AC3: the setup and turnaround times, in minutes, shown to
@@ -72,7 +68,7 @@ export default async function VenueDetailPage({ params }: { params: Promise<{ id
     throw error;
   }
 
-  const unavailableSlots = await listUpcomingUnavailableSlots(venue.id);
+  const unavailablePeriods = await listUpcomingUnavailablePeriods(venue.id);
   const canManage = canManageVenues(actor.roles);
   const [setupTurnaroundAffected, holds, holdableEvents] = canManage
     ? await Promise.all([
@@ -119,23 +115,11 @@ export default async function VenueDetailPage({ params }: { params: Promise<{ id
         <Row label="Location">{venue.location.name}</Row>
         <Row label="Maximum capacity">{venue.maxCapacity}</Row>
 
-        {/* SCRUM-116 AC4: the selected slots apply identically to every day, so all
-            three are listed and an unselected slot is shown as not operating
-            rather than silently left out (US-11.1-TC05a). */}
-        <Row label="Operating slots">
-          <p className="mb-1 text-[var(--text-muted)]">Applies to every day of the week.</p>
-          <ul>
-            {OPERATING_SLOTS.map((slot) => (
-              <li key={slot}>
-                {OPERATING_SLOT_LABELS[slot]}:{' '}
-                {venue.operatingSlots.includes(slot) ? (
-                  <span className="text-[var(--success)]">Operating</span>
-                ) : (
-                  <span className="text-[var(--text-muted)]">Not operating</span>
-                )}
-              </li>
-            ))}
-          </ul>
+        {/* SCRUM-239 AC1: the opening hours replace SCRUM-116 AC4's operating
+            slots, and apply to every day of the week. */}
+        <Row label="Opening hours">
+          <p>{formatClockRange({ start: venue.opensAt, end: venue.closesAt })}</p>
+          <p className="text-[var(--text-muted)]">Applies to every day of the week.</p>
         </Row>
 
         <Row label="Supported layouts">
@@ -188,22 +172,23 @@ export default async function VenueDetailPage({ params }: { params: Promise<{ id
         </section>
       )}
 
-      {/* SCRUM-151 AC1: slots withdrawn on specific dates, from today on. */}
+      {/* SCRUM-151 AC1, in times since SCRUM-239 AC6: periods withdrawn on
+          specific dates, from today on. */}
       <section className="mt-6 space-y-4 rounded border border-[var(--border)] bg-[var(--surface)] p-4">
-        <h2 className="text-lg font-semibold">Unavailable slots</h2>
-        {unavailableSlots.length === 0 ? (
-          <p className="text-sm text-[var(--text-muted)]">No slots are unavailable from today on.</p>
+        <h2 className="text-lg font-semibold">Unavailable periods</h2>
+        {unavailablePeriods.length === 0 ? (
+          <p className="text-sm text-[var(--text-muted)]">No periods are unavailable from today on.</p>
         ) : (
           <ul className="space-y-1 text-sm">
-            {unavailableSlots.map((entry) => (
+            {unavailablePeriods.map((entry) => (
               <li key={entry.id}>
-                {formatSingaporeDate(entry.date)}, {SLOT_NAMES[entry.slot]}: {entry.reason}
+                {formatSingaporeDate(entry.date)}, {formatClockRange(entry)}: {entry.reason}
               </li>
             ))}
           </ul>
         )}
         {canManage && (
-          <MarkSlotsUnavailableForm venueId={venue.id} operatingSlots={venue.operatingSlots} />
+          <MarkPeriodUnavailableForm venueId={venue.id} opensAt={venue.opensAt} closesAt={venue.closesAt} />
         )}
       </section>
 

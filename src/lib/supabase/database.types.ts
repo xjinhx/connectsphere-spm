@@ -928,31 +928,37 @@ export type Database = {
         Row: {
           coordinator_id: string
           created_at: string
+          end_time: string | null
           event_request_id: string
           id: string
           reason: string
           slot_date: string
-          slots: string[]
+          slots: string[] | null
+          start_time: string | null
           venue_id: string
         }
         Insert: {
           coordinator_id: string
           created_at?: string
+          end_time?: string | null
           event_request_id: string
           id?: string
           reason: string
           slot_date: string
-          slots: string[]
+          slots?: string[] | null
+          start_time?: string | null
           venue_id: string
         }
         Update: {
           coordinator_id?: string
           created_at?: string
+          end_time?: string | null
           event_request_id?: string
           id?: string
           reason?: string
           slot_date?: string
-          slots?: string[]
+          slots?: string[] | null
+          start_time?: string | null
           venue_id?: string
         }
         Relationships: [
@@ -980,7 +986,7 @@ export type Database = {
           id: string
           reason: string
           recorded_by: string | null
-          slot: string
+          slot: string | null
           start_time: string
           venue_id: string
         }
@@ -991,7 +997,7 @@ export type Database = {
           id?: string
           reason: string
           recorded_by?: string | null
-          slot: string
+          slot?: string | null
           start_time: string
           venue_id: string
         }
@@ -1002,7 +1008,7 @@ export type Database = {
           id?: string
           reason?: string
           recorded_by?: string | null
-          slot?: string
+          slot?: string | null
           start_time?: string
           venue_id?: string
         }
@@ -1081,10 +1087,14 @@ export type Database = {
         Row: {
           booking_id: string | null
           coordinator_id: string | null
+          end_time: string | null
           event_request_id: string | null
           reason: string | null
           slot: string | null
           slot_date: string | null
+          start_time: string | null
+          unavailable_end_time: string | null
+          unavailable_start_time: string | null
           venue_id: string | null
         }
         Relationships: [
@@ -1110,11 +1120,13 @@ export type Database = {
       create_venue: {
         Args: {
           p_accessibility_feature_ids: string[]
+          p_closes_at?: string
           p_facility_ids: string[]
           p_layouts: Json
           p_location_id: string
           p_max_capacity: number
           p_name: string
+          p_opens_at?: string
           p_operating_slots: string[]
         }
         Returns: string
@@ -1143,12 +1155,13 @@ export type Database = {
       }
       format_singapore_instant: { Args: { p_instant: string }; Returns: string }
       is_quarter_hour: { Args: { p_time: string }; Returns: boolean }
-      mark_slots_unavailable: {
+      mark_period_unavailable: {
         Args: {
+          p_date: string
+          p_end: string
           p_reason: string
           p_recorded_by: string
-          p_slot_date: string
-          p_slots: string[]
+          p_start: string
           p_today?: string
           p_venue_id: string
         }
@@ -1160,6 +1173,7 @@ export type Database = {
       update_venue: {
         Args: {
           p_accessibility_feature_ids?: string[]
+          p_closes_at?: string
           p_confirm_affected_bookings?: boolean
           p_confirm_setup_turnaround_change?: boolean
           p_expected_updated_at: string
@@ -1170,6 +1184,7 @@ export type Database = {
           p_name?: string
           p_needs_setup_slot?: boolean
           p_needs_turnaround_slot?: boolean
+          p_opens_at?: string
           p_operating_slots?: string[]
           p_setup_minutes?: number
           p_today?: string

@@ -1,16 +1,19 @@
 import { formatSingaporeDate } from '@/domain/shared/dates';
-import { SLOT_NAMES, type BookingOnUnavailableSlot } from '@/domain/availability/schema';
+import type { BookingOnUnavailablePeriod } from '@/domain/availability/schema';
+import { formatClockRange } from '@/domain/shared/times';
 
 /**
  * SCRUM-151 AC3: on the coordinator's event page, each affected booking is
  * listed with an outstanding action (CONTEXT.md) until the booking is released
- * or replaced. Renders nothing when no booking is affected.
+ * or replaced. Renders nothing when no booking is affected. Since SCRUM-239
+ * AC6 a booking is affected when its times overlap an unavailable period, and
+ * both are shown in times.
  *
  * SCRUM-231 releases the booking from the event's Venue bookings list, further
  * down the page, and that closes this entry (AC4). The action points there
  * rather than repeating the button.
  */
-export function AffectedBookingsNotice({ bookings }: { bookings: BookingOnUnavailableSlot[] }) {
+export function AffectedBookingsNotice({ bookings }: { bookings: BookingOnUnavailablePeriod[] }) {
   if (bookings.length === 0) return null;
 
   return (
@@ -25,12 +28,12 @@ export function AffectedBookingsNotice({ bookings }: { bookings: BookingOnUnavai
         {bookings.map((booking) => (
           <li key={booking.bookingId}>
             <p className="font-medium">
-              {booking.venueName}, {formatSingaporeDate(booking.date)}
+              {booking.venueName}, {formatSingaporeDate(booking.date)} · {formatClockRange(booking)}
             </p>
             <ul className="mt-1 list-disc pl-5">
-              {booking.slots.map((entry) => (
-                <li key={entry.slot}>
-                  {SLOT_NAMES[entry.slot]} is unavailable: {entry.reason}
+              {booking.unavailable.map((entry) => (
+                <li key={entry.start}>
+                  {formatClockRange(entry)} is unavailable: {entry.reason}
                 </li>
               ))}
             </ul>

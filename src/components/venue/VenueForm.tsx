@@ -5,18 +5,16 @@ import { useRef, useState } from 'react';
 import {
   AffectedBookingsDetailsSchema,
   SetupTurnaroundClashesDetailsSchema,
-  OPERATING_SLOTS,
-  OPERATING_SLOT_LABELS,
   ROOM_LAYOUTS,
   ROOM_LAYOUT_LABELS,
   type AffectedBookingsDetails,
   type SetupTurnaroundClashesDetails,
-  type OperatingSlot,
   type RoomLayout,
   type VenueDetail,
   type VenueFormOptions,
 } from '@/domain/venues/schema';
 import { formatSingaporeDate } from '@/domain/shared/dates';
+import { END_TIME_OPTIONS, START_TIME_OPTIONS } from '@/domain/shared/times';
 import { capacityToSend } from './capacityInput';
 
 /**
@@ -25,7 +23,9 @@ import { capacityToSend } from './capacityInput';
  *
  * SCRUM-116 AC1 name, location from the maintained list, maximum capacity
  * SCRUM-116 AC3 a bad capacity flags the field, so errors render per field
- * SCRUM-116 AC4 slot checkboxes, all three ticked by default on a new venue
+ * SCRUM-239 AC1 opening and closing times in 15-minute steps, which replace
+ *              SCRUM-116 AC4's slot checkboxes (a new venue starts 07:00-24:00,
+ *              the hours all three slots used to cover)
  * SCRUM-117 AC1, AC2 facilities and accessibility features
  * SCRUM-117 AC3 editing submits the full list, so unticking removes
  * SCRUM-118 AC1 layouts, each with its own capacity
@@ -113,8 +113,10 @@ export default function VenueForm({
   const [setupMinutes, setSetupMinutes] = useState(venue ? String(venue.setupMinutes) : '0');
   const [turnaroundMinutes, setTurnaroundMinutes] = useState(venue ? String(venue.turnaroundMinutes) : '0');
 
-  // SCRUM-116 AC4: a new venue starts with all three slots selected.
-  const [slots, setSlots] = useState<OperatingSlot[]>(venue ? venue.operatingSlots : [...OPERATING_SLOTS]);
+  // SCRUM-239 AC1: opening hours in 15-minute steps. A new venue starts with
+  // the hours all three slots used to cover.
+  const [opensAt, setOpensAt] = useState(venue?.opensAt ?? '07:00');
+  const [closesAt, setClosesAt] = useState(venue?.closesAt ?? '24:00');
 
   const [facilityIds, setFacilityIds] = useState<string[]>(
     venue ? venue.facilities.map((facility) => facility.id) : [],
@@ -206,7 +208,8 @@ export default function VenueForm({
       name,
       locationId,
       maxCapacity: capacity,
-      operatingSlots: slots,
+      opensAt,
+      closesAt,
       facilityIds,
       accessibilityFeatureIds: featureIds,
       layouts: layouts.map((row) => ({ layout: row.layout, capacity: capacityToSend(row.capacity) })),
@@ -371,24 +374,50 @@ export default function VenueForm({
         </fieldset>
       )}
 
+      {/* SCRUM-239 AC1: replaces the Operating slots checkboxes. */}
       <fieldset>
-        <legend className="mb-1 text-sm font-medium">Operating slots</legend>
+        <legend className="mb-1 text-sm font-medium">Opening hours</legend>
         <p className="mb-2 text-sm text-[var(--text-muted)]">
-          The selected slots apply to every day of the week.
+          In 15-minute steps, every day of the week. Outside these hours the venue cannot be requested.
         </p>
         <div className="flex flex-wrap gap-4">
-          {OPERATING_SLOTS.map((slot) => (
-            <label key={slot} className="flex items-center gap-2 text-sm">
-              <input
-                type="checkbox"
-                checked={slots.includes(slot)}
-                onChange={() => setSlots(toggle(slots, slot))}
-              />
-              {OPERATING_SLOT_LABELS[slot]}
+          <div>
+            <label htmlFor="venue-opens-at" className="mb-1 block text-sm">
+              Opening time
             </label>
-          ))}
+            <select
+              id="venue-opens-at"
+              className={inputClass}
+              value={opensAt}
+              onChange={(event) => setOpensAt(event.target.value)}
+            >
+              {START_TIME_OPTIONS.map((time) => (
+                <option key={time} value={time}>
+                  {time}
+                </option>
+              ))}
+            </select>
+            <FieldError messages={fieldErrors.opensAt} />
+          </div>
+          <div>
+            <label htmlFor="venue-closes-at" className="mb-1 block text-sm">
+              Closing time
+            </label>
+            <select
+              id="venue-closes-at"
+              className={inputClass}
+              value={closesAt}
+              onChange={(event) => setClosesAt(event.target.value)}
+            >
+              {END_TIME_OPTIONS.map((time) => (
+                <option key={time} value={time}>
+                  {time}
+                </option>
+              ))}
+            </select>
+            <FieldError messages={fieldErrors.closesAt} />
+          </div>
         </div>
-        <FieldError messages={fieldErrors.operatingSlots} />
       </fieldset>
 
       <fieldset>

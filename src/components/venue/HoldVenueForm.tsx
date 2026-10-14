@@ -22,7 +22,7 @@ const END_TIMES = QUARTER_HOURS.slice(1);
  * be picked (the server checks again, as for every time input). The expiry is
  * a Singapore date and time from a datetime-local input.
  *
- * Same request/response shape as MarkSlotsUnavailableForm: on success the
+ * Same request/response shape as MarkPeriodUnavailableForm: on success the
  * page is refreshed so the list of holds comes from the server.
  */
 export function HoldVenueForm({ venueId, events }: { venueId: string; events: HoldableEvent[] }) {

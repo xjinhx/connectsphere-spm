@@ -3,8 +3,8 @@ import { createAdminClient } from './admin';
 import type { Database } from './database.types';
 
 /**
- * Venue availability queries (EP-13): the unavailable slots Venue Staff
- * record (SCRUM-151).
+ * Venue availability queries (EP-13): the unavailable periods Venue Staff
+ * record (SCRUM-151, in times since SCRUM-239 AC6).
  *
  * Same rules as venues.ts: the client and the query building live here, and
  * src/domain/availability/service.ts only calls these functions. Each returns
@@ -18,70 +18,66 @@ function db(): SupabaseClient<Database> {
 
 /**
  * venue_unavailable_slot is shared with SCRUM-128's venue search, which created
- * it as a stand-in for this story (dummy D-09). SCRUM-151 writes it and adds
- * recorded_by; the other columns are SCRUM-128's names.
+ * it as a stand-in for SCRUM-151 (dummy D-09). Since SCRUM-239 AC6 a row is a
+ * period, start_time to end_time; `slot` is only set on rows from before.
  */
-const UNAVAILABLE_SLOT_SELECT = 'id, venue_id, date, slot, reason, created_at';
+const UNAVAILABLE_PERIOD_SELECT = 'id, venue_id, date, start_time, end_time, reason, created_at';
 
 /**
- * SCRUM-151 AC1 and AC2: one call to the database function
- * mark_slots_unavailable (migration 20261007120000_...), which records one
- * row per slot and a notice for each affected booking's coordinator in a
- * single transaction. supabase-js has no transactions of its own.
+ * SCRUM-239 AC6, SCRUM-151 AC1 and AC2: one call to the database function
+ * mark_period_unavailable (migration 20261013110100_...), which records the
+ * period and a notice for each affected booking's coordinator in a single
+ * transaction. supabase-js has no transactions of its own.
  *
- * If any of the slots is already unavailable (the unique constraint) the
- * whole call fails and nothing is saved. Resolves to the notices written, a
- * jsonb array (NoticeWrittenSchema). `today` is the Singapore date (YYYY-MM-DD) "upcoming" is judged
- * against; left out, the function works it out itself.
+ * If the period overlaps one already recorded (exclusion constraint, 23P01)
+ * the whole call fails and nothing is saved. Resolves to the notices written,
+ * a jsonb array (NoticeWrittenSchema). `today` is the Singapore date
+ * (YYYY-MM-DD) "upcoming" is judged against; left out, the function works it
+ * out itself.
  */
-export async function recordUnavailableSlots(input: {
+export async function recordUnavailablePeriod(input: {
   venueId: string;
   date: string;
-  slots: string[];
+  start: string;
+  end: string;
   reason: string;
   recordedBy: string;
   today?: string;
 }) {
-  return db().rpc('mark_slots_unavailable', {
+  return db().rpc('mark_period_unavailable', {
     p_venue_id: input.venueId,
-    p_slot_date: input.date,
-    p_slots: input.slots,
+    p_date: input.date,
+    p_start: input.start,
+    p_end: input.end,
     p_reason: input.reason,
     p_recorded_by: input.recordedBy,
     ...(input.today !== undefined && { p_today: input.today }),
   });
 }
 
-/** The venue's unavailable slots on one date, among `slots`. */
-export async function fetchUnavailableSlotsOn(venueId: string, date: string, slots: readonly string[]) {
-  return db()
-    .from('venue_unavailable_slot')
-    .select(UNAVAILABLE_SLOT_SELECT)
-    .eq('venue_id', venueId)
-    .eq('date', date)
-    .in('slot', [...slots]);
+/** The venue's unavailable periods on one date. */
+export async function fetchUnavailablePeriodsOn(venueId: string, date: string) {
+  return db().from('venue_unavailable_slot').select(UNAVAILABLE_PERIOD_SELECT).eq('venue_id', venueId).eq('date', date);
 }
 
 /**
- * SCRUM-151 AC3: the event's affected bookings on or after `today`, a
- * Singapore date (YYYY-MM-DD), from the affected_booking_slot view added by
- * AC2. One row per affected slot, with the venue's name.
+ * SCRUM-151 AC3, by time: the event's affected bookings on or after `today`, a
+ * Singapore date (YYYY-MM-DD), from the affected_booking_slot view. One row
+ * per booking and overlapping unavailable period, with the venue's name.
  */
-export async function fetchAffectedBookingSlotsForEvent(eventRequestId: string, today: string) {
+export async function fetchAffectedBookingsForEvent(eventRequestId: string, today: string) {
   return db()
     .from('affected_booking_slot')
-    .select('booking_id, venue_id, slot_date, slot, reason, venues ( name )')
+    .select(
+      'booking_id, venue_id, slot_date, start_time, end_time, unavailable_start_time, unavailable_end_time, reason, venues ( name )',
+    )
     .eq('event_request_id', eventRequestId)
     .gte('slot_date', today);
 }
 
-/** The venue's unavailable slots on or after `today`, a Singapore date (YYYY-MM-DD). */
-export async function fetchUpcomingUnavailableSlots(venueId: string, today: string) {
-  return db()
-    .from('venue_unavailable_slot')
-    .select(UNAVAILABLE_SLOT_SELECT)
-    .eq('venue_id', venueId)
-    .gte('date', today);
+/** The venue's unavailable periods on or after `today`, a Singapore date (YYYY-MM-DD). */
+export async function fetchUpcomingUnavailablePeriods(venueId: string, today: string) {
+  return db().from('venue_unavailable_slot').select(UNAVAILABLE_PERIOD_SELECT).eq('venue_id', venueId).gte('date', today);
 }
 
 /**
