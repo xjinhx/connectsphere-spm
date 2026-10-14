@@ -57,6 +57,29 @@ export const UpdateEquipmentLineInputSchema = z.object({
 });
 export type UpdateEquipmentLineInput = z.infer<typeof UpdateEquipmentLineInputSchema>;
 
+/**
+ * AC5: "when I enter free-text technical requirements and save, then the notes
+ * are stored with the request." Stored exactly as typed - line breaks, quotes
+ * and <, > and & included (TC-160-14) - so the text is not trimmed. Text that
+ * is only spaces is stored as none.
+ *
+ * 1000 characters, the same limit as SCRUM-80's technical support notes.
+ */
+export const TECHNICAL_REQUIREMENTS_MAX_LENGTH = 1000;
+export const SaveTechnicalRequirementsInputSchema = z.object({
+  technicalRequirements: z
+    .string({
+      required_error: 'Technical requirements are required.',
+      invalid_type_error: 'Technical requirements must be text.',
+    })
+    .max(
+      TECHNICAL_REQUIREMENTS_MAX_LENGTH,
+      `Technical requirements must be ${TECHNICAL_REQUIREMENTS_MAX_LENGTH} characters or fewer.`,
+    )
+    .transform((text) => (text.trim() === '' ? null : text)),
+});
+export type SaveTechnicalRequirementsInput = z.infer<typeof SaveTechnicalRequirementsInputSchema>;
+
 /** One line of the request, as the API and the page show it. */
 export const EquipmentRequestLineSchema = z.object({
   id: z.string().uuid(),
@@ -76,6 +99,8 @@ export const EquipmentRequestViewSchema = z.object({
   eventStatus: EventRequestStatusEnum,
   proposedDate: z.string().nullable(),
   lines: z.array(EquipmentRequestLineSchema),
+  /** AC5: the free-text technical requirements, or null when none have been entered. */
+  technicalRequirements: z.string().nullable(),
   /** Whether the signed-in account may change it: the assigned coordinator, while the event is open to it. */
   canEdit: z.boolean(),
 });

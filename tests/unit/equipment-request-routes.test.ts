@@ -24,14 +24,21 @@ vi.mock('@/domain/equipment-request/service', () => ({
   updateEquipmentLineQuantity: vi.fn(),
   removeEquipmentLine: vi.fn(),
   getEquipmentRequest: vi.fn(),
+  saveTechnicalRequirements: vi.fn(),
 }));
 
 import { getCurrentActor } from '@/lib/auth/currentActor';
-import { addEquipmentLine, removeEquipmentLine, updateEquipmentLineQuantity } from '@/domain/equipment-request/service';
+import {
+  addEquipmentLine,
+  removeEquipmentLine,
+  saveTechnicalRequirements,
+  updateEquipmentLineQuantity,
+} from '@/domain/equipment-request/service';
 import { ForbiddenError, UnauthenticatedError } from '@/domain/shared/errors';
 import type { Role } from '@/domain/identity/roles';
 import { POST } from '@/app/api/event-requests/[id]/equipment-request/lines/route';
 import { DELETE, PATCH } from '@/app/api/event-requests/[id]/equipment-request/lines/[lineId]/route';
+import { PATCH as PATCH_REQUEST } from '@/app/api/event-requests/[id]/equipment-request/route';
 
 const EVENT = '33333333-3333-4333-8333-333333333333';
 const LINE = '44444444-4444-4444-8444-444444444444';
@@ -49,6 +56,14 @@ const lineParams = { params: Promise.resolve({ id: EVENT, lineId: LINE }) };
 const patch = (body: unknown) =>
   PATCH(new NextRequest(`${url}/${LINE}`, { method: 'PATCH', body: JSON.stringify(body) }), lineParams);
 const remove = () => DELETE(new NextRequest(`${url}/${LINE}`, { method: 'DELETE' }), lineParams);
+const saveNotes = (body: unknown) =>
+  PATCH_REQUEST(
+    new NextRequest(`http://localhost/api/event-requests/${EVENT}/equipment-request`, {
+      method: 'PATCH',
+      body: JSON.stringify(body),
+    }),
+    { params: Promise.resolve({ id: EVENT }) },
+  );
 
 beforeEach(() => {
   vi.clearAllMocks();
@@ -74,6 +89,13 @@ describe('AC4: the routes refuse an edit before touching the request', () => {
     expect((await remove()).status).toBe(403);
   });
 
+  it('TC-160-11 returns 403 for a notes save the service refuses', async () => {
+    signInAs('coordinator');
+    vi.mocked(saveTechnicalRequirements).mockRejectedValue(new ForbiddenError('This event is not assigned to you.'));
+
+    expect((await saveNotes({ technicalRequirements: 'changed' })).status).toBe(403);
+  });
+
   it('passes the signed-in account, never one from the body, to the service', async () => {
     signInAs('coordinator');
     vi.mocked(addEquipmentLine).mockResolvedValue({} as never);
@@ -90,7 +112,9 @@ describe('AC4: the routes refuse an edit before touching the request', () => {
       expect((await post({ equipmentId: PROJECTOR, quantity: 2 })).status).toBe(403);
       expect((await patch({ quantity: 5 })).status).toBe(403);
       expect((await remove()).status).toBe(403);
+      expect((await saveNotes({ technicalRequirements: 'changed' })).status).toBe(403);
       expect(addEquipmentLine).not.toHaveBeenCalled();
+      expect(saveTechnicalRequirements).not.toHaveBeenCalled();
       expect(updateEquipmentLineQuantity).not.toHaveBeenCalled();
       expect(removeEquipmentLine).not.toHaveBeenCalled();
     },

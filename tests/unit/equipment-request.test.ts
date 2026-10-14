@@ -1,6 +1,10 @@
 import { describe, expect, it } from 'vitest';
 import { acceptsEquipmentRequest, linesOfSameType } from '@/domain/equipment-request/policy';
-import { AddEquipmentLineInputSchema, UpdateEquipmentLineInputSchema } from '@/domain/equipment-request/schema';
+import {
+  AddEquipmentLineInputSchema,
+  SaveTechnicalRequirementsInputSchema,
+  UpdateEquipmentLineInputSchema,
+} from '@/domain/equipment-request/schema';
 import { EventRequestStatusEnum, type EventRequestStatus } from '@/domain/event-request/schema';
 
 /**
@@ -97,5 +101,32 @@ describe('AC3: the existing lines of the same type are shown', () => {
 
   it('never lists the added line itself', () => {
     expect(linesOfSameType([existing], existing)).toEqual([]);
+  });
+});
+
+describe('AC5: technical requirements are stored as typed', () => {
+  const save = (technicalRequirements: unknown) => SaveTechnicalRequirementsInputSchema.safeParse({ technicalRequirements });
+
+  it('TC-160-13 keeps the notes', () => {
+    const parsed = save('HDMI to the stage lectern; 2 handheld mics with spare batteries');
+    expect(parsed.success && parsed.data.technicalRequirements).toBe(
+      'HDMI to the stage lectern; 2 handheld mics with spare batteries',
+    );
+  });
+
+  it('TC-160-14 keeps line breaks, quotes, <, > and & exactly, with nothing trimmed or escaped', () => {
+    const notes = 'Line 1: Power <near> stage\nLine 2: "Q&A" mic\nLine 3: 13A sockets x4  ';
+    const parsed = save(notes);
+    expect(parsed.success && parsed.data.technicalRequirements).toBe(notes);
+  });
+
+  it('stores notes that are only spaces as none', () => {
+    const parsed = save('   \n ');
+    expect(parsed.success && parsed.data.technicalRequirements).toBeNull();
+  });
+
+  it('refuses more than 1000 characters', () => {
+    expect(save('x'.repeat(1000)).success).toBe(true);
+    expect(save('x'.repeat(1001)).success).toBe(false);
   });
 });

@@ -6,6 +6,7 @@ import {
   addEquipmentLine,
   getEquipmentRequest,
   removeEquipmentLine,
+  saveTechnicalRequirements,
   updateEquipmentLineQuantity,
 } from '@/domain/equipment-request/service';
 import { changeEventStatus, enterPlanning } from '@/domain/event-status/service';
@@ -37,6 +38,9 @@ import { ensureTestClientOrganisation, TEST_CLIENT_ORGANISATION_ID } from './fix
  *   AC4 "Given I am an Event Coordinator who is not assigned to the event,
  *        when I invoke an equipment-request edit on it, then it is refused
  *        and the request is unchanged."
+ *   AC5 "Given I am editing an equipment request, when I enter free-text
+ *        technical requirements and save, then the notes are stored with the
+ *        request."
  *   AC7 "Given an equipment item has not yet been reserved, when I change its
  *        quantity or remove it, then the change is saved immediately."
  *
@@ -120,6 +124,17 @@ async function addItem(name: string): Promise<string> {
   );
   equipmentIds.push(item.id);
   return item.id;
+}
+
+/** The event's stored technical requirements, read straight from the table. */
+async function storedNotes(eventId: string): Promise<string | null> {
+  const { data, error } = await admin
+    .from('equipment_request')
+    .select('technical_requirements')
+    .eq('event_request_id', eventId)
+    .maybeSingle();
+  if (error) throw new Error(`could not read test notes: ${error.message}`);
+  return (data?.technical_requirements as string | null | undefined) ?? null;
 }
 
 /** The event's stored lines, read straight from the table rather than through the service. */
@@ -323,6 +338,16 @@ describe('SCRUM-160 AC4: a coordinator who is not assigned to the event', () => 
     expect(await storedLines(event)).toEqual([{ id: line.id, equipment_id: projector, quantity: 2 }]);
   });
 
+  it('TC-160-11 cannot save the notes, and they still read as before', async () => {
+    const event = await createEvent('planning');
+    await saveTechnicalRequirements(event, coordinatorA.userId, { technicalRequirements: 'HDMI to lectern' });
+
+    await expect(
+      saveTechnicalRequirements(event, coordinatorB.userId, { technicalRequirements: 'changed' }),
+    ).rejects.toMatchObject({ code: 'FORBIDDEN' });
+    expect(await storedNotes(event)).toBe('HDMI to lectern');
+  });
+
   it('TC-160-12 refuses a coordinator reassigned away, and lets the new one add', async () => {
     const event = await createEvent('planning');
     await reassignCoordinator(event, {
@@ -345,6 +370,53 @@ describe('SCRUM-160 AC4: a coordinator who is not assigned to the event', () => 
     await expect(
       addEquipmentLine(event, coordinatorB.userId, { equipmentId: projector, quantity: 2 }),
     ).rejects.toMatchObject({ code: 'FORBIDDEN' });
+  });
+});
+
+// -----------------------------------------------------------------------------
+// AC5 — technical requirements are stored with the request
+// -----------------------------------------------------------------------------
+
+describe('SCRUM-160 AC5: technical requirements', () => {
+  it('TC-160-13 stores the notes with the request, and a fresh read shows them', async () => {
+    const event = await createEvent('planning');
+    await addEquipmentLine(event, coordinatorA.userId, { equipmentId: projector, quantity: 2 });
+    const notes = 'HDMI to the stage lectern; 2 handheld mics with spare batteries';
+
+    await saveTechnicalRequirements(event, coordinatorA.userId, { technicalRequirements: notes });
+
+    expect(await storedNotes(event)).toBe(notes);
+    expect((await getEquipmentRequest(event, coordinatorA)).technicalRequirements).toBe(notes);
+  });
+
+  it('TC-160-14 stores multi-line notes with special characters exactly as typed', async () => {
+    const event = await createEvent('planning');
+    const notes = 'Line 1: Power <near> stage\nLine 2: "Q&A" mic\nLine 3: 13A sockets x4';
+
+    await saveTechnicalRequirements(event, coordinatorA.userId, { technicalRequirements: notes });
+
+    expect(await storedNotes(event)).toBe(notes);
+  });
+
+  it('TC-160-15 leaves the stored notes as they were until a save', async () => {
+    const event = await createEvent('planning');
+    await saveTechnicalRequirements(event, coordinatorA.userId, { technicalRequirements: 'HDMI to lectern' });
+
+    // 'Rear projection only' is typed and the page left without saving: no save
+    // call is made. The form half of this is checked by hand on the page.
+    const request = await getEquipmentRequest(event, coordinatorA);
+
+    expect(request.technicalRequirements).toBe('HDMI to lectern');
+    expect(await storedNotes(event)).toBe('HDMI to lectern');
+  });
+
+  it('saving the notes leaves the equipment lines alone', async () => {
+    const event = await createEvent('planning');
+    const { line } = await addEquipmentLine(event, coordinatorA.userId, { equipmentId: projector, quantity: 2 });
+
+    await saveTechnicalRequirements(event, coordinatorA.userId, { technicalRequirements: 'Rear projection only' });
+
+    expect(await storedLines(event)).toEqual([{ id: line.id, equipment_id: projector, quantity: 2 }]);
   });
 });
 

@@ -14,6 +14,8 @@
 -- AC3: the same type twice is two lines, never merged, so there is
 --      deliberately no unique index on (event_request_id, equipment_id) -
 --      unlike SCRUM-80's event_request_equipment_item_unique.
+-- AC5: the technical requirements are stored with the request
+--      (equipment_request.technical_requirements).
 --
 -- Kept apart from SCRUM-80's event_request_equipment (20260913100000): that is
 -- the free text an Event Organiser types on the request form, with one line per
@@ -21,9 +23,16 @@
 -- (SCRUM-240 AC5), and the organiser's answer is left as they gave it.
 -- =============================================================================
 
--- One equipment request per event. Created with the event's first line.
+-- One equipment request per event. Created with the event's first line, or
+-- the first time its technical requirements are saved.
 create table equipment_request (
   event_request_id uuid primary key references event_request (id) on delete cascade,
+  -- AC5: free-text technical requirements, stored as typed (line breaks and
+  -- all). Null when none have been entered. 1000 characters, the same limit
+  -- as SCRUM-80's technical_support_notes.
+  technical_requirements text
+    constraint equipment_request_technical_requirements_length
+      check (technical_requirements is null or length(technical_requirements) between 1 and 1000),
   created_at timestamptz not null default now(),
   updated_at timestamptz not null default now()
 );

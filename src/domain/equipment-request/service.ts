@@ -7,9 +7,11 @@ import { fetchEventRequestById, type EventRequestRow } from '@/lib/supabase/even
 import {
   deleteEquipmentRequestLine,
   ensureEquipmentRequest,
+  fetchEquipmentRequest,
   fetchEquipmentRequestLines,
   insertEquipmentRequestLine,
   updateEquipmentRequestLineQuantity,
+  upsertTechnicalRequirements,
 } from '@/lib/supabase/equipmentRequests';
 import { EVENT_NOT_OPEN_FOR_EQUIPMENT_MESSAGE, acceptsEquipmentRequest, linesOfSameType } from './policy';
 import {
@@ -17,6 +19,7 @@ import {
   AddEquipmentLineOutcomeSchema,
   EquipmentRequestLineIdSchema,
   QUANTITY_AT_LEAST_ONE_MESSAGE,
+  SaveTechnicalRequirementsInputSchema,
   EquipmentRequestLineSchema,
   EquipmentRequestViewSchema,
   UpdateEquipmentLineInputSchema,
@@ -95,7 +98,8 @@ export const NOT_ASSIGNED_MESSAGE = 'This event is not assigned to you.';
  * I invoke an equipment-request edit on it, then it is refused and the request
  * is unchanged." Checked against the event's current coordinator, so one
  * reassigned away is refused too (TC-160-12). Every edit - add, change, remove
- * - comes through here before anything is written.
+ * - and every save of the technical requirements (AC5) comes through here
+ * before anything is written.
  *
  * Refused before AC1's status check, the same order as SCRUM-142's
  * submitVenueBookingRequest: a coordinator the event is not assigned to learns
@@ -112,6 +116,13 @@ async function readEventForEdit(eventRequestId: string, actorId: string): Promis
   return event;
 }
 
+/** AC5: the request's technical requirements, or null when nothing has been saved yet. */
+async function readTechnicalRequirements(eventRequestId: string): Promise<string | null> {
+  const { data, error } = await fetchEquipmentRequest(eventRequestId);
+  if (error) throw new ValidationError('The equipment request could not be read.', error.message);
+  return (data as { technical_requirements: string | null } | null)?.technical_requirements ?? null;
+}
+
 async function readLines(eventRequestId: string): Promise<EquipmentRequestLine[]> {
   const { data, error } = await fetchEquipmentRequestLines(eventRequestId);
   if (error || !data) throw new ValidationError('The equipment request could not be read.', error?.message);
@@ -124,7 +135,8 @@ async function readLines(eventRequestId: string): Promise<EquipmentRequestLine[]
 
 /**
  * An event's equipment request: its lines in the order they were added, read
- * from the stored rows (TC-160-01: "still shows after the reload").
+ * from the stored rows (TC-160-01: "still shows after the reload"), with its
+ * technical requirements (AC5).
  *
  * Open to the event's assigned coordinator.
  */
@@ -142,6 +154,7 @@ export async function getEquipmentRequest(eventRequestId: string, actor: Actor):
     eventStatus: event.status,
     proposedDate: event.proposed_date,
     lines: await readLines(event.id),
+    technicalRequirements: await readTechnicalRequirements(event.id),
     canEdit: acceptsEquipmentRequest(event.status),
   });
 }
@@ -247,4 +260,38 @@ export async function removeEquipmentLine(eventRequestId: string, lineId: string
   const { data, error } = await deleteEquipmentRequestLine(event.id, id);
   if (error) throw new ValidationError('The item could not be removed.', error.message);
   if (!data) throw new NotFoundError('Equipment line');
+}
+
+// -----------------------------------------------------------------------------
+// AC5: technical requirements
+// -----------------------------------------------------------------------------
+
+/**
+ * AC5: "Given I am editing an equipment request, when I enter free-text
+ * technical requirements and save, then the notes are stored with the
+ * request." Stored exactly as typed (TC-160-14); only a save stores them, so
+ * text typed and left unsaved leaves the stored notes as they were
+ * (TC-160-15). Saving them leaves the equipment lines alone.
+ *
+ * The same rules as every other edit: the event's assigned coordinator (AC4),
+ * while it is Approved or in Planning (AC1). Saving notes alone does not raise
+ * the request for AC10 - only an item does.
+ *
+ * Returns the stored notes.
+ */
+export async function saveTechnicalRequirements(
+  eventRequestId: string,
+  actorId: string,
+  input: unknown,
+): Promise<{ technicalRequirements: string | null }> {
+  const event = await readEventForEdit(eventRequestId, actorId);
+
+  const parsed = SaveTechnicalRequirementsInputSchema.safeParse(input);
+  if (!parsed.success) throw validationError(parsed.error, 'The technical requirements are not valid.');
+
+  const { data, error } = await upsertTechnicalRequirements(event.id, parsed.data.technicalRequirements);
+  if (error || !data) {
+    throw new ValidationError('The technical requirements could not be saved.', error?.message);
+  }
+  return { technicalRequirements: (data as { technical_requirements: string | null }).technical_requirements };
 }

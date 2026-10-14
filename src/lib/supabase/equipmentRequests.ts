@@ -23,7 +23,7 @@ const LINE_SELECT =
 export async function fetchEquipmentRequest(eventRequestId: string) {
   return db()
     .from('equipment_request')
-    .select('event_request_id')
+    .select('event_request_id, technical_requirements')
     .eq('event_request_id', eventRequestId)
     .maybeSingle();
 }
@@ -87,4 +87,23 @@ export async function deleteEquipmentRequestLine(eventRequestId: string, lineId:
     .eq('id', lineId)
     .select('id')
     .maybeSingle();
+}
+
+/**
+ * AC5: stores the technical requirements with the event's request, creating
+ * the request if this is the first thing saved on it.
+ */
+export async function upsertTechnicalRequirements(eventRequestId: string, technicalRequirements: string | null) {
+  return db()
+    .from('equipment_request')
+    .upsert(
+      {
+        event_request_id: eventRequestId,
+        technical_requirements: technicalRequirements,
+        updated_at: new Date().toISOString(),
+      },
+      { onConflict: 'event_request_id' },
+    )
+    .select('event_request_id, technical_requirements')
+    .single();
 }
