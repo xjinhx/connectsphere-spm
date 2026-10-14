@@ -1,4 +1,4 @@
-import { afterAll, beforeAll, describe, expect, it } from 'vitest';
+import { afterAll, beforeAll, describe, expect, it, vi } from 'vitest';
 import { createAdminClient } from '@/lib/supabase/admin';
 import { assignCoordinator, reassignCoordinator } from '@/domain/assignment/service';
 import { createEquipmentItem } from '@/domain/equipment/service';
@@ -65,8 +65,14 @@ import { ensureTestClientOrganisation, TEST_CLIENT_ORGANISATION_ID } from './fix
  * Test case IDs are from the Sprint 3 sheet's SCRUM-160 tab (TC-160-nn).
  */
 
+// Each test builds real events through submit, assignment and approval, and
+// setup creates seven accounts, so on a slow machine they outlast vitest's 5s
+// test and 10s hook defaults. Raised for this file only; the shared config is
+// left alone.
+vi.setConfig({ testTimeout: 20_000, hookTimeout: 60_000 });
+
 const admin = createAdminClient();
-const RUN = `${Date.now().toString(36)}${Math.random().toString(36).slice(2, 6)}`;
+const RUN =`${Date.now().toString(36)}${Math.random().toString(36).slice(2, 6)}`;
 
 type Account = { userId: string; roles: Role[] };
 
