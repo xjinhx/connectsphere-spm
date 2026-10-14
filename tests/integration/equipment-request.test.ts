@@ -54,6 +54,8 @@ import { ensureTestClientOrganisation, TEST_CLIENT_ORGANISATION_ID } from './fix
  *        no minimum notice period is enforced."
  *   AC10 "Given an event is Approved, when the first equipment request is
  *         raised against it, then the status becomes Planning."
+ *   AC11 "Given an event is already in Planning, when an equipment request is
+ *         raised against it, then the status remains Planning."
  *
  * Reserving equipment is SCRUM-167, not built. A line is reserved here by a
  * row in the stand-in equipment_reservation table (dummy D-18), inserted by
@@ -717,5 +719,44 @@ describe('SCRUM-160 AC10: the first equipment request against an Approved event'
     await saveTechnicalRequirements(event, coordinatorA.userId, { technicalRequirements: 'HDMI to lectern' });
 
     expect(await storedStatus(event)).toBe('approved');
+  });
+});
+
+// -----------------------------------------------------------------------------
+// AC11 — an event already in Planning stays Planning
+// -----------------------------------------------------------------------------
+
+describe('SCRUM-160 AC11: an equipment request against an event already in Planning', () => {
+  it('TC-160-28 keeps Planning when a later item is added to an event its first item moved there', async () => {
+    const event = await createEvent('approved');
+    await addEquipmentLine(event, coordinatorA.userId, { equipmentId: wirelessMic, quantity: 4 });
+    expect(await storedStatus(event)).toBe('planning');
+
+    await addEquipmentLine(event, coordinatorA.userId, { equipmentId: lectern, quantity: 1 });
+
+    expect(await storedLines(event)).toHaveLength(2);
+    expect(await storedStatus(event)).toBe('planning');
+  });
+
+  it('TC-160-29 keeps a Planning event in Planning, and the save succeeds', async () => {
+    const event = await createEvent('planning');
+
+    await expect(
+      addEquipmentLine(event, coordinatorA.userId, { equipmentId: lectern, quantity: 1 }),
+    ).resolves.toMatchObject({ line: { quantity: 1 } });
+
+    expect(await storedStatus(event)).toBe('planning');
+  });
+
+  it('TC-160-30 changes nothing when an item on a Planning event is refused', async () => {
+    const event = await createEvent('planning');
+    const { line } = await addEquipmentLine(event, coordinatorA.userId, { equipmentId: projector, quantity: 2 });
+
+    await expect(
+      addEquipmentLine(event, coordinatorA.userId, { equipmentId: lectern, quantity: -1 }),
+    ).rejects.toMatchObject({ code: 'VALIDATION_ERROR' });
+
+    expect(await storedStatus(event)).toBe('planning');
+    expect(await storedLines(event)).toEqual([{ id: line.id, equipment_id: projector, quantity: 2 }]);
   });
 });

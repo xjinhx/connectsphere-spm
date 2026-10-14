@@ -21,6 +21,8 @@
 --      so equipment_reservation below is a stand-in: dummy D-18.
 -- AC10: the first equipment request raised against an Approved event moves it
 --      to Planning (equipment_request_line_enter_planning, below).
+-- AC11: an event already in Planning stays Planning when a further request is
+--      raised: the same trigger matches only 'approved', so it changes nothing.
 --
 -- Kept apart from SCRUM-80's event_request_equipment (20260913100000): that is
 -- the free text an Event Organiser types on the request form, with one line per
