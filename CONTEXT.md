@@ -24,6 +24,10 @@ _Avoid_: blocked slot (SCRUM-154's title uses it for the same thing), closed slo
 A coordinator's request to use one venue, made up of date-and-slot lines that Venue Staff approve or reject one by one (SCRUM-142 AC3, SCRUM-148 AC5).
 _Avoid_: booking (until a line is approved)
 
+**Venue requirements**:
+The expected attendance, room layout and accessibility needs a venue must meet. An event has its own. A booking request may have its own for its venue, and uses the event's for any it leaves empty (SCRUM-230).
+_Avoid_: event requirements (for a booking request's own), space requirements
+
 **Confirmed booking**:
 A venue committed to one event for one date and slot, created when Venue Staff approve that line of a booking request.
 _Avoid_: reservation (that word is for equipment)
