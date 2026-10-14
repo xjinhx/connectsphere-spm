@@ -7,6 +7,8 @@ import { RejectRequestForm } from '@/components/event-request/RejectRequestForm'
 import { RequestClarificationForm } from '@/components/event-request/RequestClarificationForm';
 import { AffectedBookingsNotice } from '@/components/venue/AffectedBookingsNotice';
 import { listAffectedBookings } from '@/domain/availability/service';
+import { EventBookingRequests } from '@/components/venue-booking/EventBookingRequests';
+import { listEventBookingRequests } from '@/domain/venue-booking/service';
 import { RequestVenueBookingForm } from '@/components/event-request/RequestVenueBookingForm';
 import { EventVenueBookings } from '@/components/venue-booking/EventVenueBookings';
 import { canCreateBookingRequest } from '@/domain/venue-booking/policy';
@@ -127,6 +129,9 @@ export default async function ReviewEventRequestPage({
   // the section will actually render, the same reasoning as gating every
   // other action below on its own policy function first.
   const venues = canCreateBookingRequest(request.status) ? await listVenues() : [];
+
+  // SCRUM-236 AC1-AC3, read for the same reason after getReviewDetail.
+  const bookingRequests = await listEventBookingRequests(request.id);
 
   return (
     <main className="mx-auto max-w-2xl px-4 py-8">
@@ -253,6 +258,11 @@ export default async function ReviewEventRequestPage({
           </div>
         </section>
       ) : null}
+
+      {/* SCRUM-236 AC1-AC3 — every booking request made for this event, each
+          opening its booking request page. Shown in every status, so earlier
+          requests stay visible after the event moves on. */}
+      <EventBookingRequests requests={bookingRequests} />
 
       {canRequestClarification(request.status) ? (
         <section className="mt-6 rounded-lg border border-[var(--border)] bg-[var(--surface)] p-4">
