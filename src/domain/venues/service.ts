@@ -190,6 +190,8 @@ export async function getVenue(venueId: string): Promise<VenueDetail> {
     maxCapacity: data.max_capacity,
     isRetired: data.is_retired,
     operatingSlots: data.operating_slots,
+    opensAt: fromDatabaseTime(data.opens_at),
+    closesAt: fromDatabaseTime(data.closes_at),
     facilities: data.venue_facilities.flatMap((link) => (link.facilities ? [link.facilities] : [])),
     accessibilityFeatures: data.venue_accessibility_features.flatMap((link) =>
       link.accessibility_features ? [link.accessibility_features] : [],
@@ -300,6 +302,8 @@ export async function createVenue(input: unknown): Promise<VenueDetail> {
     facilityIds: venue.facilityIds,
     accessibilityFeatureIds: venue.accessibilityFeatureIds,
     layouts: venue.layouts,
+    opensAt: venue.opensAt,
+    closesAt: venue.closesAt,
   });
 
   // SCRUM-116 AC2: the unique index on lower(name) is what actually enforces this.
@@ -486,6 +490,8 @@ export async function updateVenue(venueId: string, input: unknown): Promise<Venu
       needsTurnaroundSlot: changes.needsTurnaroundSlot,
       setupMinutes: changes.setupMinutes,
       turnaroundMinutes: changes.turnaroundMinutes,
+      opensAt: changes.opensAt,
+      closesAt: changes.closesAt,
     },
     { confirmAffectedBookings, confirmSetupTurnaroundChange, today },
   );

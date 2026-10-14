@@ -2,7 +2,7 @@
 
 import { useState } from 'react';
 import { useRouter } from 'next/navigation';
-import { OPERATING_SLOT_LABELS, type OperatingSlot } from '@/domain/venues/schema';
+import { END_TIME_OPTIONS, START_TIME_OPTIONS, toMinutes } from '@/domain/shared/times';
 
 /**
  * SCRUM-151 AC2: after a save, say how many affected bookings' coordinators
@@ -16,33 +16,37 @@ function savedMessage(notifiedBookings: number): string {
 }
 
 /**
- * SCRUM-151 AC1: Venue Staff pick a date, tick the affected slots and record
- * why. Several slots can be ticked in one save. Only the slots this venue
- * operates are offered, because a slot it does not operate is never offered
- * for booking anyway (SCRUM-116 AC4).
+ * SCRUM-239 AC6 (SCRUM-151 AC1 in times): Venue Staff pick a date, a start
+ * and end time in 15-minute steps, and record why. Replaces SCRUM-151's slot
+ * checkboxes. Only times within the venue's opening hours are offered, since
+ * the venue is never offered outside them anyway (the server checks too).
  *
- * Same request/response shape as RejectRequestForm: on success the page is
- * refreshed so the list comes from the server; on refusal the server's
- * message (a blank reason, a slot already unavailable) is shown as-is.
+ * Same request/response shape as before: on success the page is refreshed so
+ * the list comes from the server; on refusal the server's message (a blank
+ * reason, a period already unavailable) is shown as-is.
  */
-export function MarkSlotsUnavailableForm({
+export function MarkPeriodUnavailableForm({
   venueId,
-  operatingSlots,
+  opensAt,
+  closesAt,
 }: {
   venueId: string;
-  operatingSlots: OperatingSlot[];
+  opensAt: string;
+  closesAt: string;
 }) {
   const router = useRouter();
+  const opens = toMinutes(opensAt);
+  const closes = toMinutes(closesAt);
+  const startOptions = START_TIME_OPTIONS.filter((time) => toMinutes(time) >= opens && toMinutes(time) < closes);
+  const endOptions = END_TIME_OPTIONS.filter((time) => toMinutes(time) > opens && toMinutes(time) <= closes);
+
   const [date, setDate] = useState('');
-  const [slots, setSlots] = useState<OperatingSlot[]>([]);
+  const [start, setStart] = useState(startOptions[0] ?? opensAt);
+  const [end, setEnd] = useState(endOptions[endOptions.length - 1] ?? closesAt);
   const [reason, setReason] = useState('');
   const [submitting, setSubmitting] = useState(false);
   const [error, setError] = useState<string | null>(null);
   const [saved, setSaved] = useState<string | null>(null);
-
-  function toggleSlot(slot: OperatingSlot) {
-    setSlots((current) => (current.includes(slot) ? current.filter((s) => s !== slot) : [...current, slot]));
-  }
 
   async function onSubmit(event: React.FormEvent) {
     event.preventDefault();
@@ -53,30 +57,31 @@ export function MarkSlotsUnavailableForm({
       const response = await fetch(`/api/venues/${venueId}/unavailable-slots`, {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({ date, slots, reason }),
+        body: JSON.stringify({ date, start, end, reason }),
       });
       const payload = (await response.json().catch(() => null)) as
         | { message?: string; notifiedBookings?: number }
         | null;
 
       if (!response.ok) {
-        throw new Error(payload?.message ?? 'The slots could not be marked unavailable.');
+        throw new Error(payload?.message ?? 'The period could not be marked unavailable.');
       }
       setDate('');
-      setSlots([]);
       setReason('');
       setSaved(savedMessage(payload?.notifiedBookings ?? 0));
       router.refresh();
     } catch (caught) {
-      setError(caught instanceof Error ? caught.message : 'The slots could not be marked unavailable.');
+      setError(caught instanceof Error ? caught.message : 'The period could not be marked unavailable.');
     } finally {
       setSubmitting(false);
     }
   }
 
+  const selectClass = 'mt-1 block rounded-md border border-[var(--border)] bg-[var(--surface)] px-3 py-2 text-sm';
+
   return (
     <form onSubmit={onSubmit} className="space-y-3">
-      <h3 className="text-sm font-medium">Mark slots unavailable</h3>
+      <h3 className="text-sm font-medium">Mark a period unavailable</h3>
 
       <label className="block text-sm" htmlFor="unavailable-date">
         Date
@@ -85,21 +90,32 @@ export function MarkSlotsUnavailableForm({
           type="date"
           value={date}
           onChange={(event) => setDate(event.target.value)}
-          className="mt-1 block rounded-md border border-[var(--border)] bg-[var(--surface)] px-3 py-2 text-sm"
+          className={selectClass}
         />
       </label>
 
-      <fieldset className="text-sm">
-        <legend className="mb-1">Slots</legend>
-        <div className="flex flex-wrap gap-4">
-          {operatingSlots.map((slot) => (
-            <label key={slot} className="flex items-center gap-2">
-              <input type="checkbox" checked={slots.includes(slot)} onChange={() => toggleSlot(slot)} />
-              {OPERATING_SLOT_LABELS[slot]}
-            </label>
-          ))}
-        </div>
-      </fieldset>
+      <div className="flex flex-wrap gap-4">
+        <label className="block text-sm" htmlFor="unavailable-start">
+          Start time
+          <select id="unavailable-start" value={start} onChange={(event) => setStart(event.target.value)} className={selectClass}>
+            {startOptions.map((time) => (
+              <option key={time} value={time}>
+                {time}
+              </option>
+            ))}
+          </select>
+        </label>
+        <label className="block text-sm" htmlFor="unavailable-end">
+          End time
+          <select id="unavailable-end" value={end} onChange={(event) => setEnd(event.target.value)} className={selectClass}>
+            {endOptions.map((time) => (
+              <option key={time} value={time}>
+                {time}
+              </option>
+            ))}
+          </select>
+        </label>
+      </div>
 
       <label className="block text-sm" htmlFor="unavailable-reason">
         Reason
@@ -109,7 +125,7 @@ export function MarkSlotsUnavailableForm({
           onChange={(event) => setReason(event.target.value)}
           rows={2}
           className="mt-1 w-full rounded-md border border-[var(--border)] bg-[var(--surface)] px-3 py-2 text-sm"
-          placeholder="Why can these slots not be used?"
+          placeholder="Why can the venue not be used then?"
         />
       </label>
 
