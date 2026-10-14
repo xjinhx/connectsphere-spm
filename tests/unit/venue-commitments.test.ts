@@ -364,23 +364,39 @@ describe('getVenueCommitments: SCRUM-226 setup and turnaround are committed', ()
     ]);
   });
 
-  it('returns a hold as recorded: setup and turnaround are committed around a booking (CLAUDE.md)', async () => {
-    vi.mocked(fetchConfirmedBookingPeriods).mockResolvedValue(ok([]));
-    vi.mocked(fetchActiveHoldPeriods).mockResolvedValue(
-      ok([
-        {
-          venue_id: VENUE_A,
-          event_request_id: EVENT_ID,
-          date: DAY,
-          start_time: '15:00:00',
-          end_time: '16:00:00',
-          expires_at: '2026-11-03T09:00:00+00:00',
-        },
-      ]),
-    );
+  describe('TC-226-21: a hold is widened like the booking it stands in for', () => {
     const now = new Date('2026-10-10T04:00:00Z');
-    const [hold] = await getVenueCommitments(VENUE_A, at('00:00'), at('24:00'), now);
-    expect(hold).toMatchObject({ kind: 'hold', start: '15:00', end: '16:00' });
+    beforeEach(() => {
+      vi.mocked(fetchConfirmedBookingPeriods).mockResolvedValue(ok([]));
+      vi.mocked(fetchActiveHoldPeriods).mockResolvedValue(
+        ok([
+          {
+            venue_id: VENUE_A,
+            event_request_id: EVENT_ID,
+            date: DAY,
+            start_time: '10:00:00',
+            end_time: '12:00:00',
+            expires_at: '2026-11-03T09:00:00+00:00',
+          },
+        ]),
+      );
+    });
+
+    it('returns a 10:00-12:00 hold as 09:30-12:45, still a hold with its event and expiry', async () => {
+      const [hold] = await getVenueCommitments(VENUE_A, at('00:00'), at('24:00'), now);
+      expect(hold).toMatchObject({
+        kind: 'hold',
+        start: '09:30',
+        end: '12:45',
+        eventRequestId: EVENT_ID,
+        expiresAt: '2026-11-03T09:00:00.000Z',
+      });
+    });
+
+    it("refuses 13:00 (its setup falls in the hold's turnaround) and allows 13:15", async () => {
+      expect((await getVenueCommitments(VENUE_A, at('13:00'), at('14:30'), now)).length).toBe(1);
+      expect((await getVenueCommitments(VENUE_A, at('13:15'), at('14:30'), now)).length).toBe(0);
+    });
   });
 
   it('changes nothing for a venue with no setup and no turnaround (the default)', async () => {

@@ -308,14 +308,18 @@ export async function listUpcomingUnavailablePeriods(
  * SCRUM-226: setup and turnaround are committed, applied here so no caller adds
  * them. Two things widen, both by the venue's setup before and turnaround after
  * (SCRUM-225's committedMinutes):
- *   - each confirmed booking, so 10:00-12:00 with 30 min setup and 45 min
- *     turnaround is returned as 09:30-12:45 (AC4, the calendar shows that);
+ *   - each confirmed booking and each active hold, so 10:00-12:00 with 30 min
+ *     setup and 45 min turnaround is returned as 09:30-12:45 (AC4, the
+ *     calendar shows that). A hold stands in for the booking it becomes, so
+ *     it commits the same time; otherwise another event could book the held
+ *     booking's turnaround before the hold closes (agreed with SCRUM-227's
+ *     owner, 14 Oct 2026; CLAUDE.md "Committed");
  *   - the range asked about, because the new booking needs its own setup and
  *     turnaround too (AC5: 13:00 is refused, its setup would start at 12:30
  *     inside the turnaround; 13:15 is free, its setup starts at 12:45).
- * Unavailable periods and holds are returned as recorded: CLAUDE.md lists
- * setup/turnaround as committed "around a booking". A venue with 0 and 0 (the
- * default, PO 8 Oct 2026) behaves exactly as before.
+ * Unavailable periods are returned as recorded: nothing is set up for a
+ * withdrawn period. A venue with 0 and 0 (the default, PO 8 Oct 2026) behaves
+ * exactly as before.
  *
  * So a caller passes the range it wants to book or search and treats any
  * result as a clash. Re-filtering the result against the bare range (e.g. with
@@ -409,8 +413,11 @@ export async function getVenueCommitments(
         kind: 'hold',
         venueId: row.venue_id,
         date: row.date,
-        start: fromDatabaseTime(row.start_time),
-        end: fromDatabaseTime(row.end_time),
+        // SCRUM-226: a hold commits the time its booking would, setup and turnaround included.
+        ...committedPeriod(
+          { start: fromDatabaseTime(row.start_time), end: fromDatabaseTime(row.end_time) },
+          setupTurnaround,
+        ),
         eventRequestId: row.event_request_id,
         reason: null,
         expiresAt: new Date(row.expires_at).toISOString(),
