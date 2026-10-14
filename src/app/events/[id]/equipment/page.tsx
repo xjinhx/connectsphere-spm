@@ -1,6 +1,7 @@
 import Link from 'next/link';
 import { notFound } from 'next/navigation';
 import AddEquipmentLineForm from '@/components/equipment-request/AddEquipmentLineForm';
+import EquipmentLineEditor from '@/components/equipment-request/EquipmentLineEditor';
 import { EventRequestStatusBadge } from '@/components/event-request/EventRequestStatusBadge';
 import { EQUIPMENT_CATEGORY_LABELS } from '@/domain/equipment/schema';
 import { listEquipmentOptions } from '@/domain/equipment/service';
@@ -101,6 +102,11 @@ export default async function EventEquipmentRequestPage({ params }: { params: Pr
                   <th scope="col" className="p-3 font-medium">
                     Reserved
                   </th>
+                  {request.canEdit ? (
+                    <th scope="col" className="p-3 font-medium">
+                      Change or remove
+                    </th>
+                  ) : null}
                 </tr>
               </thead>
               <tbody>
@@ -110,6 +116,16 @@ export default async function EventEquipmentRequestPage({ params }: { params: Pr
                     <td className="p-3">{EQUIPMENT_CATEGORY_LABELS[line.category]}</td>
                     <td className="p-3">{line.quantity}</td>
                     <td className="p-3">{line.reserved ? 'Yes' : 'No'}</td>
+                    {request.canEdit ? (
+                      <td className="p-3">
+                        {/* AC7, AC8: keyed on the stored quantity, so the box resets after a save. */}
+                        <EquipmentLineEditor
+                          key={`${line.id}-${line.quantity}`}
+                          eventRequestId={request.eventRequestId}
+                          line={line}
+                        />
+                      </td>
+                    ) : null}
                   </tr>
                 ))}
               </tbody>
