@@ -49,6 +49,7 @@ import { notifyBestEffort } from '@/domain/notification/service';
 import { fromDatabaseTime, rangesOverlap } from '@/domain/shared/times';
 import { withoutOwnHolds } from '@/domain/venue-hold/policy';
 import { getVenue } from '@/domain/venues/service';
+import type { SetupTurnaround } from '@/domain/venues/policy';
 import { fetchEventRequestById } from '@/lib/supabase/eventRequests';
 import { fetchProfileNames } from '@/lib/supabase/profiles';
 import { fetchEventNames } from '@/lib/supabase/venueHolds';
@@ -109,18 +110,23 @@ function lineDetails(issues: { path: (string | number)[]; message: string }[]) {
 /**
  * SCRUM-239 AC1 (request part): every requested period must sit inside the
  * venue's opening hours. A period outside them is refused, and the line's
- * times say why.
+ * times say why. SCRUM-226: with the venue's setup before it and turnaround
+ * after it (TC-226-18, 19).
  */
-async function refuseOutsideOpeningHours(venueId: string, lines: readonly RequestedLine[]): Promise<void> {
+async function refuseOutsideOpeningHours(
+  venueId: string,
+  lines: readonly RequestedLine[],
+  times: SetupTurnaround,
+): Promise<void> {
   const { data, error } = await fetchVenueOpeningHours(venueId);
   if (error || !data) {
     throw new ValidationError("Could not check the venue's opening hours.", error?.message);
   }
   const hours = { opensAt: fromDatabaseTime(data.opens_at), closesAt: fromDatabaseTime(data.closes_at) };
-  const outside = lines.flatMap((line, index) => (isOutsideOpeningHours(line, hours) ? [index] : []));
+  const outside = lines.flatMap((line, index) => (isOutsideOpeningHours(line, hours, times) ? [index] : []));
   if (outside.length === 0) return;
 
-  const message = outsideOpeningHoursMessage(hours);
+  const message = outsideOpeningHoursMessage(hours, times);
   throw new ValidationError(
     `This venue cannot be requested for that time. ${message}`,
     lineDetails(outside.flatMap((index) => [{ path: [index, 'start'], message }, { path: [index, 'end'], message }])),
@@ -249,7 +255,10 @@ export async function submitVenueBookingRequest(
 
   // SCRUM-239 AC1, then AC3 and AC8 — after the field checks, so a request
   // that is missing fields is told so first, and before anything is written.
-  await refuseOutsideOpeningHours(venue.id, lines);
+  await refuseOutsideOpeningHours(venue.id, lines, {
+    setupMinutes: venue.setupMinutes ?? 0,
+    turnaroundMinutes: venue.turnaroundMinutes ?? 0,
+  });
   await refuseClashingPeriods(venue.id, parsedId.data, lines);
 
   const { data: newRequestId, error: writeError } = await createVenueBookingRequest({
