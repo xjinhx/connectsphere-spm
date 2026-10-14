@@ -66,3 +66,25 @@ export async function insertEquipmentRequestLine(line: {
     .select(LINE_SELECT)
     .single();
 }
+
+/** AC7: changes one line's quantity. Null when the event has no such line. */
+export async function updateEquipmentRequestLineQuantity(eventRequestId: string, lineId: string, quantity: number) {
+  return db()
+    .from('equipment_request_line')
+    .update({ quantity, updated_at: new Date().toISOString() })
+    .eq('event_request_id', eventRequestId)
+    .eq('id', lineId)
+    .select(LINE_SELECT)
+    .maybeSingle();
+}
+
+/** AC7: removes one line. Returns the removed line's id, or null when the event has no such line. */
+export async function deleteEquipmentRequestLine(eventRequestId: string, lineId: string) {
+  return db()
+    .from('equipment_request_line')
+    .delete()
+    .eq('event_request_id', eventRequestId)
+    .eq('id', lineId)
+    .select('id')
+    .maybeSingle();
+}

@@ -5,16 +5,20 @@ import type { Role } from '@/domain/identity/roles';
 import { ForbiddenError, NotFoundError, ValidationError } from '@/domain/shared/errors';
 import { fetchEventRequestById, type EventRequestRow } from '@/lib/supabase/eventRequests';
 import {
+  deleteEquipmentRequestLine,
   ensureEquipmentRequest,
   fetchEquipmentRequestLines,
   insertEquipmentRequestLine,
+  updateEquipmentRequestLineQuantity,
 } from '@/lib/supabase/equipmentRequests';
 import { EVENT_NOT_OPEN_FOR_EQUIPMENT_MESSAGE, acceptsEquipmentRequest } from './policy';
 import {
   AddEquipmentLineInputSchema,
   AddEquipmentLineOutcomeSchema,
+  EquipmentRequestLineIdSchema,
   EquipmentRequestLineSchema,
   EquipmentRequestViewSchema,
+  UpdateEquipmentLineInputSchema,
   type AddEquipmentLineOutcome,
   type EquipmentRequestLine,
   type EquipmentRequestView,
@@ -67,6 +71,15 @@ async function readEvent(eventRequestId: string): Promise<EventRequestRow> {
   if (error) throw new ValidationError('The event request could not be read.', error.message);
   if (!data) throw new NotFoundError('Event request');
   return data as unknown as EventRequestRow;
+}
+
+/** The event, refused unless it is still open to equipment request edits (AC1's statuses). */
+async function readOpenEvent(eventRequestId: string): Promise<EventRequestRow> {
+  const event = await readEvent(eventRequestId);
+  if (!acceptsEquipmentRequest(event.status)) {
+    throw new ValidationError(EVENT_NOT_OPEN_FOR_EQUIPMENT_MESSAGE);
+  }
+  return event;
 }
 
 async function readLines(eventRequestId: string): Promise<EquipmentRequestLine[]> {
@@ -125,11 +138,7 @@ export async function addEquipmentLine(
   actorId: string,
   input: unknown,
 ): Promise<AddEquipmentLineOutcome> {
-  const event = await readEvent(eventRequestId);
-
-  if (!acceptsEquipmentRequest(event.status)) {
-    throw new ValidationError(EVENT_NOT_OPEN_FOR_EQUIPMENT_MESSAGE);
-  }
+  const event = await readOpenEvent(eventRequestId);
 
   const parsed = AddEquipmentLineInputSchema.safeParse(input);
   if (!parsed.success) throw validationError(parsed.error, 'The equipment item is not valid.');
@@ -148,4 +157,50 @@ export async function addEquipmentLine(
   if (error || !data) throw new ValidationError('The equipment item could not be saved.', error?.message);
 
   return AddEquipmentLineOutcomeSchema.parse({ line: toLine(data as unknown as LineRow) });
+}
+
+// -----------------------------------------------------------------------------
+// AC7: change or remove an item
+// -----------------------------------------------------------------------------
+
+function parseLineId(lineId: string): string {
+  const id = EquipmentRequestLineIdSchema.safeParse(lineId);
+  if (!id.success) throw new NotFoundError('Equipment line');
+  return id.data;
+}
+
+/**
+ * AC7: "Given an equipment item has not yet been reserved, when I change its
+ * quantity ... then the change is saved immediately" - one call, no
+ * confirmation step (TC-160-19, TC-160-20). Only the quantity changes; the
+ * item a line names is fixed once added.
+ */
+export async function updateEquipmentLineQuantity(
+  eventRequestId: string,
+  lineId: string,
+  input: unknown,
+): Promise<EquipmentRequestLine> {
+  const event = await readOpenEvent(eventRequestId);
+  const id = parseLineId(lineId);
+
+  const parsed = UpdateEquipmentLineInputSchema.safeParse(input);
+  if (!parsed.success) throw validationError(parsed.error, 'The quantity is not valid.');
+
+  const { data, error } = await updateEquipmentRequestLineQuantity(event.id, id, parsed.data.quantity);
+  if (error) throw new ValidationError('The change could not be saved.', error.message);
+  if (!data) throw new NotFoundError('Equipment line');
+  return toLine(data as unknown as LineRow);
+}
+
+/**
+ * AC7: "Given an equipment item has not yet been reserved, when I ... remove
+ * it, then the change is saved immediately" (TC-160-19).
+ */
+export async function removeEquipmentLine(eventRequestId: string, lineId: string): Promise<void> {
+  const event = await readOpenEvent(eventRequestId);
+  const id = parseLineId(lineId);
+
+  const { data, error } = await deleteEquipmentRequestLine(event.id, id);
+  if (error) throw new ValidationError('The item could not be removed.', error.message);
+  if (!data) throw new NotFoundError('Equipment line');
 }

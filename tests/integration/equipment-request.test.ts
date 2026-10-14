@@ -2,7 +2,12 @@ import { afterAll, beforeAll, describe, expect, it } from 'vitest';
 import { createAdminClient } from '@/lib/supabase/admin';
 import { assignCoordinator } from '@/domain/assignment/service';
 import { createEquipmentItem } from '@/domain/equipment/service';
-import { addEquipmentLine, getEquipmentRequest } from '@/domain/equipment-request/service';
+import {
+  addEquipmentLine,
+  getEquipmentRequest,
+  removeEquipmentLine,
+  updateEquipmentLineQuantity,
+} from '@/domain/equipment-request/service';
 import { changeEventStatus, enterPlanning } from '@/domain/event-status/service';
 import type { EventRequestStatus } from '@/domain/event-request/schema';
 import type { Role } from '@/domain/identity/roles';
@@ -22,6 +27,8 @@ import { ensureTestClientOrganisation, TEST_CLIENT_ORGANISATION_ID } from './fix
  *   AC1 "Given I am the assigned coordinator of an event that is Approved or
  *        in Planning, when I add an equipment type and a quantity, then the
  *        item is saved against the event's equipment request."
+ *   AC7 "Given an equipment item has not yet been reserved, when I change its
+ *        quantity or remove it, then the change is saved immediately."
  *
  * Test case IDs are from the Sprint 3 sheet's SCRUM-160 tab (TC-160-nn).
  */
@@ -41,6 +48,7 @@ let technicalSupport: Account;
 let coordinatorA: Account;
 
 let projector: string;
+let wirelessMic: string;
 let lectern: string;
 
 async function createAccount(label: string, roles: Role[]): Promise<Account> {
@@ -121,6 +129,7 @@ beforeAll(async () => {
   coordinatorA = await createAccount('coordinator-a', ['coordinator']);
 
   projector = await addItem('Projector P-100');
+  wirelessMic = await addItem('Wireless mic WM-3');
   lectern = await addItem('Lectern LC-1');
 });
 
@@ -176,5 +185,43 @@ describe('SCRUM-160 AC1: adding an item to the event\'s equipment request', () =
     await addEquipmentLine(event, coordinatorA.userId, { equipmentId: lectern, quantity: 1 });
 
     expect(await storedLines(event)).toMatchObject([{ equipment_id: lectern, quantity: 1 }]);
+  });
+});
+
+// -----------------------------------------------------------------------------
+// AC7 — an unreserved item is changed or removed immediately
+// -----------------------------------------------------------------------------
+
+describe('SCRUM-160 AC7: changing or removing an unreserved item', () => {
+  it('TC-160-19 saves a quantity change and a removal at once, with no confirmation step', async () => {
+    const event = await createEvent('planning');
+    const { line: projectorLine } = await addEquipmentLine(event, coordinatorA.userId, { equipmentId: projector, quantity: 2 });
+    const { line: micLine } = await addEquipmentLine(event, coordinatorA.userId, { equipmentId: wirelessMic, quantity: 4 });
+
+    // One call each: nothing asks for a confirmation first.
+    await updateEquipmentLineQuantity(event, projectorLine.id, { quantity: 5 });
+    await removeEquipmentLine(event, micLine.id);
+
+    expect(await storedLines(event)).toEqual([{ id: projectorLine.id, equipment_id: projector, quantity: 5 }]);
+  });
+
+  it('TC-160-20 saves a reduction of an unreserved item at once', async () => {
+    const event = await createEvent('planning');
+    const { line } = await addEquipmentLine(event, coordinatorA.userId, { equipmentId: projector, quantity: 5 });
+
+    const changed = await updateEquipmentLineQuantity(event, line.id, { quantity: 3 });
+
+    expect(changed.quantity).toBe(3);
+    expect(await storedLines(event)).toMatchObject([{ id: line.id, quantity: 3 }]);
+  });
+
+  it("refuses a line that belongs to another event's request, and changes nothing", async () => {
+    const event = await createEvent('planning');
+    const other = await createEvent('planning');
+    const { line } = await addEquipmentLine(other, coordinatorA.userId, { equipmentId: projector, quantity: 2 });
+
+    await expect(updateEquipmentLineQuantity(event, line.id, { quantity: 9 })).rejects.toMatchObject({ code: 'NOT_FOUND' });
+    await expect(removeEquipmentLine(event, line.id)).rejects.toMatchObject({ code: 'NOT_FOUND' });
+    expect(await storedLines(other)).toMatchObject([{ id: line.id, quantity: 2 }]);
   });
 });

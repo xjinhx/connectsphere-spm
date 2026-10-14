@@ -41,6 +41,12 @@ export const AddEquipmentLineInputSchema = z.object({
 });
 export type AddEquipmentLineInput = z.infer<typeof AddEquipmentLineInputSchema>;
 
+/** AC7: "when I change its quantity". */
+export const UpdateEquipmentLineInputSchema = z.object({
+  quantity: RequestedQuantitySchema,
+});
+export type UpdateEquipmentLineInput = z.infer<typeof UpdateEquipmentLineInputSchema>;
+
 /** One line of the request, as the API and the page show it. */
 export const EquipmentRequestLineSchema = z.object({
   id: z.string().uuid(),
