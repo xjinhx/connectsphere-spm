@@ -43,6 +43,7 @@ import {
 } from './policy';
 import { isCurrentCoordinator } from '@/domain/assignment/policy';
 import { getVenueCommitments } from '@/domain/availability/service';
+import { normaliseAccessibility } from '@/domain/event-request/policy';
 import { toCommittedPeriods } from '@/domain/availability/policy';
 import type { Role } from '@/domain/identity/roles';
 import { notifyBestEffort } from '@/domain/notification/service';
@@ -252,11 +253,24 @@ export async function submitVenueBookingRequest(
   await refuseOutsideOpeningHours(venue.id, lines);
   await refuseClashingPeriods(venue.id, parsedId.data, lines);
 
+  // SCRUM-230 AC1: the request's own venue requirements; anything left empty
+  // is stored as null and the event's is used (AC2). Notes only go with a
+  // "needed" answer, the same rule as the event's (SCRUM-79).
+  const accessibility = normaliseAccessibility({
+    accessibilityRequired: parsedInput.data.accessibilityRequired,
+    accessibilityFeatureIds: [],
+    accessibilityNotes: parsedInput.data.accessibilityNotes,
+  });
+
   const { data: newRequestId, error: writeError } = await createVenueBookingRequest({
     eventRequestId: parsedId.data,
     venueId: parsedInput.data.venueId,
     requestedBy: actorId,
     lines,
+    expectedAttendance: parsedInput.data.expectedAttendance ?? null,
+    roomLayout: parsedInput.data.roomLayout ?? null,
+    accessibilityRequired: accessibility.required,
+    accessibilityNotes: accessibility.notes,
   });
 
   if (writeError || !newRequestId) {
