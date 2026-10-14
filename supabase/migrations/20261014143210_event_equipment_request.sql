@@ -11,6 +11,9 @@
 --      SCRUM-142's booking request; RLS here is the deny-all backstop.
 -- AC2: a quantity of zero or below is refused
 --      (equipment_request_line_quantity_at_least_one).
+-- AC3: the same type twice is two lines, never merged, so there is
+--      deliberately no unique index on (event_request_id, equipment_id) -
+--      unlike SCRUM-80's event_request_equipment_item_unique.
 --
 -- Kept apart from SCRUM-80's event_request_equipment (20260913100000): that is
 -- the free text an Event Organiser types on the request form, with one line per

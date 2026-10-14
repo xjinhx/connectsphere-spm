@@ -20,3 +20,21 @@ export function acceptsEquipmentRequest(status: EventRequestStatus): boolean {
 
 export const EVENT_NOT_OPEN_FOR_EQUIPMENT_MESSAGE =
   'Equipment can only be requested for an event that is Approved or in Planning.';
+
+/**
+ * AC3: "Given I add the same equipment type a second time on the same event,
+ * when I save, then a separate line is created and the existing line is shown
+ * to me so that I can merge them if that was my intent; lines are never merged
+ * automatically."
+ *
+ * The event's other lines that name the same catalogue item as `added`, in the
+ * order given. Empty for a type the event has not asked for before (TC-160-09).
+ * Only the request it is given is searched, so the same type on another event
+ * is never reported (AC3 says "on the same event").
+ */
+export function linesOfSameType<T extends { id: string; equipmentId: string }>(
+  lines: readonly T[],
+  added: { id: string; equipmentId: string },
+): T[] {
+  return lines.filter((line) => line.id !== added.id && line.equipmentId === added.equipmentId);
+}

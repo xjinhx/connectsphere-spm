@@ -1,5 +1,5 @@
 import { describe, expect, it } from 'vitest';
-import { acceptsEquipmentRequest } from '@/domain/equipment-request/policy';
+import { acceptsEquipmentRequest, linesOfSameType } from '@/domain/equipment-request/policy';
 import { AddEquipmentLineInputSchema, UpdateEquipmentLineInputSchema } from '@/domain/equipment-request/schema';
 import { EventRequestStatusEnum, type EventRequestStatus } from '@/domain/event-request/schema';
 
@@ -12,6 +12,7 @@ import { EventRequestStatusEnum, type EventRequestStatus } from '@/domain/event-
  */
 
 const PROJECTOR = '11111111-1111-4111-8111-111111111111';
+const MIC = '22222222-2222-4222-8222-222222222222';
 
 function fieldErrors(input: unknown) {
   const parsed = AddEquipmentLineInputSchema.safeParse(input);
@@ -78,5 +79,23 @@ describe('AC2: the quantity must be at least one', () => {
     expect(parsed.success ? null : parsed.error.flatten().fieldErrors).toEqual({
       quantity: ['Quantity must be at least one.'],
     });
+  });
+});
+
+describe('AC3: the existing lines of the same type are shown', () => {
+  const existing = { id: 'line-1', equipmentId: PROJECTOR };
+
+  it('TC-160-07 lists the existing Projector line when a second Projector line is added', () => {
+    const added = { id: 'line-2', equipmentId: PROJECTOR };
+    expect(linesOfSameType([existing, added], added)).toEqual([existing]);
+  });
+
+  it('TC-160-09 lists nothing when a different type is added', () => {
+    const added = { id: 'line-2', equipmentId: MIC };
+    expect(linesOfSameType([existing, added], added)).toEqual([]);
+  });
+
+  it('never lists the added line itself', () => {
+    expect(linesOfSameType([existing], existing)).toEqual([]);
   });
 });

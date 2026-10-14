@@ -11,7 +11,7 @@ import {
   insertEquipmentRequestLine,
   updateEquipmentRequestLineQuantity,
 } from '@/lib/supabase/equipmentRequests';
-import { EVENT_NOT_OPEN_FOR_EQUIPMENT_MESSAGE, acceptsEquipmentRequest } from './policy';
+import { EVENT_NOT_OPEN_FOR_EQUIPMENT_MESSAGE, acceptsEquipmentRequest, linesOfSameType } from './policy';
 import {
   AddEquipmentLineInputSchema,
   AddEquipmentLineOutcomeSchema,
@@ -145,6 +145,9 @@ export async function getEquipmentRequest(eventRequestId: string, actor: Actor):
  * as well as one the picker never offered.
  *
  * The event's first line creates its equipment request.
+ *
+ * AC3: adding a type the event already has creates a separate line, and the
+ * outcome lists the existing ones (TC-160-07, TC-160-08).
  */
 export async function addEquipmentLine(
   eventRequestId: string,
@@ -172,7 +175,11 @@ export async function addEquipmentLine(
     throw new ValidationError('The equipment item could not be saved.', error?.message);
   }
 
-  return AddEquipmentLineOutcomeSchema.parse({ line: toLine(data as unknown as LineRow) });
+  // AC3: always a new line, never folded into an existing one; the existing
+  // lines of the same type come back so the coordinator is shown them.
+  const line = toLine(data as unknown as LineRow);
+  const sameTypeLines = linesOfSameType(await readLines(event.id), line);
+  return AddEquipmentLineOutcomeSchema.parse({ line, sameTypeLines });
 }
 
 // -----------------------------------------------------------------------------

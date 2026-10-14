@@ -30,6 +30,10 @@ import { ensureTestClientOrganisation, TEST_CLIENT_ORGANISATION_ID } from './fix
  *   AC2 "Given I enter a quantity that is zero or negative, when I attempt to
  *        save, then the item is not added and I am told the quantity must be
  *        at least one."
+ *   AC3 "Given I add the same equipment type a second time on the same event,
+ *        when I save, then a separate line is created and the existing line
+ *        is shown to me so that I can merge them if that was my intent; lines
+ *        are never merged automatically."
  *   AC7 "Given an equipment item has not yet been reserved, when I change its
  *        quantity or remove it, then the change is saved immediately."
  *
@@ -234,6 +238,56 @@ describe('SCRUM-160 AC2: a quantity of zero or below', () => {
       .from('equipment_request_line')
       .insert({ event_request_id: event, equipment_id: projector, quantity: 0, created_by: coordinatorA.userId });
     expect(error?.code).toBe('23514');
+  });
+});
+
+// -----------------------------------------------------------------------------
+// AC3 — the same type twice is two lines, and the existing one is shown
+// -----------------------------------------------------------------------------
+
+describe('SCRUM-160 AC3: adding the same equipment type again', () => {
+  it('TC-160-07 creates a second line and shows the existing one', async () => {
+    const event = await createEvent('planning');
+    const { line: first } = await addEquipmentLine(event, coordinatorA.userId, { equipmentId: projector, quantity: 2 });
+
+    const outcome = await addEquipmentLine(event, coordinatorA.userId, { equipmentId: projector, quantity: 3 });
+
+    expect(outcome.line).toMatchObject({ equipmentId: projector, quantity: 3 });
+    expect(outcome.line.id).not.toBe(first.id);
+    expect(outcome.sameTypeLines).toEqual([first]);
+  });
+
+  it('TC-160-08 keeps the two lines apart: no single x 5 line is ever stored', async () => {
+    const event = await createEvent('planning');
+    await addEquipmentLine(event, coordinatorA.userId, { equipmentId: projector, quantity: 2 });
+    await addEquipmentLine(event, coordinatorA.userId, { equipmentId: projector, quantity: 3 });
+
+    const stored = await storedLines(event);
+    expect(stored.map((line) => line.quantity)).toEqual([2, 3]);
+    expect(stored.every((line) => line.equipment_id === projector)).toBe(true);
+    // And a fresh read of the request shows both, still apart.
+    const request = await getEquipmentRequest(event, coordinatorA);
+    expect(request.lines.map((line) => line.quantity)).toEqual([2, 3]);
+  });
+
+  it('TC-160-09 shows no existing line when a different type is added', async () => {
+    const event = await createEvent('planning');
+    await addEquipmentLine(event, coordinatorA.userId, { equipmentId: projector, quantity: 2 });
+
+    const outcome = await addEquipmentLine(event, coordinatorA.userId, { equipmentId: wirelessMic, quantity: 2 });
+
+    expect(outcome.sameTypeLines).toEqual([]);
+    expect(await storedLines(event)).toHaveLength(2);
+  });
+
+  it('shows no existing line for the same type on a different event', async () => {
+    const event = await createEvent('planning');
+    const other = await createEvent('planning');
+    await addEquipmentLine(other, coordinatorA.userId, { equipmentId: projector, quantity: 2 });
+
+    const outcome = await addEquipmentLine(event, coordinatorA.userId, { equipmentId: projector, quantity: 1 });
+
+    expect(outcome.sameTypeLines).toEqual([]);
   });
 });
 

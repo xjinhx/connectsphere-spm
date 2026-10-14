@@ -81,8 +81,13 @@ export const EquipmentRequestViewSchema = z.object({
 });
 export type EquipmentRequestView = z.infer<typeof EquipmentRequestViewSchema>;
 
-/** What adding a line returns: the saved line. */
+/**
+ * What adding a line returns: the saved line and, for AC3, the event's other
+ * lines of the same type, so the coordinator is shown them and can merge by
+ * hand (change one quantity, remove the other).
+ */
 export const AddEquipmentLineOutcomeSchema = z.object({
   line: EquipmentRequestLineSchema,
+  sameTypeLines: z.array(EquipmentRequestLineSchema),
 });
 export type AddEquipmentLineOutcome = z.infer<typeof AddEquipmentLineOutcomeSchema>;
