@@ -52,6 +52,8 @@ import { ensureTestClientOrganisation, TEST_CLIENT_ORGANISATION_ID } from './fix
  *   AC9 "Given the event starts tomorrow, when I amend the equipment request,
  *        then the amendment is accepted with no notice-period warning, because
  *        no minimum notice period is enforced."
+ *   AC10 "Given an event is Approved, when the first equipment request is
+ *         raised against it, then the status becomes Planning."
  *
  * Reserving equipment is SCRUM-167, not built. A line is reserved here by a
  * row in the stand-in equipment_reservation table (dummy D-18), inserted by
@@ -153,6 +155,13 @@ async function addItem(name: string): Promise<string> {
 async function reserve(lineId: string): Promise<void> {
   const { error } = await admin.from('equipment_reservation').insert({ line_id: lineId });
   if (error) throw new Error(`could not reserve test line: ${error.message}`);
+}
+
+/** The event's stored status, read straight from the table. */
+async function storedStatus(eventId: string): Promise<EventRequestStatus> {
+  const { data, error } = await admin.from('event_request').select('status').eq('id', eventId).single();
+  if (error) throw new Error(`could not read test event: ${error.message}`);
+  return data.status as EventRequestStatus;
 }
 
 /** The event's stored technical requirements, read straight from the table. */
@@ -665,5 +674,48 @@ describe('SCRUM-160 AC9: an event starting tomorrow', () => {
     });
     expect(JSON.stringify(refusal)).not.toMatch(/notice/i);
     expect(Object.keys((refusal as { details: { fieldErrors: object } }).details.fieldErrors)).toEqual(['quantity']);
+  });
+});
+
+// -----------------------------------------------------------------------------
+// AC10 — the first equipment request moves an Approved event to Planning
+// -----------------------------------------------------------------------------
+
+describe('SCRUM-160 AC10: the first equipment request against an Approved event', () => {
+  it('TC-160-26 moves the event to Planning', async () => {
+    const event = await createEvent('approved');
+
+    await addEquipmentLine(event, coordinatorA.userId, { equipmentId: wirelessMic, quantity: 4 });
+
+    expect(await storedStatus(event)).toBe('planning');
+  });
+
+  it('TC-160-27 leaves the event Approved when the item is refused, since nothing was raised', async () => {
+    const event = await createEvent('approved');
+
+    await expect(
+      addEquipmentLine(event, coordinatorA.userId, { equipmentId: projector, quantity: 0 }),
+    ).rejects.toMatchObject({ code: 'VALIDATION_ERROR' });
+
+    expect(await storedLines(event)).toEqual([]);
+    expect(await storedStatus(event)).toBe('approved');
+  });
+
+  it("leaves the event Approved when an unassigned coordinator's item is refused", async () => {
+    const event = await createEvent('approved');
+
+    await expect(
+      addEquipmentLine(event, coordinatorB.userId, { equipmentId: projector, quantity: 2 }),
+    ).rejects.toMatchObject({ code: 'FORBIDDEN' });
+
+    expect(await storedStatus(event)).toBe('approved');
+  });
+
+  it('leaves the event Approved when only technical requirements are saved (interim)', async () => {
+    const event = await createEvent('approved');
+
+    await saveTechnicalRequirements(event, coordinatorA.userId, { technicalRequirements: 'HDMI to lectern' });
+
+    expect(await storedStatus(event)).toBe('approved');
   });
 });

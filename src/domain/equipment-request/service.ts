@@ -231,6 +231,11 @@ export async function getEquipmentRequest(eventRequestId: string, actor: Actor):
  *
  * AC3: adding a type the event already has creates a separate line, and the
  * outcome lists the existing ones (TC-160-07, TC-160-08).
+ *
+ * AC10: the event's own status reacts to the new line - an Approved event
+ * becomes Planning - through SCRUM-101's database trigger, in the same
+ * transaction as the insert (equipment_request_line_enter_planning). Nothing
+ * to call from here.
  */
 export async function addEquipmentLine(
   eventRequestId: string,

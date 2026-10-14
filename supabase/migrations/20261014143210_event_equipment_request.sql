@@ -19,6 +19,8 @@
 -- AC7, AC8: whether a line has been reserved decides whether reducing it needs
 --      a confirmation. Reserving equipment is SCRUM-167 (stretch, not built),
 --      so equipment_reservation below is a stand-in: dummy D-18.
+-- AC10: the first equipment request raised against an Approved event moves it
+--      to Planning (equipment_request_line_enter_planning, below).
 --
 -- Kept apart from SCRUM-80's event_request_equipment (20260913100000): that is
 -- the free text an Event Organiser types on the request form, with one line per
@@ -64,6 +66,24 @@ create index equipment_request_line_event_idx on equipment_request_line (event_r
 -- writes through the service-role client and decides access in the service.
 alter table equipment_request enable row level security;
 alter table equipment_request_line enable row level security;
+
+-- -----------------------------------------------------------------------------
+-- AC10: Approved -> Planning when the first equipment request is raised
+-- -----------------------------------------------------------------------------
+-- SCRUM-101's rule, not a second copy of it: the same function its trigger on
+-- venue_booking_request runs (20261006100000), which moves the event named by
+-- new.event_request_id from 'approved' to 'planning' and leaves any other
+-- status alone. Its name says booking request because that story added it for
+-- one; the body only reads event_request_id, which a line has too.
+--
+-- Raising the request means adding an item, so this fires on a new line.
+-- Saving the technical requirements alone does not move the event (interim,
+-- to confirm at standup - recorded on TC-160-26). It runs in the same
+-- transaction as the insert, so the line and the event's new status land
+-- together or not at all, and a refused item (AC2, AC4) never moves it.
+create trigger equipment_request_line_enter_planning
+  after insert on equipment_request_line
+  for each row execute function enter_planning_on_booking_request();
 
 -- -----------------------------------------------------------------------------
 -- AC8: reservations - a stand-in until SCRUM-167
