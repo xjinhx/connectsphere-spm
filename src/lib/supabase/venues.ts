@@ -23,7 +23,7 @@ const VENUE_SUMMARY_SELECT = 'id, name, max_capacity, is_retired, locations ( id
 
 /** SCRUM-121 AC2: the full venue page, including turnaround values. */
 const VENUE_DETAIL_SELECT =
-  'id, name, max_capacity, is_retired, operating_slots, needs_setup_slot, needs_turnaround_slot, setup_minutes, turnaround_minutes, created_at, updated_at, locations ( id, name ), venue_facilities ( facilities ( id, name ) ), venue_accessibility_features ( accessibility_features ( id, name ) ), venue_layouts ( layout, capacity )';
+  'id, name, max_capacity, is_retired, operating_slots, opens_at, closes_at, needs_setup_slot, needs_turnaround_slot, setup_minutes, turnaround_minutes, created_at, updated_at, locations ( id, name ), venue_facilities ( facilities ( id, name ) ), venue_accessibility_features ( accessibility_features ( id, name ) ), venue_layouts ( layout, capacity )';
 
 // -----------------------------------------------------------------------------
 // Reading the catalogue
@@ -93,6 +93,8 @@ export async function createVenueWithLists(venue: {
   facilityIds: string[];
   accessibilityFeatureIds: string[];
   layouts: VenueLayoutRow[];
+  opensAt?: string;
+  closesAt?: string;
 }) {
   return db().rpc('create_venue', {
     p_name: venue.name,
@@ -102,6 +104,8 @@ export async function createVenueWithLists(venue: {
     p_facility_ids: venue.facilityIds,
     p_accessibility_feature_ids: venue.accessibilityFeatureIds,
     p_layouts: venue.layouts,
+    ...(venue.opensAt !== undefined && { p_opens_at: venue.opensAt }),
+    ...(venue.closesAt !== undefined && { p_closes_at: venue.closesAt }),
   });
 }
 
@@ -141,6 +145,8 @@ export async function saveVenueChanges(
     needsTurnaroundSlot?: boolean;
     setupMinutes?: number;
     turnaroundMinutes?: number;
+    opensAt?: string;
+    closesAt?: string;
   },
   {
     confirmAffectedBookings = false,
@@ -164,6 +170,8 @@ export async function saveVenueChanges(
     ...(changes.layouts !== undefined && { p_layouts: changes.layouts }),
     ...(changes.setupMinutes !== undefined && { p_setup_minutes: changes.setupMinutes }),
     ...(changes.turnaroundMinutes !== undefined && { p_turnaround_minutes: changes.turnaroundMinutes }),
+    ...(changes.opensAt !== undefined && { p_opens_at: changes.opensAt }),
+    ...(changes.closesAt !== undefined && { p_closes_at: changes.closesAt }),
     p_confirm_affected_bookings: confirmAffectedBookings,
     p_confirm_setup_turnaround_change: confirmSetupTurnaroundChange,
     ...(today !== undefined && { p_today: today }),

@@ -1,6 +1,6 @@
 import { z } from 'zod';
 import { isISODate } from '@/domain/shared/dates';
-import { ClockRangeSchema } from '@/domain/shared/times';
+import { ClockRangeSchema, EndTimeSchema, StartTimeSchema } from '@/domain/shared/times';
 
 /**
  * Venue Catalogue (EP-08): data shapes shared by the API routes and the UI.
@@ -13,6 +13,7 @@ import { ClockRangeSchema } from '@/domain/shared/times';
  * SCRUM-128 Search venues by date and slot
  * SCRUM-123 View a venue's calendar with the state of each slot
  * SCRUM-225 Record setup and turnaround time for each venue
+ * SCRUM-239 Venue opening hours in 15-minute steps (AC1)
  *
  * Values mirror the check constraints in
  * supabase/migrations/20260911063000_create_venue_catalogue.sql.
@@ -151,6 +152,35 @@ function setupTurnaroundMinutesSchema(label: 'Setup time' | 'Turnaround time') {
   });
 }
 
+/**
+ * SCRUM-239 AC1: "when I set opening and closing times in 15-minute steps and
+ * save, then they replace the venue's slot configuration". Each time on its
+ * 15-minute step (the shared StartTimeSchema / EndTimeSchema), sent together,
+ * and the closing time after the opening time. Errors are on opensAt /
+ * closesAt so the form can name the field.
+ */
+const OpensAtSchema = StartTimeSchema;
+const ClosesAtSchema = EndTimeSchema;
+
+function hoursTogether(input: { opensAt?: string; closesAt?: string }, ctx: z.RefinementCtx) {
+  const { opensAt, closesAt } = input;
+  if (opensAt === undefined && closesAt === undefined) return;
+  if (opensAt === undefined || closesAt === undefined) {
+    const path = opensAt === undefined ? 'opensAt' : 'closesAt';
+    ctx.addIssue({ code: z.ZodIssueCode.custom, path: [path], message: 'Set both the opening and the closing time.' });
+    return;
+  }
+  // The shared rule: closing after opening, on both fields.
+  const range = ClockRangeSchema.safeParse({ start: opensAt, end: closesAt });
+  if (range.success) return;
+  for (const issue of range.error.issues) {
+    if (issue.message === 'The end time must be after the start time.') {
+      const field = issue.path[0] === 'start' ? 'opensAt' : 'closesAt';
+      ctx.addIssue({ code: z.ZodIssueCode.custom, path: [field], message: 'The closing time must be after the opening time.' });
+    }
+  }
+}
+
 // -----------------------------------------------------------------------------
 // Inputs (request bodies and query strings)
 // -----------------------------------------------------------------------------
@@ -165,15 +195,23 @@ function setupTurnaroundMinutesSchema(label: 'Setup time' | 'Turnaround time') {
  * see UpdateVenueInputSchema) and retiring (SCRUM-122) are deliberately
  * not accepted here.
  */
-export const CreateVenueInputSchema = z.object({
-  name: VenueNameSchema,
-  locationId: z.string({ required_error: 'Location is required.' }).uuid('Location must be chosen from the list.'),
-  maxCapacity: MaxCapacitySchema,
-  operatingSlots: OperatingSlotsSchema.default([...OPERATING_SLOTS]),
-  facilityIds: IdListSchema('facility').default([]),
-  accessibilityFeatureIds: IdListSchema('accessibility feature').default([]),
-  layouts: LayoutListSchema.default([]),
-});
+export const CreateVenueInputSchema = z
+  .object({
+    name: VenueNameSchema,
+    locationId: z.string({ required_error: 'Location is required.' }).uuid('Location must be chosen from the list.'),
+    maxCapacity: MaxCapacitySchema,
+    operatingSlots: OperatingSlotsSchema.default([...OPERATING_SLOTS]),
+    facilityIds: IdListSchema('facility').default([]),
+    accessibilityFeatureIds: IdListSchema('accessibility feature').default([]),
+    layouts: LayoutListSchema.default([]),
+    /**
+     * SCRUM-239 AC1: the venue's opening hours. Left out (an older caller),
+     * they are filled from the operating slots, as before.
+     */
+    opensAt: OpensAtSchema.optional(),
+    closesAt: ClosesAtSchema.optional(),
+  })
+  .superRefine(hoursTogether);
 /** Shape after parsing (defaults filled in). */
 export type CreateVenueInput = z.infer<typeof CreateVenueInputSchema>;
 /** Shape a form may send (defaulted fields optional). */
@@ -233,6 +271,13 @@ export const UpdateVenueInputSchema = z
     /** SCRUM-225 AC1: minutes the venue needs after an event to reset. */
     turnaroundMinutes: setupTurnaroundMinutesSchema('Turnaround time').optional(),
     /**
+     * SCRUM-239 AC1: the venue's opening and closing times, which replace its
+     * operating slots (operatingSlots above is still accepted from older
+     * callers, and still stored, but nothing reads it for availability).
+     */
+    opensAt: OpensAtSchema.optional(),
+    closesAt: ClosesAtSchema.optional(),
+    /**
      * SCRUM-120 AC2: the user has seen the confirmed future bookings a capacity
      * cut affects and confirmed it. Without it, such a cut is refused with the
      * list of those bookings (AffectedBookingsDetails).
@@ -251,7 +296,8 @@ export const UpdateVenueInputSchema = z
         ([key, value]) => !UPDATE_CONTROL_FIELDS.includes(key) && value !== undefined,
       ),
     'Nothing to update.',
-  );
+  )
+  .superRefine(hoursTogether);
 export type UpdateVenueInput = z.infer<typeof UpdateVenueInputSchema>;
 
 /**
@@ -431,6 +477,9 @@ export type VenueLayout = z.infer<typeof VenueLayoutSchema>;
 /** SCRUM-121 AC2: the full venue page. */
 export const VenueDetailSchema = VenueSummarySchema.extend({
   operatingSlots: z.array(OperatingSlotSchema),
+  /** SCRUM-239 AC1: the venue's opening hours (HH:MM), which replace its slots. */
+  opensAt: z.string(),
+  closesAt: z.string(),
   facilities: z.array(ReferenceItemSchema),
   accessibilityFeatures: z.array(ReferenceItemSchema),
   layouts: z.array(VenueLayoutSchema),
