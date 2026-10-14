@@ -94,12 +94,22 @@ export class UnavailableError extends DomainError {
 /** Postgres SQLSTATE codes we translate into domain errors. */
 export const PG_UNIQUE_VIOLATION = '23505';
 export const PG_CHECK_VIOLATION = '23514';
+/** An exclusion constraint, e.g. venue_booking_no_overlap (two confirmed bookings overlapping). */
+export const PG_EXCLUSION_VIOLATION = '23P01';
 
 export function isUniqueViolation(error: unknown): boolean {
   return (
     typeof error === 'object' &&
     error !== null &&
     (error as { code?: string }).code === PG_UNIQUE_VIOLATION
+  );
+}
+
+export function isExclusionViolation(error: unknown): boolean {
+  return (
+    typeof error === 'object' &&
+    error !== null &&
+    (error as { code?: string }).code === PG_EXCLUSION_VIOLATION
   );
 }
 

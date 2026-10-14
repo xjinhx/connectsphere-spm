@@ -2,10 +2,10 @@
 
 import { useState } from 'react';
 import { useRouter } from 'next/navigation';
-import { TIME_SLOT_LABELS, TIME_SLOT_ORDER, type TimeSlot } from '@/domain/event-request/schema';
+import { END_TIME_OPTIONS, START_TIME_OPTIONS } from '@/domain/shared/times';
 
 type Decision = 'approve' | 'reject';
-type Suggestion = { venueId: string; date: string; slots: string[] };
+type Suggestion = { venueId: string; date: string; start: string; end: string };
 
 /**
  * SCRUM-148 AC1 and AC5 — Venue Staff approve or reject each line of a pending
@@ -18,13 +18,14 @@ type Suggestion = { venueId: string; date: string; slots: string[] };
  *
  * The decider is never sent from here. The route reads whoever is signed in.
  *
- * SCRUM-155 AC2: a line that clashes with a confirmed booking or an
- * unavailable slot says what with, and offers Reject only. The API refuses an
- * approval of it anyway, for everyone.
+ * SCRUM-239 AC4 (SCRUM-155 AC2 in time ranges): a line that overlaps a
+ * confirmed booking, another event's hold or an unavailable period says what
+ * with and when, and offers Reject only. The API refuses an approval of it
+ * anyway, for everyone.
  *
  * SCRUM-150 AC1: a rejected line may also suggest another venue, date and
- * slots. The date and slots start as the line's own, so staff change only what
- * differs. The reason is still required.
+ * period. The date and times start as the line's own, so staff change only
+ * what differs. The reason is still required.
  */
 export function VenueBookingDecisionForm({
   requestId,
@@ -32,7 +33,7 @@ export function VenueBookingDecisionForm({
   venues,
 }: {
   requestId: string;
-  lines: readonly { id: string; label: string; date: string; timeSlots: readonly string[]; blockedReason?: string }[];
+  lines: readonly { id: string; label: string; date: string; start: string; end: string; blockedReason?: string }[];
   /** SCRUM-150: the venues a suggestion can name. */
   venues: readonly { id: string; name: string }[];
 }) {
@@ -124,7 +125,9 @@ export function VenueBookingDecisionForm({
                   onChange={(event) =>
                     setSuggestions((current) => ({
                       ...current,
-                      [line.id]: event.target.checked ? { venueId: '', date: line.date, slots: [...line.timeSlots] } : undefined,
+                      [line.id]: event.target.checked
+                        ? { venueId: '', date: line.date, start: line.start, end: line.end }
+                        : undefined,
                     }))
                   }
                 />
@@ -158,22 +161,41 @@ export function VenueBookingDecisionForm({
                     onChange={(event) => updateSuggestion(line.id, { date: event.target.value })}
                     className="w-full rounded-md border border-[var(--border)] bg-[var(--surface)] px-3 py-2 text-sm"
                   />
-                  <div className="flex flex-wrap gap-4">
-                    {TIME_SLOT_ORDER.map((slot: TimeSlot) => (
-                      <label key={slot} className="flex items-center gap-2 text-sm">
-                        <input
-                          type="checkbox"
-                          checked={suggestions[line.id]?.slots.includes(slot) ?? false}
-                          onChange={() => {
-                            const slots = suggestions[line.id]?.slots ?? [];
-                            updateSuggestion(line.id, {
-                              slots: slots.includes(slot) ? slots.filter((s) => s !== slot) : [...slots, slot],
-                            });
-                          }}
-                        />
-                        {TIME_SLOT_LABELS[slot]}
+                  <div className="flex flex-wrap gap-3">
+                    <div>
+                      <label className="block text-xs text-[var(--text-muted)]" htmlFor={`suggest-start-${line.id}`}>
+                        Start time
                       </label>
-                    ))}
+                      <select
+                        id={`suggest-start-${line.id}`}
+                        value={suggestions[line.id]?.start ?? ''}
+                        onChange={(event) => updateSuggestion(line.id, { start: event.target.value })}
+                        className="rounded-md border border-[var(--border)] bg-[var(--surface)] px-3 py-2 text-sm"
+                      >
+                        {START_TIME_OPTIONS.map((time) => (
+                          <option key={time} value={time}>
+                            {time}
+                          </option>
+                        ))}
+                      </select>
+                    </div>
+                    <div>
+                      <label className="block text-xs text-[var(--text-muted)]" htmlFor={`suggest-end-${line.id}`}>
+                        End time
+                      </label>
+                      <select
+                        id={`suggest-end-${line.id}`}
+                        value={suggestions[line.id]?.end ?? ''}
+                        onChange={(event) => updateSuggestion(line.id, { end: event.target.value })}
+                        className="rounded-md border border-[var(--border)] bg-[var(--surface)] px-3 py-2 text-sm"
+                      >
+                        {END_TIME_OPTIONS.map((time) => (
+                          <option key={time} value={time}>
+                            {time}
+                          </option>
+                        ))}
+                      </select>
+                    </div>
                   </div>
                 </div>
               ) : null}

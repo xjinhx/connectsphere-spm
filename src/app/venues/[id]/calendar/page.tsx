@@ -4,30 +4,31 @@ import { getVenueCalendar } from '@/domain/venues/calendar';
 import { canViewVenueCatalogue } from '@/domain/venues/policy';
 import {
   CALENDAR_MAX_DAYS,
-  CALENDAR_SLOT_STATE_LABELS,
-  OPERATING_SLOTS,
-  OPERATING_SLOT_LABELS,
-  type CalendarSlot,
+  CALENDAR_PERIOD_LABELS,
+  type CalendarPeriod,
   type VenueCalendar,
 } from '@/domain/venues/schema';
 import { NotFoundError, ValidationError } from '@/domain/shared/errors';
 import { formatSingaporeDate, todayInSingapore } from '@/domain/shared/dates';
+import { formatExpiry } from '@/domain/venue-hold/policy';
 import { getCurrentActor } from '@/lib/auth/currentActor';
 import NoVenueAccess from '@/components/venue/NoVenueAccess';
 
 /**
- * SCRUM-123 View a venue's calendar with the state of each slot.
+ * SCRUM-239 AC5 View a venue's calendar in exact time ranges (replacing
+ * SCRUM-123's AM / PM / Night slots, which stays Done on slots).
  *
- * AC1 every date in the range shows its AM, PM and Night slot with a state.
- * AC2 Available, AC3 Outside operating hours (cannot be requested), AC5
- *     Confirmed, AC6 Pending request, AC7 Blocked with its reason.
- * AC4 a date with every slot it runs committed reads Fully committed.
- * AC8 a request on a confirmed slot leaves it Confirmed, with the request
- *     shown beside it.
- * AC9/AC10 needs venue_catalogue_view, checked before anything is read; the
- *     API route enforces the same rule with a 403.
- * SCRUM-148 AC3/AC4 a Confirmed slot names its event for Venue Staff, the
- *     event's coordinator and Operations Managers; others see only Confirmed.
+ * Each date lists its confirmed, pending, held and blocked periods with their
+ * exact start and end times, in time order; no fixed lunch or dinner gap is
+ * drawn. SCRUM-123's rules carry over: the venue's opening hours, outside which
+ * it cannot be requested (AC3); Fully committed when committed periods cover
+ * them (AC4); a Blocked period with its reason (AC7); a pending request shown
+ * beside a commitment, never as one (AC8). SCRUM-227 AC7: a Held period with
+ * its expiry time. AC9/AC10: needs
+ * venue_catalogue_view, checked before anything is read; the API route
+ * enforces the same rule with a 403. SCRUM-148 AC3/AC4: a Confirmed period
+ * names its event for Venue Staff, the event's coordinator and Operations
+ * Managers; others see only Confirmed.
  *
  * A server component with a plain GET form, so a range is a URL and the rules
  * run once, in getVenueCalendar — the same call the API route makes. With no
@@ -55,38 +56,33 @@ function messagesFrom(error: ValidationError): string[] {
   return messages.length > 0 ? messages : [error.message];
 }
 
-const STATE_STYLE: Record<CalendarSlot['state'], string> = {
-  outside_operating_hours: 'text-[var(--text-muted)]',
-  blocked: 'text-[var(--warning)] font-medium',
+const KIND_STYLE: Record<CalendarPeriod['kind'], string> = {
   confirmed: 'text-[var(--brand)] font-medium',
-  pending_request: 'text-[var(--text)]',
-  available: 'text-[var(--success)]',
+  pending: 'text-[var(--text)]',
+  held: 'text-[var(--text)] font-medium',
+  blocked: 'text-[var(--warning)] font-medium',
 };
 
-function SlotCell({ slot }: { slot: CalendarSlot }) {
+function PeriodItem({ period }: { period: CalendarPeriod }) {
   return (
-    <td className="p-3 align-top">
-      <span className={STATE_STYLE[slot.state]}>{CALENDAR_SLOT_STATE_LABELS[slot.state]}</span>
-      {slot.state === 'outside_operating_hours' && (
-        <span className="block text-xs text-[var(--text-muted)]">Cannot be requested</span>
+    <li className="py-1">
+      <span className="tabular-nums">
+        {period.start}–{period.end}
+      </span>{' '}
+      <span className={KIND_STYLE[period.kind]}>{CALENDAR_PERIOD_LABELS[period.kind]}</span>
+      {period.kind === 'pending' && <span className="text-xs text-[var(--text-muted)]"> · not a commitment</span>}
+      {period.kind === 'blocked' && period.reason && (
+        <span className="block text-xs text-[var(--text-muted)]">Reason: {period.reason}</span>
       )}
-      {slot.state === 'blocked' && slot.reason && (
-        <span className="block text-xs text-[var(--text-muted)]">Reason: {slot.reason}</span>
+      {period.kind === 'held' && period.expiresAt && (
+        <span className="block text-xs text-[var(--text-muted)]">Expires {formatExpiry(period.expiresAt)}</span>
       )}
-      {slot.state === 'confirmed' && slot.event && (
+      {period.kind === 'confirmed' && period.event && (
         <span className="block text-xs">
-          {slot.event.reference} · {slot.event.name}
+          {period.event.reference} · {period.event.name}
         </span>
       )}
-      {slot.state === 'confirmed' && slot.pendingRequests > 0 && (
-        <span className="block text-xs text-[var(--text-muted)]">
-          +{slot.pendingRequests} pending {slot.pendingRequests === 1 ? 'request' : 'requests'}, not a commitment
-        </span>
-      )}
-      {slot.state === 'pending_request' && slot.pendingRequests > 1 && (
-        <span className="block text-xs text-[var(--text-muted)]">{slot.pendingRequests} requests</span>
-      )}
-    </td>
+    </li>
   );
 }
 
@@ -157,37 +153,50 @@ export default async function VenueCalendarPage({
       )}
 
       {calendar && (
-        <div className="overflow-x-auto rounded border border-[var(--border)] bg-[var(--surface)]" aria-live="polite">
-          <table className="w-full border-collapse text-left text-sm">
-            <thead>
-              <tr className="border-b border-[var(--border)] text-[var(--text-muted)]">
-                <th scope="col" className="p-3 font-medium">
-                  Date
-                </th>
-                {OPERATING_SLOTS.map((slot) => (
-                  <th key={slot} scope="col" className="p-3 font-medium">
-                    {OPERATING_SLOT_LABELS[slot]}
+        <section aria-live="polite">
+          <p className="mb-3 text-sm text-[var(--text-muted)]">
+            Open {calendar.venue.opensAt}–{calendar.venue.closesAt}. Outside these hours the venue cannot be requested.
+          </p>
+          <div className="overflow-x-auto rounded border border-[var(--border)] bg-[var(--surface)]">
+            <table className="w-full border-collapse text-left text-sm">
+              <thead>
+                <tr className="border-b border-[var(--border)] text-[var(--text-muted)]">
+                  <th scope="col" className="w-48 p-3 font-medium">
+                    Date
                   </th>
-                ))}
-              </tr>
-            </thead>
-            <tbody>
-              {calendar.days.map((day) => (
-                <tr key={day.date} className="border-b border-[var(--border)] last:border-b-0">
-                  <th scope="row" className="p-3 align-top font-medium">
-                    {formatSingaporeDate(day.date)}
-                    {day.fullyCommitted && (
-                      <span className="block text-xs font-medium text-[var(--warning)]">Fully committed</span>
-                    )}
+                  <th scope="col" className="p-3 font-medium">
+                    Periods
                   </th>
-                  {day.slots.map((slot) => (
-                    <SlotCell key={slot.slot} slot={slot} />
-                  ))}
                 </tr>
-              ))}
-            </tbody>
-          </table>
-        </div>
+              </thead>
+              <tbody>
+                {calendar.days.map((day) => (
+                  <tr key={day.date} className="border-b border-[var(--border)] last:border-b-0">
+                    <th scope="row" className="p-3 align-top font-medium">
+                      {formatSingaporeDate(day.date)}
+                      {day.fullyCommitted && (
+                        <span className="block text-xs font-medium text-[var(--warning)]">Fully committed</span>
+                      )}
+                    </th>
+                    <td className="p-3 align-top">
+                      {day.periods.length === 0 ? (
+                        <span className="text-[var(--success)]">
+                          Available {calendar.venue.opensAt}–{calendar.venue.closesAt}
+                        </span>
+                      ) : (
+                        <ul>
+                          {day.periods.map((period) => (
+                            <PeriodItem key={`${period.kind}-${period.start}-${period.end}`} period={period} />
+                          ))}
+                        </ul>
+                      )}
+                    </td>
+                  </tr>
+                ))}
+              </tbody>
+            </table>
+          </div>
+        </section>
       )}
     </main>
   );
