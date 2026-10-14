@@ -2,6 +2,7 @@ import Link from 'next/link';
 import { notFound } from 'next/navigation';
 import AddEquipmentLineForm from '@/components/equipment-request/AddEquipmentLineForm';
 import EquipmentLineEditor from '@/components/equipment-request/EquipmentLineEditor';
+import TechnicalRequirementsForm from '@/components/equipment-request/TechnicalRequirementsForm';
 import { EventRequestStatusBadge } from '@/components/event-request/EventRequestStatusBadge';
 import { EQUIPMENT_CATEGORY_LABELS } from '@/domain/equipment/schema';
 import { listEquipmentOptions } from '@/domain/equipment/service';
@@ -145,11 +146,21 @@ export default async function EventEquipmentRequestPage({ params }: { params: Pr
           breaks included (AC5, TC-160-14). */}
       <section className="mt-6">
         <h2 className="text-sm font-semibold">Technical requirements</h2>
-        <p className="mt-2 rounded border border-[var(--border)] bg-[var(--surface)] p-4 text-sm whitespace-pre-wrap">
-          {request.technicalRequirements ?? (
-            <span className="text-[var(--text-muted)]">No technical requirements entered.</span>
-          )}
-        </p>
+        {request.canEdit ? (
+          // AC5: the coordinator enters and saves them here.
+          <div className="mt-2">
+            <TechnicalRequirementsForm
+              eventRequestId={request.eventRequestId}
+              technicalRequirements={request.technicalRequirements}
+            />
+          </div>
+        ) : (
+          <p className="mt-2 rounded border border-[var(--border)] bg-[var(--surface)] p-4 text-sm whitespace-pre-wrap">
+            {request.technicalRequirements ?? (
+              <span className="text-[var(--text-muted)]">No technical requirements entered.</span>
+            )}
+          </p>
+        )}
       </section>
     </main>
   );
