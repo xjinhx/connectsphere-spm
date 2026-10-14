@@ -9,7 +9,7 @@ import { getCurrentActor } from '@/lib/auth/currentActor';
  *
  * SCRUM-160 — the event's equipment request, read from the stored rows.
  *
- * GET: AC6 - Technical Support Staff (equipment_request_view) or the
+ * GET: AC6 - Technical Support Staff (equipment_administration) or the
  * event's assigned coordinator. The coordinator half needs the event, so the
  * check is in getEquipmentRequest, which reads the event anyway.
  *

@@ -47,8 +47,11 @@ export function linesOfSameType<T extends { id: string; equipmentId: string }>(
  *
  * AC6: "Given technical requirements have been entered, when Technical Support
  * Staff open the request, then the notes are displayed with the equipment
- * list" - they hold equipment_request_view. The event's assigned coordinator,
- * who records it, may open it too. Nobody else: access follows role and
+ * list". Technical Support Staff are the role that holds
+ * equipment_administration (SCRUM-240: equipment is their responsibility), so
+ * that existing permission is what lets them open it - no new action is added
+ * to SCRUM-69's matrix. The event's assigned coordinator, who records it, may
+ * open it too. Nobody else: access follows role and
  * relationship to the event (customer clarification #91), so a coordinator the
  * event is not assigned to is refused, as for every edit (AC4).
  */
@@ -57,7 +60,8 @@ export function canViewEquipmentRequest(
   eventCoordinatorId: string | null,
 ): boolean {
   return (
-    isActionPermitted(actor.roles, 'equipment_request_view') || isCurrentCoordinator(eventCoordinatorId, actor.userId)
+    isActionPermitted(actor.roles, 'equipment_administration') ||
+    isCurrentCoordinator(eventCoordinatorId, actor.userId)
   );
 }
 

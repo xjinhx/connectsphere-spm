@@ -57,7 +57,7 @@ export default async function EventEquipmentRequestPage({ params }: { params: Pr
   // Back to where the viewer came from: the coordinator recording it to the
   // event, Technical Support Staff to their landing page.
   const backLink =
-    !request.canEdit && isActionPermitted(actor.roles, 'equipment_request_view')
+    !request.canEdit && isActionPermitted(actor.roles, 'equipment_administration')
       ? { href: '/equipment-queue', label: '← Equipment requests' }
       : { href: `/events/${id}/review`, label: '← Back to the event' };
 

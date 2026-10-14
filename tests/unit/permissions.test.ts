@@ -28,15 +28,9 @@ describe('getPermittedActions', () => {
   it('unions actions across multiple roles on one account, without duplicates', () => {
     const actions = getPermittedActions(['venue_staff', 'technical_support']);
     expect(actions).toEqual(
-      expect.arrayContaining([
-        'venue_administration',
-        'venue_catalogue_view',
-        'equipment_administration',
-        // SCRUM-160 AC6: Technical Support Staff open an event's equipment request.
-        'equipment_request_view',
-      ]),
+      expect.arrayContaining(['venue_administration', 'venue_catalogue_view', 'equipment_administration']),
     );
-    expect(actions).toHaveLength(4);
+    expect(actions).toHaveLength(3);
   });
 });
 
