@@ -253,11 +253,6 @@ describe('releaseVenueBooking (SCRUM-231)', () => {
     const venueId = await createTestVenue('Affected');
     const eventId = await createEvent(date);
     const booking = await book(eventId, venueId, date, 'am');
-    // SCRUM-151's affected-booking flag still matches a booking by its slot
-    // until SCRUM-239 Part 4 (AC6) moves it to times, and a booking approved
-    // since Part 3 (#100) has times only. Give this one its slot, as a booking
-    // from before the switch has.
-    await admin.from('venue_booking').update({ slot: 'am' }).eq('id', booking);
     await admin.from('venue_unavailable_slot').insert({ venue_id: venueId, date, slot: 'am', reason: 'Aircon repair' });
     expect(await listAffectedBookings(eventId)).toHaveLength(1);
 

@@ -317,3 +317,64 @@ describe('VenueListQuerySchema: SCRUM-121 AC3 retired venues', () => {
     expect(excluded.success && excluded.data.includeRetired).toBe(false);
   });
 });
+
+/**
+ * SCRUM-239 AC1 (Jira): "Given I am Venue Staff editing a venue, when I set
+ * opening and closing times in 15-minute steps and save, then they replace the
+ * venue's slot configuration".
+ */
+describe('UpdateVenueInputSchema: SCRUM-239 AC1 opening hours', () => {
+  const LOADED_AT = '2026-10-13T02:30:00.123456+00:00';
+  const edit = (changes: Record<string, unknown>) =>
+    UpdateVenueInputSchema.safeParse({ expectedUpdatedAt: LOADED_AT, ...changes });
+  const fieldErrors = (result: z.SafeParseReturnType<unknown, unknown>) =>
+    result.success ? {} : result.error.flatten().fieldErrors;
+
+  it('TC-239-01: accepts 08:00 to 22:00', () => {
+    expect(edit({ opensAt: '08:00', closesAt: '22:00' }).success).toBe(true);
+  });
+
+  it('accepts a venue open until midnight (24:00)', () => {
+    expect(edit({ opensAt: '07:00', closesAt: '24:00' }).success).toBe(true);
+  });
+
+  it('TC-239-02: refuses an opening time off the 15-minute step, on that field', () => {
+    expect(fieldErrors(edit({ opensAt: '08:10', closesAt: '22:00' }))).toEqual({
+      opensAt: ['Choose a time on a 15-minute step (:00, :15, :30 or :45).'],
+    });
+  });
+
+  it('refuses a closing time off the 15-minute step, on that field', () => {
+    expect(fieldErrors(edit({ opensAt: '08:00', closesAt: '21:50' }))).toEqual({
+      closesAt: ['Choose a time on a 15-minute step (:00, :15, :30 or :45).'],
+    });
+  });
+
+  it('refuses closing at or before opening, on both fields', () => {
+    const message = 'The closing time must be after the opening time.';
+    expect(fieldErrors(edit({ opensAt: '22:00', closesAt: '08:00' }))).toEqual({ opensAt: [message], closesAt: [message] });
+    expect(fieldErrors(edit({ opensAt: '10:00', closesAt: '10:00' }))).toEqual({ opensAt: [message], closesAt: [message] });
+  });
+
+  it('needs both times together', () => {
+    expect(fieldErrors(edit({ opensAt: '08:00' }))).toEqual({ closesAt: ['Set both the opening and the closing time.'] });
+  });
+
+  it('an edit that leaves the hours out keeps them (nothing to check)', () => {
+    expect(edit({ maxCapacity: 250 }).success).toBe(true);
+  });
+});
+
+describe('CreateVenueInputSchema: SCRUM-239 AC1 opening hours on a new venue', () => {
+  it('accepts a new venue with its hours', () => {
+    expect(CreateVenueInputSchema.safeParse({ ...validVenue(), opensAt: '08:00', closesAt: '22:00' }).success).toBe(true);
+  });
+
+  it('still accepts one without hours (filled from the slots, as before)', () => {
+    expect(CreateVenueInputSchema.safeParse(validVenue()).success).toBe(true);
+  });
+
+  it('refuses hours off the 15-minute step', () => {
+    expect(CreateVenueInputSchema.safeParse({ ...validVenue(), opensAt: '08:10', closesAt: '22:00' }).success).toBe(false);
+  });
+});

@@ -10,12 +10,15 @@ Planning client events at ConnectSphere-owned venues in Singapore: event request
 One of the three fixed parts of a day that a venue is booked by: AM, PM or Night (customer clarification #50).
 _Avoid_: session, period, time block
 
+**Opening hours**:
+The opening and closing time a venue keeps every day, in 15-minute steps, set by Venue Staff on the venue form (SCRUM-239 AC1). They replace the venue's operating slots. Outside them the venue is never offered. A permanent setting, not the same thing as unavailable.
+_Avoid_: operating hours, open slot
+
 **Operating slot**:
-A slot a venue runs every day, as set in the venue catalogue. A slot the venue does not run is _not operating_. That is a permanent setting, not the same thing as unavailable.
-_Avoid_: open slot
+Before SCRUM-239: a slot a venue ran every day (AM, PM, Night). Replaced by opening hours; still stored, but nothing reads it for availability.
 
 **Unavailable slot**:
-A slot at one venue on one date that Venue Staff have withdrawn from use, with the reason recorded (customer clarification #54). The venue calendar labels it _Blocked_ (SCRUM-123 AC7).
+A period at one venue on one date that Venue Staff have withdrawn from use, with the reason recorded (customer clarification #54). A start and end time since SCRUM-239 AC6 (before that, a slot); the name stays, as the table's does. The venue calendar labels it _Blocked_ (SCRUM-123 AC7).
 _Avoid_: blocked slot (SCRUM-154's title uses it for the same thing), closed slot, blackout
 
 ### Bookings
@@ -29,7 +32,7 @@ A venue committed to one event for one date and slot, created when Venue Staff a
 _Avoid_: reservation (that word is for equipment)
 
 **Affected booking**:
-A confirmed booking for an upcoming event that sits on a slot that has since become unavailable (SCRUM-151).
+A confirmed booking for an upcoming event whose times overlap a period that has since become unavailable (SCRUM-151, by time since SCRUM-239 AC6). A booking that only touches the period (ends as it starts) is not affected.
 
 **Released booking**:
 A confirmed booking that its event's coordinator has given up, with a reason. It no longer commits the venue; the event and its other bookings are unchanged (SCRUM-231).
@@ -49,6 +52,19 @@ _Avoid_: tentative booking, reservation, provisional booking
 **Outstanding action**:
 An open item on an event that its coordinator must deal with, such as releasing or replacing an affected booking. It closes when that is done.
 _Avoid_: task, alert
+
+### Equipment
+
+**Equipment catalogue**:
+The record of the equipment ConnectSphere owns, maintained by Technical Support Staff: each item with its name, category, quantity held, current location and operational status (SCRUM-240, customer clarifications #2, #9, #13, #23). It says what exists, not what is free on a date.
+_Avoid_: equipment list, inventory, stock list
+
+**Catalogue item**:
+One line of the equipment catalogue. It is what a coordinator's equipment requirement names (SCRUM-240 AC5), and is kept apart from the free-text equipment an Event Organiser types on an event request (SCRUM-80).
+
+**Operational status**:
+Whether a catalogue item can be used: _Available_, _Unavailable_, _Damaged_ or _Under maintenance_ (SCRUM-240 AC2, customer clarification #23). A property of the item itself, not of a date — a Damaged item can still be named by a requirement.
+_Avoid_: condition, state, availability (that word is for a venue on a date)
 
 ### Access
 
