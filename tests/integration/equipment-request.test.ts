@@ -49,6 +49,9 @@ import { ensureTestClientOrganisation, TEST_CLIENT_ORGANISATION_ID } from './fix
  *   AC8 "Given an equipment item has already been reserved, when I attempt to
  *        reduce its quantity, then I am warned that a reservation exists and
  *        must confirm before the change is applied."
+ *   AC9 "Given the event starts tomorrow, when I amend the equipment request,
+ *        then the amendment is accepted with no notice-period warning, because
+ *        no minimum notice period is enforced."
  *
  * Reserving equipment is SCRUM-167, not built. A line is reserved here by a
  * row in the stand-in equipment_reservation table (dummy D-18), inserted by
@@ -97,10 +100,19 @@ async function createAccount(label: string, roles: Role[]): Promise<Account> {
  * assigned by an Operations Manager, approved by its coordinator, then moved
  * on through SCRUM-101's enterPlanning and SCRUM-103's changeEventStatus.
  */
-async function createEvent(status: EventRequestStatus, coordinator: Account = coordinatorA): Promise<string> {
+async function createEvent(
+  status: EventRequestStatus,
+  coordinator: Account = coordinatorA,
+  proposedDate: string | null = null,
+): Promise<string> {
   const { data, error } = await admin
     .from('event_request')
-    .insert({ organiser_id: organiser.userId, client_organisation_id: TEST_CLIENT_ORGANISATION_ID, name: `Tech Summit ${RUN}` })
+    .insert({
+      organiser_id: organiser.userId,
+      client_organisation_id: TEST_CLIENT_ORGANISATION_ID,
+      name: `Tech Summit ${RUN}`,
+      proposed_date: proposedDate,
+    })
     .select('id')
     .single();
   if (error) throw new Error(`could not create test event: ${error.message}`);
@@ -609,5 +621,49 @@ describe('SCRUM-160 AC8: reducing a reserved item', () => {
 
     await removeEquipmentLine(event, line.id, coordinatorA.userId, { confirmReservationChange: true });
     expect(await storedLines(event)).toEqual([]);
+  });
+});
+
+// -----------------------------------------------------------------------------
+// AC9 — no minimum notice period
+// -----------------------------------------------------------------------------
+
+/** A Singapore calendar date `days` from today, as YYYY-MM-DD. */
+function singaporeDate(days: number): string {
+  const singaporeNow = new Date(Date.now() + 8 * 60 * 60 * 1000);
+  singaporeNow.setUTCDate(singaporeNow.getUTCDate() + days);
+  return singaporeNow.toISOString().slice(0, 10);
+}
+
+describe('SCRUM-160 AC9: an event starting tomorrow', () => {
+  it('TC-160-24 accepts an add, a change and a removal, and none comes back with a warning', async () => {
+    // Relative to the run date, so the case keeps testing "tomorrow".
+    const event = await createEvent('planning', coordinatorA, singaporeDate(1));
+    const { line: projectorLine } = await addEquipmentLine(event, coordinatorA.userId, { equipmentId: projector, quantity: 2 });
+
+    const added = await addEquipmentLine(event, coordinatorA.userId, { equipmentId: lectern, quantity: 1 });
+    const changed = await updateEquipmentLineQuantity(event, projectorLine.id, coordinatorA.userId, { quantity: 3 });
+    await removeEquipmentLine(event, added.line.id, coordinatorA.userId);
+
+    // What comes back is the saved data and nothing else: no warning of any kind.
+    expect(Object.keys(added).sort()).toEqual(['line', 'sameTypeLines']);
+    expect(changed).not.toHaveProperty('warning');
+    expect(await storedLines(event)).toEqual([{ id: projectorLine.id, equipment_id: projector, quantity: 3 }]);
+  });
+
+  it('TC-160-25 refuses quantity 0 on tomorrow\'s event for the quantity alone, never for notice', async () => {
+    const event = await createEvent('planning', coordinatorA, singaporeDate(1));
+
+    const refusal = await addEquipmentLine(event, coordinatorA.userId, { equipmentId: projector, quantity: 0 }).catch(
+      (error: unknown) => error,
+    );
+
+    expect(refusal).toMatchObject({
+      code: 'VALIDATION_ERROR',
+      message: 'Quantity must be at least one.',
+      details: { fieldErrors: { quantity: ['Quantity must be at least one.'] } },
+    });
+    expect(JSON.stringify(refusal)).not.toMatch(/notice/i);
+    expect(Object.keys((refusal as { details: { fieldErrors: object } }).details.fieldErrors)).toEqual(['quantity']);
   });
 });
