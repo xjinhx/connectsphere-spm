@@ -1,7 +1,11 @@
 import { afterAll, beforeAll, describe, expect, it } from 'vitest';
 import { createAdminClient } from '@/lib/supabase/admin';
-import { createVenue } from '@/domain/venues/service';
-import { getBookingRequestRequirements, submitVenueBookingRequest } from '@/domain/venue-booking/service';
+import { createVenue, getVenue, updateVenue } from '@/domain/venues/service';
+import {
+  decideVenueBookingRequest,
+  getBookingRequestRequirements,
+  submitVenueBookingRequest,
+} from '@/domain/venue-booking/service';
 import { todayInSingapore } from '@/domain/shared/dates';
 import { ensureTestClientOrganisation } from './fixtures/clientOrganisation';
 
@@ -11,6 +15,7 @@ import { ensureTestClientOrganisation } from './fixtures/clientOrganisation';
  * accessibility needs for that space". AC2: left empty, "the event's own ...
  * are used". AC6: a breakout room can be requested for the same time as the
  * event's auditorium booking, "because each venue is checked on its own".
+ * AC4, AC5: a capacity cut goes by each booking's own attendance.
  *
  * Runs against the local stack. The code under test is
  * submitVenueBookingRequest; the admin client only arranges and reads rows.
@@ -25,7 +30,9 @@ let ballroomId: string;
 let meetingRoomId: string;
 let organiserId: string;
 let coordinatorId: string;
+let venueStaffId: string;
 const eventIds: string[] = [];
+const cutRoomIds: string[] = [];
 
 function daysFromToday(days: number): string {
   const date = new Date(`${todayInSingapore()}T00:00:00Z`);
@@ -51,6 +58,7 @@ async function createEvent(): Promise<string> {
       organiser_id: organiserId,
       client_organisation_id: CLIENT_ORGANISATION_ID,
       name: `Requirements Event ${RUN}`,
+      proposed_date: daysFromToday(40),
       expected_attendance: 250,
       room_layout: 'theatre',
       accessibility_required: true,
@@ -96,14 +104,15 @@ beforeAll(async () => {
   meetingRoomId = (await createVenue({ name: `VReq Meeting Room ${RUN}`, locationId, maxCapacity: 60 })).id;
   organiserId = await createUser('organiser');
   coordinatorId = await createUser('coordinator');
+  venueStaffId = await createUser('venue-staff');
 });
 
 afterAll(async () => {
   // Events first: their requests, lines and bookings go with them (cascade).
   if (eventIds.length > 0) await admin.from('event_request').delete().in('id', eventIds);
-  for (const id of [ballroomId, meetingRoomId]) if (id) await admin.from('venues').delete().eq('id', id);
+  for (const id of [ballroomId, meetingRoomId, ...cutRoomIds]) if (id) await admin.from('venues').delete().eq('id', id);
   if (locationId) await admin.from('locations').delete().eq('id', locationId);
-  for (const id of [organiserId, coordinatorId]) if (id) await admin.auth.admin.deleteUser(id);
+  for (const id of [organiserId, coordinatorId, venueStaffId]) if (id) await admin.auth.admin.deleteUser(id);
 });
 
 describe("a request's own venue requirements (SCRUM-230)", () => {
@@ -263,5 +272,85 @@ describe('each venue is checked on its own (SCRUM-230 AC6)', () => {
       }),
     ).rejects.toMatchObject({ details: { reason: 'period_clash' }, message: expect.stringContaining('10:00') });
     expect(await requestsFor(eventId)).toEqual([]);
+  });
+});
+
+describe("a capacity cut goes by each booking's own attendance (SCRUM-230 AC4, AC5)", () => {
+  /**
+   * A Meeting Room (capacity 60) with a confirmed booking for the 250-person
+   * event, requested and approved through the app, with `ownAttendance` of its
+   * own or none.
+   */
+  async function bookedRoom(ownAttendance?: number) {
+    const eventId = await createEvent();
+    const room = await createVenue({ name: `VReq Cut Room ${RUN} ${cutRoomIds.length}`, locationId, maxCapacity: 60 });
+    cutRoomIds.push(room.id);
+    const request = await submitVenueBookingRequest(eventId, coordinatorId, {
+      venueId: room.id,
+      lines: [{ date: daysFromToday(50), start: '10:00', end: '13:00' }],
+      expectedAttendance: ownAttendance,
+    });
+    await decideVenueBookingRequest(request.id, venueStaffId, {
+      decisions: [{ lineId: request.lines[0]!.id, decision: 'approve' }],
+    });
+    return { eventId, room };
+  }
+
+  async function noticesFor(venueId: string) {
+    const { data, error } = await admin
+      .from('venue_capacity_notice')
+      .select('event_request_id, new_capacity, expected_attendance')
+      .eq('venue_id', venueId);
+    if (error || !data) throw new Error(`could not read notices: ${error?.message}`);
+    return data;
+  }
+
+  it('AC4: a cut to 45 does not list a 40-person booking of a 250-person event (TC-230-06)', async () => {
+    const { room } = await bookedRoom(40);
+
+    const saved = await updateVenue(room.id, { expectedUpdatedAt: room.updatedAt, maxCapacity: 45 });
+
+    expect(saved.maxCapacity).toBe(45);
+    expect(await noticesFor(room.id)).toEqual([]);
+  });
+
+  it("AC4: a cut to exactly the booking's attendance does not list it (TC-230-07)", async () => {
+    const { room } = await bookedRoom(40);
+
+    const saved = await updateVenue(room.id, { expectedUpdatedAt: room.updatedAt, maxCapacity: 40 });
+
+    expect(saved.maxCapacity).toBe(40);
+    expect(await noticesFor(room.id)).toEqual([]);
+  });
+
+  it('AC5: a cut to 39 lists the booking with its own attendance, and saves once confirmed (TC-230-08)', async () => {
+    const { eventId, room } = await bookedRoom(40);
+
+    await expect(updateVenue(room.id, { expectedUpdatedAt: room.updatedAt, maxCapacity: 39 })).rejects.toMatchObject({
+      details: { reason: 'affected_bookings', maxCapacity: 39, bookings: [{ eventId, expectedAttendance: 40 }] },
+    });
+    const saved = await updateVenue(room.id, { expectedUpdatedAt: room.updatedAt, maxCapacity: 39, confirmAffectedBookings: true });
+
+    expect(saved.maxCapacity).toBe(39);
+    expect(await noticesFor(room.id)).toEqual([{ event_request_id: eventId, new_capacity: 39, expected_attendance: 40 }]);
+  });
+
+  it('AC5: a cut that is not confirmed is not saved and flags nothing (TC-230-10)', async () => {
+    const { room } = await bookedRoom(40);
+
+    await expect(updateVenue(room.id, { expectedUpdatedAt: room.updatedAt, maxCapacity: 39 })).rejects.toMatchObject({
+      details: { reason: 'affected_bookings' },
+    });
+
+    expect((await getVenue(room.id)).maxCapacity).toBe(60);
+    expect(await noticesFor(room.id)).toEqual([]);
+  });
+
+  it("AC2: a booking with no attendance of its own is checked against the event's (TC-230-04)", async () => {
+    const { eventId, room } = await bookedRoom();
+
+    await expect(updateVenue(room.id, { expectedUpdatedAt: room.updatedAt, maxCapacity: 45 })).rejects.toMatchObject({
+      details: { reason: 'affected_bookings', bookings: [{ eventId, expectedAttendance: 250 }] },
+    });
   });
 });

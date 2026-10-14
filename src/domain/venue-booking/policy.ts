@@ -246,7 +246,8 @@ export function describeAccessibilityForVenueStaff(event: {
 // SCRUM-230 — Give each venue booking its own attendance and requirements
 // ---------------------------------------------------------------------------
 
-function ownOrEvent<T>(own: T | null, event: T | null): { value: T | null; fromEvent: boolean } {
+/** AC2: one venue requirement, the request's own or else the event's, and which it was. */
+export function ownOrEvent<T>(own: T | null, event: T | null): { value: T | null; fromEvent: boolean } {
   return own === null ? { value: event, fromEvent: true } : { value: own, fromEvent: false };
 }
 
