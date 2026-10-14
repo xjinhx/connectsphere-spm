@@ -60,3 +60,28 @@ export function canViewEquipmentRequest(
     isActionPermitted(actor.roles, 'equipment_request_view') || isCurrentCoordinator(eventCoordinatorId, actor.userId)
   );
 }
+
+/**
+ * AC8: "Given an equipment item has already been reserved, when I attempt to
+ * reduce its quantity, then I am warned that a reservation exists and must
+ * confirm before the change is applied."
+ *
+ * `newQuantity` is null for a removal. A reduction of one already needs it
+ * (TC-160-23); keeping the same quantity, or raising it, does not, since AC8
+ * names only a reduction. An item not yet reserved never needs it - AC7 saves
+ * that change immediately (TC-160-20).
+ *
+ * INTERIM, to confirm at standup (recorded on TC-160-22): removing a reserved
+ * item is treated as reducing it to nothing, so it needs the same
+ * confirmation, rather than dropping a reservation without a word.
+ */
+export function needsReservationConfirmation(
+  line: { quantity: number; reserved: boolean },
+  newQuantity: number | null,
+): boolean {
+  if (!line.reserved) return false;
+  return newQuantity === null || newQuantity < line.quantity;
+}
+
+export const RESERVATION_WARNING_MESSAGE =
+  'This item has already been reserved. Confirm to apply the change to its reservation.';

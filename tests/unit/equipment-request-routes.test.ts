@@ -34,7 +34,7 @@ import {
   saveTechnicalRequirements,
   updateEquipmentLineQuantity,
 } from '@/domain/equipment-request/service';
-import { ForbiddenError, UnauthenticatedError } from '@/domain/shared/errors';
+import { ConflictError, ForbiddenError, UnauthenticatedError } from '@/domain/shared/errors';
 import type { Role } from '@/domain/identity/roles';
 import { POST } from '@/app/api/event-requests/[id]/equipment-request/lines/route';
 import { DELETE, PATCH } from '@/app/api/event-requests/[id]/equipment-request/lines/[lineId]/route';
@@ -125,5 +125,45 @@ describe('AC4: the routes refuse an edit before touching the request', () => {
     expect((await post({ equipmentId: PROJECTOR, quantity: 2 })).status).toBe(401);
     expect((await patch({ quantity: 5 })).status).toBe(401);
     expect((await remove()).status).toBe(401);
+  });
+});
+
+describe('AC8: the reservation warning through the routes', () => {
+  it('TC-160-22 returns 409 with the warning when a reduction is not confirmed', async () => {
+    signInAs('coordinator');
+    vi.mocked(updateEquipmentLineQuantity).mockRejectedValue(
+      new ConflictError('This item has already been reserved. Confirm to apply the change to its reservation.', {
+        reservationConfirmationRequired: true,
+        lineId: LINE,
+      }),
+    );
+
+    const response = await patch({ quantity: 3 });
+
+    expect(response.status).toBe(409);
+    expect(await response.json()).toMatchObject({ details: { reservationConfirmationRequired: true } });
+  });
+
+  it('TC-160-21 passes the confirmation through to the service', async () => {
+    signInAs('coordinator');
+    vi.mocked(updateEquipmentLineQuantity).mockResolvedValue({} as never);
+
+    await patch({ quantity: 3, confirmReservationChange: true });
+
+    expect(updateEquipmentLineQuantity).toHaveBeenCalledWith(EVENT, LINE, ACCOUNT, {
+      quantity: 3,
+      confirmReservationChange: true,
+    });
+  });
+
+  it('reads a removal\'s confirmation from the query string, and treats it as absent otherwise', async () => {
+    signInAs('coordinator');
+    vi.mocked(removeEquipmentLine).mockResolvedValue();
+
+    await DELETE(new NextRequest(`${url}/${LINE}?confirmReservationChange=true`, { method: 'DELETE' }), lineParams);
+    await remove();
+
+    expect(removeEquipmentLine).toHaveBeenNthCalledWith(1, EVENT, LINE, ACCOUNT, { confirmReservationChange: true });
+    expect(removeEquipmentLine).toHaveBeenNthCalledWith(2, EVENT, LINE, ACCOUNT, { confirmReservationChange: false });
   });
 });

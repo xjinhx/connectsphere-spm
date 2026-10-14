@@ -107,3 +107,24 @@ export async function upsertTechnicalRequirements(eventRequestId: string, techni
     .select('event_request_id, technical_requirements')
     .single();
 }
+
+/** One line of the event's request, or null when the event has no such line. */
+export async function fetchEquipmentRequestLine(eventRequestId: string, lineId: string) {
+  return db()
+    .from('equipment_request_line')
+    .select(LINE_SELECT)
+    .eq('event_request_id', eventRequestId)
+    .eq('id', lineId)
+    .maybeSingle();
+}
+
+/**
+ * AC7, AC8: the lines, out of `lineIds`, that have been reserved.
+ *
+ * DUMMY(SCRUM-167) D-18: reads the stand-in equipment_reservation table, whose
+ * rows are inserted by hand. SCRUM-167 points this at its own reservation
+ * record and keeps the signature.
+ */
+export async function fetchReservedLineIds(lineIds: readonly string[]) {
+  return db().from('equipment_reservation').select('line_id').in('line_id', [...lineIds]);
+}

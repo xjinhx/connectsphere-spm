@@ -2,22 +2,26 @@ import { z } from 'zod';
 import { assertEquipmentInCatalogue } from '@/domain/equipment/service';
 import { isCurrentCoordinator } from '@/domain/assignment/policy';
 import type { Role } from '@/domain/identity/roles';
-import { ForbiddenError, NotFoundError, ValidationError, isCheckViolation } from '@/domain/shared/errors';
+import { ConflictError, ForbiddenError, NotFoundError, ValidationError, isCheckViolation } from '@/domain/shared/errors';
 import { fetchEventRequestById, type EventRequestRow } from '@/lib/supabase/eventRequests';
 import {
   deleteEquipmentRequestLine,
   ensureEquipmentRequest,
   fetchEquipmentRequest,
+  fetchEquipmentRequestLine,
   fetchEquipmentRequestLines,
+  fetchReservedLineIds,
   insertEquipmentRequestLine,
   updateEquipmentRequestLineQuantity,
   upsertTechnicalRequirements,
 } from '@/lib/supabase/equipmentRequests';
 import {
   EVENT_NOT_OPEN_FOR_EQUIPMENT_MESSAGE,
+  RESERVATION_WARNING_MESSAGE,
   acceptsEquipmentRequest,
   canViewEquipmentRequest,
   linesOfSameType,
+  needsReservationConfirmation,
 } from './policy';
 import {
   AddEquipmentLineInputSchema,
@@ -56,7 +60,7 @@ type LineRow = {
   equipment: { name: string; category: string } | null;
 };
 
-function toLine(row: LineRow): EquipmentRequestLine {
+function toLine(row: LineRow, reserved: boolean): EquipmentRequestLine {
   return EquipmentRequestLineSchema.parse({
     id: row.id,
     equipmentId: row.equipment_id,
@@ -64,6 +68,7 @@ function toLine(row: LineRow): EquipmentRequestLine {
     equipmentName: row.equipment?.name ?? '',
     category: row.equipment?.category,
     quantity: row.quantity,
+    reserved,
     createdAt: row.created_at,
   });
 }
@@ -128,10 +133,46 @@ async function readTechnicalRequirements(eventRequestId: string): Promise<string
   return (data as { technical_requirements: string | null } | null)?.technical_requirements ?? null;
 }
 
+/** AC7, AC8: the ids, out of `lineIds`, of the lines that have been reserved. */
+async function readReservedLineIds(lineIds: readonly string[]): Promise<Set<string>> {
+  if (lineIds.length === 0) return new Set();
+  const { data, error } = await fetchReservedLineIds(lineIds);
+  if (error || !data) throw new ValidationError('The equipment reservations could not be read.', error?.message);
+  return new Set((data as { line_id: string }[]).map((row) => row.line_id));
+}
+
+/** Rows as lines, each marked reserved or not. */
+async function toLines(rows: readonly LineRow[]): Promise<EquipmentRequestLine[]> {
+  const reserved = await readReservedLineIds(rows.map((row) => row.id));
+  return rows.map((row) => toLine(row, reserved.has(row.id)));
+}
+
 async function readLines(eventRequestId: string): Promise<EquipmentRequestLine[]> {
   const { data, error } = await fetchEquipmentRequestLines(eventRequestId);
   if (error || !data) throw new ValidationError('The equipment request could not be read.', error?.message);
-  return (data as unknown as LineRow[]).map(toLine);
+  return toLines(data as unknown as LineRow[]);
+}
+
+/** One line of the event's request, with whether it has been reserved. */
+async function readLine(eventRequestId: string, lineId: string): Promise<EquipmentRequestLine> {
+  const { data, error } = await fetchEquipmentRequestLine(eventRequestId, lineId);
+  if (error) throw new ValidationError('The equipment line could not be read.', error.message);
+  if (!data) throw new NotFoundError('Equipment line');
+  const [line] = await toLines([data as unknown as LineRow]);
+  if (!line) throw new NotFoundError('Equipment line');
+  return line;
+}
+
+/**
+ * AC8: refuses a change that needs the reservation warning confirmed and has
+ * not been. A ConflictError (409) the page recognises by
+ * reservationConfirmationRequired, so it can show the warning and send the
+ * change again with the confirmation.
+ */
+function assertReservationConfirmed(line: EquipmentRequestLine, newQuantity: number | null, confirmed: boolean): void {
+  if (needsReservationConfirmation(line, newQuantity) && !confirmed) {
+    throw new ConflictError(RESERVATION_WARNING_MESSAGE, { reservationConfirmationRequired: true, lineId: line.id });
+  }
 }
 
 // -----------------------------------------------------------------------------
@@ -219,13 +260,14 @@ export async function addEquipmentLine(
 
   // AC3: always a new line, never folded into an existing one; the existing
   // lines of the same type come back so the coordinator is shown them.
-  const line = toLine(data as unknown as LineRow);
+  // A line added a moment ago has no reservation yet.
+  const line = toLine(data as unknown as LineRow, false);
   const sameTypeLines = linesOfSameType(await readLines(event.id), line);
   return AddEquipmentLineOutcomeSchema.parse({ line, sameTypeLines });
 }
 
 // -----------------------------------------------------------------------------
-// AC7: change or remove an item
+// AC7, AC8: change or remove an item
 // -----------------------------------------------------------------------------
 
 function parseLineId(lineId: string): string {
@@ -239,6 +281,10 @@ function parseLineId(lineId: string): string {
  * quantity ... then the change is saved immediately" - one call, no
  * confirmation step (TC-160-19, TC-160-20). Only the quantity changes; the
  * item a line names is fixed once added.
+ *
+ * AC8: a reduction of a reserved item is refused with the reservation warning
+ * (a 409 with reservationConfirmationRequired) unless confirmReservationChange
+ * is sent, and then applied (TC-160-21 to TC-160-23).
  */
 export async function updateEquipmentLineQuantity(
   eventRequestId: string,
@@ -252,22 +298,36 @@ export async function updateEquipmentLineQuantity(
   const parsed = UpdateEquipmentLineInputSchema.safeParse(input);
   if (!parsed.success) throw validationError(parsed.error, 'The quantity is not valid.');
 
+  const line = await readLine(event.id, id);
+  assertReservationConfirmed(line, parsed.data.quantity, parsed.data.confirmReservationChange === true);
+
   const { data, error } = await updateEquipmentRequestLineQuantity(event.id, id, parsed.data.quantity);
   if (error) {
     if (isCheckViolation(error)) throw quantityError();
     throw new ValidationError('The change could not be saved.', error.message);
   }
   if (!data) throw new NotFoundError('Equipment line');
-  return toLine(data as unknown as LineRow);
+  return toLine(data as unknown as LineRow, line.reserved);
 }
 
 /**
  * AC7: "Given an equipment item has not yet been reserved, when I ... remove
  * it, then the change is saved immediately" (TC-160-19).
+ *
+ * AC8 (interim, see needsReservationConfirmation): removing a reserved item
+ * needs the same confirmation as reducing it.
  */
-export async function removeEquipmentLine(eventRequestId: string, lineId: string, actorId: string): Promise<void> {
+export async function removeEquipmentLine(
+  eventRequestId: string,
+  lineId: string,
+  actorId: string,
+  options: { confirmReservationChange?: boolean } = {},
+): Promise<void> {
   const event = await readEventForEdit(eventRequestId, actorId);
   const id = parseLineId(lineId);
+
+  const line = await readLine(event.id, id);
+  assertReservationConfirmed(line, null, options.confirmReservationChange === true);
 
   const { data, error } = await deleteEquipmentRequestLine(event.id, id);
   if (error) throw new ValidationError('The item could not be removed.', error.message);

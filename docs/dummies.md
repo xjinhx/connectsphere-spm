@@ -522,3 +522,31 @@ switch them the next time they edit those files.
   with `tests/unit/venue-commitments.test.ts` and
   `tests/integration/venue-commitments.test.ts`; SCRUM-227 and SCRUM-229
   owners to re-run the ACs that use it.
+
+### D-18 — An equipment line is reserved by hand
+
+- **Kind:** Out-of-sprint stand-in (reserving equipment is SCRUM-167, a
+  stretch story not built this sprint)
+- **Added by:** SCRUM-160 AC8 — branch `event-equipment-request`
+- **Waiting on:** SCRUM-167 (equipment reservation)
+- **Where:**
+  `supabase/migrations/20261014143210_event_equipment_request.sql` — the
+  `equipment_reservation` table (`DUMMY(SCRUM-167) D-18`);
+  `src/lib/supabase/equipmentRequests.ts` — `fetchReservedLineIds()`
+  (`DUMMY(SCRUM-167) D-18`);
+  `tests/integration/equipment-request.test.ts` — `reserve()`
+  (`DUMMY(SCRUM-167) D-18`)
+- **What is real and what is faked:** the warning is real. A reduction (or
+  removal) of a reserved line is refused with 409 and "This item has already
+  been reserved. Confirm to apply the change to its reservation." until the
+  coordinator confirms, and an unreserved line is changed at once (AC7). Only
+  the reservation is faked: a line is reserved when a row in
+  `equipment_reservation` names it, and testers insert that row by hand in
+  Studio (`insert into equipment_reservation (line_id) values ('<line id>');`).
+- **To replace:** once SCRUM-167 reserves equipment, point
+  `fetchReservedLineIds()` at its reservation record (same signature: the
+  reserved line ids out of the ones given), drop `equipment_reservation` in
+  SCRUM-167's migration if it is not reused, and remove the markers. Re-run
+  SCRUM-160 AC7 and AC8 (TC-160-19 to TC-160-23) with a line reserved through
+  the app.
+- **Status:** Active.

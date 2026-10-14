@@ -46,6 +46,14 @@ import { ensureTestClientOrganisation, TEST_CLIENT_ORGANISATION_ID } from './fix
  *        equipment list."
  *   AC7 "Given an equipment item has not yet been reserved, when I change its
  *        quantity or remove it, then the change is saved immediately."
+ *   AC8 "Given an equipment item has already been reserved, when I attempt to
+ *        reduce its quantity, then I am warned that a reservation exists and
+ *        must confirm before the change is applied."
+ *
+ * Reserving equipment is SCRUM-167, not built. A line is reserved here by a
+ * row in the stand-in equipment_reservation table (dummy D-18), inserted by
+ * hand as testers do; the warning runs against it for real, so AC8's tests
+ * count. Re-run them once SCRUM-167 replaces the stand-in.
  *
  * Test case IDs are from the Sprint 3 sheet's SCRUM-160 tab (TC-160-nn).
  */
@@ -127,6 +135,12 @@ async function addItem(name: string): Promise<string> {
   );
   equipmentIds.push(item.id);
   return item.id;
+}
+
+/** DUMMY(SCRUM-167) D-18: marks a line reserved the way testers do, by hand. */
+async function reserve(lineId: string): Promise<void> {
+  const { error } = await admin.from('equipment_reservation').insert({ line_id: lineId });
+  if (error) throw new Error(`could not reserve test line: ${error.message}`);
 }
 
 /** The event's stored technical requirements, read straight from the table. */
@@ -513,5 +527,87 @@ describe('SCRUM-160 AC7: changing or removing an unreserved item', () => {
     await expect(updateEquipmentLineQuantity(event, line.id, coordinatorA.userId, { quantity: 9 })).rejects.toMatchObject({ code: 'NOT_FOUND' });
     await expect(removeEquipmentLine(event, line.id, coordinatorA.userId)).rejects.toMatchObject({ code: 'NOT_FOUND' });
     expect(await storedLines(other)).toMatchObject([{ id: line.id, quantity: 2 }]);
+  });
+});
+
+// -----------------------------------------------------------------------------
+// AC8 — reducing a reserved item is warned about and must be confirmed
+// -----------------------------------------------------------------------------
+
+describe('SCRUM-160 AC8: reducing a reserved item', () => {
+  const WARNING = {
+    code: 'CONFLICT',
+    message: 'This item has already been reserved. Confirm to apply the change to its reservation.',
+    details: { reservationConfirmationRequired: true },
+  };
+
+  it('TC-160-21 warns that a reservation exists, then applies the reduction once confirmed', async () => {
+    const event = await createEvent('planning');
+    const { line } = await addEquipmentLine(event, coordinatorA.userId, { equipmentId: projector, quantity: 5 });
+    await reserve(line.id);
+
+    await expect(updateEquipmentLineQuantity(event, line.id, coordinatorA.userId, { quantity: 3 })).rejects.toMatchObject(
+      WARNING,
+    );
+    const changed = await updateEquipmentLineQuantity(event, line.id, coordinatorA.userId, {
+      quantity: 3,
+      confirmReservationChange: true,
+    });
+
+    expect(changed).toMatchObject({ quantity: 3, reserved: true });
+    expect(await storedLines(event)).toMatchObject([{ id: line.id, quantity: 3 }]);
+  });
+
+  it('TC-160-22 leaves the reserved item at x 5 when the warning is not confirmed', async () => {
+    const event = await createEvent('planning');
+    const { line } = await addEquipmentLine(event, coordinatorA.userId, { equipmentId: projector, quantity: 5 });
+    await reserve(line.id);
+
+    // Cancelling at the warning sends nothing more; a PATCH without the
+    // confirmation, straight at the API, is refused the same way.
+    await expect(updateEquipmentLineQuantity(event, line.id, coordinatorA.userId, { quantity: 3 })).rejects.toMatchObject(
+      WARNING,
+    );
+    await expect(
+      updateEquipmentLineQuantity(event, line.id, coordinatorA.userId, { quantity: 3, confirmReservationChange: false }),
+    ).rejects.toMatchObject(WARNING);
+
+    expect(await storedLines(event)).toMatchObject([{ id: line.id, quantity: 5 }]);
+  });
+
+  it('TC-160-23 warns about a reduction of one, and not about saving the same quantity', async () => {
+    const event = await createEvent('planning');
+    const { line } = await addEquipmentLine(event, coordinatorA.userId, { equipmentId: projector, quantity: 5 });
+    await reserve(line.id);
+
+    await expect(updateEquipmentLineQuantity(event, line.id, coordinatorA.userId, { quantity: 4 })).rejects.toMatchObject(
+      WARNING,
+    );
+    await expect(updateEquipmentLineQuantity(event, line.id, coordinatorA.userId, { quantity: 5 })).resolves.toMatchObject({
+      quantity: 5,
+    });
+  });
+
+  it('shows which lines are reserved when the request is read', async () => {
+    const event = await createEvent('planning');
+    const { line: reservedLine } = await addEquipmentLine(event, coordinatorA.userId, { equipmentId: projector, quantity: 5 });
+    await addEquipmentLine(event, coordinatorA.userId, { equipmentId: lectern, quantity: 1 });
+    await reserve(reservedLine.id);
+
+    const request = await getEquipmentRequest(event, coordinatorA);
+
+    expect(request.lines.map((line) => line.reserved)).toEqual([true, false]);
+  });
+
+  it('asks for the same confirmation before a reserved item is removed (interim)', async () => {
+    const event = await createEvent('planning');
+    const { line } = await addEquipmentLine(event, coordinatorA.userId, { equipmentId: projector, quantity: 5 });
+    await reserve(line.id);
+
+    await expect(removeEquipmentLine(event, line.id, coordinatorA.userId)).rejects.toMatchObject(WARNING);
+    expect(await storedLines(event)).toHaveLength(1);
+
+    await removeEquipmentLine(event, line.id, coordinatorA.userId, { confirmReservationChange: true });
+    expect(await storedLines(event)).toEqual([]);
   });
 });

@@ -1,5 +1,10 @@
 import { describe, expect, it } from 'vitest';
-import { acceptsEquipmentRequest, canViewEquipmentRequest, linesOfSameType } from '@/domain/equipment-request/policy';
+import {
+  acceptsEquipmentRequest,
+  canViewEquipmentRequest,
+  linesOfSameType,
+  needsReservationConfirmation,
+} from '@/domain/equipment-request/policy';
 import {
   AddEquipmentLineInputSchema,
   SaveTechnicalRequirementsInputSchema,
@@ -148,5 +153,36 @@ describe('AC6: who may open an equipment request', () => {
     for (const role of ['venue_staff', 'event_organiser', 'attendee', 'operations_manager'] as const) {
       expect(canViewEquipmentRequest({ userId: OTHER, roles: [role] }, ASSIGNED)).toBe(false);
     }
+  });
+});
+
+describe('AC7 and AC8: when a change needs the reservation warning confirmed', () => {
+  const unreserved = { quantity: 5, reserved: false };
+  const reserved = { quantity: 5, reserved: true };
+
+  it('TC-160-19 never asks for an unreserved item, whatever the change', () => {
+    expect(needsReservationConfirmation(unreserved, 7)).toBe(false);
+    expect(needsReservationConfirmation(unreserved, null)).toBe(false);
+  });
+
+  it('TC-160-20 does not ask when an unreserved item is reduced', () => {
+    expect(needsReservationConfirmation(unreserved, 3)).toBe(false);
+  });
+
+  it('TC-160-21 asks when a reserved item is reduced', () => {
+    expect(needsReservationConfirmation(reserved, 3)).toBe(true);
+  });
+
+  it('TC-160-23 asks for a reduction of one, and not for an unchanged quantity', () => {
+    expect(needsReservationConfirmation(reserved, 4)).toBe(true);
+    expect(needsReservationConfirmation(reserved, 5)).toBe(false);
+  });
+
+  it('does not ask when a reserved item is raised: AC8 names only a reduction', () => {
+    expect(needsReservationConfirmation(reserved, 6)).toBe(false);
+  });
+
+  it('asks when a reserved item is removed (interim: removal is a reduction to nothing)', () => {
+    expect(needsReservationConfirmation(reserved, null)).toBe(true);
   });
 });

@@ -16,6 +16,9 @@
 --      unlike SCRUM-80's event_request_equipment_item_unique.
 -- AC5: the technical requirements are stored with the request
 --      (equipment_request.technical_requirements).
+-- AC7, AC8: whether a line has been reserved decides whether reducing it needs
+--      a confirmation. Reserving equipment is SCRUM-167 (stretch, not built),
+--      so equipment_reservation below is a stand-in: dummy D-18.
 --
 -- Kept apart from SCRUM-80's event_request_equipment (20260913100000): that is
 -- the free text an Event Organiser types on the request form, with one line per
@@ -61,3 +64,20 @@ create index equipment_request_line_event_idx on equipment_request_line (event_r
 -- writes through the service-role client and decides access in the service.
 alter table equipment_request enable row level security;
 alter table equipment_request_line enable row level security;
+
+-- -----------------------------------------------------------------------------
+-- AC8: reservations - a stand-in until SCRUM-167
+-- -----------------------------------------------------------------------------
+-- DUMMY(SCRUM-167) D-18: no story in this sprint reserves equipment, so a line
+-- is reserved when a row here names it, and rows are inserted by hand. The
+-- warning AC8 asks for runs against it for real. SCRUM-167 replaces this with
+-- its own reservation record (see docs/dummies.md, D-18).
+create table equipment_reservation (
+  id uuid primary key default gen_random_uuid(),
+  -- One reservation per line. Cascade: a reserved line is only removed after
+  -- the coordinator confirms (AC8), and its reservation goes with it.
+  line_id uuid not null unique references equipment_request_line (id) on delete cascade,
+  created_at timestamptz not null default now()
+);
+
+alter table equipment_reservation enable row level security;

@@ -51,9 +51,15 @@ export const AddEquipmentLineInputSchema = z.object({
 });
 export type AddEquipmentLineInput = z.infer<typeof AddEquipmentLineInputSchema>;
 
-/** AC7: "when I change its quantity". */
+/**
+ * AC7: "when I change its quantity".
+ *
+ * AC8: confirmReservationChange is the coordinator's confirmation after the
+ * reservation warning. Left out, a reduction of a reserved item is not applied.
+ */
 export const UpdateEquipmentLineInputSchema = z.object({
   quantity: RequestedQuantitySchema,
+  confirmReservationChange: z.boolean().optional(),
 });
 export type UpdateEquipmentLineInput = z.infer<typeof UpdateEquipmentLineInputSchema>;
 
@@ -87,6 +93,8 @@ export const EquipmentRequestLineSchema = z.object({
   equipmentName: z.string(),
   category: EquipmentCategorySchema,
   quantity: z.number().int(),
+  /** AC7, AC8: whether the item has been reserved; reducing a reserved item needs a confirmation. */
+  reserved: z.boolean(),
   createdAt: z.string(),
 });
 export type EquipmentRequestLine = z.infer<typeof EquipmentRequestLineSchema>;

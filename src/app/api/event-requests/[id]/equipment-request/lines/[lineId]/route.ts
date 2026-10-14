@@ -10,6 +10,10 @@ import { getCurrentActor } from '@/lib/auth/currentActor';
  * SCRUM-160 AC7 — change a line's quantity (PATCH) or remove it (DELETE),
  * saved immediately.
  *
+ * AC8 — a reduction of a reserved item is refused with 409 and the reservation
+ * warning until it is confirmed: confirmReservationChange: true in the PATCH
+ * body, or ?confirmReservationChange=true on the DELETE.
+ *
  * Same split as adding a line: the role is checked here through SCRUM-69's
  * matrix before the body is read, and the rules that need the event are in
  * the service.
@@ -29,12 +33,13 @@ export async function PATCH(req: NextRequest, { params }: Params) {
   }
 }
 
-export async function DELETE(_req: NextRequest, { params }: Params) {
+export async function DELETE(req: NextRequest, { params }: Params) {
   try {
     const { id, lineId } = await params;
     const actor = await getCurrentActor();
     assertPermission(actor.roles, 'equipment_request');
-    await removeEquipmentLine(id, lineId, actor.userId);
+    const confirmReservationChange = req.nextUrl.searchParams.get('confirmReservationChange') === 'true';
+    await removeEquipmentLine(id, lineId, actor.userId, { confirmReservationChange });
     return new NextResponse(null, { status: 204 });
   } catch (error) {
     return handleApiError(error);

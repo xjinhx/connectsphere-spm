@@ -192,6 +192,32 @@ export type Database = {
           },
         ]
       }
+      equipment_reservation: {
+        Row: {
+          created_at: string
+          id: string
+          line_id: string
+        }
+        Insert: {
+          created_at?: string
+          id?: string
+          line_id: string
+        }
+        Update: {
+          created_at?: string
+          id?: string
+          line_id?: string
+        }
+        Relationships: [
+          {
+            foreignKeyName: "equipment_reservation_line_id_fkey"
+            columns: ["line_id"]
+            isOneToOne: true
+            referencedRelation: "equipment_request_line"
+            referencedColumns: ["id"]
+          },
+        ]
+      }
       event_request: {
         Row: {
           accessibility_notes: string | null
