@@ -244,11 +244,17 @@ export default async function ReviewEventRequestPage({
         <section className="mt-6 rounded-lg border border-[var(--border)] bg-[var(--surface)] p-4">
           <h2 className="text-sm font-semibold">Request a venue</h2>
           <div className="mt-3">
-            {/* SCRUM-239 AC3: the request starts from the event's own date and times (SCRUM-238). */}
+            {/* SCRUM-239 AC3: the request starts from the event's own date and times (SCRUM-238).
+                SCRUM-230 AC2: each venue requirement left empty shows the event's. */}
             <RequestVenueBookingForm
               requestId={request.id}
               venues={venues}
               eventPeriod={{ date: request.proposedDate, start: request.startTime, end: request.endTime }}
+              eventRequirements={{
+                expectedAttendance: request.expectedAttendance,
+                roomLayout: describeRoomLayout(request.roomLayout),
+                accessibility: describeAccessibility(request),
+              }}
             />
           </div>
         </section>

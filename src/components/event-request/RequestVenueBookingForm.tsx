@@ -3,6 +3,7 @@
 import { useState } from 'react';
 import { useRouter } from 'next/navigation';
 import { END_TIME_OPTIONS, START_TIME_OPTIONS } from '@/domain/shared/times';
+import { ROOM_LAYOUTS, ROOM_LAYOUT_LABELS } from '@/domain/venues/schema';
 import type { VenueBookingLineErrors, VenueBookingRequestErrorDetails } from '@/domain/venue-booking/schema';
 
 export interface VenueOption {
@@ -23,6 +24,26 @@ export interface EventPeriod {
   end: string | null;
 }
 
+/**
+ * SCRUM-230 AC2: the event's own venue requirements, as the event page shows
+ * them, so each empty field can say what it falls back to.
+ */
+export interface EventRequirements {
+  expectedAttendance: number | null;
+  roomLayout: string;
+  accessibility: string;
+}
+
+/** SCRUM-230 AC1: the request's own venue requirements, as typed. Empty is "use the event's". */
+interface OwnRequirements {
+  expectedAttendance: string;
+  roomLayout: string;
+  accessibility: '' | 'yes' | 'no';
+  accessibilityNotes: string;
+}
+
+const NO_OWN_REQUIREMENTS: OwnRequirements = { expectedAttendance: '', roomLayout: '', accessibility: '', accessibilityNotes: '' };
+
 const NO_FIELD_ERRORS: VenueBookingRequestErrorDetails = { formErrors: [], fieldErrors: {}, lineErrors: [] };
 
 function messagesFrom(value: unknown): string[] | undefined {
@@ -41,7 +62,14 @@ function fieldErrorsFrom(details: unknown): VenueBookingRequestErrorDetails {
   const fields = (typeof fieldErrors === 'object' && fieldErrors !== null ? fieldErrors : {}) as Record<string, unknown>;
   return {
     formErrors: messagesFrom(formErrors) ?? [],
-    fieldErrors: { venueId: messagesFrom(fields.venueId), lines: messagesFrom(fields.lines) },
+    fieldErrors: {
+      venueId: messagesFrom(fields.venueId),
+      lines: messagesFrom(fields.lines),
+      expectedAttendance: messagesFrom(fields.expectedAttendance),
+      roomLayout: messagesFrom(fields.roomLayout),
+      accessibilityRequired: messagesFrom(fields.accessibilityRequired),
+      accessibilityNotes: messagesFrom(fields.accessibilityNotes),
+    },
     lineErrors: Array.isArray(lineErrors)
       ? lineErrors.map((line): VenueBookingLineErrors => {
           const record = (typeof line === 'object' && line !== null ? line : {}) as Record<string, unknown>;
@@ -82,20 +110,28 @@ function FieldError({ id, messages }: { id: string; messages: string[] | undefin
  * the committed period, or a validation error). AC5: a validation error also
  * names each missing field, shown beside that field on the line it belongs to;
  * a clash or a period outside opening hours is shown beside the line's times.
+ *
+ * SCRUM-230 AC1: an optional section for the venue's own attendance, layout
+ * and accessibility needs; AC2: each one left empty uses the event's, which the
+ * field shows. The form does not check them itself (noValidate), so a refused
+ * attendance shows the API's message beside the field, as for the event's own.
  */
 export function RequestVenueBookingForm({
   requestId,
   venues,
   eventPeriod,
+  eventRequirements,
 }: {
   requestId: string;
   venues: readonly VenueOption[];
   eventPeriod: EventPeriod;
+  eventRequirements: EventRequirements;
 }) {
   const router = useRouter();
   const firstLine = (): Line => ({ date: eventPeriod.date ?? '', start: eventPeriod.start ?? '', end: eventPeriod.end ?? '' });
   const [venueId, setVenueId] = useState(venues[0]?.id ?? '');
   const [lines, setLines] = useState<Line[]>(() => [firstLine()]);
+  const [own, setOwn] = useState<OwnRequirements>(NO_OWN_REQUIREMENTS);
   const [submitting, setSubmitting] = useState(false);
   const [error, setError] = useState<string | null>(null);
   const [fieldErrors, setFieldErrors] = useState<VenueBookingRequestErrorDetails>(NO_FIELD_ERRORS);
@@ -126,7 +162,15 @@ export function RequestVenueBookingForm({
       const response = await fetch(`/api/event-requests/${requestId}/venue-booking-requests`, {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({ venueId, lines }),
+        body: JSON.stringify({
+          venueId,
+          lines,
+          // SCRUM-230: null is "use the event's" (AC2).
+          expectedAttendance: own.expectedAttendance === '' ? null : Number(own.expectedAttendance),
+          roomLayout: own.roomLayout === '' ? null : own.roomLayout,
+          accessibilityRequired: own.accessibility === '' ? null : own.accessibility === 'yes',
+          accessibilityNotes: own.accessibility === 'yes' ? own.accessibilityNotes : null,
+        }),
       });
       const payload = (await response.json().catch(() => null)) as {
         lines?: unknown[];
@@ -140,6 +184,7 @@ export function RequestVenueBookingForm({
       }
       setSubmittedCount(payload?.lines?.length ?? lines.length);
       setLines([firstLine()]);
+      setOwn(NO_OWN_REQUIREMENTS);
       router.refresh();
     } catch (caught) {
       setError(
@@ -162,7 +207,7 @@ export function RequestVenueBookingForm({
   }
 
   return (
-    <form onSubmit={onSubmit} className="space-y-4">
+    <form onSubmit={onSubmit} noValidate className="space-y-4">
       <div>
         <label className="block text-sm font-medium" htmlFor="venue-booking-venue">
           Venue
@@ -277,6 +322,93 @@ export function RequestVenueBookingForm({
           + Add another date for this venue
         </button>
       </div>
+
+      {/* SCRUM-230 AC1, AC2: this venue's own needs, each falling back to the event's. */}
+      <fieldset className="space-y-3 rounded-md border border-[var(--border)] p-3">
+        <legend className="px-1 text-sm font-medium">Venue requirements for this venue</legend>
+        <p className="text-xs text-[var(--text-muted)]">Leave any of these empty to use the event&apos;s.</p>
+        <div>
+          <label className="block text-xs text-[var(--text-muted)]" htmlFor="venue-booking-attendance">
+            Expected attendance
+          </label>
+          <input
+            id="venue-booking-attendance"
+            type="number"
+            min={1}
+            step={1}
+            value={own.expectedAttendance}
+            placeholder={
+              eventRequirements.expectedAttendance === null
+                ? "Event's: not provided"
+                : `Event's: ${eventRequirements.expectedAttendance}`
+            }
+            onChange={(event) => setOwn({ ...own, expectedAttendance: event.target.value })}
+            aria-invalid={fieldErrors.fieldErrors.expectedAttendance ? true : undefined}
+            aria-describedby={fieldErrors.fieldErrors.expectedAttendance ? 'venue-booking-attendance-error' : undefined}
+            className="mt-1 w-40 rounded-md border border-[var(--border)] bg-[var(--surface)] px-3 py-2 text-sm"
+          />
+          <FieldError id="venue-booking-attendance-error" messages={fieldErrors.fieldErrors.expectedAttendance} />
+        </div>
+        <div>
+          <label className="block text-xs text-[var(--text-muted)]" htmlFor="venue-booking-layout">
+            Room layout
+          </label>
+          <select
+            id="venue-booking-layout"
+            value={own.roomLayout}
+            onChange={(event) => setOwn({ ...own, roomLayout: event.target.value })}
+            aria-invalid={fieldErrors.fieldErrors.roomLayout ? true : undefined}
+            aria-describedby={fieldErrors.fieldErrors.roomLayout ? 'venue-booking-layout-error' : undefined}
+            className="mt-1 rounded-md border border-[var(--border)] bg-[var(--surface)] px-3 py-2 text-sm"
+          >
+            <option value="">Use the event&apos;s ({eventRequirements.roomLayout})</option>
+            {ROOM_LAYOUTS.map((layout) => (
+              <option key={layout} value={layout}>
+                {ROOM_LAYOUT_LABELS[layout]}
+              </option>
+            ))}
+          </select>
+          <FieldError id="venue-booking-layout-error" messages={fieldErrors.fieldErrors.roomLayout} />
+        </div>
+        <div>
+          <label className="block text-xs text-[var(--text-muted)]" htmlFor="venue-booking-accessibility">
+            Accessibility needs
+          </label>
+          <select
+            id="venue-booking-accessibility"
+            value={own.accessibility}
+            onChange={(event) => setOwn({ ...own, accessibility: event.target.value as OwnRequirements['accessibility'] })}
+            className="mt-1 rounded-md border border-[var(--border)] bg-[var(--surface)] px-3 py-2 text-sm"
+          >
+            <option value="">Use the event&apos;s ({eventRequirements.accessibility})</option>
+            <option value="yes">Yes, needed for this venue</option>
+            <option value="no">None for this venue</option>
+          </select>
+          <FieldError id="venue-booking-accessibility-error" messages={fieldErrors.fieldErrors.accessibilityRequired} />
+          {own.accessibility === 'yes' ? (
+            <>
+              <label className="mt-2 block text-xs text-[var(--text-muted)]" htmlFor="venue-booking-accessibility-notes">
+                What is needed
+              </label>
+              <textarea
+                id="venue-booking-accessibility-notes"
+                value={own.accessibilityNotes}
+                onChange={(event) => setOwn({ ...own, accessibilityNotes: event.target.value })}
+                aria-invalid={fieldErrors.fieldErrors.accessibilityNotes ? true : undefined}
+                aria-describedby={
+                  fieldErrors.fieldErrors.accessibilityNotes ? 'venue-booking-accessibility-notes-error' : undefined
+                }
+                rows={2}
+                className="mt-1 w-full rounded-md border border-[var(--border)] bg-[var(--surface)] px-3 py-2 text-sm"
+              />
+              <FieldError
+                id="venue-booking-accessibility-notes-error"
+                messages={fieldErrors.fieldErrors.accessibilityNotes}
+              />
+            </>
+          ) : null}
+        </div>
+      </fieldset>
 
       {error ? (
         <div role="alert" className="text-sm text-[var(--danger)]">
