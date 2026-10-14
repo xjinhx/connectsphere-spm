@@ -2,7 +2,7 @@ import { z } from 'zod';
 import { assertEquipmentInCatalogue } from '@/domain/equipment/service';
 import { isCurrentCoordinator } from '@/domain/assignment/policy';
 import type { Role } from '@/domain/identity/roles';
-import { ForbiddenError, NotFoundError, ValidationError } from '@/domain/shared/errors';
+import { ForbiddenError, NotFoundError, ValidationError, isCheckViolation } from '@/domain/shared/errors';
 import { fetchEventRequestById, type EventRequestRow } from '@/lib/supabase/eventRequests';
 import {
   deleteEquipmentRequestLine,
@@ -16,6 +16,7 @@ import {
   AddEquipmentLineInputSchema,
   AddEquipmentLineOutcomeSchema,
   EquipmentRequestLineIdSchema,
+  QUANTITY_AT_LEAST_ONE_MESSAGE,
   EquipmentRequestLineSchema,
   EquipmentRequestViewSchema,
   UpdateEquipmentLineInputSchema,
@@ -61,6 +62,18 @@ function toLine(row: LineRow): EquipmentRequestLine {
 
 function validationError(error: z.ZodError, fallback: string): ValidationError {
   return new ValidationError(error.issues[0]?.message ?? fallback, error.flatten());
+}
+
+/**
+ * AC2: the column check mirrors the schema, so a check violation means a value
+ * got past it; name the quantity field rather than failing with a message no
+ * field owns.
+ */
+function quantityError(): ValidationError {
+  return new ValidationError(QUANTITY_AT_LEAST_ONE_MESSAGE, {
+    formErrors: [],
+    fieldErrors: { quantity: [QUANTITY_AT_LEAST_ONE_MESSAGE] },
+  });
 }
 
 async function readEvent(eventRequestId: string): Promise<EventRequestRow> {
@@ -154,7 +167,10 @@ export async function addEquipmentLine(
     quantity: parsed.data.quantity,
     createdBy: actorId,
   });
-  if (error || !data) throw new ValidationError('The equipment item could not be saved.', error?.message);
+  if (error || !data) {
+    if (isCheckViolation(error)) throw quantityError();
+    throw new ValidationError('The equipment item could not be saved.', error?.message);
+  }
 
   return AddEquipmentLineOutcomeSchema.parse({ line: toLine(data as unknown as LineRow) });
 }
@@ -187,7 +203,10 @@ export async function updateEquipmentLineQuantity(
   if (!parsed.success) throw validationError(parsed.error, 'The quantity is not valid.');
 
   const { data, error } = await updateEquipmentRequestLineQuantity(event.id, id, parsed.data.quantity);
-  if (error) throw new ValidationError('The change could not be saved.', error.message);
+  if (error) {
+    if (isCheckViolation(error)) throw quantityError();
+    throw new ValidationError('The change could not be saved.', error.message);
+  }
   if (!data) throw new NotFoundError('Equipment line');
   return toLine(data as unknown as LineRow);
 }

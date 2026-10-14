@@ -1,6 +1,6 @@
 import { describe, expect, it } from 'vitest';
 import { acceptsEquipmentRequest } from '@/domain/equipment-request/policy';
-import { AddEquipmentLineInputSchema } from '@/domain/equipment-request/schema';
+import { AddEquipmentLineInputSchema, UpdateEquipmentLineInputSchema } from '@/domain/equipment-request/schema';
 import { EventRequestStatusEnum, type EventRequestStatus } from '@/domain/event-request/schema';
 
 /**
@@ -51,6 +51,32 @@ describe('AC1: an item needs an equipment type and a quantity', () => {
   it('refuses a quantity that is not a whole number', () => {
     expect(fieldErrors({ equipmentId: PROJECTOR, quantity: 2.5 })).toEqual({
       quantity: ['Quantity must be a whole number.'],
+    });
+  });
+});
+
+describe('AC2: the quantity must be at least one', () => {
+  it('TC-160-04 refuses 0 with the "at least one" message on the quantity field', () => {
+    expect(fieldErrors({ equipmentId: PROJECTOR, quantity: 0 })).toEqual({
+      quantity: ['Quantity must be at least one.'],
+    });
+  });
+
+  it('refuses a negative quantity with the same message', () => {
+    expect(fieldErrors({ equipmentId: PROJECTOR, quantity: -3 })).toEqual({
+      quantity: ['Quantity must be at least one.'],
+    });
+  });
+
+  it('TC-160-05 accepts 1, one step above the refusal', () => {
+    expect(AddEquipmentLineInputSchema.safeParse({ equipmentId: PROJECTOR, quantity: 1 }).success).toBe(true);
+  });
+
+  it('TC-160-06 holds when a line is changed to 0, not only when it is added', () => {
+    const parsed = UpdateEquipmentLineInputSchema.safeParse({ quantity: 0 });
+    expect(parsed.success).toBe(false);
+    expect(parsed.success ? null : parsed.error.flatten().fieldErrors).toEqual({
+      quantity: ['Quantity must be at least one.'],
     });
   });
 });

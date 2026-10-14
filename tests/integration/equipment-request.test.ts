@@ -27,6 +27,9 @@ import { ensureTestClientOrganisation, TEST_CLIENT_ORGANISATION_ID } from './fix
  *   AC1 "Given I am the assigned coordinator of an event that is Approved or
  *        in Planning, when I add an equipment type and a quantity, then the
  *        item is saved against the event's equipment request."
+ *   AC2 "Given I enter a quantity that is zero or negative, when I attempt to
+ *        save, then the item is not added and I am told the quantity must be
+ *        at least one."
  *   AC7 "Given an equipment item has not yet been reserved, when I change its
  *        quantity or remove it, then the change is saved immediately."
  *
@@ -185,6 +188,52 @@ describe('SCRUM-160 AC1: adding an item to the event\'s equipment request', () =
     await addEquipmentLine(event, coordinatorA.userId, { equipmentId: lectern, quantity: 1 });
 
     expect(await storedLines(event)).toMatchObject([{ equipment_id: lectern, quantity: 1 }]);
+  });
+});
+
+// -----------------------------------------------------------------------------
+// AC2 — the quantity must be at least one
+// -----------------------------------------------------------------------------
+
+describe('SCRUM-160 AC2: a quantity of zero or below', () => {
+  it('TC-160-04 does not add an item with quantity 0, and says it must be at least one', async () => {
+    const event = await createEvent('planning');
+
+    await expect(addEquipmentLine(event, coordinatorA.userId, { equipmentId: projector, quantity: 0 })).rejects.toMatchObject({
+      code: 'VALIDATION_ERROR',
+      message: 'Quantity must be at least one.',
+      details: { fieldErrors: { quantity: ['Quantity must be at least one.'] } },
+    });
+    expect(await storedLines(event)).toEqual([]);
+  });
+
+  it('TC-160-05 adds an item with quantity 1', async () => {
+    const event = await createEvent('planning');
+
+    await addEquipmentLine(event, coordinatorA.userId, { equipmentId: lectern, quantity: 1 });
+
+    expect(await storedLines(event)).toMatchObject([{ equipment_id: lectern, quantity: 1 }]);
+  });
+
+  it('TC-160-06 refuses changing a line to 0, and the line keeps its quantity', async () => {
+    const event = await createEvent('planning');
+    const { line } = await addEquipmentLine(event, coordinatorA.userId, { equipmentId: projector, quantity: 2 });
+
+    await expect(updateEquipmentLineQuantity(event, line.id, { quantity: 0 })).rejects.toMatchObject({
+      code: 'VALIDATION_ERROR',
+      message: 'Quantity must be at least one.',
+    });
+    expect(await storedLines(event)).toMatchObject([{ id: line.id, quantity: 2 }]);
+  });
+
+  it('the database refuses 0 on its own, as the backstop', async () => {
+    const event = await createEvent('planning');
+    await addEquipmentLine(event, coordinatorA.userId, { equipmentId: projector, quantity: 1 });
+
+    const { error } = await admin
+      .from('equipment_request_line')
+      .insert({ event_request_id: event, equipment_id: projector, quantity: 0, created_by: coordinatorA.userId });
+    expect(error?.code).toBe('23514');
   });
 });
 

@@ -21,13 +21,23 @@ const EquipmentTypeSchema = z
   .string({ required_error: CHOOSE_EQUIPMENT_TYPE_MESSAGE, invalid_type_error: CHOOSE_EQUIPMENT_TYPE_MESSAGE })
   .uuid(CHOOSE_EQUIPMENT_TYPE_MESSAGE);
 
-/** AC1: "and a quantity". A whole number. */
+/**
+ * AC2: "Given I enter a quantity that is zero or negative, when I attempt to
+ * save, then the item is not added and I am told the quantity must be at least
+ * one." 0 is the highest refused value (TC-160-04) and 1 the lowest accepted
+ * (TC-160-05). The same rule holds when a line's quantity is changed
+ * (TC-160-06): removing a line is the way to take it to nothing.
+ */
+export const QUANTITY_AT_LEAST_ONE_MESSAGE = 'Quantity must be at least one.';
+
+/** AC1: "and a quantity". A whole number of at least one (AC2). */
 export const RequestedQuantitySchema = z
   .number({
     required_error: 'Quantity is required.',
     invalid_type_error: 'Quantity must be a whole number.',
   })
   .int('Quantity must be a whole number.')
+  .min(1, QUANTITY_AT_LEAST_ONE_MESSAGE)
   .max(QUANTITY_COLUMN_MAX, 'Quantity is too large.');
 
 /**
