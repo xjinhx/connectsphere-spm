@@ -11,8 +11,8 @@ import { ensureTestClientOrganisation } from './fixtures/clientOrganisation';
  * AC5, is tests/unit/suitability-capacity.test.ts.
  *
  * AC5: a check can be for one of the event's booking requests, at that
- * request's venue (tested below). The request's own attendance is SCRUM-230's
- * (#106); until it is merged a request carries none, so these use the event's.
+ * request's venue, using the request's own attendance (SCRUM-230), else the
+ * event's.
  *
  * Test case IDs are from Joshua's Sprint 3 sheet (TC-136-nn). The venue is the
  * sheet's S136 Hall: maximum capacity 200, Theatre 120, Banquet 100.
@@ -59,8 +59,11 @@ async function createEvent(expectedAttendance: number | null, roomLayout: string
   return data.id;
 }
 
-/** A booking request for the event at a venue, through the real database function, as the coordinator. */
-async function createBookingRequest(eventId: string, venueId: string): Promise<string> {
+/**
+ * A booking request for the event at a venue, through the real database
+ * function, as the coordinator, with its own attendance if given (SCRUM-230).
+ */
+async function createBookingRequest(eventId: string, venueId: string, expectedAttendance?: number): Promise<string> {
   await admin.from('event_request').update({ status: 'approved', decision: 'approved', decided_by: coordinatorId }).eq('id', eventId);
   const date = new Date(`${todayInSingapore()}T00:00:00Z`);
   date.setUTCDate(date.getUTCDate() + 30);
@@ -69,6 +72,7 @@ async function createBookingRequest(eventId: string, venueId: string): Promise<s
     p_venue_id: venueId,
     p_requested_by: coordinatorId,
     p_lines: [{ date: date.toISOString().slice(0, 10), start: '10:00', end: '12:00' }],
+    p_expected_attendance: expectedAttendance,
   });
   if (error || !data) throw new Error(`could not create test booking request: ${error?.message}`);
   return data;
@@ -191,6 +195,35 @@ describe('checkVenueSuitability for a booking request: SCRUM-136 AC5', () => {
     await expect(checkVenueSuitability(eventId, { bookingRequestId: otherRequestId }, coordinatorId)).rejects.toMatchObject({
       code: 'NOT_FOUND',
     });
+  });
+
+  it("TC-136-08 uses the request's own 150, not the event's 80, and states the shortfall of 30", async () => {
+    const eventId = await createEvent(80, 'theatre');
+    const bookingRequestId = await createBookingRequest(eventId, hallId, 150);
+
+    const result = await checkVenueSuitability(eventId, { bookingRequestId }, coordinatorId);
+
+    expect(result.verdict).toBe('not_suitable');
+    expect(result.requirements[0]).toMatchObject({ eventValue: '150 expected', shortfall: 30 });
+  });
+
+  it("TC-136-09 uses the request's own 80, not the event's 150, so no capacity failure is raised", async () => {
+    const eventId = await createEvent(150, 'theatre');
+    const bookingRequestId = await createBookingRequest(eventId, hallId, 80);
+
+    const result = await checkVenueSuitability(eventId, { bookingRequestId }, coordinatorId);
+
+    expect(result.verdict).toBe('suitable');
+    expect(result.requirements[0]).toMatchObject({ outcome: 'met', eventValue: '80 expected' });
+  });
+
+  it("uses the event's attendance for a request that left it empty, marked as the event's", async () => {
+    const eventId = await createEvent(150, 'theatre');
+    const bookingRequestId = await createBookingRequest(eventId, hallId);
+
+    const result = await checkVenueSuitability(eventId, { bookingRequestId }, coordinatorId);
+
+    expect(result.requirements[0]).toMatchObject({ eventValue: "150 expected (event's)", shortfall: 30 });
   });
 
   it('refuses a coordinator the event is not assigned to before reading the request', async () => {

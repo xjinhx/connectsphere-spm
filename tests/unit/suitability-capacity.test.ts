@@ -1,5 +1,6 @@
 import { describe, it, expect } from 'vitest';
-import { capacityRequirement, needsFor, toRoomLayout, verdictOf } from '@/domain/suitability/policy';
+import { capacityRequirement, needsOfRequest, toRoomLayout, verdictOf } from '@/domain/suitability/policy';
+import { venueRequirementsOf } from '@/domain/venue-booking/policy';
 import { CheckSuitabilityInputSchema, type RequirementResult } from '@/domain/suitability/schema';
 
 /**
@@ -104,22 +105,36 @@ describe('capacityRequirement: a required layout the venue has no capacity for',
   });
 });
 
-describe('needsFor: SCRUM-136 AC5, a booking request carries its own attendance', () => {
-  const event = { expectedAttendance: 80, roomLayout: 'theatre' as const };
+describe("needsOfRequest: SCRUM-136 AC5, a booking request's own attendance (SCRUM-230's venueRequirementsOf)", () => {
+  const eventRequirements = (expectedAttendance: number | null, roomLayout: string | null) => ({
+    expectedAttendance,
+    roomLayout,
+    accessibilityRequired: false,
+    accessibilityNotes: null,
+    accessibilityFeatures: [],
+  });
+  const own = (expectedAttendance: number | null, roomLayout: string | null = null) => ({
+    expectedAttendance,
+    roomLayout,
+    accessibilityRequired: null,
+    accessibilityNotes: null,
+  });
 
   it("TC-136-08 uses the request's higher attendance, so 150 is short by 30 against Theatre 120", () => {
-    const needs = needsFor(event, { expectedAttendance: 150 });
+    const needs = needsOfRequest(venueRequirementsOf(own(150), eventRequirements(80, 'theatre')));
     expect(capacityRequirement(needs, S136_HALL).shortfall).toBe(30);
   });
 
   it("TC-136-09 uses the request's lower attendance, so 80 raises nothing where the event's 150 would", () => {
-    const needs = needsFor({ ...event, expectedAttendance: 150 }, { expectedAttendance: 80 });
+    const needs = needsOfRequest(venueRequirementsOf(own(80), eventRequirements(150, 'theatre')));
     expect(capacityRequirement(needs, S136_HALL).outcome).toBe('met');
   });
 
-  it("falls back to the event's values where the request leaves them empty", () => {
-    expect(needsFor(event, { expectedAttendance: null })).toEqual(event);
-    expect(needsFor(event, null)).toEqual(event);
+  it("falls back to the event's attendance and layout where the request leaves them empty", () => {
+    expect(needsOfRequest(venueRequirementsOf(own(null), eventRequirements(80, 'theatre')))).toEqual({
+      expectedAttendance: 80,
+      roomLayout: 'theatre',
+    });
   });
 });
 

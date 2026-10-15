@@ -3,8 +3,9 @@ import { fetchBookingRequestForCheck } from '@/lib/supabase/suitability';
 import { ForbiddenError, NotFoundError, ValidationError } from '@/domain/shared/errors';
 import { isCurrentCoordinator } from '@/domain/assignment/policy';
 import { EventRequestIdSchema } from '@/domain/venue-booking/schema';
+import { markIfEvents, venueRequirementsOf } from '@/domain/venue-booking/policy';
 import { getVenue } from '@/domain/venues/service';
-import { capacityRequirement, needsFor, toRoomLayout, verdictOf } from './policy';
+import { capacityRequirement, needsOfRequest, toRoomLayout, verdictOf, type SuitabilityNeeds } from './policy';
 import { CheckSuitabilityInputSchema, SuitabilityResultSchema, type SuitabilityResult } from './schema';
 
 /**
@@ -21,9 +22,9 @@ import { CheckSuitabilityInputSchema, SuitabilityResultSchema, type SuitabilityR
  * requires the coordinator role (event_request_review).
  *
  * SCRUM-136 AC5: a check can be for one of the event's booking requests
- * instead, at that request's venue. The request's own attendance and layout
- * are SCRUM-230's (#106); until it is merged a request has none, so the
- * event's are used.
+ * instead, at that request's venue, using the request's own attendance and
+ * layout and the event's for any it left empty. Which one applies is
+ * SCRUM-230's venueRequirementsOf, not repeated here.
  */
 export async function checkVenueSuitability(
   eventRequestId: string,
@@ -54,20 +55,47 @@ export async function checkVenueSuitability(
   // is treated as not found, so nothing about another event is given away.
   let venueId = parsed.data.venueId;
   let bookingRequestId: string | null = null;
+  let needs: SuitabilityNeeds = { expectedAttendance: event.expected_attendance, roomLayout: toRoomLayout(event.room_layout) };
+  let attendanceFromEvent = false;
   if (parsed.data.bookingRequestId !== undefined) {
     const { data: bookingRequest, error: requestError } = await fetchBookingRequestForCheck(parsed.data.bookingRequestId);
     if (requestError) throw new ValidationError('The booking request could not be read.', requestError.message);
     if (!bookingRequest || bookingRequest.event_request_id !== event.id) throw new NotFoundError('Venue booking request');
     venueId = bookingRequest.venue_id;
     bookingRequestId = bookingRequest.id;
+    // AC5: the request's own attendance and layout, else the event's (SCRUM-230).
+    const inUse = venueRequirementsOf(
+      {
+        expectedAttendance: bookingRequest.expected_attendance,
+        roomLayout: bookingRequest.room_layout,
+        accessibilityRequired: bookingRequest.accessibility_required,
+        accessibilityNotes: bookingRequest.accessibility_notes,
+      },
+      {
+        expectedAttendance: event.expected_attendance,
+        roomLayout: event.room_layout,
+        accessibilityRequired: event.accessibility_required,
+        accessibilityNotes: event.accessibility_notes,
+        accessibilityFeatures: event.event_request_accessibility_features.flatMap((link) =>
+          link.accessibility_features ? [{ name: link.accessibility_features.name }] : [],
+        ),
+      },
+    );
+    needs = needsOfRequest(inUse);
+    attendanceFromEvent = inUse.expectedAttendance.fromEvent;
   }
 
   // Throws NotFoundError for a venue that does not exist. The schema makes
   // sure one of the two was given, so venueId is set here.
   const venue = await getVenue(venueId ?? '');
 
-  const needs = needsFor({ expectedAttendance: event.expected_attendance, roomLayout: toRoomLayout(event.room_layout) });
-  const requirements = [capacityRequirement(needs, venue)];
+  const capacity = capacityRequirement(needs, venue);
+  // A request that left its attendance empty is shown as using the event's (SCRUM-230 AC2).
+  const requirements = [
+    bookingRequestId && attendanceFromEvent
+      ? { ...capacity, eventValue: markIfEvents(capacity.eventValue, { fromEvent: true }) }
+      : capacity,
+  ];
 
   return SuitabilityResultSchema.parse({
     eventRequestId: event.id,
