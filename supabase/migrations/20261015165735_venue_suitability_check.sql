@@ -6,6 +6,9 @@
 --      then the stored verdict, the unmet requirements and the time the check
 --      was run are shown without re-running the check."
 --
+-- SCRUM-135 AC4 / SCRUM-136 AC5: a check can be for one of the event's booking
+-- requests, at its venue, so a stored run also records which request it was for.
+--
 -- So a check is stored: one row per run, the verdict and every requirement
 -- with its event and venue values (SCRUM-135 AC2), when it was run and by
 -- whom, and the event's requirements as they were when it ran. Reopening reads
@@ -24,6 +27,10 @@ create table if not exists venue_suitability_check (
   -- Cascade: a check is about this event and this venue, and goes with either.
   event_request_id uuid not null references event_request (id) on delete cascade,
   venue_id uuid not null references venues (id) on delete cascade,
+
+  -- The booking request checked for; null when the venue was checked against
+  -- the event itself. Cascade: a check for a request goes with it.
+  venue_booking_request_id uuid references venue_booking_request (id) on delete cascade,
 
   verdict text not null
     constraint venue_suitability_check_verdict_known

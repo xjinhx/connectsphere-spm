@@ -1,6 +1,6 @@
 import { describe, it, expect } from 'vitest';
 import { capacityRequirement, needsFor, toRoomLayout, verdictOf } from '@/domain/suitability/policy';
-import type { RequirementResult } from '@/domain/suitability/schema';
+import { CheckSuitabilityInputSchema, type RequirementResult } from '@/domain/suitability/schema';
 
 /**
  * SCRUM-136 Flag a venue whose capacity is exceeded: the rule on its own. The
@@ -144,5 +144,29 @@ describe('verdictOf: exactly one verdict', () => {
 
   it('is suitable when everything is met', () => {
     expect(verdictOf([result('met')])).toBe('suitable');
+  });
+});
+
+describe('CheckSuitabilityInputSchema: a venue against the event, or a booking request (AC5)', () => {
+  const VENUE = '11111111-1111-4111-8111-111111111111';
+  const BOOKING_REQUEST = '22222222-2222-4222-8222-222222222222';
+
+  it('accepts a venue, or a booking request, on its own', () => {
+    expect(CheckSuitabilityInputSchema.safeParse({ venueId: VENUE }).success).toBe(true);
+    expect(CheckSuitabilityInputSchema.safeParse({ bookingRequestId: BOOKING_REQUEST }).success).toBe(true);
+  });
+
+  it('refuses both together, or neither', () => {
+    for (const input of [{}, { venueId: VENUE, bookingRequestId: BOOKING_REQUEST }]) {
+      const parsed = CheckSuitabilityInputSchema.safeParse(input);
+      expect(parsed.success).toBe(false);
+      expect(parsed.error?.issues[0]?.message).toBe('Choose a venue, or one of the booking requests.');
+    }
+  });
+
+  it('refuses an id that is not a venue or booking request id', () => {
+    expect(CheckSuitabilityInputSchema.safeParse({ bookingRequestId: 'not-an-id' }).error?.issues[0]?.message).toBe(
+      'Choose a booking request from the list.',
+    );
   });
 });

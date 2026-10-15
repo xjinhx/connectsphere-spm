@@ -932,6 +932,7 @@ export type Database = {
           id: string
           needs: Json
           requirements: Json
+          venue_booking_request_id: string | null
           venue_id: string
           verdict: string
         }
@@ -942,6 +943,7 @@ export type Database = {
           id?: string
           needs: Json
           requirements: Json
+          venue_booking_request_id?: string | null
           venue_id: string
           verdict: string
         }
@@ -952,6 +954,7 @@ export type Database = {
           id?: string
           needs?: Json
           requirements?: Json
+          venue_booking_request_id?: string | null
           venue_id?: string
           verdict?: string
         }
@@ -961,6 +964,13 @@ export type Database = {
             columns: ["event_request_id"]
             isOneToOne: false
             referencedRelation: "event_request"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "venue_suitability_check_venue_booking_request_id_fkey"
+            columns: ["venue_booking_request_id"]
+            isOneToOne: false
+            referencedRelation: "venue_booking_request"
             referencedColumns: ["id"]
           },
           {

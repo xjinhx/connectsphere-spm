@@ -19,6 +19,8 @@ function db(): SupabaseClient<Database> {
 export async function insertSuitabilityCheck(check: {
   eventRequestId: string;
   venueId: string;
+  /** SCRUM-136 AC5: the booking request checked for, or null for the event itself. */
+  bookingRequestId: string | null;
   verdict: string;
   requirements: Json;
   needs: Json;
@@ -29,6 +31,7 @@ export async function insertSuitabilityCheck(check: {
     .insert({
       event_request_id: check.eventRequestId,
       venue_id: check.venueId,
+      venue_booking_request_id: check.bookingRequestId,
       verdict: check.verdict,
       requirements: check.requirements,
       needs: check.needs,
@@ -38,11 +41,11 @@ export async function insertSuitabilityCheck(check: {
     .single();
 }
 
-/** AC3: every stored check for an event, newest first, with each venue's name. */
+/** AC3: every stored check for an event, newest first, with each venue's name and the request it was for. */
 export async function fetchSuitabilityChecks(eventRequestId: string) {
   return db()
     .from('venue_suitability_check')
-    .select('venue_id, verdict, requirements, needs, checked_at, venues:venue_id!inner (name)')
+    .select('venue_id, venue_booking_request_id, verdict, requirements, needs, checked_at, venues:venue_id!inner (name)')
     .eq('event_request_id', eventRequestId)
     .order('checked_at', { ascending: false });
 }

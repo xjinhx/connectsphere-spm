@@ -10,36 +10,52 @@ export interface VenueOption {
   name: string;
 }
 
+/** SCRUM-136 AC5: one of the event's booking requests, as the picker lists it. */
+export interface BookingRequestOption {
+  id: string;
+  label: string;
+}
+
+/** What a stored check is for: a venue against the event, or a booking request at its venue. */
+function keyOf(check: SuitabilityCheck): string {
+  return check.bookingRequestId ? `request:${check.bookingRequestId}` : `venue:${check.venue.id}`;
+}
+
 /**
  * SCRUM-135 and SCRUM-136: the coordinator selects a venue and checks it
- * against the event.
+ * against the event, or selects one of the event's booking requests and
+ * checks it for that request at its own venue (SCRUM-135 AC4, SCRUM-136 AC5).
  *
  * SCRUM-135 AC1: exactly one verdict.
  * SCRUM-135 AC2: unless suitable, each requirement not met is listed with the
  *                event's requirement and the venue's value side by side.
- * SCRUM-135 AC3: selecting a venue checked before shows its stored check and
- *                when it was run, without running it again (`checks`, from
- *                the server). Once the event's requirements have changed, it
+ * SCRUM-135 AC3: selecting a venue (or request) checked before shows its
+ *                stored check and when it was run, without running it again
+ *                (`checks`, from the server). Once the event's requirements have changed, it
  *                is shown as out of date instead, and the coordinator checks
  *                again.
  * SCRUM-136 AC1, AC3: the shortfall, or the unverified attendance, is the
  *                requirement's issue.
  *
- * On refusal (not this coordinator's event, a venue that does not exist) the
- * server's message is shown as-is.
+ * `requestId` is the event request's id. On refusal (not this coordinator's
+ * event, a venue that does not exist) the server's message is shown as-is.
  */
 export function SuitabilityCheckForm({
   requestId,
   venues,
   checks,
+  bookingRequests = [],
 }: {
   requestId: string;
   venues: readonly VenueOption[];
   checks: readonly SuitabilityCheck[];
+  bookingRequests?: readonly BookingRequestOption[];
 }) {
   const [venueId, setVenueId] = useState(venues[0]?.id ?? '');
-  const [byVenue, setByVenue] = useState<Record<string, SuitabilityCheck>>(() =>
-    Object.fromEntries(checks.map((check) => [check.venue.id, check])),
+  // '' checks a venue against the event; otherwise the booking request checked for (AC5).
+  const [bookingRequestId, setBookingRequestId] = useState('');
+  const [byKey, setByKey] = useState<Record<string, SuitabilityCheck>>(() =>
+    Object.fromEntries(checks.map((check) => [keyOf(check), check])),
   );
   const [checking, setChecking] = useState(false);
   const [error, setError] = useState<string | null>(null);
@@ -52,14 +68,14 @@ export function SuitabilityCheckForm({
       const response = await fetch(`/api/event-requests/${requestId}/suitability`, {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({ venueId }),
+        body: JSON.stringify(bookingRequestId ? { bookingRequestId } : { venueId }),
       });
       const payload = (await response.json().catch(() => null)) as { result?: SuitabilityCheck; message?: string } | null;
       if (!response.ok || !payload?.result) {
         throw new Error(payload?.message ?? 'The suitability check could not be run.');
       }
       const result = payload.result;
-      setByVenue((current) => ({ ...current, [result.venue.id]: result }));
+      setByKey((current) => ({ ...current, [keyOf(result)]: result }));
     } catch (caught) {
       setError(caught instanceof Error ? caught.message : 'The suitability check could not be run.');
     } finally {
@@ -67,32 +83,55 @@ export function SuitabilityCheckForm({
     }
   }
 
-  const shown = byVenue[venueId];
+  const shown = byKey[bookingRequestId ? `request:${bookingRequestId}` : `venue:${venueId}`];
 
   return (
     <div className="space-y-3">
       <form onSubmit={onSubmit} className="flex flex-wrap items-end gap-3">
-        <label className="block text-sm" htmlFor="suitability-venue">
-          Venue
-          <select
-            id="suitability-venue"
-            value={venueId}
-            onChange={(event) => {
-              setVenueId(event.target.value);
-              setError(null);
-            }}
-            className="mt-1 block rounded-md border border-[var(--border)] bg-[var(--surface)] px-3 py-2 text-sm"
-          >
-            {venues.map((venue) => (
-              <option key={venue.id} value={venue.id}>
-                {venue.name}
-              </option>
-            ))}
-          </select>
-        </label>
+        {bookingRequests.length > 0 ? (
+          <label className="block text-sm" htmlFor="suitability-for">
+            Check for
+            <select
+              id="suitability-for"
+              value={bookingRequestId}
+              onChange={(event) => {
+                setBookingRequestId(event.target.value);
+                setError(null);
+              }}
+              className="mt-1 block rounded-md border border-[var(--border)] bg-[var(--surface)] px-3 py-2 text-sm"
+            >
+              <option value="">The event, at a venue I choose</option>
+              {bookingRequests.map((option) => (
+                <option key={option.id} value={option.id}>
+                  Booking request: {option.label}
+                </option>
+              ))}
+            </select>
+          </label>
+        ) : null}
+        {bookingRequestId === '' ? (
+          <label className="block text-sm" htmlFor="suitability-venue">
+            Venue
+            <select
+              id="suitability-venue"
+              value={venueId}
+              onChange={(event) => {
+                setVenueId(event.target.value);
+                setError(null);
+              }}
+              className="mt-1 block rounded-md border border-[var(--border)] bg-[var(--surface)] px-3 py-2 text-sm"
+            >
+              {venues.map((venue) => (
+                <option key={venue.id} value={venue.id}>
+                  {venue.name}
+                </option>
+              ))}
+            </select>
+          </label>
+        ) : null}
         <button
           type="submit"
-          disabled={checking || venueId === ''}
+          disabled={checking || (bookingRequestId === '' && venueId === '')}
           className="rounded-md bg-[var(--brand)] px-4 py-2 text-sm font-medium text-white hover:bg-[var(--brand-dark)] disabled:opacity-60"
         >
           {checking ? 'Checking...' : shown ? 'Check again' : 'Check suitability'}
@@ -114,7 +153,10 @@ function CheckResult({ check }: { check: SuitabilityCheck }) {
   if (check.outOfDate) {
     return (
       <div role="status" className="rounded-md border border-[var(--warning)] p-3 text-sm">
-        <p className="font-medium">{check.venue.name}: out of date</p>
+        <p className="font-medium">
+          {check.venue.name}
+          {check.bookingRequestId ? ' (for the booking request)' : ''}: out of date
+        </p>
         <p className="mt-1 text-[var(--text-muted)]">
           The event&apos;s requirements have changed since this venue was checked on{' '}
           {formatSingaporeDateTime(check.checkedAt)}, so that result no longer applies. Check again for a current
@@ -128,7 +170,8 @@ function CheckResult({ check }: { check: SuitabilityCheck }) {
   return (
     <div role="status" className="rounded-md border border-[var(--border)] p-3 text-sm">
       <p>
-        <span className="font-medium">{check.venue.name}</span>: {VERDICT_LABELS[check.verdict]}
+        <span className="font-medium">{check.venue.name}</span>
+        {check.bookingRequestId ? ' (for the booking request)' : ''}: {VERDICT_LABELS[check.verdict]}
       </p>
       <p className="text-xs text-[var(--text-muted)]">Checked {formatSingaporeDateTime(check.checkedAt)}</p>
       {unmet.length === 0 ? (

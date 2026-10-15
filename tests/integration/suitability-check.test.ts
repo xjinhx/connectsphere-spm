@@ -2,6 +2,7 @@ import { afterAll, beforeAll, describe, expect, it } from 'vitest';
 import { createAdminClient } from '@/lib/supabase/admin';
 import { createVenue } from '@/domain/venues/service';
 import { checkVenueSuitability, listSuitabilityChecks } from '@/domain/suitability/service';
+import { todayInSingapore } from '@/domain/shared/dates';
 import { ensureTestClientOrganisation } from './fixtures/clientOrganisation';
 
 /**
@@ -65,6 +66,21 @@ async function createEvent(expectedAttendance: number | null, roomLayout: string
   await admin.from('event_request').update({ status: 'submitted' }).eq('id', data.id);
   await admin.from('event_request').update({ coordinator_id: coordinatorId, assigned_by: coordinatorId }).eq('id', data.id);
   return data.id;
+}
+
+/** A booking request for the event at a venue, through the real database function, as the coordinator. */
+async function createBookingRequest(eventId: string, venueId: string): Promise<string> {
+  await admin.from('event_request').update({ status: 'approved', decision: 'approved', decided_by: coordinatorId }).eq('id', eventId);
+  const date = new Date(`${todayInSingapore()}T00:00:00Z`);
+  date.setUTCDate(date.getUTCDate() + 30);
+  const { data, error } = await admin.rpc('create_venue_booking_request', {
+    p_event_request_id: eventId,
+    p_venue_id: venueId,
+    p_requested_by: coordinatorId,
+    p_lines: [{ date: date.toISOString().slice(0, 10), start: '10:00', end: '12:00' }],
+  });
+  if (error || !data) throw new Error(`could not create test booking request: ${error?.message}`);
+  return data;
 }
 
 async function storedRunCount(eventId: string) {
@@ -173,6 +189,21 @@ describe('listSuitabilityChecks: SCRUM-135 AC3, a stored check is shown again wi
     expect(checks.map((check) => [check.venue.id, check.verdict, check.checkedAt])).toEqual([
       [otherHallId, annex.verdict, annex.checkedAt],
       [hallId, 'suitable', latestHall.checkedAt],
+    ]);
+  });
+
+  it('keeps a check for a booking request apart from the same venue checked against the event (AC4)', async () => {
+    const eventId = await createEvent(150, 'theatre');
+    const bookingRequestId = await createBookingRequest(eventId, hallId);
+    const forEvent = await checkVenueSuitability(eventId, { venueId: hallId }, coordinatorId);
+    const forRequest = await checkVenueSuitability(eventId, { bookingRequestId }, coordinatorId);
+
+    const checks = await listSuitabilityChecks(eventId, coordinatorId);
+
+    expect(forRequest).toMatchObject({ bookingRequestId, venue: { id: hallId } });
+    expect(checks.map((check) => [check.bookingRequestId, check.venue.id, check.checkedAt])).toEqual([
+      [bookingRequestId, hallId, forRequest.checkedAt],
+      [null, hallId, forEvent.checkedAt],
     ]);
   });
 

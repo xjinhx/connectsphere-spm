@@ -1,6 +1,7 @@
 import { z } from 'zod';
 import { fetchEventRequestById, type EventRequestRow } from '@/lib/supabase/eventRequests';
 import { fetchSuitabilityChecks, insertSuitabilityCheck } from '@/lib/supabase/suitabilityChecks';
+import { fetchBookingRequestForCheck } from '@/lib/supabase/suitability';
 import { ForbiddenError, NotFoundError, ValidationError } from '@/domain/shared/errors';
 import { isCurrentCoordinator } from '@/domain/assignment/policy';
 import { EventRequestIdSchema } from '@/domain/venue-booking/schema';
@@ -34,9 +35,10 @@ import {
  * operating hours are SCRUM-137's, in no sprint yet, and add to
  * `requirements` here when it is built.
  *
- * SCRUM-135 AC4 and SCRUM-136 AC5, a booking request's own attendance and
- * layout, wait on SCRUM-230, which gives each booking request its own. Until
- * then every check uses the event's.
+ * SCRUM-135 AC4 and SCRUM-136 AC5: a check can be for one of the event's
+ * booking requests instead, at that request's venue. The request's own
+ * attendance and layout are SCRUM-230's (#106); until it is merged a request
+ * has none, so the event's are used.
  */
 
 /** The event, once the actor is known to be its coordinator, with what the check needs from it. */
@@ -63,10 +65,12 @@ async function readEventForCheck(eventRequestId: string, actorId: string): Promi
 /**
  * SCRUM-135 AC1 and AC2, SCRUM-136 AC1 to AC4: check a selected venue against
  * the event, giving exactly one verdict and every requirement with the event's
- * and the venue's values side by side.
+ * and the venue's values side by side. SCRUM-135 AC4, SCRUM-136 AC5: or check
+ * one of the event's booking requests, at that request's venue.
  *
- * SCRUM-135 AC3: every run is stored, with the requirements it used, so it can
- * be shown again without running it (listSuitabilityChecks).
+ * SCRUM-135 AC3: every run is stored, with the requirements it used and the
+ * request it was for, so it can be shown again without running it
+ * (listSuitabilityChecks).
  */
 export async function checkVenueSuitability(
   eventRequestId: string,
@@ -76,12 +80,28 @@ export async function checkVenueSuitability(
   if (!EventRequestIdSchema.safeParse(eventRequestId).success) throw new NotFoundError('Event request');
   const parsed = CheckSuitabilityInputSchema.safeParse(input);
   if (!parsed.success) {
-    throw new ValidationError(parsed.error.issues[0]?.message ?? 'Choose a venue.', parsed.error.flatten());
+    throw new ValidationError(
+      parsed.error.issues[0]?.message ?? 'Choose a venue, or one of the booking requests.',
+      parsed.error.flatten(),
+    );
   }
   const event = await readEventForCheck(eventRequestId, actorId);
 
-  // Throws NotFoundError for a venue that does not exist.
-  const venue = await getVenue(parsed.data.venueId);
+  // AC5: a booking request brings its own venue. One that is not this event's
+  // is treated as not found, so nothing about another event is given away.
+  let venueId = parsed.data.venueId;
+  let bookingRequestId: string | null = null;
+  if (parsed.data.bookingRequestId !== undefined) {
+    const { data: bookingRequest, error: requestError } = await fetchBookingRequestForCheck(parsed.data.bookingRequestId);
+    if (requestError) throw new ValidationError('The booking request could not be read.', requestError.message);
+    if (!bookingRequest || bookingRequest.event_request_id !== event.id) throw new NotFoundError('Venue booking request');
+    venueId = bookingRequest.venue_id;
+    bookingRequestId = bookingRequest.id;
+  }
+
+  // Throws NotFoundError for a venue that does not exist. The schema makes
+  // sure one of the two was given, so venueId is set here.
+  const venue = await getVenue(venueId ?? '');
 
   const requirements = [capacityRequirement(event.needs, venue)];
   const verdict = verdictOf(requirements);
@@ -89,6 +109,7 @@ export async function checkVenueSuitability(
   const { data: stored, error } = await insertSuitabilityCheck({
     eventRequestId: event.id,
     venueId: venue.id,
+    bookingRequestId,
     verdict,
     requirements,
     needs: { expectedAttendance: event.needs.expectedAttendance, roomLayout: event.needs.roomLayout },
@@ -98,6 +119,7 @@ export async function checkVenueSuitability(
 
   return SuitabilityCheckSchema.parse({
     eventRequestId: event.id,
+    bookingRequestId,
     venue: { id: venue.id, name: venue.name },
     verdict,
     requirements,
@@ -113,8 +135,9 @@ const StoredNeedsSchema = z.object({
 });
 
 /**
- * SCRUM-135 AC3: the latest stored check of each venue for the event, newest
- * first, as they were run: verdict, requirements and the time each was run.
+ * SCRUM-135 AC3: the latest stored check of each venue for the event, and of
+ * each booking request checked for (SCRUM-136 AC5), newest first, as they
+ * were run: verdict, requirements and the time each was run.
  * Nothing is run again. A check whose event requirements have changed since is
  * marked out of date rather than dropped, so the coordinator can see it needs
  * running again.
@@ -127,12 +150,14 @@ export async function listSuitabilityChecks(eventRequestId: string, actorId: str
 
   const latest = new Map<string, SuitabilityCheck>();
   for (const row of data) {
-    if (latest.has(row.venue_id)) continue; // newest first, so the first is the latest
+    const key = row.venue_booking_request_id ? `request:${row.venue_booking_request_id}` : `venue:${row.venue_id}`;
+    if (latest.has(key)) continue; // newest first, so the first is the latest
     const needs = StoredNeedsSchema.safeParse(row.needs);
     latest.set(
-      row.venue_id,
+      key,
       SuitabilityCheckSchema.parse({
         eventRequestId: event.id,
+        bookingRequestId: row.venue_booking_request_id,
         venue: { id: row.venue_id, name: row.venues.name },
         verdict: z.enum(VERDICTS).parse(row.verdict),
         requirements: RequirementResultSchema.array().parse(row.requirements),
