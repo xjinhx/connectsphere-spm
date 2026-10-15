@@ -243,12 +243,23 @@ export default async function ReviewEventRequestPage({
       {/* SCRUM-136 — check a venue against the event before asking Venue Staff
           for it ("so that a room that cannot hold the event is never
           requested"). Offered whenever a venue can be requested, just above
-          that form; the service refuses anyone but the event's coordinator. */}
+          that form; the service refuses anyone but the event's coordinator.
+          AC5: or for one of the event's booking requests (SCRUM-236's list),
+          at that request's venue. */}
       {canCreateBookingRequest(request.status) ? (
         <section className="mt-6 rounded-lg border border-[var(--border)] bg-[var(--surface)] p-4">
           <h2 className="text-sm font-semibold">Check venue suitability</h2>
           <div className="mt-3">
-            <SuitabilityCheckForm requestId={request.id} venues={venues} />
+            <SuitabilityCheckForm
+              requestId={request.id}
+              venues={venues}
+              bookingRequests={bookingRequests.map((bookingRequest) => ({
+                id: bookingRequest.id,
+                label: `${bookingRequest.venueName}, ${bookingRequest.lines
+                  .map((line) => `${formatSingaporeDate(line.date)} ${line.startTime}-${line.endTime}`)
+                  .join('; ')}`,
+              }))}
+            />
           </div>
         </section>
       ) : null}

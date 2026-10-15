@@ -49,16 +49,27 @@ export const RequirementResultSchema = z.object({
 });
 export type RequirementResult = z.infer<typeof RequirementResultSchema>;
 
-/** A check of one venue against one event. */
+/** A check of one venue against one event, or against one of its booking requests (AC5). */
 export const SuitabilityResultSchema = z.object({
   eventRequestId: z.string().uuid(),
+  /** SCRUM-136 AC5: the booking request checked for; null when the venue is checked against the event. */
+  bookingRequestId: z.string().uuid().nullable(),
   venue: z.object({ id: z.string().uuid(), name: z.string() }),
   verdict: z.enum(VERDICTS),
   requirements: z.array(RequirementResultSchema),
 });
 export type SuitabilityResult = z.infer<typeof SuitabilityResultSchema>;
 
-/** "When suitability is checked": which venue. The event comes from the URL. */
-export const CheckSuitabilityInputSchema = z.object({
-  venueId: z.string({ required_error: 'Choose a venue.' }).uuid('Choose a venue from the list.'),
-});
+/**
+ * "When suitability is checked": a venue, checked against the event (AC1 to
+ * AC4), or one of the event's booking requests, checked for that request at
+ * its own venue (AC5). Exactly one of the two. The event comes from the URL.
+ */
+export const CheckSuitabilityInputSchema = z
+  .object({
+    venueId: z.string().uuid('Choose a venue from the list.').optional(),
+    bookingRequestId: z.string().uuid('Choose a booking request from the list.').optional(),
+  })
+  .refine((input) => (input.venueId === undefined) !== (input.bookingRequestId === undefined), {
+    message: 'Choose a venue, or one of the booking requests.',
+  });

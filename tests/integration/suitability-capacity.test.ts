@@ -2,6 +2,7 @@ import { afterAll, beforeAll, describe, expect, it } from 'vitest';
 import { createAdminClient } from '@/lib/supabase/admin';
 import { createVenue } from '@/domain/venues/service';
 import { checkVenueSuitability } from '@/domain/suitability/service';
+import { todayInSingapore } from '@/domain/shared/dates';
 import { ensureTestClientOrganisation } from './fixtures/clientOrganisation';
 
 /**
@@ -9,9 +10,9 @@ import { ensureTestClientOrganisation } from './fixtures/clientOrganisation';
  * events and venues on the local Supabase stack. The rule on its own, with
  * AC5, is tests/unit/suitability-capacity.test.ts.
  *
- * AC5 (a booking request's own attendance) is not run here: booking requests
- * get their own attendance in SCRUM-230, and until then there is no request
- * value to check against.
+ * AC5: a check can be for one of the event's booking requests, at that
+ * request's venue (tested below). The request's own attendance is SCRUM-230's
+ * (#106); until it is merged a request carries none, so these use the event's.
  *
  * Test case IDs are from Joshua's Sprint 3 sheet (TC-136-nn). The venue is the
  * sheet's S136 Hall: maximum capacity 200, Theatre 120, Banquet 100.
@@ -56,6 +57,21 @@ async function createEvent(expectedAttendance: number | null, roomLayout: string
   await admin.from('event_request').update({ status: 'submitted' }).eq('id', data.id);
   await admin.from('event_request').update({ coordinator_id: coordinatorId, assigned_by: coordinatorId }).eq('id', data.id);
   return data.id;
+}
+
+/** A booking request for the event at a venue, through the real database function, as the coordinator. */
+async function createBookingRequest(eventId: string, venueId: string): Promise<string> {
+  await admin.from('event_request').update({ status: 'approved', decision: 'approved', decided_by: coordinatorId }).eq('id', eventId);
+  const date = new Date(`${todayInSingapore()}T00:00:00Z`);
+  date.setUTCDate(date.getUTCDate() + 30);
+  const { data, error } = await admin.rpc('create_venue_booking_request', {
+    p_event_request_id: eventId,
+    p_venue_id: venueId,
+    p_requested_by: coordinatorId,
+    p_lines: [{ date: date.toISOString().slice(0, 10), start: '10:00', end: '12:00' }],
+  });
+  if (error || !data) throw new Error(`could not create test booking request: ${error?.message}`);
+  return data;
 }
 
 beforeAll(async () => {
@@ -143,5 +159,46 @@ describe('checkVenueSuitability: SCRUM-136', () => {
     await expect(
       checkVenueSuitability(eventId, { venueId: '99999999-9999-4999-8999-999999999999' }, coordinatorId),
     ).rejects.toMatchObject({ code: 'NOT_FOUND' });
+  });
+
+  it('refuses a check that names both a venue and a booking request, or neither', async () => {
+    const eventId = await createEvent(150, 'theatre');
+    const bookingRequestId = await createBookingRequest(eventId, hallId);
+
+    await expect(checkVenueSuitability(eventId, {}, coordinatorId)).rejects.toMatchObject({ code: 'VALIDATION_ERROR' });
+    await expect(checkVenueSuitability(eventId, { venueId: hallId, bookingRequestId }, coordinatorId)).rejects.toMatchObject({
+      code: 'VALIDATION_ERROR',
+    });
+  });
+});
+
+describe('checkVenueSuitability for a booking request: SCRUM-136 AC5', () => {
+  it("checks the request at its own venue, and says which request it was for", async () => {
+    const eventId = await createEvent(150, 'theatre');
+    const bookingRequestId = await createBookingRequest(eventId, hallId);
+
+    const result = await checkVenueSuitability(eventId, { bookingRequestId }, coordinatorId);
+
+    expect(result).toMatchObject({ bookingRequestId, venue: { id: hallId }, verdict: 'not_suitable' });
+    expect(result.requirements[0]?.shortfall).toBe(30);
+  });
+
+  it("treats another event's booking request as not found", async () => {
+    const otherEventId = await createEvent(80, 'theatre');
+    const otherRequestId = await createBookingRequest(otherEventId, hallId);
+    const eventId = await createEvent(150, 'theatre');
+
+    await expect(checkVenueSuitability(eventId, { bookingRequestId: otherRequestId }, coordinatorId)).rejects.toMatchObject({
+      code: 'NOT_FOUND',
+    });
+  });
+
+  it('refuses a coordinator the event is not assigned to before reading the request', async () => {
+    const eventId = await createEvent(150, 'theatre');
+    const bookingRequestId = await createBookingRequest(eventId, hallId);
+
+    await expect(checkVenueSuitability(eventId, { bookingRequestId }, otherCoordinatorId)).rejects.toMatchObject({
+      code: 'FORBIDDEN',
+    });
   });
 });

@@ -7,8 +7,10 @@ import { getCurrentActor } from '@/lib/auth/currentActor';
 
 /**
  * POST /api/event-requests/[id]/suitability — SCRUM-136, check a venue
- * against the event. Body: { venueId }. 200 with { result }: the verdict and
- * each requirement with the event's and the venue's values.
+ * against the event (Body: { venueId }), or for one of its booking requests
+ * at that request's venue (Body: { bookingRequestId }, AC5). 200 with
+ * { result }: the verdict and each requirement with the event's and the
+ * venue's values.
  *
  * Coordinators only (venue_booking_request, the permission for asking for a
  * venue, which this check comes before), checked before anything is read; the
