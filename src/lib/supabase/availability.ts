@@ -95,6 +95,14 @@ export async function fetchConfirmedBookingPeriods(venueId: string, fromDate: st
     .lte('date', toDate);
 }
 
+/**
+ * SCRUM-226: the venue's setup and turnaround in minutes, so getVenueCommitments
+ * can treat them as occupied. Null data for a venue id that doesn't exist.
+ */
+export async function fetchVenueSetupTurnaround(venueId: string) {
+  return db().from('venues').select('setup_minutes, turnaround_minutes').eq('id', venueId).maybeSingle();
+}
+
 /** SCRUM-239: a venue's unavailable periods from `fromDate` to `toDate` (inclusive), with their reasons. */
 export async function fetchUnavailablePeriods(venueId: string, fromDate: string, toDate: string) {
   return db()

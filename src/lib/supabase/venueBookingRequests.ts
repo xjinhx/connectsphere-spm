@@ -37,18 +37,30 @@ export interface VenueBookingRequestRow {
  * transaction (create_venue_booking_request(), as SCRUM-239 left it in
  * 20261012090000_booking_requests_in_time_ranges.sql). Each line is a date
  * and a start and end time. Returns the new request's id.
+ *
+ * SCRUM-230 AC1: the request's own venue requirements go with it
+ * (20261014114328_booking_request_venue_requirements.sql). Null is "use the
+ * event's" (AC2), and is left out so the function's default applies.
  */
 export async function createVenueBookingRequest(input: {
   eventRequestId: string;
   venueId: string;
   requestedBy: string;
   lines: readonly { date: string; start: string; end: string }[];
+  expectedAttendance: number | null;
+  roomLayout: string | null;
+  accessibilityRequired: boolean | null;
+  accessibilityNotes: string | null;
 }) {
   return db().rpc('create_venue_booking_request', {
     p_event_request_id: input.eventRequestId,
     p_venue_id: input.venueId,
     p_requested_by: input.requestedBy,
     p_lines: input.lines.map((line) => ({ date: line.date, start: line.start, end: line.end })),
+    p_expected_attendance: input.expectedAttendance ?? undefined,
+    p_room_layout: input.roomLayout ?? undefined,
+    p_accessibility_required: input.accessibilityRequired ?? undefined,
+    p_accessibility_notes: input.accessibilityNotes ?? undefined,
   });
 }
 
@@ -100,6 +112,11 @@ export interface BookingRequestRequirementsRow {
   id: string;
   created_at: string;
   requested_by: string;
+  // SCRUM-230: the request's own venue requirements; null is "use the event's".
+  expected_attendance: number | null;
+  room_layout: string | null;
+  accessibility_required: boolean | null;
+  accessibility_notes: string | null;
   event_request: {
     name: string;
     reference: string;
@@ -116,7 +133,7 @@ export async function fetchBookingRequestRequirements(id: string) {
   return db()
     .from('venue_booking_request')
     .select(
-      'id, created_at, requested_by, ' +
+      'id, created_at, requested_by, expected_attendance, room_layout, accessibility_required, accessibility_notes, ' +
         'event_request ( name, reference, expected_attendance, room_layout, accessibility_required, accessibility_notes, ' +
         'event_request_accessibility_features ( accessibility_features ( name ) ) )',
     )

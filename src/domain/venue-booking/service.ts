@@ -37,6 +37,7 @@ import {
   periodClashFieldMessage,
   periodCommittedMessage,
   requestStatusOf,
+  venueRequirementsOf,
   sortBookingQueue,
   type ApprovalConflict,
   type BookingQueueSort,
@@ -44,12 +45,14 @@ import {
 } from './policy';
 import { isCurrentCoordinator } from '@/domain/assignment/policy';
 import { getVenueCommitments } from '@/domain/availability/service';
+import { normaliseAccessibility } from '@/domain/event-request/policy';
 import { toCommittedPeriods } from '@/domain/availability/policy';
 import type { Role } from '@/domain/identity/roles';
 import { notifyBestEffort } from '@/domain/notification/service';
 import { fromDatabaseTime, rangesOverlap } from '@/domain/shared/times';
 import { withoutOwnHolds } from '@/domain/venue-hold/policy';
 import { getVenue } from '@/domain/venues/service';
+import type { SetupTurnaround } from '@/domain/venues/policy';
 import { fetchEventRequestById } from '@/lib/supabase/eventRequests';
 import { fetchProfileNames } from '@/lib/supabase/profiles';
 import { fetchEventNames } from '@/lib/supabase/venueHolds';
@@ -112,18 +115,23 @@ function lineDetails(issues: { path: (string | number)[]; message: string }[]) {
 /**
  * SCRUM-239 AC1 (request part): every requested period must sit inside the
  * venue's opening hours. A period outside them is refused, and the line's
- * times say why.
+ * times say why. SCRUM-226: with the venue's setup before it and turnaround
+ * after it (TC-226-18, 19).
  */
-async function refuseOutsideOpeningHours(venueId: string, lines: readonly RequestedLine[]): Promise<void> {
+async function refuseOutsideOpeningHours(
+  venueId: string,
+  lines: readonly RequestedLine[],
+  times: SetupTurnaround,
+): Promise<void> {
   const { data, error } = await fetchVenueOpeningHours(venueId);
   if (error || !data) {
     throw new ValidationError("Could not check the venue's opening hours.", error?.message);
   }
   const hours = { opensAt: fromDatabaseTime(data.opens_at), closesAt: fromDatabaseTime(data.closes_at) };
-  const outside = lines.flatMap((line, index) => (isOutsideOpeningHours(line, hours) ? [index] : []));
+  const outside = lines.flatMap((line, index) => (isOutsideOpeningHours(line, hours, times) ? [index] : []));
   if (outside.length === 0) return;
 
-  const message = outsideOpeningHoursMessage(hours);
+  const message = outsideOpeningHoursMessage(hours, times);
   throw new ValidationError(
     `This venue cannot be requested for that time. ${message}`,
     lineDetails(outside.flatMap((index) => [{ path: [index, 'start'], message }, { path: [index, 'end'], message }])),
@@ -252,14 +260,30 @@ export async function submitVenueBookingRequest(
 
   // SCRUM-239 AC1, then AC3 and AC8 — after the field checks, so a request
   // that is missing fields is told so first, and before anything is written.
-  await refuseOutsideOpeningHours(venue.id, lines);
+  await refuseOutsideOpeningHours(venue.id, lines, {
+    setupMinutes: venue.setupMinutes ?? 0,
+    turnaroundMinutes: venue.turnaroundMinutes ?? 0,
+  });
   await refuseClashingPeriods(venue.id, parsedId.data, lines);
+
+  // SCRUM-230 AC1: the request's own venue requirements; anything left empty
+  // is stored as null and the event's is used (AC2). Notes only go with a
+  // "needed" answer, the same rule as the event's (SCRUM-79).
+  const accessibility = normaliseAccessibility({
+    accessibilityRequired: parsedInput.data.accessibilityRequired,
+    accessibilityFeatureIds: [],
+    accessibilityNotes: parsedInput.data.accessibilityNotes,
+  });
 
   const { data: newRequestId, error: writeError } = await createVenueBookingRequest({
     eventRequestId: parsedId.data,
     venueId: parsedInput.data.venueId,
     requestedBy: actorId,
     lines,
+    expectedAttendance: parsedInput.data.expectedAttendance ?? null,
+    roomLayout: parsedInput.data.roomLayout ?? null,
+    accessibilityRequired: accessibility.required,
+    accessibilityNotes: accessibility.notes,
   });
 
   if (writeError || !newRequestId) {
@@ -739,11 +763,7 @@ export async function getBookingRequestRequirements(requestId: string): Promise<
     throw new ValidationError('The requesting coordinator could not be read.', requesterError.message);
   }
 
-  return {
-    eventName: event.name,
-    eventReference: event.reference,
-    requestedByName: requester?.[0]?.full_name ?? null,
-    requestedAt: row.created_at,
+  const eventRequirements = {
     expectedAttendance: event.expected_attendance,
     roomLayout: event.room_layout,
     accessibilityRequired: event.accessibility_required,
@@ -751,6 +771,24 @@ export async function getBookingRequestRequirements(requestId: string): Promise<
       link.accessibility_features ? [{ name: link.accessibility_features.name }] : [],
     ),
     accessibilityNotes: event.accessibility_notes,
+  };
+
+  return {
+    eventName: event.name,
+    eventReference: event.reference,
+    requestedByName: requester?.[0]?.full_name ?? null,
+    requestedAt: row.created_at,
+    ...eventRequirements,
+    // SCRUM-230 AC2, AC3: the request's own, else the event's.
+    venueRequirements: venueRequirementsOf(
+      {
+        expectedAttendance: row.expected_attendance,
+        roomLayout: row.room_layout,
+        accessibilityRequired: row.accessibility_required,
+        accessibilityNotes: row.accessibility_notes,
+      },
+      eventRequirements,
+    ),
   };
 }
 
