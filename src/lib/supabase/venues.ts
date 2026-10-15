@@ -243,7 +243,7 @@ export async function fetchSetupTurnaroundAffectedBookings(venueId: string, toda
 export async function fetchSearchableVenues() {
   return db()
     .from('venues')
-    .select('id, name, max_capacity, is_retired, opens_at, closes_at, locations ( id, name )')
+    .select('id, name, max_capacity, is_retired, opens_at, closes_at, setup_minutes, turnaround_minutes, locations ( id, name )')
     .eq('is_retired', false)
     .order('name');
 }

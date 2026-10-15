@@ -42,14 +42,14 @@ A confirmed booking that its event's coordinator has given up, with a reason. It
 _Avoid_: cancelled booking (cancelling is for a whole event, SCRUM-105)
 
 **Setup time** / **Turnaround time**:
-The minutes a venue needs before an event to prepare the room and after it to reset it, in 15-minute steps, set per venue by Venue Staff (SCRUM-225). A booking commits its venue from its start minus the setup time to its end plus the turnaround time.
+The minutes a venue needs before an event to prepare the room and after it to reset it, in 15-minute steps, set per venue by Venue Staff (SCRUM-225). A booking commits its venue from its start minus the setup time to its end plus the turnaround time. An active _hold_ commits the same widened period, so the event can still be booked when the hold closes (SCRUM-226).
 _Avoid_: teardown (folded into turnaround), buffer
 
 **Affected by a setup or turnaround change**:
 A confirmed booking that a confirmed setup or turnaround change has left too close to another event's booking. It stays confirmed and is flagged for Venue Staff (SCRUM-225 AC5). Kept apart from an _affected booking_, which carries an outstanding action for the coordinator.
 
 **Hold**:
-A period at one venue kept for one event by Venue Staff until an expiry, so the coordinator can finish arranging the booking (SCRUM-227). While it is _active_ it commits the period against every other event; it is _closed_ when that event's booking for the period is confirmed, and _lapsed_ once its expiry passes first. A hold is never a booking.
+A period at one venue kept for one event by Venue Staff until an expiry, so the coordinator can finish arranging the booking (SCRUM-227). While it is _active_ it commits the period, with the venue's setup and turnaround around it, against every other event; it is _closed_ when that event's booking for the period is confirmed, and _lapsed_ once its expiry passes first. A hold is never a booking.
 _Avoid_: tentative booking, reservation, provisional booking
 
 **Outstanding action**:
