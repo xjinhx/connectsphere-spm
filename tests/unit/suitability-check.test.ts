@@ -1,5 +1,13 @@
 import { describe, it, expect } from 'vitest';
-import { capacityRequirement, needsFor, sameNeeds, unmetRequirements, verdictOf, type SuitabilityNeeds } from '@/domain/suitability/policy';
+import {
+  capacityRequirement,
+  needsOfRequest,
+  sameNeeds,
+  unmetRequirements,
+  verdictOf,
+  type SuitabilityNeeds,
+} from '@/domain/suitability/policy';
+import { venueRequirementsOf } from '@/domain/venue-booking/policy';
 import type { RequirementResult } from '@/domain/suitability/schema';
 
 /**
@@ -111,7 +119,12 @@ describe('sameNeeds: SCRUM-135 AC3, have the requirements changed since the chec
 
 describe("SCRUM-135 AC4: a booking request's own needs are used instead of the event's", () => {
   it("TC-135-11 uses the request's attendance and layout (110 in Banquet 100), not the event's (80 in Theatre)", () => {
-    const requestNeeds = needsFor({ expectedAttendance: 80, roomLayout: 'theatre' }, { expectedAttendance: 110, roomLayout: 'banquet' });
+    const requestNeeds = needsOfRequest(
+      venueRequirementsOf(
+        { expectedAttendance: 110, roomLayout: 'banquet', accessibilityRequired: null, accessibilityNotes: null },
+        { expectedAttendance: 80, roomLayout: 'theatre', accessibilityRequired: false, accessibilityNotes: null, accessibilityFeatures: [] },
+      ),
+    );
     expect(capacityRequirement(requestNeeds, S135_HALL)).toMatchObject({
       outcome: 'not_met',
       eventValue: '110 expected',

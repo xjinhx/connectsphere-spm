@@ -45,7 +45,10 @@ export async function insertSuitabilityCheck(check: {
 export async function fetchSuitabilityChecks(eventRequestId: string) {
   return db()
     .from('venue_suitability_check')
-    .select('venue_id, venue_booking_request_id, verdict, requirements, needs, checked_at, venues:venue_id!inner (name)')
+    // With each request's own venue requirements (SCRUM-230), to tell whether they have changed since.
+    .select(
+      'venue_id, venue_booking_request_id, verdict, requirements, needs, checked_at, venues:venue_id!inner (name), venue_booking_request:venue_booking_request_id (expected_attendance, room_layout, accessibility_required, accessibility_notes)',
+    )
     .eq('event_request_id', eventRequestId)
     .order('checked_at', { ascending: false });
 }

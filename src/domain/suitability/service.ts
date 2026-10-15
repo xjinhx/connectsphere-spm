@@ -4,10 +4,11 @@ import { fetchSuitabilityChecks, insertSuitabilityCheck } from '@/lib/supabase/s
 import { fetchBookingRequestForCheck } from '@/lib/supabase/suitability';
 import { ForbiddenError, NotFoundError, ValidationError } from '@/domain/shared/errors';
 import { isCurrentCoordinator } from '@/domain/assignment/policy';
-import { EventRequestIdSchema } from '@/domain/venue-booking/schema';
+import { EventRequestIdSchema, type EventVenueRequirements, type OwnVenueRequirements } from '@/domain/venue-booking/schema';
+import { markIfEvents, venueRequirementsOf } from '@/domain/venue-booking/policy';
 import { RoomLayoutSchema } from '@/domain/venues/schema';
 import { getVenue } from '@/domain/venues/service';
-import { capacityRequirement, needsFor, sameNeeds, toRoomLayout, verdictOf, type SuitabilityNeeds } from './policy';
+import { capacityRequirement, needsOfRequest, sameNeeds, toRoomLayout, verdictOf, type SuitabilityNeeds } from './policy';
 import {
   CheckSuitabilityInputSchema,
   RequirementResultSchema,
@@ -36,13 +37,33 @@ import {
  * `requirements` here when it is built.
  *
  * SCRUM-135 AC4 and SCRUM-136 AC5: a check can be for one of the event's
- * booking requests instead, at that request's venue. The request's own
- * attendance and layout are SCRUM-230's (#106); until it is merged a request
- * has none, so the event's are used.
+ * booking requests instead, at that request's venue, using the request's own
+ * attendance and layout and the event's for any it left empty. Which one
+ * applies is SCRUM-230's venueRequirementsOf, not repeated here.
  */
 
+/** A booking request's own venue requirements, as stored: null is "use the event's" (SCRUM-230 AC2). */
+type OwnRequirementsRow = {
+  expected_attendance: number | null;
+  room_layout: string | null;
+  accessibility_required: boolean | null;
+  accessibility_notes: string | null;
+};
+
+function ownRequirements(row: OwnRequirementsRow): OwnVenueRequirements {
+  return {
+    expectedAttendance: row.expected_attendance,
+    roomLayout: row.room_layout,
+    accessibilityRequired: row.accessibility_required,
+    accessibilityNotes: row.accessibility_notes,
+  };
+}
+
 /** The event, once the actor is known to be its coordinator, with what the check needs from it. */
-async function readEventForCheck(eventRequestId: string, actorId: string): Promise<{ id: string; needs: SuitabilityNeeds }> {
+async function readEventForCheck(
+  eventRequestId: string,
+  actorId: string,
+): Promise<{ id: string; needs: SuitabilityNeeds; requirements: EventVenueRequirements }> {
   if (!EventRequestIdSchema.safeParse(eventRequestId).success) throw new NotFoundError('Event request');
 
   const { data, error } = await fetchEventRequestById(eventRequestId);
@@ -58,7 +79,17 @@ async function readEventForCheck(eventRequestId: string, actorId: string): Promi
 
   return {
     id: event.id,
-    needs: needsFor({ expectedAttendance: event.expected_attendance, roomLayout: toRoomLayout(event.room_layout) }),
+    needs: { expectedAttendance: event.expected_attendance, roomLayout: toRoomLayout(event.room_layout) },
+    // What SCRUM-230's venueRequirementsOf falls back to for a request.
+    requirements: {
+      expectedAttendance: event.expected_attendance,
+      roomLayout: event.room_layout,
+      accessibilityRequired: event.accessibility_required,
+      accessibilityNotes: event.accessibility_notes,
+      accessibilityFeatures: event.event_request_accessibility_features.flatMap((link) =>
+        link.accessibility_features ? [{ name: link.accessibility_features.name }] : [],
+      ),
+    },
   };
 }
 
@@ -91,19 +122,31 @@ export async function checkVenueSuitability(
   // is treated as not found, so nothing about another event is given away.
   let venueId = parsed.data.venueId;
   let bookingRequestId: string | null = null;
+  let needs = event.needs;
+  let attendanceFromEvent = false;
   if (parsed.data.bookingRequestId !== undefined) {
     const { data: bookingRequest, error: requestError } = await fetchBookingRequestForCheck(parsed.data.bookingRequestId);
     if (requestError) throw new ValidationError('The booking request could not be read.', requestError.message);
     if (!bookingRequest || bookingRequest.event_request_id !== event.id) throw new NotFoundError('Venue booking request');
     venueId = bookingRequest.venue_id;
     bookingRequestId = bookingRequest.id;
+    // SCRUM-136 AC5, SCRUM-135 AC4: the request's own attendance and layout, else the event's.
+    const inUse = venueRequirementsOf(ownRequirements(bookingRequest), event.requirements);
+    needs = needsOfRequest(inUse);
+    attendanceFromEvent = inUse.expectedAttendance.fromEvent;
   }
 
   // Throws NotFoundError for a venue that does not exist. The schema makes
   // sure one of the two was given, so venueId is set here.
   const venue = await getVenue(venueId ?? '');
 
-  const requirements = [capacityRequirement(event.needs, venue)];
+  const capacity = capacityRequirement(needs, venue);
+  // A request that left its attendance empty is shown as using the event's (SCRUM-230 AC2).
+  const requirements = [
+    bookingRequestId && attendanceFromEvent
+      ? { ...capacity, eventValue: markIfEvents(capacity.eventValue, { fromEvent: true }) }
+      : capacity,
+  ];
   const verdict = verdictOf(requirements);
 
   const { data: stored, error } = await insertSuitabilityCheck({
@@ -112,7 +155,7 @@ export async function checkVenueSuitability(
     bookingRequestId,
     verdict,
     requirements,
-    needs: { expectedAttendance: event.needs.expectedAttendance, roomLayout: event.needs.roomLayout },
+    needs: { expectedAttendance: needs.expectedAttendance, roomLayout: needs.roomLayout },
     checkedBy: actorId,
   });
   if (error || !stored) throw new ValidationError('The suitability check could not be saved.', error?.message);
@@ -153,6 +196,10 @@ export async function listSuitabilityChecks(eventRequestId: string, actorId: str
     const key = row.venue_booking_request_id ? `request:${row.venue_booking_request_id}` : `venue:${row.venue_id}`;
     if (latest.has(key)) continue; // newest first, so the first is the latest
     const needs = StoredNeedsSchema.safeParse(row.needs);
+    // A check for a request is compared with that request's requirements now (its own, else the event's).
+    const current = row.venue_booking_request
+      ? needsOfRequest(venueRequirementsOf(ownRequirements(row.venue_booking_request), event.requirements))
+      : event.needs;
     latest.set(
       key,
       SuitabilityCheckSchema.parse({
@@ -162,7 +209,7 @@ export async function listSuitabilityChecks(eventRequestId: string, actorId: str
         verdict: z.enum(VERDICTS).parse(row.verdict),
         requirements: RequirementResultSchema.array().parse(row.requirements),
         checkedAt: row.checked_at,
-        outOfDate: !needs.success || !sameNeeds(needs.data, event.needs),
+        outOfDate: !needs.success || !sameNeeds(needs.data, current),
       }),
     );
   }

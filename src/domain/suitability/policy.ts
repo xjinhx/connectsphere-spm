@@ -1,4 +1,5 @@
 import { ROOM_LAYOUT_LABELS, RoomLayoutSchema, type RoomLayout } from '@/domain/venues/schema';
+import type { VenueRequirementsInUse } from '@/domain/venue-booking/schema';
 import type { RequirementResult, Verdict } from './schema';
 
 /**
@@ -26,16 +27,18 @@ export function toRoomLayout(value: string | null): RoomLayout | null {
 }
 
 /**
- * SCRUM-136 AC5: a booking request's own attendance and layout are used
- * instead of the event's, where the request carries them. One space of a
- * multi-venue event is checked for what it will actually be used for (Week 7
- * change #3, SCRUM-230). A value the request leaves empty falls back to the
- * event's, as SCRUM-230 AC2 does.
+ * SCRUM-136 AC5, SCRUM-135 AC4: what a check for a booking request needs: the
+ * request's own attendance and layout, or the event's for any it left empty.
+ * Which one applies is SCRUM-230's rule (venueRequirementsOf), not repeated
+ * here, so one space of a multi-venue event is checked for what it will
+ * actually be used for (Week 7 change #3).
  */
-export function needsFor(event: SuitabilityNeeds, request?: Partial<SuitabilityNeeds> | null): SuitabilityNeeds {
+export function needsOfRequest(
+  requirements: Pick<VenueRequirementsInUse, 'expectedAttendance' | 'roomLayout'>,
+): SuitabilityNeeds {
   return {
-    expectedAttendance: request?.expectedAttendance ?? event.expectedAttendance,
-    roomLayout: request?.roomLayout ?? event.roomLayout,
+    expectedAttendance: requirements.expectedAttendance.value,
+    roomLayout: toRoomLayout(requirements.roomLayout.value),
   };
 }
 

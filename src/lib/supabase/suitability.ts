@@ -18,9 +18,14 @@ function db(): SupabaseClient<Database> {
 
 /**
  * SCRUM-136 AC5: the booking request a check is for. Its event, to make sure
- * it belongs to the event being checked, and its venue, which is the venue
- * checked. maybeSingle: a missing id is null, not an error.
+ * it belongs to the event being checked; its venue, which is the venue
+ * checked; and its own venue requirements (SCRUM-230), null for any it left
+ * to the event. maybeSingle: a missing id is null, not an error.
  */
 export async function fetchBookingRequestForCheck(bookingRequestId: string) {
-  return db().from('venue_booking_request').select('id, event_request_id, venue_id').eq('id', bookingRequestId).maybeSingle();
+  return db()
+    .from('venue_booking_request')
+    .select('id, event_request_id, venue_id, expected_attendance, room_layout, accessibility_required, accessibility_notes')
+    .eq('id', bookingRequestId)
+    .maybeSingle();
 }

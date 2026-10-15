@@ -18,9 +18,8 @@ import { ensureTestClientOrganisation } from './fixtures/clientOrganisation';
  * Capacity is the only requirement checked (SCRUM-136's rule): SCRUM-135 is
  * capacity only (PO decision, Slack 10 Oct 2026). Accessibility is SCRUM-137's.
  *
- * AC4 (a booking request's own needs) is not run here: booking requests get
- * their own attendance and layout in SCRUM-230. The rule that uses them is in
- * tests/unit/suitability-check.test.ts.
+ * AC4: a check for one of the event's booking requests uses the request's own
+ * attendance and layout (SCRUM-230), else the event's.
  *
  * Test case IDs are from Joshua's Sprint 3 sheet (TC-135-nn). S135 Hall:
  * maximum 200, Theatre 120 only.
@@ -37,6 +36,7 @@ let coordinatorId: string;
 let otherCoordinatorId: string;
 let organiserId: string;
 const eventIds: string[] = [];
+const extraVenueIds: string[] = [];
 
 async function createUser(label: string): Promise<string> {
   const { data, error } = await admin.auth.admin.createUser({
@@ -68,8 +68,16 @@ async function createEvent(expectedAttendance: number | null, roomLayout: string
   return data.id;
 }
 
-/** A booking request for the event at a venue, through the real database function, as the coordinator. */
-async function createBookingRequest(eventId: string, venueId: string): Promise<string> {
+/**
+ * A booking request for the event at a venue, through the real database
+ * function, as the coordinator, with its own attendance and layout if given
+ * (SCRUM-230).
+ */
+async function createBookingRequest(
+  eventId: string,
+  venueId: string,
+  own: { expectedAttendance?: number; roomLayout?: string } = {},
+): Promise<string> {
   await admin.from('event_request').update({ status: 'approved', decision: 'approved', decided_by: coordinatorId }).eq('id', eventId);
   const date = new Date(`${todayInSingapore()}T00:00:00Z`);
   date.setUTCDate(date.getUTCDate() + 30);
@@ -78,6 +86,8 @@ async function createBookingRequest(eventId: string, venueId: string): Promise<s
     p_venue_id: venueId,
     p_requested_by: coordinatorId,
     p_lines: [{ date: date.toISOString().slice(0, 10), start: '10:00', end: '12:00' }],
+    p_expected_attendance: own.expectedAttendance,
+    p_room_layout: own.roomLayout,
   });
   if (error || !data) throw new Error(`could not create test booking request: ${error?.message}`);
   return data;
@@ -106,7 +116,7 @@ beforeAll(async () => {
 afterAll(async () => {
   // Events first: their stored checks go with them.
   for (const id of eventIds) await admin.from('event_request').delete().eq('id', id);
-  for (const id of [hallId, otherHallId]) if (id) await admin.from('venues').delete().eq('id', id);
+  for (const id of [hallId, otherHallId, ...extraVenueIds]) if (id) await admin.from('venues').delete().eq('id', id);
   if (locationId) await admin.from('locations').delete().eq('id', locationId);
   for (const id of [coordinatorId, otherCoordinatorId, organiserId]) if (id) await admin.auth.admin.deleteUser(id);
 });
@@ -205,6 +215,39 @@ describe('listSuitabilityChecks: SCRUM-135 AC3, a stored check is shown again wi
       [bookingRequestId, hallId, forRequest.checkedAt],
       [null, hallId, forEvent.checkedAt],
     ]);
+  });
+
+  it("TC-135-11 uses the request's own 110 in Banquet, not the event's 80 in Theatre", async () => {
+    const eventId = await createEvent(80, 'theatre');
+    const banquetHall = await createVenue({
+      name: `S135 Banquet Hall ${RUN}`,
+      locationId,
+      maxCapacity: 200,
+      layouts: [
+        { layout: 'theatre', capacity: 120 },
+        { layout: 'banquet', capacity: 100 },
+      ],
+    });
+    extraVenueIds.push(banquetHall.id);
+    const bookingRequestId = await createBookingRequest(eventId, banquetHall.id, { expectedAttendance: 110, roomLayout: 'banquet' });
+
+    const result = await checkVenueSuitability(eventId, { bookingRequestId }, coordinatorId);
+
+    expect(result.verdict).toBe('not_suitable');
+    expect(result.requirements).toEqual([
+      expect.objectContaining({ eventValue: '110 expected', venueValue: '100 (Banquet capacity)', shortfall: 10 }),
+    ]);
+  });
+
+  it("keeps a request's stored check current while the request's own values stand, even if the event's change", async () => {
+    const eventId = await createEvent(80, 'theatre');
+    const bookingRequestId = await createBookingRequest(eventId, hallId, { expectedAttendance: 100, roomLayout: 'theatre' });
+    await checkVenueSuitability(eventId, { bookingRequestId }, coordinatorId);
+
+    await admin.from('event_request').update({ expected_attendance: 150 }).eq('id', eventId);
+
+    const [reopened] = await listSuitabilityChecks(eventId, coordinatorId);
+    expect(reopened).toMatchObject({ bookingRequestId, outOfDate: false });
   });
 
   it('refuses a coordinator the event is not assigned to', async () => {
