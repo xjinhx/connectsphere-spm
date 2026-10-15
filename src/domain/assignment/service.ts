@@ -428,8 +428,10 @@ export async function getAssignmentRecord(
 /** One choice in the picker an Operations Manager assigns from. */
 export interface AssignableCoordinator {
   id: string;
-  /** Null when the profile has no name recorded yet — shown as the id's stand-in. */
+  /** Null when the profile has no name recorded yet — the picker falls back to email. */
   name: string | null;
+  /** The account's ConnectSphere sign-in address, used when name is null. */
+  email: string | null;
 }
 
 /**
@@ -443,6 +445,14 @@ export interface AssignableCoordinator {
  *
  * No workload count is returned with each name. AC2 applies no limit
  * (clarification #92), so a count here would suggest a cap that does not exist.
+ *
+ * Email fallback added for SCRUM-232: nothing in the app writes
+ * profiles.full_name yet (SCRUM-205 "Maintain my profile details", the story
+ * that owns it, is still To Do and unassigned), so a freshly created
+ * coordinator has none and the Lead could not tell them apart in the picker.
+ * This relaxes /api/coordinators' original "names only, no email" choice
+ * (SCRUM-94/95) - flagged for Marcus to review, not yet confirmed with him.
+ * Remove this fallback once SCRUM-205 lands and profiles actually get names.
  */
 export async function listAssignableCoordinators(): Promise<AssignableCoordinator[]> {
   const { data, error } = await listCoordinatorProfiles();
@@ -451,9 +461,17 @@ export async function listAssignableCoordinators(): Promise<AssignableCoordinato
   }
 
   const rows = (data ?? []) as { id: string; full_name: string | null; roles: unknown }[];
-  return rows
-    .filter((row) => canReceiveAssignment(((row.roles as unknown[] | null) ?? []).filter(isRole)))
-    .map((row) => ({ id: row.id, name: row.full_name }));
+  const eligible = rows.filter((row) =>
+    canReceiveAssignment(((row.roles as unknown[] | null) ?? []).filter(isRole)),
+  );
+
+  return Promise.all(
+    eligible.map(async (row) => ({
+      id: row.id,
+      name: row.full_name,
+      email: row.full_name ? null : await readAccountEmail(row.id),
+    })),
+  );
 }
 
 // ---------------------------------------------------------------------------
