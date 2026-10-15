@@ -67,8 +67,18 @@ async function createDraftRequest(): Promise<string> {
   return data.id as string;
 }
 
+/** SCRUM-232 AC5: assignment is now a precondition of approving or rejecting. */
+async function assignTo(id: string, assignee: string): Promise<void> {
+  const { error } = await supabase
+    .from('event_request')
+    .update({ coordinator_id: assignee, assigned_by: assignee })
+    .eq('id', id);
+  if (error) throw new Error(`could not assign test request: ${error.message}`);
+}
+
 async function createConfirmedRequest(): Promise<string> {
   const id = await createSubmittedRequest();
+  await assignTo(id, coordinatorId);
   await approveEventRequest(id, { actorId: coordinatorId });
   await enterPlanning(id);
   await changeEventStatus(id, 'confirmed');
@@ -115,6 +125,7 @@ describe('SCRUM-103 AC1 — Draft cannot jump to Confirmed', () => {
 describe('SCRUM-103 AC2 — Rejected cannot become Approved', () => {
   it('TC-103-02: refuses rejected -> approved and the event stays Rejected', async () => {
     const id = await createSubmittedRequest();
+    await assignTo(id, coordinatorId);
     await rejectEventRequest(id, { reason: 'Venue capacity insufficient' }, coordinatorId);
 
     await expect(changeEventStatus(id, 'approved')).rejects.toMatchObject({ code: 'INVALID_TRANSITION' });

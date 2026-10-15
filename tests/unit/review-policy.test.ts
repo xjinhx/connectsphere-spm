@@ -143,10 +143,15 @@ describe('canReviewDetail', () => {
     expect(canReviewDetail(COORDINATOR_A, COORDINATOR_B)).toBe(false);
   });
 
-  // AC3 denies only when the request *is* assigned to someone else; it says
-  // nothing about an unassigned one, so that stays open to any Coordinator.
-  it('allows any coordinator while the request is not yet assigned', () => {
-    expect(canReviewDetail(null, COORDINATOR_A)).toBe(true);
+  // SCRUM-232 AC5 (Week 7 Customer Changes, change 5): assignment through the
+  // Event Coordinator Lead's queue is now a precondition of review, so an
+  // unassigned request is no longer open to any Coordinator. Supersedes the
+  // AC3-literal reading this test used to carry. The Lead still gets a
+  // read-only way in, but that OR is applied at getReviewDetail's own call
+  // site (domain/review/service.ts), not inside this pure function - see
+  // tests/integration/review-detail-clarification.test.ts.
+  it('refuses any coordinator while the request is not yet assigned', () => {
+    expect(canReviewDetail(null, COORDINATOR_A)).toBe(false);
   });
 });
 
@@ -177,18 +182,31 @@ describe('canViewRejection', () => {
     ).toBe(false);
   });
 
-  it('allows any coordinator while the request is not yet assigned', () => {
+  // SCRUM-232 AC5: no longer open to any coordinator while unassigned - only
+  // the Lead (coordinator_assignment, tested below) sees an unassigned event.
+  it('refuses any coordinator while the request is not yet assigned', () => {
     expect(
       canViewRejection(
         { organiserId: ORGANISER, coordinatorId: null },
         { userId: COORDINATOR_B, roles: ['coordinator'] },
       ),
-    ).toBe(true);
+    ).toBe(false);
   });
 
   it('allows an Event Operations Manager, whichever coordinator it is assigned to', () => {
     expect(
       canViewRejection(request, { userId: OPS_MANAGER, roles: ['operations_manager'] }),
+    ).toBe(true);
+  });
+
+  // SCRUM-232 AC5: the Lead's access does not depend on assignment existing
+  // at all - they may read even an unassigned event's rejection.
+  it('allows an Event Operations Manager even while the request is unassigned', () => {
+    expect(
+      canViewRejection(
+        { organiserId: ORGANISER, coordinatorId: null },
+        { userId: OPS_MANAGER, roles: ['operations_manager'] },
+      ),
     ).toBe(true);
   });
 
@@ -227,18 +245,31 @@ describe('canViewApproval', () => {
     expect(canViewApproval(request, { userId: COORDINATOR_B, roles: ['coordinator'] })).toBe(false);
   });
 
-  it('allows any coordinator while the request is not yet assigned', () => {
+  // SCRUM-232 AC5: no longer open to any coordinator while unassigned - only
+  // the Lead (coordinator_assignment, tested below) sees an unassigned event.
+  it('refuses any coordinator while the request is not yet assigned', () => {
     expect(
       canViewApproval(
         { organiserId: ORGANISER, coordinatorId: null },
         { userId: COORDINATOR_B, roles: ['coordinator'] },
       ),
-    ).toBe(true);
+    ).toBe(false);
   });
 
   it('allows an Event Operations Manager, whichever coordinator it is assigned to', () => {
     expect(
       canViewApproval(request, { userId: OPS_MANAGER, roles: ['operations_manager'] }),
+    ).toBe(true);
+  });
+
+  // SCRUM-232 AC5: the Lead's access does not depend on assignment existing
+  // at all - they may read even an unassigned event's approval.
+  it('allows an Event Operations Manager even while the request is unassigned', () => {
+    expect(
+      canViewApproval(
+        { organiserId: ORGANISER, coordinatorId: null },
+        { userId: OPS_MANAGER, roles: ['operations_manager'] },
+      ),
     ).toBe(true);
   });
 
@@ -306,8 +337,10 @@ describe('canViewClarification', () => {
     expect(canViewClarification(assigned, as(COORDINATOR_B, { isCoordinator: true }))).toBe(false);
   });
 
-  it('allows any coordinator while it is unassigned, matching the review rule', () => {
-    expect(canViewClarification(unassigned, as(COORDINATOR_B, { isCoordinator: true }))).toBe(true);
+  // SCRUM-232 AC5: no longer open to any coordinator while unassigned -
+  // matching the narrowed review rule (canReviewDetail).
+  it('refuses any coordinator while it is unassigned', () => {
+    expect(canViewClarification(unassigned, as(COORDINATOR_B, { isCoordinator: true }))).toBe(false);
   });
 
   // Matches SCRUM-91's canViewClarificationExchange: the manager who decides
@@ -315,6 +348,14 @@ describe('canViewClarification', () => {
   // assigned to someone else.
   it('allows an Event Operations Manager', () => {
     expect(canViewClarification(assigned, as(COORDINATOR_B, { isOperationsManager: true }))).toBe(
+      true,
+    );
+  });
+
+  // SCRUM-232 AC5: the Lead's access does not depend on assignment existing
+  // at all - they may read an unassigned event's clarification too.
+  it('allows an Event Operations Manager even while the request is unassigned', () => {
+    expect(canViewClarification(unassigned, as(COORDINATOR_B, { isOperationsManager: true }))).toBe(
       true,
     );
   });
