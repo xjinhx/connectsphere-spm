@@ -30,6 +30,10 @@ _Avoid_: booking (until a line is approved)
 **Booking request status**:
 Worked out from its lines: Pending while any line is pending; Approved if every line is approved; Rejected if every line is rejected; otherwise Partially Approved (SCRUM-148 AC5).
 
+**Venue requirements**:
+The expected attendance, room layout and accessibility needs a venue must meet. An event has its own. A booking request may have its own for its venue, and uses the event's for any it leaves empty (SCRUM-230).
+_Avoid_: event requirements (for a booking request's own), space requirements
+
 **Confirmed booking**:
 A venue committed to one event for one date, from a start to an end time, created when Venue Staff approve that line of a booking request.
 _Avoid_: reservation (that word is for equipment)

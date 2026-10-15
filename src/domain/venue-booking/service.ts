@@ -37,6 +37,7 @@ import {
   periodClashFieldMessage,
   periodCommittedMessage,
   requestStatusOf,
+  venueRequirementsOf,
   sortBookingQueue,
   type ApprovalConflict,
   type BookingQueueSort,
@@ -44,6 +45,7 @@ import {
 } from './policy';
 import { isCurrentCoordinator } from '@/domain/assignment/policy';
 import { getVenueCommitments } from '@/domain/availability/service';
+import { normaliseAccessibility } from '@/domain/event-request/policy';
 import { toCommittedPeriods } from '@/domain/availability/policy';
 import type { Role } from '@/domain/identity/roles';
 import { notifyBestEffort } from '@/domain/notification/service';
@@ -264,11 +266,24 @@ export async function submitVenueBookingRequest(
   });
   await refuseClashingPeriods(venue.id, parsedId.data, lines);
 
+  // SCRUM-230 AC1: the request's own venue requirements; anything left empty
+  // is stored as null and the event's is used (AC2). Notes only go with a
+  // "needed" answer, the same rule as the event's (SCRUM-79).
+  const accessibility = normaliseAccessibility({
+    accessibilityRequired: parsedInput.data.accessibilityRequired,
+    accessibilityFeatureIds: [],
+    accessibilityNotes: parsedInput.data.accessibilityNotes,
+  });
+
   const { data: newRequestId, error: writeError } = await createVenueBookingRequest({
     eventRequestId: parsedId.data,
     venueId: parsedInput.data.venueId,
     requestedBy: actorId,
     lines,
+    expectedAttendance: parsedInput.data.expectedAttendance ?? null,
+    roomLayout: parsedInput.data.roomLayout ?? null,
+    accessibilityRequired: accessibility.required,
+    accessibilityNotes: accessibility.notes,
   });
 
   if (writeError || !newRequestId) {
@@ -748,11 +763,7 @@ export async function getBookingRequestRequirements(requestId: string): Promise<
     throw new ValidationError('The requesting coordinator could not be read.', requesterError.message);
   }
 
-  return {
-    eventName: event.name,
-    eventReference: event.reference,
-    requestedByName: requester?.[0]?.full_name ?? null,
-    requestedAt: row.created_at,
+  const eventRequirements = {
     expectedAttendance: event.expected_attendance,
     roomLayout: event.room_layout,
     accessibilityRequired: event.accessibility_required,
@@ -760,6 +771,24 @@ export async function getBookingRequestRequirements(requestId: string): Promise<
       link.accessibility_features ? [{ name: link.accessibility_features.name }] : [],
     ),
     accessibilityNotes: event.accessibility_notes,
+  };
+
+  return {
+    eventName: event.name,
+    eventReference: event.reference,
+    requestedByName: requester?.[0]?.full_name ?? null,
+    requestedAt: row.created_at,
+    ...eventRequirements,
+    // SCRUM-230 AC2, AC3: the request's own, else the event's.
+    venueRequirements: venueRequirementsOf(
+      {
+        expectedAttendance: row.expected_attendance,
+        roomLayout: row.room_layout,
+        accessibilityRequired: row.accessibility_required,
+        accessibilityNotes: row.accessibility_notes,
+      },
+      eventRequirements,
+    ),
   };
 }
 

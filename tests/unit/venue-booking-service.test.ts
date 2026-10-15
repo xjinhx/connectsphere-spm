@@ -125,6 +125,11 @@ describe('AC1: assigned coordinator, approved event', () => {
       venueId: VENUE_ID,
       requestedBy: COORDINATOR_ID,
       lines: [{ date: '2026-11-15', start: '13:00', end: '18:00' }],
+      // SCRUM-230: none of its own venue requirements, so the event's are used.
+      expectedAttendance: null,
+      roomLayout: null,
+      accessibilityRequired: null,
+      accessibilityNotes: null,
     });
     expect(outcome.venueId).toBe(VENUE_ID);
     expect(outcome.eventRequestId).toBe(EVENT_ID);

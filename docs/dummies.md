@@ -207,7 +207,10 @@ switch them the next time they edit those files.
   none is assigned yet), holding the old and new capacity and the event's
   expected attendance. It is written in the same transaction as the cut. This
   is the minimum honest notification CLAUDE.md asks for, the same as D-03
-  (SCRUM-94) and D-06 (SCRUM-96).
+  (SCRUM-94) and D-06 (SCRUM-96). Since SCRUM-230
+  (`20261014145622_capacity_cut_by_booking_attendance.sql`), the attendance is
+  the booking's own where its request has one: the largest among the event's
+  bookings over the new capacity.
 - **To replace:** send each notice to its coordinator using SCRUM-24's
   mechanism; the row already holds everything the message needs. Re-run
   SCRUM-120 AC4.

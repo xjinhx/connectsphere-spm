@@ -18,6 +18,7 @@ import { ConflictError, NotFoundError, ValidationError, isUniqueViolation } from
 import { todayInSingapore, type ISODate } from '@/domain/shared/dates';
 import { fromDatabaseTime } from '@/domain/shared/times';
 import { getCommittedPeriods } from '@/domain/availability/service';
+import { ownOrEvent } from '@/domain/venue-booking/policy';
 import {
   assertLayoutsWithinMaxCapacity,
   findNewSetupTurnaroundClashes,
@@ -543,6 +544,11 @@ export async function updateVenue(venueId: string, input: unknown): Promise<Venu
  * Bookings are SCRUM-148's, one per venue, date and slot (D-04 replaced), so
  * an event booked for several slots is listed once.
  *
+ * SCRUM-230 AC4, AC5: each booking goes by its own attendance, else its
+ * event's (ownOrEvent, the same rule as the request page). An event is listed
+ * with the largest attendance among its bookings over the new maximum, as
+ * update_venue's notice is (20261014145622).
+ *
  * "Today" is Singapore's date, not the server's: the server runs in UTC, which
  * is still on yesterday until 08:00 in Singapore, and would count an event
  * that has already happened as a future booking.
@@ -558,20 +564,27 @@ export async function findAffectedFutureBookings(
     throw new ValidationError("Could not check the venue's bookings.", error?.message);
   }
 
-  const events = [...new Map(data.map((row) => [row.event_request.id, row.event_request])).values()];
-
-  return events
-    .filter((event) => isAffectedByCapacity(event.expected_attendance, proposedMaxCapacity))
-    .map((event) =>
-      AffectedBookingSchema.parse({
-        eventId: event.id,
-        reference: event.reference,
-        eventName: event.name,
-        proposedDate: event.proposed_date,
-        expectedAttendance: event.expected_attendance,
-        coordinatorId: event.coordinator_id,
-      }),
+  const affected = new Map<string, { event: (typeof data)[number]['event_request']; attendance: number }>();
+  for (const row of data) {
+    const { value: attendance } = ownOrEvent(
+      row.request_line?.request?.expected_attendance ?? null,
+      row.event_request.expected_attendance,
     );
+    if (attendance === null || !isAffectedByCapacity(attendance, proposedMaxCapacity)) continue;
+    const listed = affected.get(row.event_request.id);
+    if (!listed || attendance > listed.attendance) affected.set(row.event_request.id, { event: row.event_request, attendance });
+  }
+
+  return [...affected.values()].map(({ event, attendance }) =>
+    AffectedBookingSchema.parse({
+      eventId: event.id,
+      reference: event.reference,
+      eventName: event.name,
+      proposedDate: event.proposed_date,
+      expectedAttendance: attendance,
+      coordinatorId: event.coordinator_id,
+    }),
+  );
 }
 
 // -----------------------------------------------------------------------------

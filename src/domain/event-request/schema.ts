@@ -35,9 +35,9 @@ export type EventRequestCore = z.infer<typeof eventRequestCoreSchema>;
 /**
  * An untouched form input arrives as ''. That means "not entered", not "invalid".
  * Introduced by SCRUM-83 for the draft schema; also how SCRUM-79's optional
- * venue requirements read a blank select.
+ * venue requirements read a blank select, and SCRUM-230's on a booking request.
  */
-function optionalFromBlank<T extends z.ZodTypeAny>(schema: T) {
+export function optionalFromBlank<T extends z.ZodTypeAny>(schema: T) {
   return z.preprocess((value) => (value === '' || value === null ? undefined : value), schema.optional());
 }
 

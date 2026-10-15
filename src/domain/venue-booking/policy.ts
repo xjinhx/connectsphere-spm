@@ -6,7 +6,13 @@ import { formatClockRange, rangesOverlap, type ClockRange, type ClockTime } from
 import { isWithinOpeningHours, type SetupTurnaround } from '@/domain/venues/policy';
 import type { CommittedPeriod, VenueCommitment } from '@/domain/availability/schema';
 import { formatExpiry } from '@/domain/venue-hold/policy';
-import type { VenueBookingRequestLineStatus, VenueBookingRequestStatus } from './schema';
+import type {
+  EventVenueRequirements,
+  OwnVenueRequirements,
+  VenueBookingRequestLineStatus,
+  VenueBookingRequestStatus,
+  VenueRequirementsInUse,
+} from './schema';
 import { describeAccessibility } from '@/domain/event-request/policy';
 import { ROOM_LAYOUT_LABELS, RoomLayoutSchema } from '@/domain/venues/schema';
 
@@ -251,6 +257,45 @@ export function describeAccessibilityForVenueStaff(event: {
   accessibilityNotes: string | null;
 }): string {
   return event.accessibilityRequired === null ? NOT_SPECIFIED : describeAccessibility(event);
+}
+
+// ---------------------------------------------------------------------------
+// SCRUM-230 — Give each venue booking its own attendance and requirements
+// ---------------------------------------------------------------------------
+
+/** AC2: one venue requirement, the request's own or else the event's, and which it was. */
+export function ownOrEvent<T>(own: T | null, event: T | null): { value: T | null; fromEvent: boolean } {
+  return own === null ? { value: event, fromEvent: true } : { value: own, fromEvent: false };
+}
+
+/**
+ * AC2: a request goes by its own venue requirements, and by the event's for
+ * any it left empty, field by field. The request page shows them (AC2, AC3),
+ * and SCRUM-120's capacity check and SCRUM-135/136's suitability check read
+ * the same answer from here rather than each doing its own fallback.
+ */
+export function venueRequirementsOf(own: OwnVenueRequirements, event: EventVenueRequirements): VenueRequirementsInUse {
+  return {
+    expectedAttendance: ownOrEvent(own.expectedAttendance, event.expectedAttendance),
+    roomLayout: ownOrEvent(own.roomLayout, event.roomLayout),
+    accessibility:
+      own.accessibilityRequired === null
+        ? {
+            required: event.accessibilityRequired,
+            features: event.accessibilityFeatures,
+            notes: event.accessibilityNotes,
+            fromEvent: true,
+          }
+        : { required: own.accessibilityRequired, features: [], notes: own.accessibilityNotes, fromEvent: false },
+  };
+}
+
+/**
+ * AC2: a value taken from the event is "shown as the event's". One the event
+ * never recorded reads "Not specified" alone (SCRUM-143 AC4).
+ */
+export function markIfEvents(description: string, requirement: { fromEvent: boolean }): string {
+  return requirement.fromEvent && description !== NOT_SPECIFIED ? `${description} (event's)` : description;
 }
 
 // ---------------------------------------------------------------------------
