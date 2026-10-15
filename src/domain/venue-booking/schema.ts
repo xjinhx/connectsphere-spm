@@ -297,6 +297,19 @@ export type BookedPeriod =
   | { date: string; start: string; end: string; state: 'committed' };
 
 // ---------------------------------------------------------------------------
+// SCRUM-236 — See my event's booking requests from the event page
+// ---------------------------------------------------------------------------
+
+/** AC1: one of an event's booking requests, as its event page lists it. */
+export interface EventBookingRequest {
+  id: string;
+  venueName: string;
+  status: VenueBookingRequestStatus;
+  /** Each requested date with its start and end time (HH:MM, Singapore time), in date order. */
+  lines: readonly { date: string; startTime: string; endTime: string }[];
+}
+
+// ---------------------------------------------------------------------------
 // SCRUM-147 — View the pending booking request queue
 // ---------------------------------------------------------------------------
 // One entry per pending line, not per request: each date-and-period line is

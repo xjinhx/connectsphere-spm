@@ -140,3 +140,24 @@ export async function fetchBookingRequestRequirements(id: string) {
     .eq('id', id)
     .maybeSingle();
 }
+
+// ---------------------------------------------------------------------------
+// SCRUM-236 — See my event's booking requests from the event page
+// ---------------------------------------------------------------------------
+
+/** One of an event's booking requests, with its venue and each line's date, times and status. */
+export interface EventBookingRequestRow {
+  id: string;
+  created_at: string;
+  venues: { name: string } | null;
+  venue_booking_request_line: { date: string; start_time: string; end_time: string; status: string }[];
+}
+
+/** AC1 — every booking request made for the event, newest first. */
+export async function fetchEventBookingRequests(eventRequestId: string) {
+  return db()
+    .from('venue_booking_request')
+    .select('id, created_at, venues ( name ), venue_booking_request_line ( date, start_time, end_time, status )')
+    .eq('event_request_id', eventRequestId)
+    .order('created_at', { ascending: false });
+}

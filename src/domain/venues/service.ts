@@ -146,6 +146,8 @@ export async function searchVenues(input: unknown): Promise<VenueSearchResult> {
     isWithinOpeningHours(
       { start, end },
       { opensAt: fromDatabaseTime(venue.opens_at), closesAt: fromDatabaseTime(venue.closes_at) },
+      // SCRUM-226: setup and turnaround must fit inside the hours too (TC-226-18, 19).
+      { setupMinutes: venue.setup_minutes ?? 0, turnaroundMinutes: venue.turnaround_minutes ?? 0 },
     ),
   );
   const checked = await Promise.all(

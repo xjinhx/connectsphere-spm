@@ -3,7 +3,7 @@ import { isActionPermitted } from '@/domain/identity/permissions';
 import type { Role } from '@/domain/identity/roles';
 import { formatSingaporeDate } from '@/domain/shared/dates';
 import { formatClockRange, rangesOverlap, type ClockRange, type ClockTime } from '@/domain/shared/times';
-import { isWithinOpeningHours } from '@/domain/venues/policy';
+import { isWithinOpeningHours, type SetupTurnaround } from '@/domain/venues/policy';
 import type { CommittedPeriod, VenueCommitment } from '@/domain/availability/schema';
 import { formatExpiry } from '@/domain/venue-hold/policy';
 import type {
@@ -50,14 +50,31 @@ export function describePeriod(period: { date: string } & ClockRange): string {
  * AC1: a requested period that starts before the venue opens or ends after it
  * closes. The same rule search uses (isWithinOpeningHours, Part 1), so a venue
  * search leaves out is never one a request accepts, and the other way round.
+ * SCRUM-226: the venue's setup and turnaround must fit inside the hours too.
  */
-export function isOutsideOpeningHours(period: ClockRange, hours: { opensAt: ClockTime; closesAt: ClockTime }): boolean {
-  return !isWithinOpeningHours(period, hours);
+export function isOutsideOpeningHours(
+  period: ClockRange,
+  hours: { opensAt: ClockTime; closesAt: ClockTime },
+  times?: SetupTurnaround,
+): boolean {
+  return !isWithinOpeningHours(period, hours, times);
 }
 
-/** AC1: "Outside this venue's opening hours (08:00–22:00)." */
-export function outsideOpeningHoursMessage(hours: { opensAt: ClockTime; closesAt: ClockTime }): string {
-  return `Outside this venue's opening hours (${formatClockRange({ start: hours.opensAt, end: hours.closesAt })}).`;
+/**
+ * AC1: "Outside this venue's opening hours (08:00–22:00)." SCRUM-226 adds
+ * what had to fit as well, so the coordinator sees why 08:00 is refused at a
+ * venue opening at 08:00: "..., including its 30-minute setup."
+ */
+export function outsideOpeningHoursMessage(
+  hours: { opensAt: ClockTime; closesAt: ClockTime },
+  times: SetupTurnaround = { setupMinutes: 0, turnaroundMinutes: 0 },
+): string {
+  const parts = [
+    ...(times.setupMinutes > 0 ? [`${times.setupMinutes}-minute setup`] : []),
+    ...(times.turnaroundMinutes > 0 ? [`${times.turnaroundMinutes}-minute turnaround`] : []),
+  ];
+  const including = parts.length > 0 ? `, including its ${parts.join(' and ')}` : '';
+  return `Outside this venue's opening hours (${formatClockRange({ start: hours.opensAt, end: hours.closesAt })})${including}.`;
 }
 
 /**
