@@ -1,7 +1,7 @@
 import { afterAll, beforeAll, describe, expect, it } from 'vitest';
 import { createAdminClient } from '@/lib/supabase/admin';
 import { createVenue } from '@/domain/venues/service';
-import { getVenueCommitments } from '@/domain/availability/service';
+import { getCommittedPeriods, getVenueCommitments } from '@/domain/availability/service';
 import { todayInSingapore } from '@/domain/shared/dates';
 import { ensureTestClientOrganisation, TEST_CLIENT_ORGANISATION_ID } from './fixtures/clientOrganisation';
 
@@ -162,5 +162,42 @@ describe('getVenueCommitments against the database (SCRUM-239)', () => {
 
     const result = await getVenueCommitments(venue.id, `${first}T00:00`, `${second}T24:00`);
     expect(result.map((c) => `${c.date} ${c.start}`)).toEqual([`${first} 15:00`, `${second} 09:00`]);
+  });
+});
+
+describe('getVenueCommitments against the database: SCRUM-226 setup and turnaround', () => {
+  /** The card's venue: 30 min setup, 45 min turnaround (set directly until SCRUM-225's form exists). */
+  async function createCardVenue(label: string) {
+    const venue = await createTestVenue(label);
+    const { error } = await admin
+      .from('venues')
+      .update({ setup_minutes: 30, turnaround_minutes: 45 })
+      .eq('id', venue.id);
+    if (error) throw new Error(`could not set setup and turnaround: ${error.message}`);
+    return venue;
+  }
+
+  it('TC-226-01..05: a confirmed 10:00-12:00 booking commits 09:30-12:45', async () => {
+    const venue = await createCardVenue('Venue V');
+    const date = daysFromToday(50);
+    const eventId = await book(venue.id, date, 'am', { start: '10:00', end: '12:00' });
+
+    // AC4: the calendar's committed block includes setup and turnaround.
+    expect(await getCommittedPeriods(venue.id, `${date}T00:00`, `${date}T24:00`)).toEqual([
+      { date, start: '09:30', end: '12:45' },
+    ]);
+    // AC1-AC3: 12:30-14:00 clashes, and Venue Staff see which booking.
+    expect(await getVenueCommitments(venue.id, `${date}T12:30`, `${date}T14:00`)).toEqual([
+      { kind: 'booking', venueId: venue.id, date, start: '09:30', end: '12:45', eventRequestId: eventId, reason: null },
+    ]);
+  });
+
+  it('TC-226-07..10 (AC5): 13:15 is free, 13:00 is not', async () => {
+    const venue = await createCardVenue('Venue V5');
+    const date = daysFromToday(51);
+    await book(venue.id, date, 'am', { start: '10:00', end: '12:00' });
+
+    expect(await getVenueCommitments(venue.id, `${date}T13:15`, `${date}T14:30`)).toEqual([]);
+    expect(await getVenueCommitments(venue.id, `${date}T13:00`, `${date}T14:30`)).toHaveLength(1);
   });
 });

@@ -5,19 +5,24 @@ import {
   fetchUnavailablePeriods,
   fetchUnavailablePeriodsOn,
   fetchUpcomingUnavailablePeriods,
+  fetchVenueSetupTurnaround,
   recordUnavailablePeriod,
 } from '@/lib/supabase/availability';
 import { fetchActiveHoldPeriods } from '@/lib/supabase/venueHolds';
 import { ConflictError, ValidationError, isExclusionViolation } from '@/domain/shared/errors';
 import { formatSingaporeDate, todayInSingapore, type ISODate } from '@/domain/shared/dates';
 import { getVenue } from '@/domain/venues/service';
-import { isWithinOpeningHours } from '@/domain/venues/policy';
+// SCRUM-225's committed-time rule, which SCRUM-226 applies to every check.
+import { committedMinutes, isWithinOpeningHours, type SetupTurnaround } from '@/domain/venues/policy';
 import { notifyBestEffort } from '@/domain/notification/service';
 import {
+  END_OF_DAY,
   formatClockRange,
   fromDatabaseTime,
+  fromMinutes,
   rangesOverlap,
   splitDateTime,
+  toMinutes,
   type ClockRange,
   type SingaporeDateTime,
 } from '@/domain/shared/times';
@@ -292,22 +297,41 @@ export async function listUpcomingUnavailablePeriods(
 // -----------------------------------------------------------------------------
 
 /**
- * Every committed period at a venue that overlaps [start, end): its confirmed
- * bookings, unavailable periods, and active holds (SCRUM-227).
- * The one check behind venue search (SCRUM-239 AC2), booking requests (AC3),
- * approvals (AC4) and the calendar (AC5), and the check SCRUM-227 (holds) and
- * SCRUM-229 (replacement venue) call instead of writing their own. Unavailable
- * periods are included because the story builds on SCRUM-151 and SCRUM-154,
- * which keep a withdrawn period from being booked. SCRUM-226 will widen each
- * period by the venue's setup and turnaround here, so no caller adds them.
+ * Every committed period at a venue that a booking for [start, end) would
+ * clash with: its confirmed bookings, unavailable periods, and active holds
+ * (SCRUM-227). The one check behind venue search (SCRUM-239 AC2), booking
+ * requests (AC3), approvals (AC4) and the calendar (AC5), and the check
+ * SCRUM-227 (holds) and SCRUM-229 (replacement venue) call instead of writing
+ * their own. Unavailable periods are included because the story builds on
+ * SCRUM-151 and SCRUM-154, which keep a withdrawn period from being booked.
+ *
+ * SCRUM-226: setup and turnaround are committed, applied here so no caller adds
+ * them. Two things widen, both by the venue's setup before and turnaround after
+ * (SCRUM-225's committedMinutes):
+ *   - each confirmed booking and each active hold, so 10:00-12:00 with 30 min
+ *     setup and 45 min turnaround is returned as 09:30-12:45 (AC4, the
+ *     calendar shows that). A hold stands in for the booking it becomes, so
+ *     it commits the same time; otherwise another event could book the held
+ *     booking's turnaround before the hold closes (agreed with SCRUM-227's
+ *     owner, 14 Oct 2026; CLAUDE.md "Committed");
+ *   - the range asked about, because the new booking needs its own setup and
+ *     turnaround too (AC5: 13:00 is refused, its setup would start at 12:30
+ *     inside the turnaround; 13:15 is free, its setup starts at 12:45).
+ * Unavailable periods are returned as recorded: nothing is set up for a
+ * withdrawn period. A venue with 0 and 0 (the default, PO 8 Oct 2026) behaves
+ * exactly as before.
+ *
+ * So a caller passes the range it wants to book or search and treats any
+ * result as a clash. Re-filtering the result against the bare range (e.g. with
+ * commitmentsOverlapping) would drop AC5's own-setup clash.
  *
  * `start` and `end` are Singapore date-times on the 15-minute unit. Returned
  * periods are sorted by date, then start time.
  *
  * Each commitment carries the event id or reason behind it, for Venue Staff
- * (SCRUM-239 AC4, as SCRUM-155 AC1). Anything shown to a coordinator or
- * organiser goes through getCommittedPeriods instead, which returns the
- * periods only.
+ * (SCRUM-239 AC4, as SCRUM-155 AC1; SCRUM-226 AC3 "the clashing booking is
+ * identified"). Anything shown to a coordinator or organiser goes through
+ * getCommittedPeriods instead, which returns the periods only (SCRUM-226 AC4).
  *
  * A period never crosses midnight: setup and turnaround must fit inside the
  * venue's opening hours (PO assumption, 8 Oct 2026; TC-226-18, 19), and opening
@@ -332,17 +356,31 @@ export async function getVenueCommitments(
 ): Promise<VenueCommitment[]> {
   const fromDate = splitDateTime(start).date;
   const toDate = splitDateTime(end).date;
-  const [bookings, unavailable, holds] = await Promise.all([
+  const [bookings, unavailable, holds, venue] = await Promise.all([
     fetchConfirmedBookingPeriods(venueId, fromDate, toDate),
     fetchUnavailablePeriods(venueId, fromDate, toDate),
     fetchActiveHoldPeriods(venueId, fromDate, toDate, now.toISOString()),
+    fetchVenueSetupTurnaround(venueId),
   ]);
-  if (bookings.error || !bookings.data || unavailable.error || !unavailable.data || holds.error || !holds.data) {
+  if (
+    bookings.error ||
+    !bookings.data ||
+    unavailable.error ||
+    !unavailable.data ||
+    holds.error ||
+    !holds.data ||
+    venue.error
+  ) {
     throw new ValidationError(
       "Could not check the venue's availability.",
-      bookings.error?.message ?? unavailable.error?.message ?? holds.error?.message,
+      bookings.error?.message ?? unavailable.error?.message ?? holds.error?.message ?? venue.error?.message,
     );
   }
+  // An unknown venue has no bookings either; 0 and 0 keeps it a no-op.
+  const setupTurnaround: SetupTurnaround = {
+    setupMinutes: venue.data?.setup_minutes ?? 0,
+    turnaroundMinutes: venue.data?.turnaround_minutes ?? 0,
+  };
 
   const commitments: VenueCommitment[] = [
     ...bookings.data.map((row) =>
@@ -350,8 +388,11 @@ export async function getVenueCommitments(
         kind: 'booking',
         venueId: row.venue_id,
         date: row.date,
-        start: fromDatabaseTime(row.start_time),
-        end: fromDatabaseTime(row.end_time),
+        // SCRUM-226 AC1-AC4: the booking plus its setup and turnaround.
+        ...committedPeriod(
+          { start: fromDatabaseTime(row.start_time), end: fromDatabaseTime(row.end_time) },
+          setupTurnaround,
+        ),
         eventRequestId: row.event_request_id,
         reason: null,
       }),
@@ -372,15 +413,47 @@ export async function getVenueCommitments(
         kind: 'hold',
         venueId: row.venue_id,
         date: row.date,
-        start: fromDatabaseTime(row.start_time),
-        end: fromDatabaseTime(row.end_time),
+        // SCRUM-226: a hold commits the time its booking would, setup and turnaround included.
+        ...committedPeriod(
+          { start: fromDatabaseTime(row.start_time), end: fromDatabaseTime(row.end_time) },
+          setupTurnaround,
+        ),
         eventRequestId: row.event_request_id,
         reason: null,
         expiresAt: new Date(row.expires_at).toISOString(),
       }),
     ),
   ];
-  return commitmentsInRange(commitments, start, end);
+  const window = widenedWindow(start, end, setupTurnaround);
+  return commitmentsInRange(commitments, window.start, window.end);
+}
+
+/**
+ * SCRUM-225's committed time as clock times on one date. committedMinutes can
+ * run before 00:00 or past 24:00; a commitment stays within its date (opening
+ * hours end by 24:00, PO 8 Oct 2026), so the ends are kept inside the day.
+ */
+function committedPeriod(range: ClockRange, venue: SetupTurnaround): ClockRange {
+  const { start, end } = committedMinutes(range, venue);
+  return { start: fromMinutes(Math.max(0, start)), end: fromMinutes(Math.min(toMinutes(END_OF_DAY), end)) };
+}
+
+/**
+ * SCRUM-226 AC5: the range asked about, plus the new booking's own setup
+ * before its start and turnaround after its end. Each end is widened on its
+ * own date, so a window spanning several days (the calendar) keeps its days.
+ */
+function widenedWindow(
+  start: SingaporeDateTime,
+  end: SingaporeDateTime,
+  venue: SetupTurnaround,
+): { start: SingaporeDateTime; end: SingaporeDateTime } {
+  const from = splitDateTime(start);
+  const to = splitDateTime(end);
+  const widenedStart = committedPeriod({ start: from.time, end: END_OF_DAY }, venue).start;
+  // An end of 00:00 closes the window at the start of that day: nothing to widen.
+  const widenedEnd = to.time === '00:00' ? to.time : committedPeriod({ start: '00:00', end: to.time }, venue).end;
+  return { start: `${from.date}T${widenedStart}`, end: `${to.date}T${widenedEnd}` };
 }
 
 /**

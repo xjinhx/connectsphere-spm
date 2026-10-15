@@ -185,12 +185,16 @@ export async function saveVenueChanges(
  * Bookings are written by SCRUM-148's approval, one per venue, date and slot,
  * so "future" is the booking's own date (D-04 replaced). An event with several
  * booked slots comes back once per slot; the service counts it once.
+ *
+ * SCRUM-230 AC4, AC5: with the booking's own attendance, from the request its
+ * line was approved on (null when the request left it empty, or the booking
+ * has no line).
  */
 export async function fetchConfirmedFutureBookings(venueId: string, today: string) {
   return db()
     .from('venue_booking')
     .select(
-      'date, event_request:event_request_id!inner (id, reference, name, proposed_date, expected_attendance, coordinator_id)',
+      'date, event_request:event_request_id!inner (id, reference, name, proposed_date, expected_attendance, coordinator_id), request_line:request_line_id ( request:request_id ( expected_attendance ) )',
     )
     .eq('venue_id', venueId)
     .eq('status', 'confirmed')
@@ -243,7 +247,7 @@ export async function fetchSetupTurnaroundAffectedBookings(venueId: string, toda
 export async function fetchSearchableVenues() {
   return db()
     .from('venues')
-    .select('id, name, max_capacity, is_retired, opens_at, closes_at, locations ( id, name )')
+    .select('id, name, max_capacity, is_retired, opens_at, closes_at, setup_minutes, turnaround_minutes, locations ( id, name )')
     .eq('is_retired', false)
     .order('name');
 }

@@ -1,6 +1,7 @@
 import { z } from 'zod';
 import { isISODate } from '@/domain/shared/dates';
 import { EndTimeSchema, StartTimeSchema, isQuarterHourEnd, isQuarterHourStart, toMinutes } from '@/domain/shared/times';
+import { eventRequestCoreSchema, optionalFromBlank, venueRequirementsShape } from '@/domain/event-request/schema';
 
 // ---------------------------------------------------------------------------
 // SCRUM-142 — Submit a venue booking request for an event
@@ -60,9 +61,24 @@ export const VenueBookingRequestLineInputSchema = z
   .superRefine((line, ctx) => endAfterStart(line, ctx, ['start', 'end']));
 export type VenueBookingRequestLineInput = z.infer<typeof VenueBookingRequestLineInputSchema>;
 
+/**
+ * SCRUM-230 AC1: the venue requirements (CONTEXT.md) a request may carry for
+ * its venue, each optional. Left empty, the event's is used (AC2,
+ * venueRequirementsOf in policy.ts). Each takes the event's own rule
+ * (SCRUM-78, SCRUM-79). Accessibility is the answer and notes, without the
+ * feature list (agreed 14 Oct 2026).
+ */
+const requestVenueRequirementsShape = {
+  expectedAttendance: optionalFromBlank(eventRequestCoreSchema.shape.expectedAttendance),
+  roomLayout: venueRequirementsShape.roomLayout,
+  accessibilityRequired: venueRequirementsShape.accessibilityRequired,
+  accessibilityNotes: venueRequirementsShape.accessibilityNotes,
+};
+
 export const CreateVenueBookingRequestInputSchema = z.object({
   venueId: z.string().uuid('Venue must be chosen from the list.'),
   lines: z.array(VenueBookingRequestLineInputSchema).min(1, 'At least one date is required.'),
+  ...requestVenueRequirementsShape,
 });
 export type CreateVenueBookingRequestInput = z.infer<typeof CreateVenueBookingRequestInputSchema>;
 
@@ -82,7 +98,15 @@ export type VenueBookingLineErrors = Partial<Record<LineField, string[]>>;
  */
 export interface VenueBookingRequestErrorDetails {
   formErrors: string[];
-  fieldErrors: { venueId?: string[]; lines?: string[] };
+  fieldErrors: {
+    venueId?: string[];
+    lines?: string[];
+    // SCRUM-230 AC1: the request's own venue requirements.
+    expectedAttendance?: string[];
+    roomLayout?: string[];
+    accessibilityRequired?: string[];
+    accessibilityNotes?: string[];
+  };
   lineErrors: VenueBookingLineErrors[];
 }
 
@@ -122,7 +146,14 @@ export function venueBookingRequestErrorDetails(
   const { formErrors, fieldErrors } = new z.ZodError<CreateVenueBookingRequestInput>(otherIssues).flatten();
   return {
     formErrors,
-    fieldErrors: { venueId: fieldErrors.venueId, lines: fieldErrors.lines },
+    fieldErrors: {
+      venueId: fieldErrors.venueId,
+      lines: fieldErrors.lines,
+      expectedAttendance: fieldErrors.expectedAttendance,
+      roomLayout: fieldErrors.roomLayout,
+      accessibilityRequired: fieldErrors.accessibilityRequired,
+      accessibilityNotes: fieldErrors.accessibilityNotes,
+    },
     lineErrors: lineErrorsFrom(lineIssues),
   };
 }
@@ -322,6 +353,44 @@ export interface BookingRequestRequirements {
   accessibilityRequired: boolean | null;
   accessibilityFeatures: readonly { name: string }[];
   accessibilityNotes: string | null;
+  /**
+   * SCRUM-230 AC2, AC3: what the request goes by. Its own venue requirements,
+   * and the event's (the fields above) for any it left empty.
+   */
+  venueRequirements: VenueRequirementsInUse;
+}
+
+// ---------------------------------------------------------------------------
+// SCRUM-230 — Give each venue booking its own attendance and requirements
+// ---------------------------------------------------------------------------
+
+/** A request's own venue requirements, as stored: null is "use the event's" (AC2). */
+export interface OwnVenueRequirements {
+  expectedAttendance: number | null;
+  roomLayout: string | null;
+  accessibilityRequired: boolean | null;
+  accessibilityNotes: string | null;
+}
+
+/** The event's venue requirements, as SCRUM-79 records them. */
+export interface EventVenueRequirements extends OwnVenueRequirements {
+  accessibilityFeatures: readonly { name: string }[];
+}
+
+/**
+ * AC2: the venue requirements a request goes by. Each is its own or the
+ * event's, and `fromEvent` says which, so a page can show it as the event's.
+ * Accessibility (the answer, features and notes) is taken as one.
+ */
+export interface VenueRequirementsInUse {
+  expectedAttendance: { value: number | null; fromEvent: boolean };
+  roomLayout: { value: string | null; fromEvent: boolean };
+  accessibility: {
+    required: boolean | null;
+    features: readonly { name: string }[];
+    notes: string | null;
+    fromEvent: boolean;
+  };
 }
 
 // ---------------------------------------------------------------------------
