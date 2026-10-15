@@ -338,3 +338,55 @@ describe('updateVenue: SCRUM-119 (revised) setup and turnaround slot flags', () 
     expect(saved.needsTurnaroundSlot).toBe(true);
   });
 });
+
+/**
+ * SCRUM-239 AC1 (Jira): "Given I am Venue Staff editing a venue, when I set
+ * opening and closing times in 15-minute steps and save, then they replace the
+ * venue's slot configuration".
+ */
+describe('updateVenue: SCRUM-239 AC1 opening hours', () => {
+  it('TC-239-01: saves 08:00 to 22:00 and returns them on reopening the venue', async () => {
+    const venue = await createTestVenue('Hours Hall');
+
+    await updateVenue(venue.id, { expectedUpdatedAt: venue.updatedAt, opensAt: '08:00', closesAt: '22:00' });
+
+    const reopened = await getVenue(venue.id);
+    expect([reopened.opensAt, reopened.closesAt]).toEqual(['08:00', '22:00']);
+  });
+
+  it('TC-239-02: refuses 08:10 and keeps the hours it had', async () => {
+    const venue = await createTestVenue('Off Step Hall');
+
+    await expect(
+      updateVenue(venue.id, { expectedUpdatedAt: venue.updatedAt, opensAt: '08:10', closesAt: '22:00' }),
+    ).rejects.toMatchObject({
+      code: 'VALIDATION_ERROR',
+      details: { fieldErrors: { opensAt: ['Choose a time on a 15-minute step (:00, :15, :30 or :45).'] } },
+    });
+
+    const kept = await getVenue(venue.id);
+    expect([kept.opensAt, kept.closesAt]).toEqual([venue.opensAt, venue.closesAt]);
+  });
+
+  it('keeps setup and turnaround (SCRUM-225, #96) when only the hours change, and the hours when only they change', async () => {
+    const venue = await createTestVenue('Both Hall');
+    const withTimes = await updateVenue(venue.id, { expectedUpdatedAt: venue.updatedAt, setupMinutes: 30, turnaroundMinutes: 15 });
+
+    const withHours = await updateVenue(venue.id, { expectedUpdatedAt: withTimes.updatedAt, opensAt: '09:00', closesAt: '21:00' });
+    expect([withHours.setupMinutes, withHours.turnaroundMinutes]).toEqual([30, 15]);
+
+    const again = await updateVenue(venue.id, { expectedUpdatedAt: withHours.updatedAt, setupMinutes: 45 });
+    expect([again.opensAt, again.closesAt, again.setupMinutes]).toEqual(['09:00', '21:00', 45]);
+  });
+
+  it('a new venue is created with the hours sent', async () => {
+    const venue = await createVenue({ name: `Created Hours Hall ${RUN}`, locationId, maxCapacity: 50, opensAt: '08:30', closesAt: '20:00' });
+    venueIds.push(venue.id);
+    expect([venue.opensAt, venue.closesAt]).toEqual(['08:30', '20:00']);
+  });
+
+  it('a new venue without hours still opens 07:00-24:00, from its slots', async () => {
+    const venue = await createTestVenue('Default Hours Hall');
+    expect([venue.opensAt, venue.closesAt]).toEqual(['07:00', '24:00']);
+  });
+});

@@ -41,6 +41,13 @@ export const ACTIONS = [
   // precedent); adding the action now so it exists for whoever wires the
   // route to check it, per the contract-first workflow.
   'venue_booking_request',
+  // SCRUM-240 AC5 — "when a coordinator records an equipment requirement
+  // (SCRUM-160), then they can only choose items that exist in the
+  // catalogue": choosing from the catalogue means reading it, which AC3 does
+  // not refuse (it refuses adding and changing). Kept separate from
+  // equipment_administration so looking and maintaining can diverge, the same
+  // split as venue_catalogue_view and venue_administration.
+  'equipment_catalogue_view',
 ] as const;
 
 export type Action = (typeof ACTIONS)[number];
@@ -63,6 +70,10 @@ export const ROLE_PERMISSIONS: Record<Role, readonly Action[]> = {
     'event_request_clarification',
     'organisation_membership_management',
     'venue_booking_request',
+    // SCRUM-240 AC5: the catalogue is the list an equipment requirement
+    // (SCRUM-160) is chosen from, so a Coordinator may read it. Not granted to
+    // the other roles, because no story names them reading it yet.
+    'equipment_catalogue_view',
   ],
   operations_manager: ['venue_catalogue_view', 'coordinator_assignment', 'account_role_management'],
   venue_staff: ['venue_administration', 'venue_catalogue_view'],
