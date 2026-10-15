@@ -1,4 +1,4 @@
-import { ROOM_LAYOUT_LABELS, RoomLayoutSchema, type ReferenceItem, type RoomLayout } from '@/domain/venues/schema';
+import { ROOM_LAYOUT_LABELS, RoomLayoutSchema, type RoomLayout } from '@/domain/venues/schema';
 import type { RequirementResult, Verdict } from './schema';
 
 /**
@@ -12,19 +12,6 @@ export type SuitabilityNeeds = {
   /** Null: the event requires no specific layout (AC4). */
   roomLayout: RoomLayout | null;
 };
-
-/**
- * SCRUM-135: the event's accessibility needs as SCRUM-79 records them (or,
- * under SCRUM-135 AC4, a booking request's own).
- */
-export type AccessibilityNeeds = {
-  /** Null: not answered yet. False: none required. True: the features below. */
-  accessibilityRequired: boolean | null;
-  accessibilityFeatures: readonly ReferenceItem[];
-};
-
-/** Everything a check reads from the event: what SCRUM-135 AC3 compares to tell whether it has changed. */
-export type CheckedNeeds = SuitabilityNeeds & { accessibility: AccessibilityNeeds };
 
 /** What the check needs from the venue. */
 export type VenueCapacities = {
@@ -49,23 +36,6 @@ export function needsFor(event: SuitabilityNeeds, request?: Partial<SuitabilityN
   return {
     expectedAttendance: request?.expectedAttendance ?? event.expectedAttendance,
     roomLayout: request?.roomLayout ?? event.roomLayout,
-  };
-}
-
-/**
- * SCRUM-135 AC4: a booking request's own accessibility needs are used instead
- * of the event's when the request answers the question, as needsFor does for
- * attendance and layout. A request that leaves it unanswered falls back to the
- * event's, as SCRUM-230 AC2 does.
- */
-export function accessibilityNeedsFor(
-  event: AccessibilityNeeds,
-  request?: Partial<AccessibilityNeeds> | null,
-): AccessibilityNeeds {
-  if (request?.accessibilityRequired === undefined || request.accessibilityRequired === null) return event;
-  return {
-    accessibilityRequired: request.accessibilityRequired,
-    accessibilityFeatures: request.accessibilityFeatures ?? [],
   };
 }
 
@@ -148,82 +118,10 @@ export function unmetRequirements(results: readonly RequirementResult[]): Requir
 
 /**
  * SCRUM-135 AC3: whether the event's requirements are what they were when a
- * check was run. Only what the check reads is compared, so editing the event's
- * name or description does not make a stored check out of date.
+ * check was run. Only what the check reads is compared (attendance and
+ * layout), so editing the event's name, description or accessibility needs
+ * does not make a stored check out of date.
  */
-export function sameNeeds(a: CheckedNeeds, b: CheckedNeeds): boolean {
-  const featureIds = (needs: AccessibilityNeeds) =>
-    needs.accessibilityFeatures.map((feature) => feature.id).sort().join();
-  return (
-    a.expectedAttendance === b.expectedAttendance &&
-    a.roomLayout === b.roomLayout &&
-    a.accessibility.accessibilityRequired === b.accessibility.accessibilityRequired &&
-    featureIds(a.accessibility) === featureIds(b.accessibility)
-  );
-}
-
-// -----------------------------------------------------------------------------
-// SCRUM-137's accessibility rule, stood in for so SCRUM-135 can be tested
-// -----------------------------------------------------------------------------
-
-/** "Hearing loop, Step-free access", or what to say when the list is empty. */
-function featureNames(features: readonly ReferenceItem[], none: string): string {
-  return features.length === 0 ? none : features.map((feature) => feature.name).join(', ');
-}
-
-/**
- * DUMMY(SCRUM-137) D-17: SCRUM-137 owns the accessibility rule (its AC3 and
- * AC4) and is in no sprint yet. This is the minimum honest version, so
- * SCRUM-135 can be tested with more than one requirement: a verdict that
- * combines them (AC1), and each one not met listed side by side (AC2).
- *
- * - Accessibility not answered on the event: unverified (an event requirement
- *   unrecorded, so "suitable with concerns").
- * - None required: met.
- * - Required features the venue does not record: not met, each named.
- * - Required, but the venue records no accessibility features at all:
- *   unverified. SCRUM-117 stores the venue's features as a list, which cannot
- *   tell "has none" from "never recorded", so the empty list is read as not
- *   recorded (a venue attribute unrecorded, SCRUM-135 AC1).
- * - Required with no feature named (notes only): unverified, there is nothing
- *   to compare.
- *
- * Layouts, facilities and operating hours (SCRUM-137 AC1, AC2, AC5 to AC7) are
- * not checked. See docs/dummies.md, D-17, for how SCRUM-137 replaces this.
- */
-export function accessibilityRequirement(
-  needs: AccessibilityNeeds,
-  venueFeatures: readonly ReferenceItem[],
-): RequirementResult {
-  const result = {
-    requirement: 'accessibility' as const,
-    label: 'Accessibility',
-    eventValue:
-      needs.accessibilityRequired === null
-        ? 'Not recorded'
-        : needs.accessibilityRequired
-          ? featureNames(needs.accessibilityFeatures, 'Required (no feature named)')
-          : 'None required',
-    venueValue: featureNames(venueFeatures, 'None recorded'),
-    shortfall: null,
-  };
-
-  if (needs.accessibilityRequired === null) {
-    return { ...result, outcome: 'unverified', detail: 'Accessibility needs are not recorded.' };
-  }
-  if (!needs.accessibilityRequired) {
-    return { ...result, outcome: 'met', detail: null };
-  }
-  if (needs.accessibilityFeatures.length === 0) {
-    return { ...result, outcome: 'unverified', detail: 'Accessibility is required, but no feature is named to check.' };
-  }
-  if (venueFeatures.length === 0) {
-    return { ...result, outcome: 'unverified', detail: 'The venue has no accessibility features recorded.' };
-  }
-  const recorded = new Set(venueFeatures.map((feature) => feature.id));
-  const missing = needs.accessibilityFeatures.filter((feature) => !recorded.has(feature.id));
-  if (missing.length > 0) {
-    return { ...result, outcome: 'not_met', detail: `Missing: ${featureNames(missing, '')}.` };
-  }
-  return { ...result, outcome: 'met', detail: null };
+export function sameNeeds(a: SuitabilityNeeds, b: SuitabilityNeeds): boolean {
+  return a.expectedAttendance === b.expectedAttendance && a.roomLayout === b.roomLayout;
 }

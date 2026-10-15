@@ -38,12 +38,7 @@ async function createUser(label: string): Promise<string> {
   return data.user.id;
 }
 
-/**
- * An event assigned to the test coordinator, with the attendance and layout
- * given. Accessibility is answered "none required", so each verdict turns on
- * capacity alone: the check also looks at accessibility (SCRUM-135, D-17), and
- * an unanswered question would make every verdict "with concerns".
- */
+/** An event assigned to the test coordinator, with the attendance and layout given. */
 async function createEvent(expectedAttendance: number | null, roomLayout: string | null): Promise<string> {
   const { data, error } = await admin
     .from('event_request')
@@ -53,7 +48,6 @@ async function createEvent(expectedAttendance: number | null, roomLayout: string
       name: `Suitability Event ${RUN}`,
       expected_attendance: expectedAttendance,
       room_layout: roomLayout,
-      accessibility_required: false,
     })
     .select('id')
     .single();
@@ -98,7 +92,7 @@ describe('checkVenueSuitability: SCRUM-136', () => {
     const result = await checkVenueSuitability(eventId, { venueId: hallId }, coordinatorId);
 
     expect(result.verdict).toBe('not_suitable');
-    expect(result.requirements).toContainEqual(expect.objectContaining({ requirement: 'capacity', outcome: 'not_met', shortfall: 30 }));
+    expect(result.requirements).toEqual([expect.objectContaining({ requirement: 'capacity', outcome: 'not_met', shortfall: 30 })]);
   });
 
   it('TC-136-03 AC2 raises no capacity failure for 100 in Banquet (capacity exactly 100)', async () => {

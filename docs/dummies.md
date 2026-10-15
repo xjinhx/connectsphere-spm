@@ -522,32 +522,3 @@ switch them the next time they edit those files.
   with `tests/unit/venue-commitments.test.ts` and
   `tests/integration/venue-commitments.test.ts`; SCRUM-227 and SCRUM-229
   owners to re-run the ACs that use it.
-
-### D-17 — SCRUM-135 checks accessibility with a stand-in for SCRUM-137's rule
-
-- **Kind:** Out-of-sprint stand-in
-- **Added by:** SCRUM-135 — branch `venue-suitability-check`
-- **Waiting on:** SCRUM-137 Flag missing facilities, layouts, accessibility
-  features and operating slots (Release 1, not in any sprint yet; the sprint
-  cannot change once started)
-- **Where:** `src/domain/suitability/policy.ts` — `accessibilityRequirement()`;
-  `src/domain/suitability/service.ts` — where it is added to the check's
-  requirements (`DUMMY(SCRUM-137) D-17` at both)
-- **What it does:** compares the event's accessibility needs (SCRUM-79) with the
-  venue's recorded accessibility features (SCRUM-117). Not answered on the
-  event: unverified. None required: met. A needed feature the venue does not
-  record: not met, and named. A venue with no accessibility features recorded
-  at all: unverified, because SCRUM-117's list cannot tell "has none" from
-  "never recorded". Layouts, facilities and operating hours are not checked.
-  It lets SCRUM-135 AC1 and AC2 be tested on a verdict over more than one
-  requirement (TC-135-04, TC-135-05, TC-135-12), which is SCRUM-135's own
-  behaviour; the accessibility rule itself is SCRUM-137's.
-- **To replace:** SCRUM-137 replaces `accessibilityRequirement()` with its own
-  rule (AC3, AC4: an unmet requirement named; no record either way gives
-  "suitable with concerns"), deciding how a venue records "no record either
-  way", and adds facilities (AC1), layouts (AC2) and operating hours (AC5 to
-  AC7) as further requirements in `checkVenueSuitability()`. Re-run
-  `tests/unit/suitability-check.test.ts`,
-  `tests/integration/suitability-check.test.ts` and TC-135-01 to TC-135-12,
-  then remove the markers.
-- **Status:** Active

@@ -32,18 +32,19 @@ export const OUTCOMES = ['met', 'not_met', 'unverified'] as const;
 export type Outcome = (typeof OUTCOMES)[number];
 
 /**
+ * The requirements a check looks at: capacity, SCRUM-136's. SCRUM-135 checks
+ * capacity only (PO decision, Slack 10 Oct 2026). Layouts, facilities,
+ * accessibility and operating hours are SCRUM-137's, in no sprint yet, and add
+ * here when it is built.
+ */
+export const REQUIREMENTS = ['capacity'] as const;
+
+/**
  * One requirement checked, with the event's requirement and the venue's value
  * side by side (SCRUM-135 AC2), and what is wrong with it if anything (SCRUM-136
  * AC1: "the shortfall of 30 is stated"; AC3: "expected attendance is named as
  * the unverified item").
  */
-/**
- * The requirements a check looks at. Capacity is SCRUM-136's. Accessibility is
- * SCRUM-137's, stood in for by D-17 until that story is built (see
- * accessibilityRequirement in policy.ts).
- */
-export const REQUIREMENTS = ['capacity', 'accessibility'] as const;
-
 export const RequirementResultSchema = z.object({
   requirement: z.enum(REQUIREMENTS),
   label: z.string(),
