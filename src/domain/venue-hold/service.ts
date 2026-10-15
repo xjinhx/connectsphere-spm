@@ -5,6 +5,7 @@ import {
   fetchUpcomingActiveHolds,
   fetchVenueHoldById,
   insertVenueHold,
+  runHoldExpiryCheck,
 } from '@/lib/supabase/venueHolds';
 import { ConflictError, NotFoundError, ValidationError } from '@/domain/shared/errors';
 import { todayInSingapore } from '@/domain/shared/dates';
@@ -167,4 +168,28 @@ async function eventNames(ids: readonly string[]): Promise<Map<string, { referen
   const { data, error } = await fetchEventNames(unique);
   if (error) throw new ValidationError('Could not read the events holding that period.', error.message);
   return new Map((data ?? []).map((row) => [row.id, { reference: row.reference, name: row.name }]));
+}
+
+// -----------------------------------------------------------------------------
+// SCRUM-228 Tell the coordinator when a hold is about to expire
+// -----------------------------------------------------------------------------
+
+/**
+ * SCRUM-228 AC1 and AC2: run the hold-expiry check once, as pg_cron does
+ * every 5 minutes. Each active hold's coordinator is warned once when 24 hours
+ * or less remain (AC1), and told once when it lapses (AC2); a hold its booking
+ * closed is never looked at again (AC3). Resolves to how many notifications
+ * were sent.
+ *
+ * The check itself is the database function notify_hold_expiries
+ * (supabase/migrations/20261013010941_...), so the timer and the rule live in
+ * one place; this is for tests, and for anything in the app that wants to run
+ * it now rather than at the next tick.
+ */
+export async function sendHoldExpiryNotifications(now?: Date): Promise<number> {
+  const { data, error } = await runHoldExpiryCheck(now?.toISOString());
+  if (error || data === null) {
+    throw new ValidationError('The hold-expiry check could not run.', error?.message);
+  }
+  return data;
 }

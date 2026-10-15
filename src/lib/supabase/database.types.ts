@@ -82,6 +82,42 @@ export type Database = {
         }
         Relationships: []
       }
+      equipment: {
+        Row: {
+          category: string
+          created_at: string
+          created_by: string
+          current_location: string
+          id: string
+          name: string
+          operational_status: string
+          quantity: number
+          updated_at: string
+        }
+        Insert: {
+          category: string
+          created_at?: string
+          created_by: string
+          current_location: string
+          id?: string
+          name: string
+          operational_status?: string
+          quantity: number
+          updated_at?: string
+        }
+        Update: {
+          category?: string
+          created_at?: string
+          created_by?: string
+          current_location?: string
+          id?: string
+          name?: string
+          operational_status?: string
+          quantity?: number
+          updated_at?: string
+        }
+        Relationships: []
+      }
       event_request: {
         Row: {
           accessibility_notes: string | null
@@ -808,7 +844,9 @@ export type Database = {
           end_time: string
           event_request_id: string
           expires_at: string
+          expiry_warning_sent_at: string | null
           id: string
+          lapse_notified_at: string | null
           start_time: string
           status: string
           venue_id: string
@@ -821,7 +859,9 @@ export type Database = {
           end_time: string
           event_request_id: string
           expires_at: string
+          expiry_warning_sent_at?: string | null
           id?: string
+          lapse_notified_at?: string | null
           start_time: string
           status?: string
           venue_id: string
@@ -834,7 +874,9 @@ export type Database = {
           end_time?: string
           event_request_id?: string
           expires_at?: string
+          expiry_warning_sent_at?: string | null
           id?: string
+          lapse_notified_at?: string | null
           start_time?: string
           status?: string
           venue_id?: string
@@ -934,31 +976,37 @@ export type Database = {
         Row: {
           coordinator_id: string
           created_at: string
+          end_time: string | null
           event_request_id: string
           id: string
           reason: string
           slot_date: string
-          slots: string[]
+          slots: string[] | null
+          start_time: string | null
           venue_id: string
         }
         Insert: {
           coordinator_id: string
           created_at?: string
+          end_time?: string | null
           event_request_id: string
           id?: string
           reason: string
           slot_date: string
-          slots: string[]
+          slots?: string[] | null
+          start_time?: string | null
           venue_id: string
         }
         Update: {
           coordinator_id?: string
           created_at?: string
+          end_time?: string | null
           event_request_id?: string
           id?: string
           reason?: string
           slot_date?: string
-          slots?: string[]
+          slots?: string[] | null
+          start_time?: string | null
           venue_id?: string
         }
         Relationships: [
@@ -986,7 +1034,7 @@ export type Database = {
           id: string
           reason: string
           recorded_by: string | null
-          slot: string
+          slot: string | null
           start_time: string
           venue_id: string
         }
@@ -997,7 +1045,7 @@ export type Database = {
           id?: string
           reason: string
           recorded_by?: string | null
-          slot: string
+          slot?: string | null
           start_time: string
           venue_id: string
         }
@@ -1008,7 +1056,7 @@ export type Database = {
           id?: string
           reason?: string
           recorded_by?: string | null
-          slot?: string
+          slot?: string | null
           start_time?: string
           venue_id?: string
         }
@@ -1087,10 +1135,14 @@ export type Database = {
         Row: {
           booking_id: string | null
           coordinator_id: string | null
+          end_time: string | null
           event_request_id: string | null
           reason: string | null
           slot: string | null
           slot_date: string | null
+          start_time: string | null
+          unavailable_end_time: string | null
+          unavailable_start_time: string | null
           venue_id: string | null
         }
         Relationships: [
@@ -1116,11 +1168,13 @@ export type Database = {
       create_venue: {
         Args: {
           p_accessibility_feature_ids: string[]
+          p_closes_at?: string
           p_facility_ids: string[]
           p_layouts: Json
           p_location_id: string
           p_max_capacity: number
           p_name: string
+          p_opens_at?: string
           p_operating_slots: string[]
         }
         Returns: string
@@ -1138,23 +1192,36 @@ export type Database = {
         Args: { p_decided_by: string; p_decisions: Json; p_request_id: string }
         Returns: Json
       }
-      is_quarter_hour: { Args: { p_time: string }; Returns: boolean }
-      mark_slots_unavailable: {
+      describe_hold_period: {
         Args: {
+          p_date: string
+          p_end: string
+          p_start: string
+          p_venue_name: string
+        }
+        Returns: string
+      }
+      format_singapore_instant: { Args: { p_instant: string }; Returns: string }
+      is_quarter_hour: { Args: { p_time: string }; Returns: boolean }
+      mark_period_unavailable: {
+        Args: {
+          p_date: string
+          p_end: string
           p_reason: string
           p_recorded_by: string
-          p_slot_date: string
-          p_slots: string[]
+          p_start: string
           p_today?: string
           p_venue_id: string
         }
         Returns: Json
       }
+      notify_hold_expiries: { Args: { p_now?: string }; Returns: number }
       slot_end_time: { Args: { p_slot: string }; Returns: string }
       slot_start_time: { Args: { p_slot: string }; Returns: string }
       update_venue: {
         Args: {
           p_accessibility_feature_ids?: string[]
+          p_closes_at?: string
           p_confirm_affected_bookings?: boolean
           p_confirm_setup_turnaround_change?: boolean
           p_expected_updated_at: string
@@ -1165,6 +1232,7 @@ export type Database = {
           p_name?: string
           p_needs_setup_slot?: boolean
           p_needs_turnaround_slot?: boolean
+          p_opens_at?: string
           p_operating_slots?: string[]
           p_setup_minutes?: number
           p_today?: string

@@ -1,29 +1,35 @@
 import { z } from 'zod';
 import {
-  fetchAffectedBookingSlotsForEvent,
+  fetchAffectedBookingsForEvent,
   fetchConfirmedBookingPeriods,
   fetchUnavailablePeriods,
-  fetchUnavailableSlotsOn,
-  fetchUpcomingUnavailableSlots,
-  recordUnavailableSlots,
+  fetchUnavailablePeriodsOn,
+  fetchUpcomingUnavailablePeriods,
+  recordUnavailablePeriod,
 } from '@/lib/supabase/availability';
 import { fetchActiveHoldPeriods } from '@/lib/supabase/venueHolds';
-import { ConflictError, ValidationError, isUniqueViolation } from '@/domain/shared/errors';
+import { ConflictError, ValidationError, isExclusionViolation } from '@/domain/shared/errors';
 import { formatSingaporeDate, todayInSingapore, type ISODate } from '@/domain/shared/dates';
 import { getVenue } from '@/domain/venues/service';
+import { isWithinOpeningHours } from '@/domain/venues/policy';
 import { notifyBestEffort } from '@/domain/notification/service';
-import { OPERATING_SLOTS, OperatingSlotSchema, type OperatingSlot } from '@/domain/venues/schema';
-import { fromDatabaseTime, splitDateTime, type SingaporeDateTime } from '@/domain/shared/times';
-import { affectedBookingMessage, commitmentsInRange, findNonOperatingSlots, toCommittedPeriods } from './policy';
 import {
-  BookingOnUnavailableSlotSchema,
-  MarkSlotsUnavailableInputSchema,
+  formatClockRange,
+  fromDatabaseTime,
+  rangesOverlap,
+  splitDateTime,
+  type ClockRange,
+  type SingaporeDateTime,
+} from '@/domain/shared/times';
+import { affectedBookingMessage, commitmentsInRange, toCommittedPeriods } from './policy';
+import {
+  BookingOnUnavailablePeriodSchema,
+  MarkPeriodUnavailableInputSchema,
   NoticeWrittenSchema,
-  SLOT_NAMES,
-  UnavailableSlotSchema,
+  UnavailablePeriodSchema,
   VenueCommitmentSchema,
-  type BookingOnUnavailableSlot,
-  type UnavailableSlot,
+  type BookingOnUnavailablePeriod,
+  type UnavailablePeriod,
   type CommittedPeriod,
   type VenueCommitment,
 } from './schema';
@@ -31,118 +37,118 @@ import {
 /**
  * Venue availability service (EP-13).
  *
- * SCRUM-151 Withdraw venue availability when circumstances change
+ * SCRUM-151 Withdraw venue availability when circumstances change, in time
+ * ranges since SCRUM-239 AC6.
  *
  * Orchestration only, like domain/venues/service.ts: every query lives in
- * src/lib/supabase/availability.ts, the rule comparing slots lives in
- * policy.ts, and single-field rules live in schema.ts.
+ * src/lib/supabase/availability.ts, the rules live in policy.ts, and
+ * single-field rules live in schema.ts.
  */
 
-/** A venue_unavailable_slot row, in SCRUM-128's column names (the table is shared). */
-type UnavailableSlotRow = {
+/** A venue_unavailable_slot row, read as a period. */
+type UnavailablePeriodRow = {
   id: string;
   venue_id: string;
   date: string;
-  slot: string;
+  start_time: string;
+  end_time: string;
   reason: string;
   created_at: string;
 };
 
-function toUnavailableSlot(row: UnavailableSlotRow): UnavailableSlot {
-  return UnavailableSlotSchema.parse({
+function toUnavailablePeriod(row: UnavailablePeriodRow): UnavailablePeriod {
+  return UnavailablePeriodSchema.parse({
     id: row.id,
     venueId: row.venue_id,
     date: row.date,
-    slot: row.slot,
+    start: fromDatabaseTime(row.start_time),
+    end: fromDatabaseTime(row.end_time),
     reason: row.reason,
     recordedAt: row.created_at,
   });
 }
 
-/** Soonest date first, and within a day AM, PM, Night: the order the day runs in. */
-function byDateThenSlot(a: UnavailableSlot, b: UnavailableSlot): number {
-  return a.date.localeCompare(b.date) || OPERATING_SLOTS.indexOf(a.slot) - OPERATING_SLOTS.indexOf(b.slot);
-}
-
-/** "AM", "AM and PM", "AM, PM and Night". */
-function slotNames(slots: readonly OperatingSlot[]): string {
-  const names = slots.map((slot) => SLOT_NAMES[slot]);
-  return names.length <= 1 ? names.join('') : `${names.slice(0, -1).join(', ')} and ${names[names.length - 1]}`;
+/** Soonest date first, then by start time: the order the days run in. */
+function byDateThenStart(a: { date: string; start: string }, b: { date: string; start: string }): number {
+  return a.date.localeCompare(b.date) || a.start.localeCompare(b.start);
 }
 
 // -----------------------------------------------------------------------------
-// SCRUM-151 AC1 and AC2: record slots as unavailable, and tell the
-// coordinators whose confirmed bookings are on them
+// SCRUM-239 AC6 (SCRUM-151 AC1 and AC2 in times): record a period as
+// unavailable, and tell the coordinators whose confirmed bookings overlap it
 // -----------------------------------------------------------------------------
 
-export type MarkSlotsUnavailableOutcome = {
-  /** AC1: the slots now recorded as unavailable. */
-  unavailableSlots: UnavailableSlot[];
-  /** AC2: affected bookings of upcoming events whose coordinator was notified. */
+export type MarkPeriodUnavailableOutcome = {
+  /** AC1: the venue's unavailable periods on that date, the new one included. */
+  unavailablePeriods: UnavailablePeriod[];
+  /** AC2: affected bookings' events whose coordinator was notified. */
   notifiedBookings: number;
 };
 
 /**
- * SCRUM-151 AC1: record the chosen slots of one venue on one date as
- * unavailable, each with the reason and who recorded it.
+ * SCRUM-239 AC6: "Given Venue Staff mark a venue unavailable from 14:00 to
+ * 16:30, when they save, then only bookings overlapping that period are
+ * flagged — SCRUM-151's behaviour applied to time ranges."
  *
+ * SCRUM-151 AC1: the period is recorded with the reason and who recorded it.
  * SCRUM-151 AC2: in the same save, every confirmed booking of an upcoming
- * event on one of those slots becomes affected (the affected_booking_slot
- * view), and its assigned coordinator is notified with the reason: the save
- * stores one notice per booking, and each is then sent as an in-app
- * notification (SCRUM-193).
+ * event whose times overlap the period becomes affected (the
+ * affected_booking_slot view, matched by time), and its assigned coordinator
+ * is notified with the reason. Half-open: a booking ending at 14:00 or
+ * starting at 16:30 only touches the period and is not flagged.
  *
- * All or nothing: one database function writes the slots and the notices in
- * one transaction, so if one slot is already unavailable nothing is saved and
- * nobody is told, and the message names the slots that were.
+ * All or nothing: one database function writes the period and the notices in
+ * one transaction. A period overlapping one already recorded is refused, and
+ * the message names the one it overlaps; nothing is saved and nobody is told.
  *
- * Who may do this is checked by the route: venue_administration, which is
- * Venue Staff's in SCRUM-69's matrix (customer clarification #54 makes
- * availability their job, and an availability change affecting an upcoming
- * event "a notification scenario"). The recorder is the signed-in account
- * passed in by the route, never an id from the request body.
+ * A period outside the venue's opening hours is refused, the way SCRUM-151
+ * refused a slot the venue did not operate: the venue is never offered then,
+ * so there is nothing to withdraw.
+ *
+ * Who may do this is checked by the route: venue_administration (Venue Staff,
+ * SCRUM-69). The recorder is the signed-in account passed in by the route.
  */
-export async function markSlotsUnavailable(
+export async function markPeriodUnavailable(
   venueId: string,
   input: unknown,
   actorId: string,
-): Promise<MarkSlotsUnavailableOutcome> {
-  const parsed = MarkSlotsUnavailableInputSchema.safeParse(input);
+): Promise<MarkPeriodUnavailableOutcome> {
+  const parsed = MarkPeriodUnavailableInputSchema.safeParse(input);
   if (!parsed.success) {
     throw new ValidationError(
-      parsed.error.issues[0]?.message ?? 'The slots could not be marked unavailable.',
+      parsed.error.issues[0]?.message ?? 'The period could not be marked unavailable.',
       parsed.error.flatten(),
     );
   }
-  const { date, slots, reason } = parsed.data;
+  const { date, start, end, reason } = parsed.data;
 
   // Throws NotFoundError for a venue that does not exist or a malformed id.
   const venue = await getVenue(venueId);
 
-  const notOperating = findNonOperatingSlots(slots, venue.operatingSlots);
-  if (notOperating.length > 0) {
+  if (!isWithinOpeningHours({ start, end }, venue)) {
     throw new ValidationError(
-      `${venue.name} does not operate in the ${slotNames(notOperating)} slot${notOperating.length > 1 ? 's' : ''}, so there is nothing to withdraw.`,
-      { notOperating },
+      `${venue.name} is open ${formatClockRange({ start: venue.opensAt, end: venue.closesAt })}, so there is nothing to withdraw outside those hours.`,
+      { fieldErrors: { start: ['Outside the venue\'s opening hours.'], end: ['Outside the venue\'s opening hours.'] } },
     );
   }
 
   // "Upcoming" is judged on Singapore's date, decided here and handed to the
   // save, not on the database's UTC clock.
-  const { data, error } = await recordUnavailableSlots({
+  const { data, error } = await recordUnavailablePeriod({
     venueId: venue.id,
     date,
-    slots: [...slots],
+    start,
+    end,
     reason,
     recordedBy: actorId,
     today: todayInSingapore(),
   });
 
   if (error) {
-    if (isUniqueViolation(error)) {
-      throw await alreadyUnavailableError(venue.id, date, slots);
+    if (isExclusionViolation(error)) {
+      throw await alreadyUnavailableError(venue.id, date, { start, end });
     }
-    throw new ValidationError('The slots could not be marked unavailable.', error.message);
+    throw new ValidationError('The period could not be marked unavailable.', error.message);
   }
 
   // AC2: the save returns the notices it wrote, and each goes to its
@@ -154,61 +160,44 @@ export async function markSlotsUnavailable(
       recipientId: notice.coordinatorId,
       type: 'venue_booking_update',
       eventRequestId: notice.eventRequestId,
-      message: affectedBookingMessage(venue.name, notice.date, notice.slots, notice.reason),
+      message: affectedBookingMessage(venue.name, notice.date, notice, notice.reason),
     });
   }
 
   return {
-    unavailableSlots: await findUnavailableSlots(venue.id, date, slots),
+    unavailablePeriods: await findUnavailablePeriods(venue.id, date),
     notifiedBookings: notices.length,
   };
 }
 
-/** The 409 for a save that included a slot already unavailable. It names which. */
-async function alreadyUnavailableError(
-  venueId: string,
-  date: ISODate,
-  slots: readonly OperatingSlot[],
-): Promise<ConflictError> {
-  const existing = await findUnavailableSlots(venueId, date, slots);
-  const names = slotNames(existing.map((entry) => entry.slot));
+/** The 409 for a period that overlaps one already recorded. It names which. */
+async function alreadyUnavailableError(venueId: string, date: ISODate, period: ClockRange): Promise<ConflictError> {
+  const overlapping = await findUnavailablePeriods(venueId, date, period);
+  const named = overlapping.map((entry) => formatClockRange(entry)).join(', ');
   const message =
-    existing.length === 0
-      ? 'One of those slots is already unavailable. Nothing was saved.'
-      : `${names} on ${formatSingaporeDate(date)} ${existing.length === 1 ? 'is' : 'are'} already unavailable. Nothing was saved.`;
-  return new ConflictError(message, { reason: 'already_unavailable', alreadyUnavailable: existing });
+    overlapping.length === 0
+      ? 'Part of that period is already unavailable. Nothing was saved.'
+      : `${formatSingaporeDate(date)} ${named} ${overlapping.length === 1 ? 'is' : 'are'} already unavailable. Nothing was saved.`;
+  return new ConflictError(message, { reason: 'already_unavailable', alreadyUnavailable: overlapping });
 }
 
-// -----------------------------------------------------------------------------
-// SCRUM-151 AC1: "no longer offered for new bookings"
-// -----------------------------------------------------------------------------
-
 /**
- * The one place that answers "is this slot unavailable, and why?". Returns
- * the slots among `slots` (all three if left out) that are unavailable at the
- * venue on `date`, each with its recorded reason. An empty list means none of
- * them has been withdrawn.
- *
- * For the stories that offer or accept slots, so the rule lives in one place:
- * SCRUM-154 AC4-5 (refuse a booking request), SCRUM-155 AC5 (refuse an
- * approval and show the reason), SCRUM-128 AC4 (leave the venue out of a
- * search) and SCRUM-123 AC7 (show the slot as Blocked with its reason).
- * Tested directly for now; re-tested end to end once those stories call it.
+ * The venue's unavailable periods on `date`, each with its recorded reason,
+ * in start-time order. With `range`, only those overlapping it.
  */
-export async function findUnavailableSlots(
-  venueId: string,
-  date: ISODate,
-  slots: readonly OperatingSlot[] = OPERATING_SLOTS,
-): Promise<UnavailableSlot[]> {
-  const { data, error } = await fetchUnavailableSlotsOn(venueId, date, slots);
+export async function findUnavailablePeriods(venueId: string, date: ISODate, range?: ClockRange): Promise<UnavailablePeriod[]> {
+  const { data, error } = await fetchUnavailablePeriodsOn(venueId, date);
   if (error || !data) {
     throw new ValidationError("Could not check the venue's availability.", error?.message);
   }
-  return data.map(toUnavailableSlot).sort(byDateThenSlot);
+  return data
+    .map(toUnavailablePeriod)
+    .filter((entry) => range === undefined || rangesOverlap(entry, range))
+    .sort(byDateThenStart);
 }
 
 // -----------------------------------------------------------------------------
-// SCRUM-151 AC3: the coordinator's outstanding action
+// SCRUM-151 AC3, by time: the coordinator's outstanding action
 // -----------------------------------------------------------------------------
 
 /**
@@ -216,28 +205,29 @@ export async function findUnavailableSlots(
  * as nullable in the generated types, so each row is checked here rather than
  * cast into shape.
  */
-const AffectedBookingSlotRowSchema = z.object({
+const AffectedBookingRowSchema = z.object({
   booking_id: z.string().uuid(),
   venue_id: z.string().uuid(),
   slot_date: z.string(),
-  slot: OperatingSlotSchema,
+  start_time: z.string(),
+  end_time: z.string(),
+  unavailable_start_time: z.string(),
+  unavailable_end_time: z.string(),
   reason: z.string(),
   venues: z.object({ name: z.string() }),
 });
 
 /**
  * SCRUM-151 AC3: the event's affected bookings, each with its venue, date and
- * withdrawn slots with their reasons, for the coordinator's event page to list
- * as an outstanding action.
+ * times and the unavailable periods overlapping it with their reasons, for the
+ * coordinator's event page to list as an outstanding action.
  *
- * Read from the affected_booking_slot view (AC2's flag), so a booking is
- * listed for as long as it is still confirmed on an unavailable slot and drops
- * off once it is released, which is also what replacing it ends with (book
- * another venue or slot, then release this one): "until they release or
- * replace it". Upcoming events only, on the Singapore date, like AC2's notices.
- *
- * SCRUM-231 releases a booking (releaseVenueBooking), which ends its confirmed
- * status, so the entry clears with no change here.
+ * Read from the affected_booking_slot view (AC2's flag, matched by time since
+ * SCRUM-239 AC6), so a booking is listed for as long as it is still confirmed
+ * and overlaps an unavailable period, and drops off once it is released
+ * (SCRUM-231, releaseVenueBooking), which is also what replacing it ends with:
+ * "until they release or replace it". Upcoming events only, on the Singapore
+ * date, like AC2's notices.
  *
  * No access check of its own: its only caller is the coordinator's review
  * page, which calls it after getReviewDetail has refused anyone the request is
@@ -246,52 +236,55 @@ const AffectedBookingSlotRowSchema = z.object({
 export async function listAffectedBookings(
   eventRequestId: string,
   today: ISODate = todayInSingapore(),
-): Promise<BookingOnUnavailableSlot[]> {
-  const { data, error } = await fetchAffectedBookingSlotsForEvent(eventRequestId, today);
+): Promise<BookingOnUnavailablePeriod[]> {
+  const { data, error } = await fetchAffectedBookingsForEvent(eventRequestId, today);
   if (error || !data) {
     throw new ValidationError("Could not check the event's venue bookings.", error?.message);
   }
 
-  // One entry per venue and date: since SCRUM-148 a booking is one row per
-  // slot, and the coordinator sees the event's booking of that venue on that
-  // day with each withdrawn slot. bookingId is the first slot's row.
-  const byVenueDay = new Map<string, BookingOnUnavailableSlot>();
-  for (const row of data.map((raw) => AffectedBookingSlotRowSchema.parse(raw))) {
-    const key = `${row.venue_id}|${row.slot_date}`;
-    const booking = byVenueDay.get(key) ?? {
+  // One entry per booking, with every unavailable period overlapping it.
+  const byBooking = new Map<string, BookingOnUnavailablePeriod>();
+  for (const row of data.map((raw) => AffectedBookingRowSchema.parse(raw))) {
+    const booking = byBooking.get(row.booking_id) ?? {
       bookingId: row.booking_id,
       venueId: row.venue_id,
       venueName: row.venues.name,
       date: row.slot_date,
-      slots: [],
+      start: fromDatabaseTime(row.start_time),
+      end: fromDatabaseTime(row.end_time),
+      unavailable: [],
     };
-    booking.slots.push({ slot: row.slot, reason: row.reason });
-    byVenueDay.set(key, booking);
+    booking.unavailable.push({
+      start: fromDatabaseTime(row.unavailable_start_time),
+      end: fromDatabaseTime(row.unavailable_end_time),
+      reason: row.reason,
+    });
+    byBooking.set(row.booking_id, booking);
   }
 
-  return [...byVenueDay.values()]
+  return [...byBooking.values()]
     .map((booking) =>
-      BookingOnUnavailableSlotSchema.parse({
+      BookingOnUnavailablePeriodSchema.parse({
         ...booking,
-        slots: [...booking.slots].sort((a, b) => OPERATING_SLOTS.indexOf(a.slot) - OPERATING_SLOTS.indexOf(b.slot)),
+        unavailable: [...booking.unavailable].sort((a, b) => a.start.localeCompare(b.start)),
       }),
     )
-    .sort((a, b) => a.date.localeCompare(b.date) || a.venueName.localeCompare(b.venueName));
+    .sort((a, b) => byDateThenStart(a, b) || a.venueName.localeCompare(b.venueName));
 }
 
 /**
- * The venue page's list: this venue's unavailable slots from today on,
+ * The venue page's list: this venue's unavailable periods from today on,
  * soonest first. "Today" is Singapore's date, not the server's UTC one.
  */
-export async function listUpcomingUnavailableSlots(
+export async function listUpcomingUnavailablePeriods(
   venueId: string,
   today: ISODate = todayInSingapore(),
-): Promise<UnavailableSlot[]> {
-  const { data, error } = await fetchUpcomingUnavailableSlots(venueId, today);
+): Promise<UnavailablePeriod[]> {
+  const { data, error } = await fetchUpcomingUnavailablePeriods(venueId, today);
   if (error || !data) {
-    throw new ValidationError("Could not load the venue's unavailable slots.", error?.message);
+    throw new ValidationError("Could not load the venue's unavailable periods.", error?.message);
   }
-  return data.map(toUnavailableSlot).sort(byDateThenSlot);
+  return data.map(toUnavailablePeriod).sort(byDateThenStart);
 }
 
 // -----------------------------------------------------------------------------
