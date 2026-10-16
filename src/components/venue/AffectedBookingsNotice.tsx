@@ -68,7 +68,8 @@ export function AffectedBookingsNotice({
                 eventId={replacement.eventId}
                 bookingId={booking.bookingId}
                 period={{ date: booking.date, start: booking.start, end: booking.end }}
-                venues={replacement.venues}
+                // AC1: "another venue", so not the one that is unavailable.
+                venues={replacement.venues.filter((venue) => venue.id !== booking.venueId)}
                 eventRequirements={replacement.eventRequirements}
               />
             ) : null}
