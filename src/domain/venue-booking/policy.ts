@@ -3,10 +3,16 @@ import { isActionPermitted } from '@/domain/identity/permissions';
 import type { Role } from '@/domain/identity/roles';
 import { formatSingaporeDate } from '@/domain/shared/dates';
 import { formatClockRange, rangesOverlap, type ClockRange, type ClockTime } from '@/domain/shared/times';
-import { isWithinOpeningHours } from '@/domain/venues/policy';
+import { isWithinOpeningHours, type SetupTurnaround } from '@/domain/venues/policy';
 import type { CommittedPeriod, VenueCommitment } from '@/domain/availability/schema';
 import { formatExpiry } from '@/domain/venue-hold/policy';
-import type { VenueBookingRequestLineStatus, VenueBookingRequestStatus } from './schema';
+import type {
+  EventVenueRequirements,
+  OwnVenueRequirements,
+  VenueBookingRequestLineStatus,
+  VenueBookingRequestStatus,
+  VenueRequirementsInUse,
+} from './schema';
 import { describeAccessibility } from '@/domain/event-request/policy';
 import { ROOM_LAYOUT_LABELS, RoomLayoutSchema } from '@/domain/venues/schema';
 
@@ -44,14 +50,31 @@ export function describePeriod(period: { date: string } & ClockRange): string {
  * AC1: a requested period that starts before the venue opens or ends after it
  * closes. The same rule search uses (isWithinOpeningHours, Part 1), so a venue
  * search leaves out is never one a request accepts, and the other way round.
+ * SCRUM-226: the venue's setup and turnaround must fit inside the hours too.
  */
-export function isOutsideOpeningHours(period: ClockRange, hours: { opensAt: ClockTime; closesAt: ClockTime }): boolean {
-  return !isWithinOpeningHours(period, hours);
+export function isOutsideOpeningHours(
+  period: ClockRange,
+  hours: { opensAt: ClockTime; closesAt: ClockTime },
+  times?: SetupTurnaround,
+): boolean {
+  return !isWithinOpeningHours(period, hours, times);
 }
 
-/** AC1: "Outside this venue's opening hours (08:00–22:00)." */
-export function outsideOpeningHoursMessage(hours: { opensAt: ClockTime; closesAt: ClockTime }): string {
-  return `Outside this venue's opening hours (${formatClockRange({ start: hours.opensAt, end: hours.closesAt })}).`;
+/**
+ * AC1: "Outside this venue's opening hours (08:00–22:00)." SCRUM-226 adds
+ * what had to fit as well, so the coordinator sees why 08:00 is refused at a
+ * venue opening at 08:00: "..., including its 30-minute setup."
+ */
+export function outsideOpeningHoursMessage(
+  hours: { opensAt: ClockTime; closesAt: ClockTime },
+  times: SetupTurnaround = { setupMinutes: 0, turnaroundMinutes: 0 },
+): string {
+  const parts = [
+    ...(times.setupMinutes > 0 ? [`${times.setupMinutes}-minute setup`] : []),
+    ...(times.turnaroundMinutes > 0 ? [`${times.turnaroundMinutes}-minute turnaround`] : []),
+  ];
+  const including = parts.length > 0 ? `, including its ${parts.join(' and ')}` : '';
+  return `Outside this venue's opening hours (${formatClockRange({ start: hours.opensAt, end: hours.closesAt })})${including}.`;
 }
 
 /**
@@ -234,6 +257,45 @@ export function describeAccessibilityForVenueStaff(event: {
   accessibilityNotes: string | null;
 }): string {
   return event.accessibilityRequired === null ? NOT_SPECIFIED : describeAccessibility(event);
+}
+
+// ---------------------------------------------------------------------------
+// SCRUM-230 — Give each venue booking its own attendance and requirements
+// ---------------------------------------------------------------------------
+
+/** AC2: one venue requirement, the request's own or else the event's, and which it was. */
+export function ownOrEvent<T>(own: T | null, event: T | null): { value: T | null; fromEvent: boolean } {
+  return own === null ? { value: event, fromEvent: true } : { value: own, fromEvent: false };
+}
+
+/**
+ * AC2: a request goes by its own venue requirements, and by the event's for
+ * any it left empty, field by field. The request page shows them (AC2, AC3),
+ * and SCRUM-120's capacity check and SCRUM-135/136's suitability check read
+ * the same answer from here rather than each doing its own fallback.
+ */
+export function venueRequirementsOf(own: OwnVenueRequirements, event: EventVenueRequirements): VenueRequirementsInUse {
+  return {
+    expectedAttendance: ownOrEvent(own.expectedAttendance, event.expectedAttendance),
+    roomLayout: ownOrEvent(own.roomLayout, event.roomLayout),
+    accessibility:
+      own.accessibilityRequired === null
+        ? {
+            required: event.accessibilityRequired,
+            features: event.accessibilityFeatures,
+            notes: event.accessibilityNotes,
+            fromEvent: true,
+          }
+        : { required: own.accessibilityRequired, features: [], notes: own.accessibilityNotes, fromEvent: false },
+  };
+}
+
+/**
+ * AC2: a value taken from the event is "shown as the event's". One the event
+ * never recorded reads "Not specified" alone (SCRUM-143 AC4).
+ */
+export function markIfEvents(description: string, requirement: { fromEvent: boolean }): string {
+  return requirement.fromEvent && description !== NOT_SPECIFIED ? `${description} (event's)` : description;
 }
 
 // ---------------------------------------------------------------------------

@@ -3,7 +3,11 @@ import { isWithinOpeningHours } from '@/domain/venues/policy';
 import { VenueSearchQuerySchema } from '@/domain/venues/schema';
 import { searchVenues } from '@/domain/venues/service';
 import { fetchSearchableVenues } from '@/lib/supabase/venues';
-import { fetchConfirmedBookingPeriods, fetchUnavailablePeriods } from '@/lib/supabase/availability';
+import {
+  fetchConfirmedBookingPeriods,
+  fetchUnavailablePeriods,
+  fetchVenueSetupTurnaround,
+} from '@/lib/supabase/availability';
 import { fetchActiveHoldPeriods } from '@/lib/supabase/venueHolds';
 
 /**
@@ -35,6 +39,8 @@ vi.mock('@/lib/supabase/availability', async (importOriginal) => ({
   ...(await importOriginal<typeof import('@/lib/supabase/availability')>()),
   fetchConfirmedBookingPeriods: vi.fn(),
   fetchUnavailablePeriods: vi.fn(),
+  // SCRUM-226: getVenueCommitments also reads the venue's setup and turnaround.
+  fetchVenueSetupTurnaround: vi.fn(),
 }));
 // SCRUM-227: getVenueCommitments also reads active holds.
 vi.mock('@/lib/supabase/venueHolds', async (importOriginal) => ({
@@ -80,6 +86,9 @@ beforeEach(() => {
   vi.mocked(fetchConfirmedBookingPeriods).mockReset().mockResolvedValue(ok([]));
   vi.mocked(fetchUnavailablePeriods).mockReset().mockResolvedValue(ok([]));
   vi.mocked(fetchActiveHoldPeriods).mockReset().mockResolvedValue(ok([]));
+  vi.mocked(fetchVenueSetupTurnaround)
+    .mockReset()
+    .mockResolvedValue(ok({ setup_minutes: 0, turnaround_minutes: 0 }));
 });
 
 describe('searchVenues: SCRUM-239 AC2, exact time ranges', () => {

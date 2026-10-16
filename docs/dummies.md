@@ -207,7 +207,10 @@ switch them the next time they edit those files.
   none is assigned yet), holding the old and new capacity and the event's
   expected attendance. It is written in the same transaction as the cut. This
   is the minimum honest notification CLAUDE.md asks for, the same as D-03
-  (SCRUM-94) and D-06 (SCRUM-96).
+  (SCRUM-94) and D-06 (SCRUM-96). Since SCRUM-230
+  (`20261014145622_capacity_cut_by_booking_attendance.sql`), the attendance is
+  the booking's own where its request has one: the largest among the event's
+  bookings over the new capacity.
 - **To replace:** send each notice to its coordinator using SCRUM-24's
   mechanism; the row already holds everything the message needs. Re-run
   SCRUM-120 AC4.
@@ -522,6 +525,39 @@ switch them the next time they edit those files.
   with `tests/unit/venue-commitments.test.ts` and
   `tests/integration/venue-commitments.test.ts`; SCRUM-227 and SCRUM-229
   owners to re-run the ACs that use it.
+
+### D-17 — SCRUM-225's occupied-time rule is a local stand-in
+
+- **Kind:** Stand-in code
+- **Added by:** SCRUM-226 — branch `setup-turnaround-occupied`
+- **Waiting on:** SCRUM-225 (its owner writes the setup + turnaround rule;
+  SCRUM-226's notes call it "SCRUM-225's occupied time", agreed 10 Oct 2026)
+- **Where:** `src/domain/availability/occupiedPeriodDummy.ts` —
+  `occupiedPeriod()`, and its import in `src/domain/availability/service.ts`
+  (`DUMMY(SCRUM-225) D-17` in both)
+- **What is real and what is faked:** everything SCRUM-226 owns is real:
+  `getVenueCommitments` reads each venue's `setup_minutes` and
+  `turnaround_minutes` and widens both the confirmed bookings and the range
+  asked about. Only the arithmetic of the rule is a stand-in: period in,
+  period plus setup before and turnaround after out, kept within the day.
+  Venue Staff cannot set the minutes until SCRUM-225's form exists, so testers
+  set them directly: `update venues set setup_minutes = 30,
+  turnaround_minutes = 45 where name = '<venue>';`
+- **To replace:** import SCRUM-225's function in
+  `src/domain/availability/service.ts` in place of the dummy's, delete
+  `occupiedPeriodDummy.ts`, keep the same call. If its name or arguments
+  differ, change the two call sites (`getVenueCommitments` and
+  `widenedWindow`). Re-run `tests/unit/venue-commitments.test.ts` and
+  `tests/integration/venue-commitments.test.ts` (the SCRUM-226 cases) and
+  SCRUM-226's manual test cases, then remove the markers.
+- **Status:** Replaced (SCRUM-226, branch `setup-turnaround-occupied`, once
+  SCRUM-225 merged). `getVenueCommitments` now calls SCRUM-225's
+  `committedMinutes` (`src/domain/venues/policy.ts`), kept within the day by
+  `committedPeriod`; `occupiedPeriodDummy.ts` is deleted and the markers are
+  removed. Venue Staff set the minutes through SCRUM-225's venue form. Re-checked
+  with `tests/unit/venue-commitments.test.ts`,
+  `tests/integration/venue-commitments.test.ts` and SCRUM-226's manual test
+  cases.
 
 ### D-18 — An equipment line is reserved by hand
 

@@ -748,24 +748,36 @@ export type Database = {
       }
       venue_booking_request: {
         Row: {
+          accessibility_notes: string | null
+          accessibility_required: boolean | null
           created_at: string
           event_request_id: string
+          expected_attendance: number | null
           id: string
           requested_by: string
+          room_layout: string | null
           venue_id: string
         }
         Insert: {
+          accessibility_notes?: string | null
+          accessibility_required?: boolean | null
           created_at?: string
           event_request_id: string
+          expected_attendance?: number | null
           id?: string
           requested_by: string
+          room_layout?: string | null
           venue_id: string
         }
         Update: {
+          accessibility_notes?: string | null
+          accessibility_required?: boolean | null
           created_at?: string
           event_request_id?: string
+          expected_attendance?: number | null
           id?: string
           requested_by?: string
+          room_layout?: string | null
           venue_id?: string
         }
         Relationships: [
@@ -1233,9 +1245,13 @@ export type Database = {
       }
       create_venue_booking_request: {
         Args: {
+          p_accessibility_notes?: string
+          p_accessibility_required?: boolean
           p_event_request_id: string
+          p_expected_attendance?: number
           p_lines: Json
           p_requested_by: string
+          p_room_layout?: string
           p_venue_id: string
         }
         Returns: string

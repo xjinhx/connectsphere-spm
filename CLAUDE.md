@@ -84,7 +84,8 @@ Ranges are half-open: a booking ending 12:00 does not clash with one starting
   check. Until the real query lands (day 4) it is a stub (D-16), so a PR that
   calls it is `uses-dummy`.
 - "Committed", not "occupied": a period taken by a confirmed booking, an active
-  hold, an unavailable period, or setup/turnaround around a booking. Venue
+  hold, an unavailable period, or setup/turnaround around a booking or an
+  active hold (SCRUM-226; a hold commits what its booking would). Venue
   Staff see which event holds a clash (SCRUM-155 AC1); coordinators see only
   the period.
 - Event Coordinator Lead is a display name only (customer #129): the role in

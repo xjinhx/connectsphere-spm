@@ -24,11 +24,18 @@ _Avoid_: blocked slot (SCRUM-154's title uses it for the same thing), closed slo
 ### Bookings
 
 **Booking request**:
-A coordinator's request to use one venue, made up of date-and-slot lines that Venue Staff approve or reject one by one (SCRUM-142 AC3, SCRUM-148 AC5).
+A coordinator's request to use one venue, made up of lines, each a date with a start and end time, that Venue Staff approve or reject one by one (SCRUM-142 AC3, SCRUM-148 AC5).
 _Avoid_: booking (until a line is approved)
 
+**Booking request status**:
+Worked out from its lines: Pending while any line is pending; Approved if every line is approved; Rejected if every line is rejected; otherwise Partially Approved (SCRUM-148 AC5).
+
+**Venue requirements**:
+The expected attendance, room layout and accessibility needs a venue must meet. An event has its own. A booking request may have its own for its venue, and uses the event's for any it leaves empty (SCRUM-230).
+_Avoid_: event requirements (for a booking request's own), space requirements
+
 **Confirmed booking**:
-A venue committed to one event for one date and slot, created when Venue Staff approve that line of a booking request.
+A venue committed to one event for one date, from a start to an end time, created when Venue Staff approve that line of a booking request.
 _Avoid_: reservation (that word is for equipment)
 
 **Affected booking**:
@@ -39,14 +46,14 @@ A confirmed booking that its event's coordinator has given up, with a reason. It
 _Avoid_: cancelled booking (cancelling is for a whole event, SCRUM-105)
 
 **Setup time** / **Turnaround time**:
-The minutes a venue needs before an event to prepare the room and after it to reset it, in 15-minute steps, set per venue by Venue Staff (SCRUM-225). A booking commits its venue from its start minus the setup time to its end plus the turnaround time.
+The minutes a venue needs before an event to prepare the room and after it to reset it, in 15-minute steps, set per venue by Venue Staff (SCRUM-225). A booking commits its venue from its start minus the setup time to its end plus the turnaround time. An active _hold_ commits the same widened period, so the event can still be booked when the hold closes (SCRUM-226).
 _Avoid_: teardown (folded into turnaround), buffer
 
 **Affected by a setup or turnaround change**:
 A confirmed booking that a confirmed setup or turnaround change has left too close to another event's booking. It stays confirmed and is flagged for Venue Staff (SCRUM-225 AC5). Kept apart from an _affected booking_, which carries an outstanding action for the coordinator.
 
 **Hold**:
-A period at one venue kept for one event by Venue Staff until an expiry, so the coordinator can finish arranging the booking (SCRUM-227). While it is _active_ it commits the period against every other event; it is _closed_ when that event's booking for the period is confirmed, and _lapsed_ once its expiry passes first. A hold is never a booking.
+A period at one venue kept for one event by Venue Staff until an expiry, so the coordinator can finish arranging the booking (SCRUM-227). While it is _active_ it commits the period, with the venue's setup and turnaround around it, against every other event; it is _closed_ when that event's booking for the period is confirmed, and _lapsed_ once its expiry passes first. A hold is never a booking.
 _Avoid_: tentative booking, reservation, provisional booking
 
 **Outstanding action**:

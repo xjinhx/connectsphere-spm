@@ -143,11 +143,23 @@ export function findNewSetupTurnaroundClashes<T extends DatedBooking>(
  * not return that venue for it". The whole period must sit inside the venue's
  * opening hours; touching either end is fine (half-open ranges).
  *
+ * SCRUM-226 (PO assumption, 8 Oct 2026: setup and turnaround fit inside
+ * opening hours; TC-226-18, 19): the period checked is the committed time,
+ * SCRUM-225's committedMinutes, so the venue's setup must start at or after
+ * opening and its turnaround end by closing. With 08:00 opening and 30 min
+ * setup, the earliest start is 08:30. `times` defaults to 0 and 0, the bare
+ * period, which is also how a venue with no setup or turnaround behaves.
+ *
  * Opening hours come from venues.opens_at / closes_at, filled from the
  * operating slots by the time-model migration until Venue Staff set them.
  */
-export function isWithinOpeningHours(period: ClockRange, hours: { opensAt: ClockTime; closesAt: ClockTime }): boolean {
-  return toMinutes(period.start) >= toMinutes(hours.opensAt) && toMinutes(period.end) <= toMinutes(hours.closesAt);
+export function isWithinOpeningHours(
+  period: ClockRange,
+  hours: { opensAt: ClockTime; closesAt: ClockTime },
+  times: SetupTurnaround = { setupMinutes: 0, turnaroundMinutes: 0 },
+): boolean {
+  const committed = committedMinutes(period, times);
+  return committed.start >= toMinutes(hours.opensAt) && committed.end <= toMinutes(hours.closesAt);
 }
 
 // -----------------------------------------------------------------------------

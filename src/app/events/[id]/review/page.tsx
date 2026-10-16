@@ -7,6 +7,8 @@ import { RejectRequestForm } from '@/components/event-request/RejectRequestForm'
 import { RequestClarificationForm } from '@/components/event-request/RequestClarificationForm';
 import { AffectedBookingsNotice } from '@/components/venue/AffectedBookingsNotice';
 import { listAffectedBookings } from '@/domain/availability/service';
+import { EventBookingRequests } from '@/components/venue-booking/EventBookingRequests';
+import { listEventBookingRequests } from '@/domain/venue-booking/service';
 import { RequestVenueBookingForm } from '@/components/event-request/RequestVenueBookingForm';
 import { EventVenueBookings } from '@/components/venue-booking/EventVenueBookings';
 import { canCreateBookingRequest } from '@/domain/venue-booking/policy';
@@ -129,6 +131,9 @@ export default async function ReviewEventRequestPage({
   // other action below on its own policy function first.
   const venues = canCreateBookingRequest(request.status) ? await listVenues() : [];
 
+  // SCRUM-236 AC1-AC3, read for the same reason after getReviewDetail.
+  const bookingRequests = await listEventBookingRequests(request.id);
+
   return (
     <main className="mx-auto max-w-2xl px-4 py-8">
       <Link href="/assigned-events" className="text-sm text-[var(--brand)] hover:underline">
@@ -245,11 +250,17 @@ export default async function ReviewEventRequestPage({
         <section className="mt-6 rounded-lg border border-[var(--border)] bg-[var(--surface)] p-4">
           <h2 className="text-sm font-semibold">Request a venue</h2>
           <div className="mt-3">
-            {/* SCRUM-239 AC3: the request starts from the event's own date and times (SCRUM-238). */}
+            {/* SCRUM-239 AC3: the request starts from the event's own date and times (SCRUM-238).
+                SCRUM-230 AC2: each venue requirement left empty shows the event's. */}
             <RequestVenueBookingForm
               requestId={request.id}
               venues={venues}
               eventPeriod={{ date: request.proposedDate, start: request.startTime, end: request.endTime }}
+              eventRequirements={{
+                expectedAttendance: request.expectedAttendance,
+                roomLayout: describeRoomLayout(request.roomLayout),
+                accessibility: describeAccessibility(request),
+              }}
             />
           </div>
         </section>
@@ -274,6 +285,11 @@ export default async function ReviewEventRequestPage({
           </Link>
         </section>
       ) : null}
+
+      {/* SCRUM-236 AC1-AC3 — every booking request made for this event, each
+          opening its booking request page. Shown in every status, so earlier
+          requests stay visible after the event moves on. */}
+      <EventBookingRequests requests={bookingRequests} />
 
       {canRequestClarification(request.status) ? (
         <section className="mt-6 rounded-lg border border-[var(--border)] bg-[var(--surface)] p-4">
