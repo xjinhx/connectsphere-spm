@@ -654,6 +654,7 @@ export type Database = {
           event_request_id: string
           expected_attendance: number | null
           id: string
+          replaces_booking_id: string | null
           requested_by: string
           room_layout: string | null
           venue_id: string
@@ -665,6 +666,7 @@ export type Database = {
           event_request_id: string
           expected_attendance?: number | null
           id?: string
+          replaces_booking_id?: string | null
           requested_by: string
           room_layout?: string | null
           venue_id: string
@@ -676,6 +678,7 @@ export type Database = {
           event_request_id?: string
           expected_attendance?: number | null
           id?: string
+          replaces_booking_id?: string | null
           requested_by?: string
           room_layout?: string | null
           venue_id?: string
@@ -686,6 +689,20 @@ export type Database = {
             columns: ["event_request_id"]
             isOneToOne: false
             referencedRelation: "event_request"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "venue_booking_request_replaces_booking_id_fkey"
+            columns: ["replaces_booking_id"]
+            isOneToOne: false
+            referencedRelation: "affected_booking_slot"
+            referencedColumns: ["booking_id"]
+          },
+          {
+            foreignKeyName: "venue_booking_request_replaces_booking_id_fkey"
+            columns: ["replaces_booking_id"]
+            isOneToOne: false
+            referencedRelation: "venue_booking"
             referencedColumns: ["id"]
           },
           {
@@ -1150,6 +1167,7 @@ export type Database = {
           p_event_request_id: string
           p_expected_attendance?: number
           p_lines: Json
+          p_replaces_booking_id?: string
           p_requested_by: string
           p_room_layout?: string
           p_venue_id: string
