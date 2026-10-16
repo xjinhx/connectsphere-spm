@@ -415,6 +415,19 @@ export async function listEventRequestsForCoordinator(coordinatorId: string) {
     .order('submitted_at', { ascending: true });
 }
 
+/**
+ * SCRUM-233 AC1 — the events owned by any of several coordinators, in one
+ * trip, for the Lead's overview. Same ordering as the single-coordinator
+ * read; the service groups rows by coordinator_id afterwards.
+ */
+export async function listEventRequestsForCoordinators(coordinatorIds: string[]) {
+  return db()
+    .from('event_request')
+    .select(COLUMNS)
+    .in('coordinator_id', coordinatorIds)
+    .order('submitted_at', { ascending: true });
+}
+
 // ---------------------------------------------------------------------------
 // SCRUM-90 — Request clarification from the Event Organiser
 // ---------------------------------------------------------------------------
