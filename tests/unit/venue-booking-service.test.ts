@@ -130,6 +130,8 @@ describe('AC1: assigned coordinator, approved event', () => {
       roomLayout: null,
       accessibilityRequired: null,
       accessibilityNotes: null,
+      // SCRUM-229: an ordinary request replaces nothing.
+      replacesBookingId: null,
     });
     expect(outcome.venueId).toBe(VENUE_ID);
     expect(outcome.eventRequestId).toBe(EVENT_ID);

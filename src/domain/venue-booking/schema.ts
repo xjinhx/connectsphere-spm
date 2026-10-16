@@ -75,11 +75,27 @@ const requestVenueRequirementsShape = {
   accessibilityNotes: venueRequirementsShape.accessibilityNotes,
 };
 
+/**
+ * SCRUM-229: a replacement request names the affected booking it replaces
+ * (CONTEXT.md: Replacement request). Left out, it is an ordinary request.
+ */
+const ReplacesBookingIdSchema = optionalFromBlank(z.string().uuid('The booking to replace must be a valid id.'));
+
 export const CreateVenueBookingRequestInputSchema = z.object({
   venueId: z.string().uuid('Venue must be chosen from the list.'),
   lines: z.array(VenueBookingRequestLineInputSchema).min(1, 'At least one date is required.'),
   ...requestVenueRequirementsShape,
+  replacesBookingId: ReplacesBookingIdSchema,
 });
+
+/**
+ * SCRUM-229 AC2: whether a request is a replacement, read before the rest of
+ * the input is checked, because SCRUM-142's status check comes first.
+ */
+export function replacesBookingIdOf(input: unknown): string | null {
+  const parsed = z.object({ replacesBookingId: ReplacesBookingIdSchema }).safeParse(input);
+  return parsed.success ? (parsed.data.replacesBookingId ?? null) : null;
+}
 export type CreateVenueBookingRequestInput = z.infer<typeof CreateVenueBookingRequestInputSchema>;
 
 const LINE_FIELDS = ['date', 'start', 'end'] as const;
@@ -106,6 +122,8 @@ export interface VenueBookingRequestErrorDetails {
     roomLayout?: string[];
     accessibilityRequired?: string[];
     accessibilityNotes?: string[];
+    // SCRUM-229: the booking a replacement request replaces.
+    replacesBookingId?: string[];
   };
   lineErrors: VenueBookingLineErrors[];
 }
@@ -153,6 +171,7 @@ export function venueBookingRequestErrorDetails(
       roomLayout: fieldErrors.roomLayout,
       accessibilityRequired: fieldErrors.accessibilityRequired,
       accessibilityNotes: fieldErrors.accessibilityNotes,
+      replacesBookingId: fieldErrors.replacesBookingId,
     },
     lineErrors: lineErrorsFrom(lineIssues),
   };

@@ -1,5 +1,6 @@
 import {
   CreateVenueBookingRequestInputSchema,
+  replacesBookingIdOf,
   DecideVenueBookingRequestInputSchema,
   DecisionResultSchema,
   EventRequestIdSchema,
@@ -24,6 +25,7 @@ import {
   approvalConflictsFor,
   bookingDecisionMessage,
   canCreateBookingRequest,
+  canRequestReplacement,
   canSeeBookingDetails,
   canViewBookingRequest,
   describeApprovalConflict,
@@ -44,7 +46,7 @@ import {
   type PeriodClash,
 } from './policy';
 import { isCurrentCoordinator } from '@/domain/assignment/policy';
-import { getVenueCommitments } from '@/domain/availability/service';
+import { getVenueCommitments, listAffectedBookings } from '@/domain/availability/service';
 import { normaliseAccessibility } from '@/domain/event-request/policy';
 import { toCommittedPeriods } from '@/domain/availability/policy';
 import type { Role } from '@/domain/identity/roles';
@@ -89,6 +91,9 @@ const EVENT_NOT_APPROVED_MESSAGE =
   'The event must be approved before venue arrangements can begin.';
 
 const RETIRED_VENUE_MESSAGE = 'This venue is retired, so it cannot be requested.';
+
+// SCRUM-229: what a replacement request may replace.
+const NOT_REPLACEABLE_MESSAGE = 'Only a confirmed booking of this event that is affected can be replaced.';
 
 function toOutcome(row: VenueBookingRequestRow): VenueBookingRequestOutcome {
   return {
@@ -218,8 +223,12 @@ export async function submitVenueBookingRequest(
     throw new ForbiddenError('This event is not assigned to you.');
   }
 
-  // AC2
-  if (!canCreateBookingRequest(event.status)) {
+  // AC2. SCRUM-229 AC2: a replacement request may also be made while the
+  // event is Confirmed (PO decision, 12 Oct 2026).
+  const replacesBookingId = replacesBookingIdOf(input);
+  const statusAllows =
+    replacesBookingId === null ? canCreateBookingRequest(event.status) : canRequestReplacement(event.status);
+  if (!statusAllows) {
     throw new ValidationError(EVENT_NOT_APPROVED_MESSAGE);
   }
 
@@ -244,6 +253,19 @@ export async function submitVenueBookingRequest(
       'The venue booking request is not valid.',
       lineDetails(overlapping.map((index) => ({ path: [index, 'start'], message: OVERLAPPING_LINES_MESSAGE }))),
     );
+  }
+
+  // SCRUM-229: a replacement replaces one of this event's confirmed bookings
+  // that is affected now, the one its outstanding action is about.
+  if (replacesBookingId !== null) {
+    const affected = await listAffectedBookings(parsedId.data);
+    if (!affected.some((booking) => booking.bookingId === replacesBookingId)) {
+      throw new ValidationError(NOT_REPLACEABLE_MESSAGE, {
+        formErrors: [NOT_REPLACEABLE_MESSAGE],
+        fieldErrors: {},
+        lineErrors: [],
+      });
+    }
   }
 
   // TC-142-10 — a retired venue can't host a new event (SCRUM-121 AC3). The
@@ -284,6 +306,7 @@ export async function submitVenueBookingRequest(
     roomLayout: parsedInput.data.roomLayout ?? null,
     accessibilityRequired: accessibility.required,
     accessibilityNotes: accessibility.notes,
+    replacesBookingId,
   });
 
   if (writeError || !newRequestId) {

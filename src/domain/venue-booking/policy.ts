@@ -35,6 +35,15 @@ export function canCreateBookingRequest(status: EventRequestStatus): boolean {
   return status === 'approved' || status === 'planning';
 }
 
+/**
+ * SCRUM-229 AC2 and the PO decision of 12 Oct 2026: a replacement request
+ * (CONTEXT.md) may also be made while the event is Confirmed. Ordinary
+ * requests keep SCRUM-142's rule above.
+ */
+export function canRequestReplacement(status: EventRequestStatus): boolean {
+  return canCreateBookingRequest(status) || status === 'confirmed';
+}
+
 // ---------------------------------------------------------------------------
 // SCRUM-239 AC1, AC3, AC8 — refuse a request that is outside the venue's
 // opening hours or overlaps a committed period. SCRUM-154's rules, carried
