@@ -1,6 +1,20 @@
 import { formatSingaporeDate } from '@/domain/shared/dates';
 import type { BookingOnUnavailablePeriod } from '@/domain/availability/schema';
 import { formatClockRange } from '@/domain/shared/times';
+import { ReplaceBookingAction } from '@/components/venue-booking/ReplaceBookingAction';
+import type { EventRequirements, VenueOption } from '@/components/event-request/RequestVenueBookingForm';
+
+/**
+ * SCRUM-229 AC1: what the notice needs to offer a replacement. Only the
+ * bookings in `bookingIds` are offered one: those the viewer may release
+ * (SCRUM-231 AC3), while the event allows a replacement request.
+ */
+export interface ReplacementOptions {
+  eventId: string;
+  bookingIds: readonly string[];
+  venues: readonly VenueOption[];
+  eventRequirements: EventRequirements;
+}
 
 /**
  * SCRUM-151 AC3: on the coordinator's event page, each affected booking is
@@ -12,8 +26,17 @@ import { formatClockRange } from '@/domain/shared/times';
  * SCRUM-231 releases the booking from the event's Venue bookings list, further
  * down the page, and that closes this entry (AC4). The action points there
  * rather than repeating the button.
+ *
+ * SCRUM-229 AC1: each entry also offers a replacement request, which closes
+ * the entry once it is approved (AC4).
  */
-export function AffectedBookingsNotice({ bookings }: { bookings: BookingOnUnavailablePeriod[] }) {
+export function AffectedBookingsNotice({
+  bookings,
+  replacement,
+}: {
+  bookings: BookingOnUnavailablePeriod[];
+  replacement?: ReplacementOptions;
+}) {
   if (bookings.length === 0) return null;
 
   return (
@@ -37,7 +60,18 @@ export function AffectedBookingsNotice({ bookings }: { bookings: BookingOnUnavai
                 </li>
               ))}
             </ul>
-            <p className="mt-1">Action needed: release this booking under Venue bookings, or replace it.</p>
+            <p className="mt-1">
+              Action needed: release this booking under Venue bookings, or request a replacement venue.
+            </p>
+            {replacement?.bookingIds.includes(booking.bookingId) ? (
+              <ReplaceBookingAction
+                eventId={replacement.eventId}
+                bookingId={booking.bookingId}
+                period={{ date: booking.date, start: booking.start, end: booking.end }}
+                venues={replacement.venues}
+                eventRequirements={replacement.eventRequirements}
+              />
+            ) : null}
           </li>
         ))}
       </ul>

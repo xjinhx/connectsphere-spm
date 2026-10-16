@@ -115,17 +115,26 @@ function FieldError({ id, messages }: { id: string; messages: string[] | undefin
  * and accessibility needs; AC2: each one left empty uses the event's, which the
  * field shows. The form does not check them itself (noValidate), so a refused
  * attendance shows the API's message beside the field, as for the event's own.
+ *
+ * SCRUM-229 AC1: the same form starts a replacement request. The page passes
+ * the affected booking's date and times as `eventPeriod`, and the booking it
+ * replaces as `replacesBookingId`. `idPrefix` keeps its element ids apart from
+ * the main form's when both are on the page.
  */
 export function RequestVenueBookingForm({
   requestId,
   venues,
   eventPeriod,
   eventRequirements,
+  replacesBookingId,
+  idPrefix = 'venue-booking',
 }: {
   requestId: string;
   venues: readonly VenueOption[];
   eventPeriod: EventPeriod;
   eventRequirements: EventRequirements;
+  replacesBookingId?: string;
+  idPrefix?: string;
 }) {
   const router = useRouter();
   const firstLine = (): Line => ({ date: eventPeriod.date ?? '', start: eventPeriod.start ?? '', end: eventPeriod.end ?? '' });
@@ -170,6 +179,8 @@ export function RequestVenueBookingForm({
           roomLayout: own.roomLayout === '' ? null : own.roomLayout,
           accessibilityRequired: own.accessibility === '' ? null : own.accessibility === 'yes',
           accessibilityNotes: own.accessibility === 'yes' ? own.accessibilityNotes : null,
+          // SCRUM-229: the affected booking this request replaces, if any.
+          replacesBookingId: replacesBookingId ?? null,
         }),
       });
       const payload = (await response.json().catch(() => null)) as {
@@ -209,15 +220,15 @@ export function RequestVenueBookingForm({
   return (
     <form onSubmit={onSubmit} noValidate className="space-y-4">
       <div>
-        <label className="block text-sm font-medium" htmlFor="venue-booking-venue">
+        <label className="block text-sm font-medium" htmlFor={`${idPrefix}-venue`}>
           Venue
         </label>
         <select
-          id="venue-booking-venue"
+          id={`${idPrefix}-venue`}
           value={venueId}
           onChange={(event) => setVenueId(event.target.value)}
           aria-invalid={fieldErrors.fieldErrors.venueId ? true : undefined}
-          aria-describedby={fieldErrors.fieldErrors.venueId ? 'venue-booking-venue-error' : undefined}
+          aria-describedby={fieldErrors.fieldErrors.venueId ? `${idPrefix}-venue-error` : undefined}
           className="mt-1 w-full rounded-md border border-[var(--border)] bg-[var(--surface)] px-3 py-2 text-sm"
         >
           {venues.map((venue) => (
@@ -226,7 +237,7 @@ export function RequestVenueBookingForm({
             </option>
           ))}
         </select>
-        <FieldError id="venue-booking-venue-error" messages={fieldErrors.fieldErrors.venueId} />
+        <FieldError id={`${idPrefix}-venue-error`} messages={fieldErrors.fieldErrors.venueId} />
       </div>
 
       <div className="space-y-3">
@@ -237,16 +248,16 @@ export function RequestVenueBookingForm({
             <div key={index} className="rounded-md border border-[var(--border)] p-3">
               <div className="flex items-end gap-3">
                 <div className="flex-1">
-                  <label className="block text-xs text-[var(--text-muted)]" htmlFor={`venue-booking-date-${index}`}>
+                  <label className="block text-xs text-[var(--text-muted)]" htmlFor={`${idPrefix}-date-${index}`}>
                     Date
                   </label>
                   <input
-                    id={`venue-booking-date-${index}`}
+                    id={`${idPrefix}-date-${index}`}
                     type="date"
                     value={line.date}
                     onChange={(event) => updateLine(index, { date: event.target.value })}
                     aria-invalid={lineErrors.date ? true : undefined}
-                    aria-describedby={lineErrors.date ? `venue-booking-date-${index}-error` : undefined}
+                    aria-describedby={lineErrors.date ? `${idPrefix}-date-${index}-error` : undefined}
                     className="mt-1 w-full rounded-md border border-[var(--border)] bg-[var(--surface)] px-3 py-2 text-sm"
                   />
                 </div>
@@ -260,19 +271,19 @@ export function RequestVenueBookingForm({
                   </button>
                 ) : null}
               </div>
-              <FieldError id={`venue-booking-date-${index}-error`} messages={lineErrors.date} />
+              <FieldError id={`${idPrefix}-date-${index}-error`} messages={lineErrors.date} />
 
               <div className="mt-2 flex flex-wrap gap-3">
                 <div>
-                  <label className="block text-xs text-[var(--text-muted)]" htmlFor={`venue-booking-start-${index}`}>
+                  <label className="block text-xs text-[var(--text-muted)]" htmlFor={`${idPrefix}-start-${index}`}>
                     Start time
                   </label>
                   <select
-                    id={`venue-booking-start-${index}`}
+                    id={`${idPrefix}-start-${index}`}
                     value={line.start}
                     onChange={(event) => updateLine(index, { start: event.target.value })}
                     aria-invalid={lineErrors.start ? true : undefined}
-                    aria-describedby={lineErrors.start ? `venue-booking-start-${index}-error` : undefined}
+                    aria-describedby={lineErrors.start ? `${idPrefix}-start-${index}-error` : undefined}
                     className="mt-1 rounded-md border border-[var(--border)] bg-[var(--surface)] px-3 py-2 text-sm"
                   >
                     <option value="">Choose</option>
@@ -284,15 +295,15 @@ export function RequestVenueBookingForm({
                   </select>
                 </div>
                 <div>
-                  <label className="block text-xs text-[var(--text-muted)]" htmlFor={`venue-booking-end-${index}`}>
+                  <label className="block text-xs text-[var(--text-muted)]" htmlFor={`${idPrefix}-end-${index}`}>
                     End time
                   </label>
                   <select
-                    id={`venue-booking-end-${index}`}
+                    id={`${idPrefix}-end-${index}`}
                     value={line.end}
                     onChange={(event) => updateLine(index, { end: event.target.value })}
                     aria-invalid={lineErrors.end ? true : undefined}
-                    aria-describedby={lineErrors.end ? `venue-booking-end-${index}-error` : undefined}
+                    aria-describedby={lineErrors.end ? `${idPrefix}-end-${index}-error` : undefined}
                     className="mt-1 rounded-md border border-[var(--border)] bg-[var(--surface)] px-3 py-2 text-sm"
                   >
                     <option value="">Choose</option>
@@ -304,9 +315,9 @@ export function RequestVenueBookingForm({
                   </select>
                 </div>
               </div>
-              <FieldError id={`venue-booking-start-${index}-error`} messages={lineErrors.start} />
+              <FieldError id={`${idPrefix}-start-${index}-error`} messages={lineErrors.start} />
               <FieldError
-                id={`venue-booking-end-${index}-error`}
+                id={`${idPrefix}-end-${index}-error`}
                 // The same message on both fields (e.g. "end must be after start") is shown once.
                 messages={lineErrors.end?.filter((message) => !lineErrors.start?.includes(message))}
               />
@@ -328,11 +339,11 @@ export function RequestVenueBookingForm({
         <legend className="px-1 text-sm font-medium">Venue requirements for this venue</legend>
         <p className="text-xs text-[var(--text-muted)]">Leave any of these empty to use the event&apos;s.</p>
         <div>
-          <label className="block text-xs text-[var(--text-muted)]" htmlFor="venue-booking-attendance">
+          <label className="block text-xs text-[var(--text-muted)]" htmlFor={`${idPrefix}-attendance`}>
             Expected attendance
           </label>
           <input
-            id="venue-booking-attendance"
+            id={`${idPrefix}-attendance`}
             type="number"
             min={1}
             step={1}
@@ -344,21 +355,21 @@ export function RequestVenueBookingForm({
             }
             onChange={(event) => setOwn({ ...own, expectedAttendance: event.target.value })}
             aria-invalid={fieldErrors.fieldErrors.expectedAttendance ? true : undefined}
-            aria-describedby={fieldErrors.fieldErrors.expectedAttendance ? 'venue-booking-attendance-error' : undefined}
+            aria-describedby={fieldErrors.fieldErrors.expectedAttendance ? `${idPrefix}-attendance-error` : undefined}
             className="mt-1 w-40 rounded-md border border-[var(--border)] bg-[var(--surface)] px-3 py-2 text-sm"
           />
-          <FieldError id="venue-booking-attendance-error" messages={fieldErrors.fieldErrors.expectedAttendance} />
+          <FieldError id={`${idPrefix}-attendance-error`} messages={fieldErrors.fieldErrors.expectedAttendance} />
         </div>
         <div>
-          <label className="block text-xs text-[var(--text-muted)]" htmlFor="venue-booking-layout">
+          <label className="block text-xs text-[var(--text-muted)]" htmlFor={`${idPrefix}-layout`}>
             Room layout
           </label>
           <select
-            id="venue-booking-layout"
+            id={`${idPrefix}-layout`}
             value={own.roomLayout}
             onChange={(event) => setOwn({ ...own, roomLayout: event.target.value })}
             aria-invalid={fieldErrors.fieldErrors.roomLayout ? true : undefined}
-            aria-describedby={fieldErrors.fieldErrors.roomLayout ? 'venue-booking-layout-error' : undefined}
+            aria-describedby={fieldErrors.fieldErrors.roomLayout ? `${idPrefix}-layout-error` : undefined}
             className="mt-1 rounded-md border border-[var(--border)] bg-[var(--surface)] px-3 py-2 text-sm"
           >
             <option value="">Use the event&apos;s ({eventRequirements.roomLayout})</option>
@@ -368,14 +379,14 @@ export function RequestVenueBookingForm({
               </option>
             ))}
           </select>
-          <FieldError id="venue-booking-layout-error" messages={fieldErrors.fieldErrors.roomLayout} />
+          <FieldError id={`${idPrefix}-layout-error`} messages={fieldErrors.fieldErrors.roomLayout} />
         </div>
         <div>
-          <label className="block text-xs text-[var(--text-muted)]" htmlFor="venue-booking-accessibility">
+          <label className="block text-xs text-[var(--text-muted)]" htmlFor={`${idPrefix}-accessibility`}>
             Accessibility needs
           </label>
           <select
-            id="venue-booking-accessibility"
+            id={`${idPrefix}-accessibility`}
             value={own.accessibility}
             onChange={(event) => setOwn({ ...own, accessibility: event.target.value as OwnRequirements['accessibility'] })}
             className="mt-1 rounded-md border border-[var(--border)] bg-[var(--surface)] px-3 py-2 text-sm"
@@ -384,25 +395,25 @@ export function RequestVenueBookingForm({
             <option value="yes">Yes, needed for this venue</option>
             <option value="no">None for this venue</option>
           </select>
-          <FieldError id="venue-booking-accessibility-error" messages={fieldErrors.fieldErrors.accessibilityRequired} />
+          <FieldError id={`${idPrefix}-accessibility-error`} messages={fieldErrors.fieldErrors.accessibilityRequired} />
           {own.accessibility === 'yes' ? (
             <>
-              <label className="mt-2 block text-xs text-[var(--text-muted)]" htmlFor="venue-booking-accessibility-notes">
+              <label className="mt-2 block text-xs text-[var(--text-muted)]" htmlFor={`${idPrefix}-accessibility-notes`}>
                 What is needed
               </label>
               <textarea
-                id="venue-booking-accessibility-notes"
+                id={`${idPrefix}-accessibility-notes`}
                 value={own.accessibilityNotes}
                 onChange={(event) => setOwn({ ...own, accessibilityNotes: event.target.value })}
                 aria-invalid={fieldErrors.fieldErrors.accessibilityNotes ? true : undefined}
                 aria-describedby={
-                  fieldErrors.fieldErrors.accessibilityNotes ? 'venue-booking-accessibility-notes-error' : undefined
+                  fieldErrors.fieldErrors.accessibilityNotes ? `${idPrefix}-accessibility-notes-error` : undefined
                 }
                 rows={2}
                 className="mt-1 w-full rounded-md border border-[var(--border)] bg-[var(--surface)] px-3 py-2 text-sm"
               />
               <FieldError
-                id="venue-booking-accessibility-notes-error"
+                id={`${idPrefix}-accessibility-notes-error`}
                 messages={fieldErrors.fieldErrors.accessibilityNotes}
               />
             </>

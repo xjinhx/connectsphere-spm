@@ -11,7 +11,7 @@ import { EventBookingRequests } from '@/components/venue-booking/EventBookingReq
 import { listEventBookingRequests } from '@/domain/venue-booking/service';
 import { RequestVenueBookingForm } from '@/components/event-request/RequestVenueBookingForm';
 import { EventVenueBookings } from '@/components/venue-booking/EventVenueBookings';
-import { canCreateBookingRequest } from '@/domain/venue-booking/policy';
+import { canCreateBookingRequest, canRequestReplacement } from '@/domain/venue-booking/policy';
 import { listEventVenueBookings } from '@/domain/venue-booking/service';
 import { listVenues } from '@/domain/venues/service';
 import {
@@ -128,7 +128,23 @@ export default async function ReviewEventRequestPage({
   // Approved or in Planning. Fetched only when
   // the section will actually render, the same reasoning as gating every
   // other action below on its own policy function first.
-  const venues = canCreateBookingRequest(request.status) ? await listVenues() : [];
+  //
+  // SCRUM-229 AC1, AC2: an affected booking can be replaced by whoever may
+  // release it (SCRUM-231 AC3), while the event allows a replacement request,
+  // Confirmed included.
+  const replaceableBookingIds = canRequestReplacement(request.status)
+    ? affectedBookings
+        .filter((affected) => venueBookings.some((booking) => booking.id === affected.bookingId && booking.canRelease))
+        .map((affected) => affected.bookingId)
+    : [];
+  const venues =
+    canCreateBookingRequest(request.status) || replaceableBookingIds.length > 0 ? await listVenues() : [];
+  // SCRUM-230 AC2: what each empty venue requirement falls back to.
+  const eventRequirements = {
+    expectedAttendance: request.expectedAttendance,
+    roomLayout: describeRoomLayout(request.roomLayout),
+    accessibility: describeAccessibility(request),
+  };
 
   // SCRUM-236 AC1-AC3, read for the same reason after getReviewDetail.
   const bookingRequests = await listEventBookingRequests(request.id);
@@ -148,7 +164,10 @@ export default async function ReviewEventRequestPage({
       {/* SCRUM-151 AC3: a confirmed booking on a slot Venue Staff have since
           made unavailable, listed until it is released or replaced. First on
           the page because it needs the coordinator to act. */}
-      <AffectedBookingsNotice bookings={affectedBookings} />
+      <AffectedBookingsNotice
+        bookings={affectedBookings}
+        replacement={{ eventId: request.id, bookingIds: replaceableBookingIds, venues, eventRequirements }}
+      />
 
       {/* US-7.2 AC1/AC3 — a clarification already raised on this request.
           Status-aware wording, same reasoning as the Organiser's own page
@@ -255,11 +274,7 @@ export default async function ReviewEventRequestPage({
               requestId={request.id}
               venues={venues}
               eventPeriod={{ date: request.proposedDate, start: request.startTime, end: request.endTime }}
-              eventRequirements={{
-                expectedAttendance: request.expectedAttendance,
-                roomLayout: describeRoomLayout(request.roomLayout),
-                accessibility: describeAccessibility(request),
-              }}
+              eventRequirements={eventRequirements}
             />
           </div>
         </section>
