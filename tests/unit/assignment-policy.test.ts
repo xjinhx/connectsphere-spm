@@ -3,6 +3,7 @@ import {
   COORDINATOR_WORKLOAD_LIMIT,
   canBeAssigned,
   canReceiveAssignment,
+  isActiveEventStatus,
   isAssigned,
 } from '@/domain/assignment/policy';
 
@@ -60,6 +61,21 @@ describe('canReceiveAssignment', () => {
   it('refuses an account with no roles', () => {
     expect(canReceiveAssignment([])).toBe(false);
   });
+});
+
+describe('isActiveEventStatus', () => {
+  // SCRUM-233 AC2: "Given an event is Completed, Cancelled or Rejected, when
+  // I open the overview, then it is not shown as active."
+  it.each(['completed', 'cancelled', 'rejected'] as const)('excludes %s', (status) => {
+    expect(isActiveEventStatus(status)).toBe(false);
+  });
+
+  it.each(['draft', 'submitted', 'planning', 'approved', 'clarification_requested'] as const)(
+    'treats %s as active',
+    (status) => {
+      expect(isActiveEventStatus(status)).toBe(true);
+    },
+  );
 });
 
 describe('workload', () => {
