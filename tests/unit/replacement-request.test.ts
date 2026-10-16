@@ -1,5 +1,5 @@
 import { describe, it, expect } from 'vitest';
-import { canCreateBookingRequest, canRequestReplacement } from '@/domain/venue-booking/policy';
+import { canCreateBookingRequest, canRequestReplacement, isReplacedBooking } from '@/domain/venue-booking/policy';
 import { replacesBookingIdOf } from '@/domain/venue-booking/schema';
 import type { EventRequestStatus } from '@/domain/event-request/schema';
 
@@ -44,5 +44,20 @@ describe('replacesBookingIdOf: is this a replacement request?', () => {
     expect(replacesBookingIdOf({ replacesBookingId: '' })).toBeNull();
     expect(replacesBookingIdOf({ replacesBookingId: 'not-an-id' })).toBeNull();
     expect(replacesBookingIdOf(null)).toBeNull();
+  });
+});
+
+describe('isReplacedBooking: shows as Replaced (AC4)', () => {
+  it('is a released booking whose replacement has an approved line (TC-229-05)', () => {
+    expect(isReplacedBooking('released', ['approved'])).toBe(true);
+  });
+
+  it('is not one whose replacement is pending or rejected (TC-229-04, TC-229-06)', () => {
+    expect(isReplacedBooking('confirmed', ['pending'])).toBe(false);
+    expect(isReplacedBooking('confirmed', ['rejected'])).toBe(false);
+  });
+
+  it('is not one the coordinator released themselves (SCRUM-231)', () => {
+    expect(isReplacedBooking('released', [])).toBe(false);
   });
 });

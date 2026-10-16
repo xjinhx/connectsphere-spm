@@ -2,7 +2,11 @@ import { afterAll, beforeAll, describe, expect, it } from 'vitest';
 import { createAdminClient } from '@/lib/supabase/admin';
 import { createVenue } from '@/domain/venues/service';
 import { listAffectedBookings } from '@/domain/availability/service';
-import { decideVenueBookingRequest, submitVenueBookingRequest } from '@/domain/venue-booking/service';
+import {
+  decideVenueBookingRequest,
+  listEventVenueBookings,
+  submitVenueBookingRequest,
+} from '@/domain/venue-booking/service';
 import { todayInSingapore } from '@/domain/shared/dates';
 import { ensureTestClientOrganisation } from './fixtures/clientOrganisation';
 
@@ -261,6 +265,17 @@ describe('deciding the replacement (SCRUM-229 AC4)', () => {
       .single();
     expect(newBooking).toEqual({ status: 'confirmed', start_time: '10:15:00', end_time: '11:45:00' });
     expect(await eventStatus(setup.eventId)).toBe('confirmed');
+
+    // The event page's Venue bookings list: the old one Replaced, the new one
+    // Confirmed. Same date and times, so in either order.
+    const listed = await listEventVenueBookings(setup.eventId, coordinatorId);
+    expect(listed.map((booking) => [booking.venueName, booking.status, booking.replaced, booking.releaseReason])).toEqual(
+      expect.arrayContaining([
+        [setup.bugis.name, 'released', true, `Replaced by ${setup.marina.name}`],
+        [setup.marina.name, 'confirmed', false, null],
+      ]),
+    );
+    expect(listed).toHaveLength(2);
   });
 
   it('rejecting it leaves the affected booking confirmed with its outstanding action (TC-229-06)', async () => {
@@ -273,6 +288,7 @@ describe('deciding the replacement (SCRUM-229 AC4)', () => {
 
     expect((await bookingRow(setup.bookingId)).status).toBe('confirmed');
     expect((await listAffectedBookings(setup.eventId)).map((booking) => booking.bookingId)).toEqual([setup.bookingId]);
+    expect((await listEventVenueBookings(setup.eventId, coordinatorId)).map((booking) => booking.replaced)).toEqual([false]);
   });
 
   it("replacing one of two affected bookings closes only that one's action (TC-229-07)", async () => {

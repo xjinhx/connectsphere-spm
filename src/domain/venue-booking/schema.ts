@@ -458,4 +458,6 @@ export interface EventVenueBooking {
   releaseReason: string | null;
   /** AC3: true only for a confirmed booking, shown to the event's assigned coordinator. */
   canRelease: boolean;
+  /** SCRUM-229 AC4: released because its replacement request was approved (CONTEXT.md: Replaced booking). */
+  replaced: boolean;
 }

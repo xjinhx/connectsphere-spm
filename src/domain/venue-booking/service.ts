@@ -26,6 +26,7 @@ import {
   bookingDecisionMessage,
   canCreateBookingRequest,
   canRequestReplacement,
+  isReplacedBooking,
   canSeeBookingDetails,
   canViewBookingRequest,
   describeApprovalConflict,
@@ -828,6 +829,7 @@ type EventVenueBookingRow = {
   release_reason: string | null;
   venue: { name: string } | null;
   event_request: { coordinator_id: string | null } | null;
+  replacements: { venue_booking_request_line: { status: string }[] }[];
 };
 
 /**
@@ -855,6 +857,11 @@ export async function listEventVenueBookings(eventRequestId: string, actorId: st
       status,
       releaseReason: row.release_reason,
       canRelease: status === 'confirmed' && isCurrentCoordinator(row.event_request?.coordinator_id ?? null, actorId),
+      // SCRUM-229 AC4.
+      replaced: isReplacedBooking(
+        status,
+        row.replacements.flatMap((request) => request.venue_booking_request_line.map((line) => line.status)),
+      ),
     };
   });
 }
