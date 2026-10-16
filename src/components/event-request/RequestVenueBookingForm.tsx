@@ -138,7 +138,9 @@ export function RequestVenueBookingForm({
 }) {
   const router = useRouter();
   const firstLine = (): Line => ({ date: eventPeriod.date ?? '', start: eventPeriod.start ?? '', end: eventPeriod.end ?? '' });
-  const [venueId, setVenueId] = useState(venues[0]?.id ?? '');
+  // SCRUM-229 AC1: a replacement leaves the venue to choose, rather than
+  // starting on the first in the list (which may be the affected one).
+  const [venueId, setVenueId] = useState(replacesBookingId ? '' : (venues[0]?.id ?? ''));
   const [lines, setLines] = useState<Line[]>(() => [firstLine()]);
   const [own, setOwn] = useState<OwnRequirements>(NO_OWN_REQUIREMENTS);
   const [submitting, setSubmitting] = useState(false);
@@ -231,6 +233,7 @@ export function RequestVenueBookingForm({
           aria-describedby={fieldErrors.fieldErrors.venueId ? `${idPrefix}-venue-error` : undefined}
           className="mt-1 w-full rounded-md border border-[var(--border)] bg-[var(--surface)] px-3 py-2 text-sm"
         >
+          {replacesBookingId ? <option value="">Choose a venue</option> : null}
           {venues.map((venue) => (
             <option key={venue.id} value={venue.id}>
               {venue.name}
