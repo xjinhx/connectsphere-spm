@@ -34,7 +34,9 @@ function Row({ label, value }: { label: string; value: string }) {
   );
 }
 
-const byWhom = (name: string | null) => name ?? 'an unnamed account';
+// Same fallback as AssignCoordinatorForm's picker (SCRUM-232): a name,
+// then the account's email, before giving up and saying so.
+const displayName = (name: string | null, email: string | null, fallback: string) => name ?? email ?? fallback;
 
 export default async function EventAssignmentPage({ params }: { params: Promise<{ id: string }> }) {
   const actor = await getCurrentActor();
@@ -89,8 +91,10 @@ export default async function EventAssignmentPage({ params }: { params: Promise<
         {current ? (
           <div className="mt-3 space-y-4">
             <p className="text-sm">
-              Assigned to <strong>{current.coordinatorName ?? 'an unnamed coordinator'}</strong> by{' '}
-              {byWhom(current.assignedByName)} on {formatSingaporeDateTime(current.assignedAt)}.
+              Assigned to{' '}
+              <strong>{displayName(current.coordinatorName, current.coordinatorEmail, 'an unnamed coordinator')}</strong>{' '}
+              by {displayName(current.assignedByName, current.assignedByEmail, 'an unnamed account')} on{' '}
+              {formatSingaporeDateTime(current.assignedAt)}.
             </p>
             <ReassignCoordinatorForm
               eventRequestId={event.id}
@@ -118,10 +122,12 @@ export default async function EventAssignmentPage({ params }: { params: Promise<
           <ol className="mt-3 space-y-2 text-sm">
             {history.map((entry) => (
               <li key={entry.replacedAt} className="rounded border border-[var(--border)] bg-[var(--surface)] p-3">
-                {entry.coordinatorName ?? 'An unnamed coordinator'} (assigned by {byWhom(entry.assignedByName)} on{' '}
+                {displayName(entry.coordinatorName, entry.coordinatorEmail, 'An unnamed coordinator')} (assigned by{' '}
+                {displayName(entry.assignedByName, entry.assignedByEmail, 'an unnamed account')} on{' '}
                 {formatSingaporeDateTime(entry.assignedAt)}) was replaced by{' '}
-                {entry.replacedByCoordinatorName ?? 'an unnamed coordinator'} — reassigned by{' '}
-                {byWhom(entry.replacedByName)} on {formatSingaporeDateTime(entry.replacedAt)}.
+                {displayName(entry.replacedByCoordinatorName, entry.replacedByCoordinatorEmail, 'an unnamed coordinator')}{' '}
+                — reassigned by {displayName(entry.replacedByName, entry.replacedByEmail, 'an unnamed account')} on{' '}
+                {formatSingaporeDateTime(entry.replacedAt)}.
               </li>
             ))}
           </ol>

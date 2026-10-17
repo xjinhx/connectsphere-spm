@@ -329,11 +329,16 @@ export async function listUnassignedEvents(): Promise<UnassignedEvent[]> {
 /** One replaced assignment, with who made each change (AC3's "my name"). */
 export interface AssignmentRecordEntry {
   coordinatorName: string | null;
+  /** Falls back to this when the profile has no name recorded, same as the picker (SCRUM-232). */
+  coordinatorEmail: string | null;
   assignedByName: string | null;
+  assignedByEmail: string | null;
   assignedAt: string;
   replacedByCoordinatorName: string | null;
+  replacedByCoordinatorEmail: string | null;
   /** The Lead who made the reassignment. */
   replacedByName: string | null;
+  replacedByEmail: string | null;
   replacedAt: string;
 }
 
@@ -343,7 +348,9 @@ export interface AssignmentRecord {
   current: {
     coordinatorId: string;
     coordinatorName: string | null;
+    coordinatorEmail: string | null;
     assignedByName: string | null;
+    assignedByEmail: string | null;
     assignedAt: string;
   } | null;
   /** Oldest first. */
@@ -381,12 +388,24 @@ export async function getAssignmentRecord(
   const row = details.data as unknown as EventRequestRow;
   const historyRows: CoordinatorHistoryRow[] = event.event_request_coordinator_history ?? [];
 
-  const people = await readContactProfiles([
+  const allIds = [
     ...(event.coordinator_id ? [event.coordinator_id] : []),
     ...(event.assigned_by ? [event.assigned_by] : []),
     ...historyRows.flatMap((h) => [h.coordinator_id, h.assigned_by, h.replaced_by, h.replaced_by_coordinator_id]),
-  ]);
+  ];
+  const people = await readContactProfiles(allIds);
   const nameOf = (id: string) => people.get(id)?.full_name ?? null;
+
+  // Same fallback as listAssignableCoordinators (SCRUM-232): until SCRUM-205
+  // lets accounts record a name, AC3's "recorded with my name" would
+  // otherwise render as "an unnamed account" for every account seeded
+  // without one. Only fetched for ids that actually lack a name.
+  const idsNeedingEmail = [...new Set(allIds)].filter((id) => !nameOf(id));
+  const emailEntries = await Promise.all(
+    idsNeedingEmail.map(async (id) => [id, await readAccountEmail(id)] as const),
+  );
+  const emailById = new Map(emailEntries);
+  const emailOf = (id: string) => emailById.get(id) ?? null;
 
   return {
     event: {
@@ -406,16 +425,22 @@ export async function getAssignmentRecord(
         ? {
             coordinatorId: event.coordinator_id,
             coordinatorName: nameOf(event.coordinator_id),
+            coordinatorEmail: emailOf(event.coordinator_id),
             assignedByName: event.assigned_by ? nameOf(event.assigned_by) : null,
+            assignedByEmail: event.assigned_by ? emailOf(event.assigned_by) : null,
             assignedAt: event.assigned_at,
           }
         : null,
     history: historyRows.map((h) => ({
       coordinatorName: nameOf(h.coordinator_id),
+      coordinatorEmail: emailOf(h.coordinator_id),
       assignedByName: nameOf(h.assigned_by),
+      assignedByEmail: emailOf(h.assigned_by),
       assignedAt: h.assigned_at,
       replacedByCoordinatorName: nameOf(h.replaced_by_coordinator_id),
+      replacedByCoordinatorEmail: emailOf(h.replaced_by_coordinator_id),
       replacedByName: nameOf(h.replaced_by),
+      replacedByEmail: emailOf(h.replaced_by),
       replacedAt: h.replaced_at,
     })),
   };
