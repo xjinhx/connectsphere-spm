@@ -51,6 +51,8 @@ export async function createVenueBookingRequest(input: {
   roomLayout: string | null;
   accessibilityRequired: boolean | null;
   accessibilityNotes: string | null;
+  /** SCRUM-229: the affected booking a replacement request replaces (20261017211239). */
+  replacesBookingId: string | null;
 }) {
   return db().rpc('create_venue_booking_request', {
     p_event_request_id: input.eventRequestId,
@@ -61,6 +63,7 @@ export async function createVenueBookingRequest(input: {
     p_room_layout: input.roomLayout ?? undefined,
     p_accessibility_required: input.accessibilityRequired ?? undefined,
     p_accessibility_notes: input.accessibilityNotes ?? undefined,
+    p_replaces_booking_id: input.replacesBookingId ?? undefined,
   });
 }
 

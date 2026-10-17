@@ -91,12 +91,16 @@ export async function fetchConfirmedBookingsBetween(venueId: string, from: strin
 // SCRUM-231 — Release one venue booking
 // -----------------------------------------------------------------------------
 
-/** AC1, AC2: an event's bookings, released ones included, with the event's coordinator (AC3). */
+/**
+ * AC1, AC2: an event's bookings, released ones included, with the event's
+ * coordinator (AC3). SCRUM-229 AC4: with the decisions on any replacement
+ * request that names the booking.
+ */
 export async function fetchEventVenueBookings(eventRequestId: string) {
   return db()
     .from('venue_booking')
     .select(
-      'id, date, start_time, end_time, status, release_reason, venue:venue_id (name), event_request:event_request_id (coordinator_id)',
+      'id, date, start_time, end_time, status, release_reason, venue:venue_id (name), event_request:event_request_id (coordinator_id), replacements:venue_booking_request!venue_booking_request_replaces_booking_id_fkey ( venue_booking_request_line ( status ) )',
     )
     .eq('event_request_id', eventRequestId)
     .order('date')

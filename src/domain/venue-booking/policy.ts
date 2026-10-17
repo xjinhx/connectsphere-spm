@@ -11,6 +11,7 @@ import type {
   OwnVenueRequirements,
   VenueBookingRequestLineStatus,
   VenueBookingRequestStatus,
+  VenueBookingStatus,
   VenueRequirementsInUse,
 } from './schema';
 import { describeAccessibility } from '@/domain/event-request/policy';
@@ -33,6 +34,24 @@ import { ROOM_LAYOUT_LABELS, RoomLayoutSchema } from '@/domain/venues/schema';
  */
 export function canCreateBookingRequest(status: EventRequestStatus): boolean {
   return status === 'approved' || status === 'planning';
+}
+
+/**
+ * SCRUM-229 AC2 and the PO decision of 12 Oct 2026: a replacement request
+ * (CONTEXT.md) may also be made while the event is Confirmed. Ordinary
+ * requests keep SCRUM-142's rule above.
+ */
+export function canRequestReplacement(status: EventRequestStatus): boolean {
+  return canCreateBookingRequest(status) || status === 'confirmed';
+}
+
+/**
+ * SCRUM-229 AC4 (CONTEXT.md: Replaced booking): a booking is replaced when it
+ * is released and a replacement request for it has an approved line, which is
+ * what released it (20261017211239).
+ */
+export function isReplacedBooking(status: VenueBookingStatus, replacementLineStatuses: readonly string[]): boolean {
+  return status === 'released' && replacementLineStatuses.includes('approved');
 }
 
 // ---------------------------------------------------------------------------

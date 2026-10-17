@@ -12,6 +12,9 @@ const STATUS_LABELS: Record<VenueBookingStatus, string> = {
  * venue, date, times and status, and a released one with its reason. The
  * event's assigned coordinator can release a confirmed one (AC3, decided by
  * listEventVenueBookings). Renders nothing when the event has no bookings.
+ *
+ * SCRUM-229 AC4: a booking released by an approved replacement shows as
+ * Replaced, with its reason ("Replaced by ...").
  */
 export function EventVenueBookings({ bookings }: { bookings: EventVenueBooking[] }) {
   if (bookings.length === 0) return null;
@@ -32,7 +35,7 @@ export function EventVenueBookings({ bookings }: { bookings: EventVenueBooking[]
                 {booking.venueName}, {formatSingaporeDate(booking.date)} · {booking.startTime}–{booking.endTime}
               </p>
               <span className="rounded-full border border-[var(--border)] px-2 py-0.5 text-xs font-medium">
-                {STATUS_LABELS[booking.status]}
+                {booking.replaced ? 'Replaced' : STATUS_LABELS[booking.status]}
               </span>
             </div>
             {booking.releaseReason ? (
