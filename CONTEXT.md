@@ -73,6 +73,22 @@ One line of the equipment catalogue. It is what a coordinator's equipment requir
 Whether a catalogue item can be used: _Available_, _Unavailable_, _Damaged_ or _Under maintenance_ (SCRUM-240 AC2, customer clarification #23). A property of the item itself, not of a date — a Damaged item can still be named by a requirement.
 _Avoid_: condition, state, availability (that word is for a venue on a date)
 
+**Equipment request**:
+What an event's assigned coordinator asks Technical Support Staff to arrange: its equipment lines and its technical requirements, one per event (SCRUM-160). Raising it — adding its first item — moves an Approved event to Planning (AC10). Kept apart from the free-text equipment an Event Organiser types on an event request (SCRUM-80).
+_Avoid_: equipment requirement, equipment booking, equipment order
+
+**Equipment line**:
+One catalogue item and a quantity of at least one on an equipment request. The same item added twice is two lines, never merged for the coordinator (SCRUM-160 AC3).
+_Avoid_: equipment item (that is a catalogue item), row
+
+**Technical requirements**:
+The free text on an equipment request saying what Technical Support Staff need to know beyond the items, stored as typed (SCRUM-160 AC5, AC6).
+_Avoid_: notes, technical support notes (that is the organiser's SCRUM-80 field)
+
+**Reserved** (equipment line):
+An equipment line whose equipment has been set aside for the event. Reducing or removing it needs the coordinator to confirm a warning first (SCRUM-160 AC8). Reserving is SCRUM-167's; until then a line is marked reserved by hand (dummy D-18).
+_Avoid_: booked, held (those words are for venues)
+
 ### Access
 
 **Anyone with access** (to an event):

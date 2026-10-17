@@ -13,6 +13,7 @@ import { RequestVenueBookingForm } from '@/components/event-request/RequestVenue
 import { SuitabilityCheckForm } from '@/components/suitability/SuitabilityCheckForm';
 import { EventVenueBookings } from '@/components/venue-booking/EventVenueBookings';
 import { canCreateBookingRequest } from '@/domain/venue-booking/policy';
+import { acceptsEquipmentRequest } from '@/domain/equipment-request/policy';
 import { listEventVenueBookings } from '@/domain/venue-booking/service';
 import { listVenues } from '@/domain/venues/service';
 import {
@@ -303,6 +304,26 @@ export default async function ReviewEventRequestPage({
               }}
             />
           </div>
+        </section>
+      ) : null}
+
+      {/* SCRUM-160 — "As an Event Coordinator, I want to record the equipment
+          an event needs with quantities". Recorded on its own page; offered
+          while the event is Approved or in Planning, the statuses AC1 accepts
+          (acceptsEquipmentRequest), so the link never leads to a form the API
+          would refuse. */}
+      {acceptsEquipmentRequest(request.status) ? (
+        <section className="mt-6 rounded-lg border border-[var(--border)] bg-[var(--surface)] p-4">
+          <h2 className="text-sm font-semibold">Equipment</h2>
+          <p className="mt-1 text-sm text-[var(--text-muted)]">
+            Record the equipment this event needs, so Technical Support Staff know what to arrange.
+          </p>
+          <Link
+            href={`/events/${request.id}/equipment`}
+            className="mt-3 inline-block rounded-md bg-[var(--brand)] px-4 py-2 text-sm font-medium text-white hover:bg-[var(--brand-dark)]"
+          >
+            Equipment request
+          </Link>
         </section>
       ) : null}
 
