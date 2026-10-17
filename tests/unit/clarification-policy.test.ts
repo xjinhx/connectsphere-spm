@@ -1,6 +1,7 @@
 import { describe, it, expect } from 'vitest';
 import {
   canRespondToClarification,
+  canViewClarificationExchange,
   hasOpenRound,
   sortRoundsInOrder,
 } from '@/domain/clarification/policy';
@@ -22,6 +23,55 @@ describe('canRespondToClarification (Jira AC1)', () => {
   // US-7.2-TC07 — there is nothing to answer on any other status.
   it.each(['draft', 'submitted', 'approved'] as const)('refuses a %s request', (status) => {
     expect(canRespondToClarification(status)).toBe(false);
+  });
+});
+
+/**
+ * SCRUM-232 AC5 (Week 7 Customer Changes PDF, change 5, confirmed with Arwen
+ * 15 Oct 2026): canViewClarificationExchange used to include an event with no
+ * coordinator yet ("matching SCRUM-89's canReviewDetail"); change 5 removes
+ * that branch, same as canReviewDetail itself. This was flagged as one of the
+ * assertions to update but had no existing test in this file to change -
+ * added fresh rather than left uncovered.
+ */
+describe('canViewClarificationExchange (SCRUM-232 AC5)', () => {
+  const organiserId = 'organiser-id';
+  const coordinatorId = 'coordinator-id';
+
+  it('refuses a coordinator when the event has no coordinator yet', () => {
+    expect(
+      canViewClarificationExchange(
+        { organiserId, coordinatorId: null },
+        { userId: coordinatorId, roles: ['coordinator'] },
+      ),
+    ).toBe(false);
+  });
+
+  it('still allows the assigned coordinator', () => {
+    expect(
+      canViewClarificationExchange(
+        { organiserId, coordinatorId },
+        { userId: coordinatorId, roles: ['coordinator'] },
+      ),
+    ).toBe(true);
+  });
+
+  it('still allows the Event Coordinator Lead to read an unassigned event', () => {
+    expect(
+      canViewClarificationExchange(
+        { organiserId, coordinatorId: null },
+        { userId: 'lead-id', roles: ['operations_manager'] },
+      ),
+    ).toBe(true);
+  });
+
+  it('still allows the organiser who owns the request', () => {
+    expect(
+      canViewClarificationExchange(
+        { organiserId, coordinatorId: null },
+        { userId: organiserId, roles: ['event_organiser'] },
+      ),
+    ).toBe(true);
   });
 });
 

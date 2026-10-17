@@ -246,6 +246,7 @@ describe('respondToClarification', () => {
   it('retains the original note, the response and the amended values', async () => {
     const id = await createCompleteRequest();
     await setStatus(id, 'submitted');
+    await assignCoordinator(id);
     await raiseClarification(id, 'How many people are you expecting?');
     await amend(id, 200);
 
@@ -267,6 +268,7 @@ describe('respondToClarification', () => {
   it('lists both clarification rounds in order, and leaves the first unchanged', async () => {
     const id = await createCompleteRequest();
     await setStatus(id, 'submitted');
+    await assignCoordinator(id);
     await raiseClarification(id, 'How many people are you expecting?');
     await amend(id, 200);
 
@@ -431,6 +433,9 @@ describe('getClarificationExchange', () => {
   it('shows an open round with no response yet', async () => {
     const id = await createCompleteRequest();
     await setStatus(id, 'submitted');
+    // SCRUM-232 AC5: assignment is now a precondition of reading the
+    // exchange as a coordinator, same as the review/approval reads.
+    await assignCoordinator(id);
     await raiseClarification(id, 'How many people are you expecting?');
 
     const exchange = await getClarificationExchange(id, asActor(coordinatorId, 'coordinator'));
@@ -438,6 +443,30 @@ describe('getClarificationExchange', () => {
     expect(round(exchange.rounds, 0).note).toBe('How many people are you expecting?');
     expect(round(exchange.rounds, 0).response).toBeNull();
     expect(round(exchange.rounds, 0).respondedAt).toBeNull();
+  });
+
+  // SCRUM-232 AC5 (Week 7 Change 5): an unassigned request is no longer open
+  // to any coordinator - assignment through the Lead's queue is now a
+  // precondition of reading the exchange, not just acting on it.
+  it('refuses any coordinator to read the exchange while the request has no coordinator yet', async () => {
+    const id = await createCompleteRequest();
+    await setStatus(id, 'submitted');
+    await raiseClarification(id, 'How many people are you expecting?');
+
+    await expect(
+      getClarificationExchange(id, asActor(coordinatorId, 'coordinator')),
+    ).rejects.toMatchObject({ code: 'FORBIDDEN' });
+  });
+
+  // The Lead's access does not depend on assignment existing at all -
+  // "review basic event information" (Change 5).
+  it('allows an Event Operations Manager to read the exchange of an unassigned request', async () => {
+    const id = await createCompleteRequest();
+    await setStatus(id, 'submitted');
+    await raiseClarification(id, 'How many people are you expecting?');
+
+    const exchange = await getClarificationExchange(id, asActor(managerId, 'operations_manager'));
+    expect(exchange.rounds).toHaveLength(1);
   });
 
   it('refuses an id that is not a request', async () => {

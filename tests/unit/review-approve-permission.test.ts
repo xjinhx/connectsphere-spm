@@ -63,14 +63,17 @@ describe('who may approve a particular event (SCRUM-213)', () => {
   });
 
   /**
-   * Deliberate, not an oversight. SCRUM-92 AC1's precondition is "Given I am
-   * reviewing a submitted request", and review access allows an event with no
-   * coordinator yet. US-7.3-TC04 does not cover this case either - its
-   * precondition is that the request IS assigned, to somebody else.
-   *
-   * Requiring assignment before approval would be a new user story.
+   * Superseded 15 Oct 2026 by SCRUM-232 AC5 (Week 7 Customer Changes PDF,
+   * change 5, confirmed with Arwen on Slack): "Event Coordinators should only
+   * be able to manage events assigned to them." Assignment through the Event
+   * Coordinator Lead's queue is now a precondition of review, including
+   * approval - not a new user story, since change 5 already covers it; this
+   * is SCRUM-232 applying it to the approve path. This test used to record
+   * the opposite decision ("requiring assignment before approval would be a
+   * new user story") on the basis that neither SCRUM-92 AC1 nor US-7.3-TC04
+   * covered the unassigned case; change 5 now does.
    */
-  it('allows any coordinator to approve an event with no coordinator yet', () => {
-    expect(canReviewDetail(null, casey)).toBe(true);
+  it('refuses any coordinator to approve an event with no coordinator yet', () => {
+    expect(canReviewDetail(null, casey)).toBe(false);
   });
 });

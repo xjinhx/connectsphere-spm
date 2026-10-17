@@ -85,7 +85,7 @@ export function AssignCoordinatorForm({
           <option value="">Choose a coordinator…</option>
           {coordinators.map((coordinator) => (
             <option key={coordinator.id} value={coordinator.id}>
-              {coordinator.name ?? 'Name not recorded'}
+              {coordinator.name ?? coordinator.email ?? 'Name not recorded'}
             </option>
           ))}
         </select>
