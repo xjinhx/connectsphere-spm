@@ -126,6 +126,9 @@ describe('rejectEventRequest', () => {
   // US-7.7 93-TC05 (AC4)
   it('rejects a submitted request and records the reason, decision maker and timestamp', async () => {
     const id = await createEventRequest('submitted');
+    // SCRUM-232 AC5: assignment is now a precondition of rejecting, same as
+    // approving — the request must be the actor's own.
+    await assignTo(id, coordinatorId);
 
     const outcome = await rejectEventRequest(id, { reason: 'Venue capacity insufficient' }, coordinatorId);
 
@@ -177,6 +180,7 @@ describe('rejectEventRequest', () => {
   // Negative coverage: rejecting from an invalid starting status.
   it('refuses to reject a request that is already rejected', async () => {
     const id = await createEventRequest('submitted');
+    await assignTo(id, coordinatorId);
     await rejectEventRequest(id, { reason: 'Venue capacity insufficient' }, coordinatorId);
 
     await expect(
@@ -184,12 +188,17 @@ describe('rejectEventRequest', () => {
     ).rejects.toMatchObject({ code: 'INVALID_TRANSITION' });
   });
 
+  // SCRUM-232 AC5: a draft carries no coordinator_id, so this is now also the
+  // unassigned case - canReviewDetail refuses it before canBeRejected is ever
+  // reached, same as every other decision action. No existing-status leak:
+  // FORBIDDEN names nothing about the draft, where the old INVALID_TRANSITION
+  // (confirming "cannot move from draft") did.
   it('refuses to reject a draft, which has not been submitted for review', async () => {
     const id = await createEventRequest('draft');
 
     await expect(
       rejectEventRequest(id, { reason: 'Venue capacity insufficient' }, coordinatorId),
-    ).rejects.toMatchObject({ code: 'INVALID_TRANSITION' });
+    ).rejects.toMatchObject({ code: 'FORBIDDEN' });
 
     const row = await readRow(id);
     expect(row.status).toBe('draft');
@@ -199,6 +208,7 @@ describe('rejectEventRequest', () => {
   // The two decisions must not be able to overwrite each other.
   it('refuses to reject a request that has already been approved', async () => {
     const id = await createEventRequest('submitted');
+    await assignTo(id, coordinatorId);
     await approveEventRequest(id, { actorId: coordinatorId });
 
     await expect(
@@ -243,6 +253,20 @@ describe('rejectEventRequest', () => {
     expect(outcome.decidedBy).toBe(otherCoordinatorId);
   });
 
+  // SCRUM-232 AC5 (Week 7 Change 5): assignment through the Lead's queue is
+  // now a precondition of rejecting too, not just approving.
+  it('refuses any coordinator to reject an event with no coordinator yet', async () => {
+    const id = await createEventRequest('submitted');
+
+    await expect(
+      rejectEventRequest(id, { reason: 'Venue capacity insufficient' }, coordinatorId),
+    ).rejects.toMatchObject({ code: 'FORBIDDEN' });
+
+    const row = await readRow(id);
+    expect(row.status).toBe('submitted');
+    expect(row.decision).toBeNull();
+  });
+
   it('reports an unknown request as not found', async () => {
     await expect(
       rejectEventRequest(
@@ -265,6 +289,8 @@ describe('getRejectionView', () => {
   // US-7.3-TC07 (AC6)
   it('shows the rejection reason and date once a request has been rejected', async () => {
     const id = await createEventRequest('submitted');
+    // SCRUM-232 AC5: assignment is now a precondition of rejecting.
+    await assignTo(id, coordinatorId);
     await rejectEventRequest(id, { reason: 'Venue capacity insufficient' }, coordinatorId);
 
     // createEventRequest sets organiser_id to this same id, so ownership

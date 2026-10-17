@@ -45,6 +45,12 @@ A confirmed booking for an upcoming event whose times overlap a period that has 
 A confirmed booking that its event's coordinator has given up, with a reason. It no longer commits the venue; the event and its other bookings are unchanged (SCRUM-231).
 _Avoid_: cancelled booking (cancelling is for a whole event, SCRUM-105)
 
+**Replacement request**:
+A booking request a coordinator makes for an affected booking, to move it to another venue. While it is pending, the affected booking is unchanged; once it is approved, the affected booking is released (SCRUM-229). A Confirmed event may request a venue only this way.
+
+**Replaced booking**:
+A released booking given up because its replacement request was approved. Its outstanding action is closed (SCRUM-229).
+
 **Setup time** / **Turnaround time**:
 The minutes a venue needs before an event to prepare the room and after it to reset it, in 15-minute steps, set per venue by Venue Staff (SCRUM-225). A booking commits its venue from its start minus the setup time to its end plus the turnaround time. An active _hold_ commits the same widened period, so the event can still be booked when the hold closes (SCRUM-226).
 _Avoid_: teardown (folded into turnaround), buffer
@@ -72,6 +78,22 @@ One line of the equipment catalogue. It is what a coordinator's equipment requir
 **Operational status**:
 Whether a catalogue item can be used: _Available_, _Unavailable_, _Damaged_ or _Under maintenance_ (SCRUM-240 AC2, customer clarification #23). A property of the item itself, not of a date — a Damaged item can still be named by a requirement.
 _Avoid_: condition, state, availability (that word is for a venue on a date)
+
+**Equipment request**:
+What an event's assigned coordinator asks Technical Support Staff to arrange: its equipment lines and its technical requirements, one per event (SCRUM-160). Raising it — adding its first item — moves an Approved event to Planning (AC10). Kept apart from the free-text equipment an Event Organiser types on an event request (SCRUM-80).
+_Avoid_: equipment requirement, equipment booking, equipment order
+
+**Equipment line**:
+One catalogue item and a quantity of at least one on an equipment request. The same item added twice is two lines, never merged for the coordinator (SCRUM-160 AC3).
+_Avoid_: equipment item (that is a catalogue item), row
+
+**Technical requirements**:
+The free text on an equipment request saying what Technical Support Staff need to know beyond the items, stored as typed (SCRUM-160 AC5, AC6).
+_Avoid_: notes, technical support notes (that is the organiser's SCRUM-80 field)
+
+**Reserved** (equipment line):
+An equipment line whose equipment has been set aside for the event. Reducing or removing it needs the coordinator to confirm a warning first (SCRUM-160 AC8). Reserving is SCRUM-167's; until then a line is marked reserved by hand (dummy D-18).
+_Avoid_: booked, held (those words are for venues)
 
 ### Access
 

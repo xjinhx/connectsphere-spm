@@ -61,6 +61,18 @@ async function createEventRequest(status: 'draft' | 'submitted'): Promise<string
   return id;
 }
 
+/**
+ * SCRUM-232 AC5: assignment through the Lead's queue is now a precondition
+ * of approving, so every test that approves a request must assign it first.
+ */
+async function assignTo(id: string, assignee: string): Promise<void> {
+  const { error } = await supabase
+    .from('event_request')
+    .update({ coordinator_id: assignee, assigned_by: assignee })
+    .eq('id', id);
+  if (error) throw new Error(`could not assign test request: ${error.message}`);
+}
+
 async function readRow(id: string) {
   const { data, error } = await supabase
     .from('event_request')
@@ -100,6 +112,7 @@ describe('approveEventRequest', () => {
   // US-7.3-TC01 (AC1)
   it('approves a submitted request and records the decision, decision maker and timestamp', async () => {
     const id = await createEventRequest('submitted');
+    await assignTo(id, coordinatorId);
 
     const outcome = await approveEventRequest(id, { actorId: coordinatorId });
 
@@ -122,6 +135,7 @@ describe('approveEventRequest', () => {
   // Negative coverage: approving from an invalid starting status.
   it('refuses to approve a request that is already approved', async () => {
     const id = await createEventRequest('submitted');
+    await assignTo(id, coordinatorId);
     await approveEventRequest(id, { actorId: coordinatorId });
 
     await expect(approveEventRequest(id, { actorId: coordinatorId })).rejects.toMatchObject({
@@ -129,11 +143,15 @@ describe('approveEventRequest', () => {
     });
   });
 
+  // SCRUM-232 AC5: a draft carries no coordinator_id - the database refuses
+  // to assign one to a draft at all (event_request_assignment_needs_submission),
+  // so this stays the unassigned case. canReviewDetail now refuses it before
+  // canBeApproved is ever reached.
   it('refuses to approve a draft, which has not been submitted for review', async () => {
     const id = await createEventRequest('draft');
 
     await expect(approveEventRequest(id, { actorId: coordinatorId })).rejects.toMatchObject({
-      code: 'INVALID_TRANSITION',
+      code: 'FORBIDDEN',
     });
 
     const row = await readRow(id);
