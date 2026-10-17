@@ -26,6 +26,21 @@ if (!SUPABASE_URL || !ANON_KEY || !SERVICE_ROLE_KEY) {
   throw new Error('Set NEXT_PUBLIC_SUPABASE_URL, NEXT_PUBLIC_SUPABASE_ANON_KEY and SUPABASE_SERVICE_ROLE_KEY in .env.local.');
 }
 
+// This creates accounts with a known password (TEST_PASSWORD below) using the
+// service-role key, which bypasses every policy. .env.local can point at
+// either Supabase instance depending on whose machine this runs on (see
+// CLAUDE.md, "Supabase — local vs. cloud"), so the URL itself - not which
+// file it came from - is what's checked before anything is created.
+const isLocalSupabaseUrl = ['127.0.0.1', 'localhost'].includes(new URL(SUPABASE_URL).hostname);
+if (!isLocalSupabaseUrl) {
+  throw new Error(
+    `NEXT_PUBLIC_SUPABASE_URL (${SUPABASE_URL}) is not a local Supabase instance. ` +
+      'This script creates test accounts with a known password via the service-role key - ' +
+      'refusing to run against anything but 127.0.0.1/localhost. Point .env.local at `npm run db:start`\'s ' +
+      'local instance before running this.',
+  );
+}
+
 const admin = createClient(SUPABASE_URL, SERVICE_ROLE_KEY);
 
 // ---------------------------------------------------------------------------
