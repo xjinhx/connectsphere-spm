@@ -1,9 +1,11 @@
+import Link from 'next/link';
 import { getCurrentActor } from '@/lib/auth/currentActor';
 import { assertPermission } from '@/domain/identity/policy';
 import { ForbiddenError } from '@/domain/shared/errors';
 import { listAssignableCoordinators, listUnassignedEvents } from '@/domain/assignment/service';
 import { AssignCoordinatorForm } from '@/components/assignment/AssignCoordinatorForm';
 import { formatSingaporeDate, formatSingaporeDateTime } from '@/domain/shared/dates';
+import { describeEventTimes } from '@/domain/event-request/policy';
 
 /**
  * SCRUM-95 AC1 — submitted events with no coordinator yet: the pool an
@@ -13,6 +15,10 @@ import { formatSingaporeDate, formatSingaporeDateTime } from '@/domain/shared/da
  * SCRUM-94's, added here afterwards as this comment anticipated: it posts to
  * SCRUM-94's own POST /coordinator endpoint and nothing about the list above
  * it changed. See AssignCoordinatorForm.
+ *
+ * SCRUM-232 AC2 — the Lead's unassigned queue shows each request's event name,
+ * client organisation, proposed date and time, expected attendance and
+ * submission date. "Slots" on the card are shown as times since SCRUM-238.
  */
 
 export const dynamic = 'force-dynamic';
@@ -70,7 +76,16 @@ export default async function EventOpsManagerAssignmentQueuePage() {
                   Reference
                 </th>
                 <th scope="col" className="p-3 font-medium">
+                  Client organisation
+                </th>
+                <th scope="col" className="p-3 font-medium">
                   Proposed date
+                </th>
+                <th scope="col" className="p-3 font-medium">
+                  Time
+                </th>
+                <th scope="col" className="p-3 font-medium">
+                  Expected attendance
                 </th>
                 <th scope="col" className="p-3 font-medium">
                   Submitted
@@ -84,11 +99,20 @@ export default async function EventOpsManagerAssignmentQueuePage() {
             <tbody>
               {events.map((event) => (
                 <tr key={event.id} className="border-b border-[var(--border)] last:border-b-0">
-                  <td className="p-3 font-medium">{event.name}</td>
+                  <td className="p-3 font-medium">
+                    {/* SCRUM-232 AC3 — the event's assignment page, where the
+                        record is shown and the event can be reassigned later. */}
+                    <Link href={`/assignment-queue/${event.id}`} className="text-[var(--brand)] hover:underline">
+                      {event.name}
+                    </Link>
+                  </td>
                   <td className="p-3 font-mono text-xs text-[var(--text-muted)]">{event.reference}</td>
+                  <td className="p-3">{event.clientOrganisation?.name ?? '—'}</td>
                   <td className="p-3">
                     {event.proposedDate ? formatSingaporeDate(event.proposedDate) : '—'}
                   </td>
+                  <td className="p-3">{describeEventTimes(event.startTime, event.endTime)}</td>
+                  <td className="p-3">{event.expectedAttendance ?? '—'}</td>
                   <td className="p-3">
                     {event.submittedAt ? formatSingaporeDateTime(event.submittedAt) : '—'}
                   </td>

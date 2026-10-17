@@ -13,8 +13,13 @@ import { getCurrentActor } from '@/lib/auth/currentActor';
  * staff accounts, and the only reason to read it is to assign somebody; whoever
  * cannot assign has no business enumerating who could be assigned.
  *
- * Names only, no email or contact number: SCRUM-98 owns showing a coordinator's
- * contact details, and to the organiser who needs them, not to a picker.
+ * No contact number: SCRUM-98 owns showing a coordinator's full contact
+ * details, and to the organiser who needs them, not to a picker.
+ *
+ * Email is the one exception, added for SCRUM-232 (see listAssignableCoordinators):
+ * nothing in the app writes profiles.full_name yet (SCRUM-205 is still To Do),
+ * so without it an unnamed coordinator is unidentifiable in the picker. Remove
+ * once SCRUM-205 lands and every account has a name.
  */
 export async function GET(_req: NextRequest) {
   try {

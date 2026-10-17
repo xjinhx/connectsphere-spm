@@ -75,6 +75,19 @@ async function createSubmittedRequest(): Promise<string> {
   return id;
 }
 
+/**
+ * SCRUM-232 AC5: assignment through the Lead's queue is now a precondition
+ * of approving, so every test that approves a request as `coordinatorId`
+ * must assign it to them first.
+ */
+async function assignTo(id: string, assignee: string): Promise<void> {
+  const { error } = await supabase
+    .from('event_request')
+    .update({ coordinator_id: assignee, assigned_by: assignee })
+    .eq('id', id);
+  if (error) throw new Error(`could not assign test request: ${error.message}`);
+}
+
 beforeAll(async () => {
   // SCRUM-203's FK on client_organisation_id means CLIENT_ORGANISATION_ID
   // below must be a real row, not just a placeholder uuid.
@@ -103,6 +116,7 @@ describe('getApprovalView', () => {
   // US-7.3-TC05 (AC2)
   it('shows the approval outcome and date together with the no-commitment statement', async () => {
     const id = await createSubmittedRequest();
+    await assignTo(id, coordinatorId);
     const outcome = await approveEventRequest(id, { actorId: coordinatorId });
 
     const view = await getApprovalView(id, owner());
@@ -119,6 +133,7 @@ describe('getApprovalView', () => {
   // US-7.3-TC06 (AC3)
   it('shows an approved request as approved, not confirmed, with no venue or equipment committed', async () => {
     const id = await createSubmittedRequest();
+    await assignTo(id, coordinatorId);
     await approveEventRequest(id, { actorId: coordinatorId });
 
     const view = await getApprovalView(id, owner());
@@ -136,6 +151,7 @@ describe('getApprovalView', () => {
     'keeps the outcome and date but drops the statement once the event is %s',
     async (status) => {
       const id = await createSubmittedRequest();
+      await assignTo(id, coordinatorId);
       const outcome = await approveEventRequest(id, { actorId: coordinatorId });
       const { error } = await supabase.from('event_request').update({ status }).eq('id', id);
       if (error) throw new Error(`could not move test request to ${status}: ${error.message}`);
@@ -161,6 +177,7 @@ describe('getApprovalView', () => {
 
   it('does not reveal who made the decision', async () => {
     const id = await createSubmittedRequest();
+    await assignTo(id, coordinatorId);
     await approveEventRequest(id, { actorId: coordinatorId });
 
     const view = await getApprovalView(id, owner());
@@ -188,6 +205,7 @@ describe('getApprovalView', () => {
 describe('getApprovalView: SCRUM-72 AC2', () => {
   it('refuses an Attendee-only account and returns no planning data', async () => {
     const id = await createSubmittedRequest();
+    await assignTo(id, coordinatorId);
     await approveEventRequest(id, { actorId: coordinatorId });
 
     await expect(getApprovalView(id, { userId: STRANGER, roles: ['attendee'] })).rejects.toMatchObject({
@@ -197,9 +215,14 @@ describe('getApprovalView: SCRUM-72 AC2', () => {
 
   it('still allows an account holding both Attendee and a planning role', async () => {
     const id = await createSubmittedRequest();
+    await assignTo(id, coordinatorId);
     await approveEventRequest(id, { actorId: coordinatorId });
 
-    const view = await getApprovalView(id, { userId: STRANGER, roles: ['attendee', 'coordinator'] });
+    // Viewed as coordinatorId, not STRANGER (a fake id with no row to be
+    // assigned to): the point of this test is the Attendee-only carve-out,
+    // not assignment, and the viewer must actually be the assigned
+    // coordinator (SCRUM-232 AC5) to reach it.
+    const view = await getApprovalView(id, { userId: coordinatorId, roles: ['attendee', 'coordinator'] });
     expect(view.decision).toBe('approved');
   });
 });
@@ -213,6 +236,7 @@ describe('getApprovalView: only people with a part in the request', () => {
   // The bug as reported: an organiser holding the id of someone else's request.
   it('refuses an organiser who does not own the request', async () => {
     const id = await createSubmittedRequest();
+    await assignTo(id, coordinatorId);
     await approveEventRequest(id, { actorId: coordinatorId });
 
     await expect(
@@ -233,19 +257,32 @@ describe('getApprovalView: only people with a part in the request', () => {
     ).rejects.toMatchObject({ code: 'FORBIDDEN' });
   });
 
-  it('allows any coordinator while the request has no coordinator yet', async () => {
+  // SCRUM-232 AC5: no longer open to any coordinator while unassigned -
+  // assignment through the Lead's queue is now a precondition of review.
+  it('refuses any coordinator while the request has no coordinator yet', async () => {
     const id = await createSubmittedRequest();
 
-    const view = await getApprovalView(id, { userId: STRANGER, roles: ['coordinator'] });
-    expect(view.status).toBe('submitted');
+    await expect(
+      getApprovalView(id, { userId: STRANGER, roles: ['coordinator'] }),
+    ).rejects.toMatchObject({ code: 'FORBIDDEN' });
   });
 
   it('allows an Event Operations Manager', async () => {
     const id = await createSubmittedRequest();
+    await assignTo(id, coordinatorId);
     await approveEventRequest(id, { actorId: coordinatorId });
 
     const view = await getApprovalView(id, { userId: STRANGER, roles: ['operations_manager'] });
     expect(view.decision).toBe('approved');
+  });
+
+  // SCRUM-232 AC5: the Lead's access does not depend on assignment existing
+  // at all - they may read even an unassigned event's approval.
+  it('allows an Event Operations Manager even while the request is unassigned', async () => {
+    const id = await createSubmittedRequest();
+
+    const view = await getApprovalView(id, { userId: STRANGER, roles: ['operations_manager'] });
+    expect(view.status).toBe('submitted');
   });
 });
 
@@ -279,6 +316,7 @@ describe('getApprovalView: the venue flag comes from confirmed bookings (SCRUM-1
 
   it('still shows nothing committed for an approved request with no booking', async () => {
     const id = await createSubmittedRequest();
+    await assignTo(id, coordinatorId);
     await approveEventRequest(id, { actorId: coordinatorId });
 
     const view = await getApprovalView(id, owner());
@@ -287,6 +325,7 @@ describe('getApprovalView: the venue flag comes from confirmed bookings (SCRUM-1
 
   it('shows the venue as committed once the event holds a confirmed booking', async () => {
     const id = await createSubmittedRequest();
+    await assignTo(id, coordinatorId);
     await approveEventRequest(id, { actorId: coordinatorId });
     const { error } = await supabase
       .from('venue_booking')

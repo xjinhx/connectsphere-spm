@@ -44,6 +44,10 @@ export function canBeRejected(status: EventRequestStatus): boolean {
  * getClarificationView carries the identical gap and is flagged there rather
  * than fixed from here - see the comment on getClarificationExchange in
  * domain/clarification/service.ts.
+ *
+ * SCRUM-232 AC5: an unassigned event is no longer open to any coordinator
+ * here either (see canReviewDetail above) - the separate
+ * `coordinator_assignment` branch below already covers the Lead.
  */
 export function canViewRejection(
   event: { organiserId: string; coordinatorId: string | null },
@@ -51,7 +55,7 @@ export function canViewRejection(
 ): boolean {
   const mayReview =
     isActionPermitted(actor.roles, 'event_request_review') &&
-    (event.coordinatorId === null || event.coordinatorId === actor.userId);
+    event.coordinatorId === actor.userId;
 
   return (
     event.organiserId === actor.userId ||
@@ -135,6 +139,10 @@ export function commitmentStatementFor(commitments: Commitments): string {
  * A same-organisation colleague (SCRUM-204) is not included, matching those
  * two. They can still open the request itself, where the status badge tells
  * them it is Approved and not Confirmed, which is all AC3 asks them to see.
+ *
+ * SCRUM-232 AC5: an unassigned event is no longer open to any coordinator
+ * here either (see canReviewDetail in this file) - the separate
+ * `coordinator_assignment` branch below already covers the Lead.
  */
 export function canViewApproval(
   event: { organiserId: string; coordinatorId: string | null },
@@ -142,7 +150,7 @@ export function canViewApproval(
 ): boolean {
   const mayReview =
     isActionPermitted(actor.roles, 'event_request_review') &&
-    (event.coordinatorId === null || event.coordinatorId === actor.userId);
+    event.coordinatorId === actor.userId;
 
   return (
     event.organiserId === actor.userId ||
@@ -223,9 +231,18 @@ export function isAwaitingReview(status: EventRequestStatus): boolean {
  * An earlier commit on this branch removed this check on the basis that the
  * test-case spreadsheet's consolidated US-7.1 carries no such AC. The Jira
  * card does carry it, and CLAUDE.md says Jira wins — so it is restored.
+ *
+ * SCRUM-232 AC5 (Week 7 Customer Changes, change 5, confirmed with Arwen
+ * 15 Oct 2026): an unassigned request is no longer open to any Coordinator —
+ * assignment through the Event Coordinator Lead's queue is now a precondition
+ * of review, not an interim state a Coordinator can act on directly. This
+ * supersedes the "coordinator_id === null stays open" reading above.
+ * getReviewDetail (domain/review/service.ts) still gives the Lead a read-only
+ * way in, as a separate OR at that one call site rather than here, so this
+ * function stays a pure "is this literally the assigned coordinator?" check.
  */
 export function canReviewDetail(coordinatorId: string | null, actorUserId: string): boolean {
-  return coordinatorId === null || coordinatorId === actorUserId;
+  return coordinatorId !== null && coordinatorId === actorUserId;
 }
 
 // ---------------------------------------------------------------------------
@@ -241,8 +258,10 @@ export function canReviewDetail(coordinatorId: string | null, actorUserId: strin
  * Nothing said so for Coordinators, because until SCRUM-94 there was no
  * assignment to reason about. The effect was that a Coordinator could open
  * any Organiser's unfinished draft through the review route, since a draft
- * carries no coordinator_id and canReviewDetail treats "unassigned" as open
- * to all — the one case where that reading is wrong.
+ * carries no coordinator_id. SCRUM-232 AC5 has since narrowed canReviewDetail
+ * to refuse an unassigned request outright, but the leak moves rather than
+ * closes: a Forbidden response confirms the id exists just as plainly as a
+ * successful one would, so this check must still run first.
  *
  * Refused as *not found* rather than forbidden, deliberately: a Coordinator
  * has no business learning that a particular id exists as someone's draft.

@@ -10,6 +10,7 @@ import { listAffectedBookings } from '@/domain/availability/service';
 import { EventBookingRequests } from '@/components/venue-booking/EventBookingRequests';
 import { listEventBookingRequests } from '@/domain/venue-booking/service';
 import { RequestVenueBookingForm } from '@/components/event-request/RequestVenueBookingForm';
+import { SuitabilityCheckForm } from '@/components/suitability/SuitabilityCheckForm';
 import { EventVenueBookings } from '@/components/venue-booking/EventVenueBookings';
 import { canCreateBookingRequest } from '@/domain/venue-booking/policy';
 import { acceptsEquipmentRequest } from '@/domain/equipment-request/policy';
@@ -69,7 +70,14 @@ export default async function ReviewEventRequestPage({
   const actor = await getCurrentActor();
   // The same permission the API route asserts, so the page and the route can
   // never disagree about who may review.
-  if (!isActionPermitted(actor.roles, 'event_request_review')) {
+  //
+  // SCRUM-232 AC5: the Event Coordinator Lead (coordinator_assignment) may
+  // also pass this gate — read-only, never to act. getReviewDetail decides
+  // the rest, and canManage below decides what renders.
+  if (
+    !isActionPermitted(actor.roles, 'event_request_review') &&
+    !isActionPermitted(actor.roles, 'coordinator_assignment')
+  ) {
     return (
       <main className="mx-auto max-w-2xl p-8">
         <h1 className="text-2xl font-semibold">Review request</h1>
@@ -85,7 +93,7 @@ export default async function ReviewEventRequestPage({
   let request: ReviewDetail;
   let exchange: ClarificationExchange;
   try {
-    request = await getReviewDetail(id, actor.userId);
+    request = await getReviewDetail(id, actor.userId, actor.roles);
     // SCRUM-91 AC2/AC3. Read after getReviewDetail, never before: that call is
     // what refuses a request assigned to another coordinator (SCRUM-89 AC3), and
     // the exchange must not be read for someone who is not allowed to see it.
@@ -101,8 +109,9 @@ export default async function ReviewEventRequestPage({
     if (error instanceof NotFoundError) {
       notFound();
     }
-    // AC3 — assigned to another Coordinator. Shown as a refusal rather than a
-    // crash, and nothing about the request is rendered.
+    // AC3 — assigned to another Coordinator, or (SCRUM-232 AC5) not assigned
+    // to anyone yet. Shown as a refusal rather than a crash, and nothing
+    // about the request is rendered.
     if (error instanceof ForbiddenError) {
       return (
         <main className="mx-auto max-w-2xl p-8">
@@ -111,7 +120,7 @@ export default async function ReviewEventRequestPage({
           </Link>
           <h1 className="mt-4 text-2xl font-semibold">Review request</h1>
           <p className="mt-4 text-[var(--text-muted)]">
-            This request is assigned to another Event Coordinator, so you cannot review it.
+            This request is not assigned to you, so you cannot review it.
           </p>
         </main>
       );
@@ -129,7 +138,10 @@ export default async function ReviewEventRequestPage({
   // Approved or in Planning. Fetched only when
   // the section will actually render, the same reasoning as gating every
   // other action below on its own policy function first.
-  const venues = canCreateBookingRequest(request.status) ? await listVenues() : [];
+  //
+  // SCRUM-232 AC5: also only for the assigned coordinator — the Lead viewing
+  // read-only never sees this form, so there is nothing to fetch venues for.
+  const venues = request.canManage && canCreateBookingRequest(request.status) ? await listVenues() : [];
 
   // SCRUM-236 AC1-AC3, read for the same reason after getReviewDetail.
   const bookingRequests = await listEventBookingRequests(request.id);
@@ -228,8 +240,13 @@ export default async function ReviewEventRequestPage({
 
           Added to SCRUM-89's page rather than a page of its own, the same way
           SCRUM-90's clarification form below already is. Nothing above this
-          changed. */}
-      {canBeApproved(request.status) ? (
+          changed.
+
+          SCRUM-232 AC5: also gated on canManage — the Lead can review basic
+          event information but does not manage the event, so this (and every
+          other decision section below) renders only for the assigned
+          coordinator. */}
+      {request.canManage && canBeApproved(request.status) ? (
         <section className="mt-6 rounded-lg border border-[var(--border)] bg-[var(--surface)] p-4">
           <ApproveRequestButton requestId={request.id} />
         </section>
@@ -240,13 +257,37 @@ export default async function ReviewEventRequestPage({
           action at the top of the page. */}
       <EventVenueBookings bookings={venueBookings} />
 
+      {/* SCRUM-136 — check a venue against the event before asking Venue Staff
+          for it ("so that a room that cannot hold the event is never
+          requested"). Offered whenever a venue can be requested, just above
+          that form; the service refuses anyone but the event's coordinator.
+          AC5: or for one of the event's booking requests (SCRUM-236's list),
+          at that request's venue. */}
+      {canCreateBookingRequest(request.status) ? (
+        <section className="mt-6 rounded-lg border border-[var(--border)] bg-[var(--surface)] p-4">
+          <h2 className="text-sm font-semibold">Check venue suitability</h2>
+          <div className="mt-3">
+            <SuitabilityCheckForm
+              requestId={request.id}
+              venues={venues}
+              bookingRequests={bookingRequests.map((bookingRequest) => ({
+                id: bookingRequest.id,
+                label: `${bookingRequest.venueName}, ${bookingRequest.lines
+                  .map((line) => `${formatSingaporeDate(line.date)} ${line.startTime}-${line.endTime}`)
+                  .join('; ')}`,
+              }))}
+            />
+          </div>
+        </section>
+      ) : null}
+
       {/* SCRUM-142 AC1-AC4 — "As an Event Coordinator, I want to request a
           specific venue for the times my event needs" (in exact times since
           SCRUM-239 AC3). Gated on
           canCreateBookingRequest, SCRUM-142's own rule, the same way the
           Approve section above is gated on canBeApproved: the screen can
           never offer an action the API would refuse. */}
-      {canCreateBookingRequest(request.status) ? (
+      {request.canManage && canCreateBookingRequest(request.status) ? (
         <section className="mt-6 rounded-lg border border-[var(--border)] bg-[var(--surface)] p-4">
           <h2 className="text-sm font-semibold">Request a venue</h2>
           <div className="mt-3">
@@ -291,7 +332,7 @@ export default async function ReviewEventRequestPage({
           requests stay visible after the event moves on. */}
       <EventBookingRequests requests={bookingRequests} />
 
-      {canRequestClarification(request.status) ? (
+      {request.canManage && canRequestClarification(request.status) ? (
         <section className="mt-6 rounded-lg border border-[var(--border)] bg-[var(--surface)] p-4">
           <RequestClarificationForm requestId={request.id} />
         </section>
@@ -299,7 +340,7 @@ export default async function ReviewEventRequestPage({
 
       {/* SCRUM-93 AC4 — the Coordinator's reject action, offered alongside
           clarification whenever the request is open to a decision. */}
-      {canBeRejected(request.status) ? (
+      {request.canManage && canBeRejected(request.status) ? (
         <section className="mt-6 rounded-lg border border-[var(--border)] bg-[var(--surface)] p-4">
           <RejectRequestForm requestId={request.id} />
         </section>
