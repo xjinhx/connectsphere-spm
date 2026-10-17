@@ -7,8 +7,9 @@ import { z } from 'zod';
  * registration as not required, then that essential set is stored against the
  * event". The four arrangements and the two answers are the card's own words.
  *
- * SCRUM-164 (readiness) reads this set to know what must be complete before an
- * event is confirmed; extend this file rather than duplicate it.
+ * Whichever story stops an event being confirmed while an essential
+ * arrangement is incomplete (customer clarification #80) should read this set
+ * through getEssentialArrangements; extend this file rather than duplicate it.
  */
 
 /** The four arrangements AC1 names, in the order the card lists them. */
