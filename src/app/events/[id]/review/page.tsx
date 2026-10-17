@@ -14,6 +14,8 @@ import { EventVenueBookings } from '@/components/venue-booking/EventVenueBooking
 import { canCreateBookingRequest } from '@/domain/venue-booking/policy';
 import { listEventVenueBookings } from '@/domain/venue-booking/service';
 import { listVenues } from '@/domain/venues/service';
+import { EssentialArrangementsPanel } from '@/components/event-request/EssentialArrangementsPanel';
+import { getEssentialArrangements } from '@/domain/essential-arrangements/service';
 import {
   describeAccessibility,
   describeEquipment,
@@ -133,6 +135,9 @@ export default async function ReviewEventRequestPage({
   // SCRUM-236 AC1-AC3, read for the same reason after getReviewDetail.
   const bookingRequests = await listEventBookingRequests(request.id);
 
+  // SCRUM-100 AC1-AC3, read for the same reason after getReviewDetail.
+  const essentialArrangements = await getEssentialArrangements(request.id, actor.userId);
+
   return (
     <main className="mx-auto max-w-2xl px-4 py-8">
       <Link href="/assigned-events" className="text-sm text-[var(--brand)] hover:underline">
@@ -233,6 +238,11 @@ export default async function ReviewEventRequestPage({
           <ApproveRequestButton requestId={request.id} />
         </section>
       ) : null}
+
+      {/* SCRUM-100 AC1-AC3 — which arrangements are essential for this event.
+          Shown in every status (AC2); the form only where the coordinator may
+          change the set. */}
+      <EssentialArrangementsPanel requestId={request.id} view={essentialArrangements} />
 
       {/* SCRUM-231 AC1-AC4 — the event's venue bookings, each released on its
           own with a reason. Releasing an affected one closes the outstanding
