@@ -34,6 +34,8 @@ import { canBeApproved, canBeRejected, canRequestClarification } from '@/domain/
 import { ForbiddenError, NotFoundError } from '@/domain/shared/errors';
 import { isActionPermitted } from '@/domain/identity/permissions';
 import { getCurrentActor } from '@/lib/auth/currentActor';
+import { SafetyCheckOutcome } from '@/components/safety-check/SafetyCheckOutcome';
+import { getLatestSafetyCheck } from '@/domain/safety-check/service';
 import { formatSingaporeDate, formatSingaporeDateTime } from '@/domain/shared/dates';
 
 /**
@@ -146,6 +148,11 @@ export default async function ReviewEventRequestPage({
   // SCRUM-236 AC1-AC3, read for the same reason after getReviewDetail.
   const bookingRequests = await listEventBookingRequests(request.id);
 
+  // SCRUM-234 AC4/AC5 — the assigned coordinator sees the Safety Officer's
+  // latest decision, with the note or reason. Read for canManage only, the
+  // same gate as the decision sections below: the Lead is not shown it.
+  const safetyCheck = request.canManage ? await getLatestSafetyCheck(request.id, actor) : null;
+
   return (
     <main className="mx-auto max-w-2xl px-4 py-8">
       <Link href="/assigned-events" className="text-sm text-[var(--brand)] hover:underline">
@@ -194,6 +201,8 @@ export default async function ReviewEventRequestPage({
           history behind it. The amended values are the fields listed under it,
           which are read from the request itself. */}
       <ClarificationRounds rounds={exchange.rounds} />
+
+      {safetyCheck ? <SafetyCheckOutcome check={safetyCheck} /> : null}
 
       <dl className="mt-6 rounded-lg border border-[var(--border)] bg-[var(--surface)] px-4">
         <Row label="Purpose" value={request.purpose ?? 'Not provided'} />
