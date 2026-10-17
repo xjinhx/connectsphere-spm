@@ -52,6 +52,11 @@ export const ACTIONS = [
   // are essential for this particular event". The narrower rule, the event's
   // assigned coordinator only (AC1), is in the service.
   'essential_arrangements_record',
+  // SCRUM-160 — "As an Event Coordinator, I want to record the equipment an
+  // event needs with quantities". The narrower rule (this event's assigned
+  // coordinator, AC4) needs the event, so it is in the service, the same split
+  // as venue_booking_request.
+  'equipment_request',
 ] as const;
 
 export type Action = (typeof ACTIONS)[number];
@@ -80,6 +85,8 @@ export const ROLE_PERMISSIONS: Record<Role, readonly Action[]> = {
     'equipment_catalogue_view',
     // SCRUM-100 AC1: only the event's assigned coordinator, so no other role.
     'essential_arrangements_record',
+    // SCRUM-160: record the equipment their event needs.
+    'equipment_request',
   ],
   operations_manager: ['venue_catalogue_view', 'coordinator_assignment', 'account_role_management'],
   venue_staff: ['venue_administration', 'venue_catalogue_view'],

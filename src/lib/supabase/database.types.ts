@@ -118,6 +118,106 @@ export type Database = {
         }
         Relationships: []
       }
+      equipment_request: {
+        Row: {
+          created_at: string
+          event_request_id: string
+          technical_requirements: string | null
+          updated_at: string
+        }
+        Insert: {
+          created_at?: string
+          event_request_id: string
+          technical_requirements?: string | null
+          updated_at?: string
+        }
+        Update: {
+          created_at?: string
+          event_request_id?: string
+          technical_requirements?: string | null
+          updated_at?: string
+        }
+        Relationships: [
+          {
+            foreignKeyName: "equipment_request_event_request_id_fkey"
+            columns: ["event_request_id"]
+            isOneToOne: true
+            referencedRelation: "event_request"
+            referencedColumns: ["id"]
+          },
+        ]
+      }
+      equipment_request_line: {
+        Row: {
+          created_at: string
+          created_by: string
+          equipment_id: string
+          event_request_id: string
+          id: string
+          quantity: number
+          updated_at: string
+        }
+        Insert: {
+          created_at?: string
+          created_by: string
+          equipment_id: string
+          event_request_id: string
+          id?: string
+          quantity: number
+          updated_at?: string
+        }
+        Update: {
+          created_at?: string
+          created_by?: string
+          equipment_id?: string
+          event_request_id?: string
+          id?: string
+          quantity?: number
+          updated_at?: string
+        }
+        Relationships: [
+          {
+            foreignKeyName: "equipment_request_line_equipment_id_fkey"
+            columns: ["equipment_id"]
+            isOneToOne: false
+            referencedRelation: "equipment"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "equipment_request_line_event_request_id_fkey"
+            columns: ["event_request_id"]
+            isOneToOne: false
+            referencedRelation: "equipment_request"
+            referencedColumns: ["event_request_id"]
+          },
+        ]
+      }
+      equipment_reservation: {
+        Row: {
+          created_at: string
+          id: string
+          line_id: string
+        }
+        Insert: {
+          created_at?: string
+          id?: string
+          line_id: string
+        }
+        Update: {
+          created_at?: string
+          id?: string
+          line_id?: string
+        }
+        Relationships: [
+          {
+            foreignKeyName: "equipment_reservation_line_id_fkey"
+            columns: ["line_id"]
+            isOneToOne: true
+            referencedRelation: "equipment_request_line"
+            referencedColumns: ["id"]
+          },
+        ]
+      }
       event_essential_arrangements: {
         Row: {
           equipment: boolean
@@ -692,6 +792,7 @@ export type Database = {
           event_request_id: string
           expected_attendance: number | null
           id: string
+          replaces_booking_id: string | null
           requested_by: string
           room_layout: string | null
           venue_id: string
@@ -703,6 +804,7 @@ export type Database = {
           event_request_id: string
           expected_attendance?: number | null
           id?: string
+          replaces_booking_id?: string | null
           requested_by: string
           room_layout?: string | null
           venue_id: string
@@ -714,6 +816,7 @@ export type Database = {
           event_request_id?: string
           expected_attendance?: number | null
           id?: string
+          replaces_booking_id?: string | null
           requested_by?: string
           room_layout?: string | null
           venue_id?: string
@@ -724,6 +827,20 @@ export type Database = {
             columns: ["event_request_id"]
             isOneToOne: false
             referencedRelation: "event_request"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "venue_booking_request_replaces_booking_id_fkey"
+            columns: ["replaces_booking_id"]
+            isOneToOne: false
+            referencedRelation: "affected_booking_slot"
+            referencedColumns: ["booking_id"]
+          },
+          {
+            foreignKeyName: "venue_booking_request_replaces_booking_id_fkey"
+            columns: ["replaces_booking_id"]
+            isOneToOne: false
+            referencedRelation: "venue_booking"
             referencedColumns: ["id"]
           },
           {
@@ -1188,6 +1305,7 @@ export type Database = {
           p_event_request_id: string
           p_expected_attendance?: number
           p_lines: Json
+          p_replaces_booking_id?: string
           p_requested_by: string
           p_room_layout?: string
           p_venue_id: string

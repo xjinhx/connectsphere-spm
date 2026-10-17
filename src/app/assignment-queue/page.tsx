@@ -50,7 +50,7 @@ export default async function EventOpsManagerAssignmentQueuePage() {
   ]);
 
   return (
-    <main className="mx-auto max-w-4xl p-6">
+    <main className="mx-auto max-w-6xl p-6">
       <div className="mb-6">
         <h1 className="text-2xl font-semibold">Assignment queue</h1>
         <p className="mt-1 text-sm text-[var(--text-muted)]">

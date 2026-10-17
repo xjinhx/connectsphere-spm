@@ -12,7 +12,8 @@ import { listEventBookingRequests } from '@/domain/venue-booking/service';
 import { RequestVenueBookingForm } from '@/components/event-request/RequestVenueBookingForm';
 import { SuitabilityCheckForm } from '@/components/suitability/SuitabilityCheckForm';
 import { EventVenueBookings } from '@/components/venue-booking/EventVenueBookings';
-import { canCreateBookingRequest } from '@/domain/venue-booking/policy';
+import { canCreateBookingRequest, canRequestReplacement } from '@/domain/venue-booking/policy';
+import { acceptsEquipmentRequest } from '@/domain/equipment-request/policy';
 import { listEventVenueBookings } from '@/domain/venue-booking/service';
 import { listVenues } from '@/domain/venues/service';
 import { EssentialArrangementsPanel } from '@/components/event-request/EssentialArrangementsPanel';
@@ -142,7 +143,25 @@ export default async function ReviewEventRequestPage({
   //
   // SCRUM-232 AC5: also only for the assigned coordinator — the Lead viewing
   // read-only never sees this form, so there is nothing to fetch venues for.
-  const venues = request.canManage && canCreateBookingRequest(request.status) ? await listVenues() : [];
+  //
+  // SCRUM-229 AC1, AC2: an affected booking can be replaced by whoever may
+  // release it (SCRUM-231 AC3: the assigned coordinator, so never the Lead),
+  // while the event allows a replacement request, Confirmed included.
+  const replaceableBookingIds = canRequestReplacement(request.status)
+    ? affectedBookings
+        .filter((affected) => venueBookings.some((booking) => booking.id === affected.bookingId && booking.canRelease))
+        .map((affected) => affected.bookingId)
+    : [];
+  const venues =
+    request.canManage && (canCreateBookingRequest(request.status) || replaceableBookingIds.length > 0)
+      ? await listVenues()
+      : [];
+  // SCRUM-230 AC2: what each empty venue requirement falls back to.
+  const eventRequirements = {
+    expectedAttendance: request.expectedAttendance,
+    roomLayout: describeRoomLayout(request.roomLayout),
+    accessibility: describeAccessibility(request),
+  };
 
   // SCRUM-236 AC1-AC3, read for the same reason after getReviewDetail.
   const bookingRequests = await listEventBookingRequests(request.id);
@@ -165,7 +184,10 @@ export default async function ReviewEventRequestPage({
       {/* SCRUM-151 AC3: a confirmed booking on a slot Venue Staff have since
           made unavailable, listed until it is released or replaced. First on
           the page because it needs the coordinator to act. */}
-      <AffectedBookingsNotice bookings={affectedBookings} />
+      <AffectedBookingsNotice
+        bookings={affectedBookings}
+        replacement={{ eventId: request.id, bookingIds: replaceableBookingIds, venues, eventRequirements }}
+      />
 
       {/* US-7.2 AC1/AC3 — a clarification already raised on this request.
           Status-aware wording, same reasoning as the Organiser's own page
@@ -306,13 +328,29 @@ export default async function ReviewEventRequestPage({
               requestId={request.id}
               venues={venues}
               eventPeriod={{ date: request.proposedDate, start: request.startTime, end: request.endTime }}
-              eventRequirements={{
-                expectedAttendance: request.expectedAttendance,
-                roomLayout: describeRoomLayout(request.roomLayout),
-                accessibility: describeAccessibility(request),
-              }}
+              eventRequirements={eventRequirements}
             />
           </div>
+        </section>
+      ) : null}
+
+      {/* SCRUM-160 — "As an Event Coordinator, I want to record the equipment
+          an event needs with quantities". Recorded on its own page; offered
+          while the event is Approved or in Planning, the statuses AC1 accepts
+          (acceptsEquipmentRequest), so the link never leads to a form the API
+          would refuse. */}
+      {acceptsEquipmentRequest(request.status) ? (
+        <section className="mt-6 rounded-lg border border-[var(--border)] bg-[var(--surface)] p-4">
+          <h2 className="text-sm font-semibold">Equipment</h2>
+          <p className="mt-1 text-sm text-[var(--text-muted)]">
+            Record the equipment this event needs, so Technical Support Staff know what to arrange.
+          </p>
+          <Link
+            href={`/events/${request.id}/equipment`}
+            className="mt-3 inline-block rounded-md bg-[var(--brand)] px-4 py-2 text-sm font-medium text-white hover:bg-[var(--brand-dark)]"
+          >
+            Equipment request
+          </Link>
         </section>
       ) : null}
 
