@@ -3,8 +3,8 @@ import type { VenueRequirementsInUse } from '@/domain/venue-booking/schema';
 import type { RequirementResult, Verdict } from './schema';
 
 /**
- * Venue suitability rules (SCRUM-136). Pure functions: no Supabase, no
- * Next.js.
+ * Venue suitability rules (SCRUM-135, SCRUM-136). Pure functions: no
+ * Supabase, no Next.js.
  */
 
 /** What the check needs from the event (or, under SCRUM-136 AC5, from a booking request). */
@@ -27,11 +27,11 @@ export function toRoomLayout(value: string | null): RoomLayout | null {
 }
 
 /**
- * SCRUM-136 AC5: what a check for a booking request needs: the request's own
- * attendance and layout, or the event's for any it left empty. Which one
- * applies is SCRUM-230's rule (venueRequirementsOf), not repeated here, so one
- * space of a multi-venue event is checked for what it will actually be used
- * for (Week 7 change #3).
+ * SCRUM-136 AC5, SCRUM-135 AC4: what a check for a booking request needs: the
+ * request's own attendance and layout, or the event's for any it left empty.
+ * Which one applies is SCRUM-230's rule (venueRequirementsOf), not repeated
+ * here, so one space of a multi-venue event is checked for what it will
+ * actually be used for (Week 7 change #3).
  */
 export function needsOfRequest(
   requirements: Pick<VenueRequirementsInUse, 'expectedAttendance' | 'roomLayout'>,
@@ -107,4 +107,24 @@ export function verdictOf(results: readonly RequirementResult[]): Verdict {
   if (results.some((result) => result.outcome === 'not_met')) return 'not_suitable';
   if (results.some((result) => result.outcome === 'unverified')) return 'suitable_with_concerns';
   return 'suitable';
+}
+
+/**
+ * SCRUM-135 AC2: what is listed when the verdict is not suitable: every
+ * requirement that was not met, and every one that could not be verified
+ * because something is unrecorded (the reason for "with concerns"), each with
+ * the event's and the venue's values. A suitable verdict lists nothing.
+ */
+export function unmetRequirements(results: readonly RequirementResult[]): RequirementResult[] {
+  return results.filter((result) => result.outcome !== 'met');
+}
+
+/**
+ * SCRUM-135 AC3: whether the event's requirements are what they were when a
+ * check was run. Only what the check reads is compared (attendance and
+ * layout), so editing the event's name, description or accessibility needs
+ * does not make a stored check out of date.
+ */
+export function sameNeeds(a: SuitabilityNeeds, b: SuitabilityNeeds): boolean {
+  return a.expectedAttendance === b.expectedAttendance && a.roomLayout === b.roomLayout;
 }

@@ -11,6 +11,8 @@ import { EventBookingRequests } from '@/components/venue-booking/EventBookingReq
 import { listEventBookingRequests } from '@/domain/venue-booking/service';
 import { RequestVenueBookingForm } from '@/components/event-request/RequestVenueBookingForm';
 import { SuitabilityCheckForm } from '@/components/suitability/SuitabilityCheckForm';
+import { listSuitabilityChecks } from '@/domain/suitability/service';
+import type { SuitabilityCheck } from '@/domain/suitability/schema';
 import { EventVenueBookings } from '@/components/venue-booking/EventVenueBookings';
 import { canCreateBookingRequest, canRequestReplacement } from '@/domain/venue-booking/policy';
 import { acceptsEquipmentRequest } from '@/domain/equipment-request/policy';
@@ -164,6 +166,17 @@ export default async function ReviewEventRequestPage({
   // SCRUM-236 AC1-AC3, read for the same reason after getReviewDetail.
   const bookingRequests = await listEventBookingRequests(request.id);
 
+  // SCRUM-135 AC3: the venues already checked, shown again without running
+  // them. Only the event's own coordinator has any; anyone else sees none.
+  let suitabilityChecks: SuitabilityCheck[] = [];
+  if (canCreateBookingRequest(request.status)) {
+    try {
+      suitabilityChecks = await listSuitabilityChecks(request.id, actor.userId);
+    } catch (error) {
+      if (!(error instanceof ForbiddenError)) throw error;
+    }
+  }
+
   return (
     <main className="mx-auto max-w-2xl px-4 py-8">
       <Link href="/assigned-events" className="text-sm text-[var(--brand)] hover:underline">
@@ -278,12 +291,12 @@ export default async function ReviewEventRequestPage({
           action at the top of the page. */}
       <EventVenueBookings bookings={venueBookings} />
 
-      {/* SCRUM-136 — check a venue against the event before asking Venue Staff
-          for it ("so that a room that cannot hold the event is never
-          requested"). Offered whenever a venue can be requested, just above
-          that form; the service refuses anyone but the event's coordinator.
-          AC5: or for one of the event's booking requests (SCRUM-236's list),
-          at that request's venue. */}
+      {/* SCRUM-135, SCRUM-136 — check a selected venue against the event
+          before asking Venue Staff for it ("so that a room that cannot hold
+          the event is never requested"), or one of the event's booking
+          requests at its venue (SCRUM-135 AC4, SCRUM-136 AC5; SCRUM-236's
+          list). Offered whenever a venue can be requested, just above that
+          form; the service refuses anyone but the event's coordinator. */}
       {canCreateBookingRequest(request.status) ? (
         <section className="mt-6 rounded-lg border border-[var(--border)] bg-[var(--surface)] p-4">
           <h2 className="text-sm font-semibold">Check venue suitability</h2>
@@ -291,6 +304,7 @@ export default async function ReviewEventRequestPage({
             <SuitabilityCheckForm
               requestId={request.id}
               venues={venues}
+              checks={suitabilityChecks}
               bookingRequests={bookingRequests.map((bookingRequest) => ({
                 id: bookingRequest.id,
                 label: `${bookingRequest.venueName}, ${bookingRequest.lines
