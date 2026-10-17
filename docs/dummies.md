@@ -566,7 +566,7 @@ switch them the next time they edit those files.
 - **Added by:** SCRUM-160 AC8 — branch `event-equipment-request`
 - **Waiting on:** SCRUM-167 (equipment reservation)
 - **Where:**
-  `supabase/migrations/20261014143210_event_equipment_request.sql` — the
+  `supabase/migrations/20261017175923_event_equipment_request.sql` — the
   `equipment_reservation` table (`DUMMY(SCRUM-167) D-18`);
   `src/lib/supabase/equipmentRequests.ts` — `fetchReservedLineIds()`
   (`DUMMY(SCRUM-167) D-18`);
