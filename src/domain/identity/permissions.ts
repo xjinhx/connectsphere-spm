@@ -48,6 +48,10 @@ export const ACTIONS = [
   // equipment_administration so looking and maintaining can diverge, the same
   // split as venue_catalogue_view and venue_administration.
   'equipment_catalogue_view',
+  // SCRUM-100 — "As an Event Coordinator, I want to mark which arrangements
+  // are essential for this particular event". The narrower rule, the event's
+  // assigned coordinator only (AC1), is in the service.
+  'essential_arrangements_record',
 ] as const;
 
 export type Action = (typeof ACTIONS)[number];
@@ -74,6 +78,8 @@ export const ROLE_PERMISSIONS: Record<Role, readonly Action[]> = {
     // (SCRUM-160) is chosen from, so a Coordinator may read it. Not granted to
     // the other roles, because no story names them reading it yet.
     'equipment_catalogue_view',
+    // SCRUM-100 AC1: only the event's assigned coordinator, so no other role.
+    'essential_arrangements_record',
   ],
   operations_manager: ['venue_catalogue_view', 'coordinator_assignment', 'account_role_management'],
   venue_staff: ['venue_administration', 'venue_catalogue_view'],
