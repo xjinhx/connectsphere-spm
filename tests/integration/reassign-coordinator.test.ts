@@ -255,7 +255,19 @@ describe('reassignCoordinator: SCRUM-96 AC1 and AC2', () => {
   // events, so "assign one instead" pointed at an action that refuses.
   it('does not tell the manager to assign an approved event, which cannot be assigned', async () => {
     const id = await createSubmittedRequest();
+    // SCRUM-232 AC5: approving now needs an assignment first, so coordinatorC
+    // is assigned, approves, then unassigned again - this test's scenario is
+    // specifically an approved event with no coordinator.
+    await supabase
+      .from('event_request')
+      .update({ coordinator_id: coordinatorC.id, assigned_by: coordinatorC.id })
+      .eq('id', id);
     await approveEventRequest(id, { actorId: coordinatorC.id });
+    const { error: unassignError } = await supabase
+      .from('event_request')
+      .update({ coordinator_id: null, assigned_by: null, assigned_at: null })
+      .eq('id', id);
+    if (unassignError) throw new Error(`could not unassign test request: ${unassignError.message}`);
 
     await expect(
       reassignCoordinator(id, {

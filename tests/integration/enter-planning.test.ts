@@ -59,6 +59,14 @@ async function createEventRequest(
 
   if (status === 'submitted') return id;
 
+  // SCRUM-232 AC5: assignment is now a precondition of approving, rejecting
+  // or clarifying, so every status past 'submitted' needs it first.
+  const { error: assignError } = await supabase
+    .from('event_request')
+    .update({ coordinator_id: coordinatorId, assigned_by: coordinatorId })
+    .eq('id', id);
+  if (assignError) throw new Error(`could not assign test request: ${assignError.message}`);
+
   if (status === 'clarification_requested') {
     // event_request_clarification_requested_has_note requires a note to be
     // set whenever status is clarification_requested, which only

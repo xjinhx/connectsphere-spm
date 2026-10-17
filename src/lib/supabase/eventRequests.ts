@@ -283,9 +283,10 @@ export async function markEventRequestApproved(id: string, actorId: string) {
     // decision impossible rather than merely unlikely, the same pattern as
     // assignCoordinatorToEventRequest (SCRUM-94).
     //
-    // `is.null` is part of the condition because an event with no coordinator
-    // yet may still be approved - see the comment on approveEventRequest.
-    .or(`coordinator_id.is.null,coordinator_id.eq.${actorId}`)
+    // SCRUM-232 AC5 (Week 7 Change 5): no `is.null` branch here any more - an
+    // event with no coordinator yet can no longer be approved by anyone,
+    // superseding the earlier reading on approveEventRequest's own comment.
+    .eq('coordinator_id', actorId)
     .select(COLUMNS)
     .maybeSingle();
 }
@@ -315,7 +316,10 @@ export async function markEventRequestRejected(id: string, reason: string, actor
     // Event Operations Manager can reassign the event between the service's
     // check and this write, and the filter makes the UPDATE miss rather than
     // record a decision by a coordinator it was taken away from.
-    .or(`coordinator_id.is.null,coordinator_id.eq.${actorId}`)
+    //
+    // SCRUM-232 AC5: no `is.null` branch - an event with no coordinator yet
+    // can no longer be rejected by anyone.
+    .eq('coordinator_id', actorId)
     .select(COLUMNS)
     .maybeSingle();
 }
@@ -447,7 +451,10 @@ export async function markEventRequestClarificationRequested(
     // is unchanged since it was read - so a request assigned to the actor
     // mid-request still goes through, and one reassigned away from them
     // does not.
-    .or(`coordinator_id.is.null,coordinator_id.eq.${actorId}`)
+    //
+    // SCRUM-232 AC5: no `is.null` branch - an event with no coordinator yet
+    // can no longer be clarified by anyone.
+    .eq('coordinator_id', actorId)
     .select(COLUMNS)
     .maybeSingle();
 }

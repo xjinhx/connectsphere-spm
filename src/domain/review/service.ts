@@ -127,10 +127,12 @@ export async function approveEventRequest(id: string, input: unknown): Promise<A
   //
   // canReviewDetail, not SCRUM-96's requireCurrentCoordinator: this card's AC1
   // reads "Given I am reviewing a submitted request", so the gate is review
-  // access, and review access allows an event with no coordinator yet (SCRUM-89).
-  // requireCurrentCoordinator refuses those, which would offer a coordinator a
-  // review page they may open and an approval that always fails. It would also
-  // re-read a row this function already holds.
+  // access. It would also re-read a row this function already holds.
+  //
+  // SCRUM-232 AC5 (Week 7 Change 5, confirmed with Arwen 15 Oct 2026)
+  // supersedes the earlier reading here: an event with no coordinator yet is
+  // no longer open to any coordinator for approval - assignment through the
+  // Lead's queue is now a precondition of review, this function included.
   if (!canReviewDetail(current.coordinator_id, parsedInput.data.actorId)) {
     throw new ForbiddenError('This event is not assigned to you.');
   }
@@ -294,6 +296,13 @@ export interface ReviewDetail extends EventRequest {
   clarificationNote: string | null;
   clarificationRequestedBy: string | null;
   clarificationRequestedAt: string | null;
+  /**
+   * SCRUM-232 AC5: whether this actor is the request's assigned coordinator,
+   * as opposed to the Lead viewing it read-only (see getReviewDetail below).
+   * The page uses this to decide whether to render the decision forms
+   * (approve, reject, clarify, request a venue) at all.
+   */
+  canManage: boolean;
 }
 
 /**
@@ -309,8 +318,24 @@ export interface ReviewDetail extends EventRequest {
  * `actorUserId` is the signed-in Coordinator, supplied by the caller from
  * getCurrentActor, never from the request — same reasoning as every other
  * actorId in this file.
+ *
+ * SCRUM-232 AC5 (Week 7 Change 5, confirmed with Arwen 15 Oct 2026):
+ * canReviewDetail alone now refuses an unassigned request to every ordinary
+ * Coordinator - assignment through the Lead's queue is a precondition of
+ * review. But Change 5 also gives the Lead the right to "review basic event
+ * information", so `actorRoles` (default empty, additive param - every
+ * existing caller that passes only two arguments keeps compiling) lets a Lead
+ * (`coordinator_assignment`) through read-only. This is deliberately a
+ * separate OR at this one call site rather than inside canReviewDetail
+ * itself: every other canReviewDetail call site in this file is a decision
+ * action (approve/reject/clarify) the Lead has no permission to reach anyway,
+ * and should stay refused for an unassigned request without exception.
  */
-export async function getReviewDetail(id: string, actorUserId: string): Promise<ReviewDetail> {
+export async function getReviewDetail(
+  id: string,
+  actorUserId: string,
+  actorRoles: readonly Role[] = [],
+): Promise<ReviewDetail> {
   const parsedId = EventRequestIdSchema.safeParse(id);
   if (!parsedId.success) throw new NotFoundError('Event request');
 
@@ -326,8 +351,11 @@ export async function getReviewDetail(id: string, actorUserId: string): Promise<
   // canReviewDetail would otherwise read it as "unassigned, open to any
   // Coordinator". See isReviewable.
   if (!isReviewable(row.status)) throw new NotFoundError('Event request');
-  if (!canReviewDetail(row.coordinator_id, actorUserId)) {
-    throw new ForbiddenError('This event request is assigned to another Event Coordinator.');
+  if (
+    !canReviewDetail(row.coordinator_id, actorUserId) &&
+    !isActionPermitted(actorRoles, 'coordinator_assignment')
+  ) {
+    throw new ForbiddenError('This event request is not assigned to you.');
   }
 
   return {
@@ -335,6 +363,7 @@ export async function getReviewDetail(id: string, actorUserId: string): Promise<
     clarificationNote: row.clarification_note,
     clarificationRequestedBy: row.clarification_requested_by,
     clarificationRequestedAt: row.clarification_requested_at,
+    canManage: row.coordinator_id === actorUserId,
   };
 }
 
@@ -512,12 +541,12 @@ export async function requestClarification(
   // A draft has never been sent to anyone, so there is nothing to clarify and
   // no Coordinator has any business learning the id exists. Checked before
   // both the assignment and status rules below: a draft carries no
-  // coordinator_id, so canReviewDetail would pass it, and
-  // canRequestClarification would then answer with an InvalidTransitionError
-  // naming the status ("cannot move from draft"), which confirms the draft
-  // just as plainly as returning it would. Blanket rather than
-  // owner-exempt, unlike getClarificationView's: clarifying is a review
-  // action, and an Organiser has no reason to raise one on their own draft.
+  // coordinator_id, and canReviewDetail now refuses that too (SCRUM-232 AC5),
+  // but as a ForbiddenError - still confirming the id exists just as plainly
+  // as a successful read would. isReviewable turns that into NotFoundError
+  // instead. Blanket rather than owner-exempt, unlike getClarificationView's:
+  // clarifying is a review action, and an Organiser has no reason to raise
+  // one on their own draft.
   if (!isReviewable(current.status)) throw new NotFoundError('Event request');
   // Raising a clarification is an act of reviewing the request, so it takes
   // the same per-event rule the review read takes (canReviewDetail). Without
@@ -525,13 +554,15 @@ export async function requestClarification(
   // that role: a Coordinator reassigned away could still move someone else's
   // event to Clarification Requested and send its Organiser a note, which
   // SCRUM-96 AC4 refuses. Reported by SCRUM-96's owner against merged code.
+  // SCRUM-232 AC5 widens the same check: an event with no coordinator yet is
+  // refused too, not just one reassigned away.
   //
   // Checked before the status check on purpose, as approveEventRequest does:
   // AC4 returns "no planning information", and an InvalidTransitionError
   // names the current status ("cannot move from approved"). Raised in review
   // of PR #57.
   if (!canReviewDetail(current.coordinator_id, actorId)) {
-    throw new ForbiddenError('This event request is assigned to another Event Coordinator.');
+    throw new ForbiddenError('This event request is not assigned to you.');
   }
   if (!canRequestClarification(current.status)) {
     throw new InvalidTransitionError(current.status, 'clarification_requested');
@@ -704,10 +735,11 @@ export async function rejectEventRequest(
   // holds. Mirrors approveEventRequest's SCRUM-213 check, including its order:
   // checked before the status check so an InvalidTransitionError cannot tell
   // them the event's current status. canReviewDetail, not
-  // requireCurrentCoordinator, so an event with no coordinator yet may still
-  // be rejected - same reasoning as approve.
+  // requireCurrentCoordinator. SCRUM-232 AC5 supersedes the "event with no
+  // coordinator yet may still be rejected" reading this comment used to
+  // carry: assignment is now a precondition of review here too.
   if (!canReviewDetail(current.coordinator_id, actorId)) {
-    throw new ForbiddenError('This event request is assigned to another Event Coordinator.');
+    throw new ForbiddenError('This event request is not assigned to you.');
   }
   if (!canBeRejected(current.status)) {
     throw new InvalidTransitionError(current.status, 'rejected');

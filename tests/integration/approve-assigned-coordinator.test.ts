@@ -165,28 +165,29 @@ describe('approveEventRequest — only a coordinator this event is not assigned 
   });
 
   /**
-   * Deliberate. SCRUM-92 AC1's precondition is "Given I am reviewing a submitted
-   * request", and review access (SCRUM-89) allows an event with no coordinator.
-   * US-7.3-TC04's precondition is that the request IS assigned, to somebody
-   * else, so it does not cover this case.
-   *
-   * Asserted rather than left implicit, so the decision is recorded: if the team
-   * later requires assignment before approval, this test is what fails and says
-   * why.
+   * Superseded 15 Oct 2026 by SCRUM-232 AC5 (Week 7 Customer Changes, change
+   * 5, confirmed with Arwen on Slack): "Event Coordinators should only be
+   * able to manage events assigned to them." Assignment through the Event
+   * Coordinator Lead's queue is now a precondition of review, approval
+   * included. This test used to record the opposite decision deliberately,
+   * on the basis that neither SCRUM-92 AC1 nor US-7.3-TC04 covered the
+   * unassigned case; change 5 now does.
    */
-  it('allows any coordinator to approve an event with no coordinator yet', async () => {
+  it('refuses any coordinator to approve an event with no coordinator yet', async () => {
     const id = await createSubmittedRequest(null);
 
-    const outcome = await approveEventRequest(id, { actorId: caseyId });
-
-    expect(outcome.decision).toBe('approved');
-    expect((await readRow(id)).decided_by).toBe(caseyId);
+    await expect(approveEventRequest(id, { actorId: caseyId })).rejects.toMatchObject({
+      code: 'FORBIDDEN',
+    });
+    expect((await readRow(id)).status).toBe('submitted');
   });
 
-  // A draft carries no coordinator (event_request_assignment_needs_submission),
-  // so this is the unassigned case: the access check passes and the status check
-  // is what refuses it. The order matters - being allowed to look at a request
-  // is not being allowed to approve it.
+  // SCRUM-232 AC5: a draft carries no coordinator_id - the database refuses
+  // to assign one to a draft at all (event_request_assignment_needs_submission),
+  // so this stays the unassigned case. canReviewDetail now refuses it before
+  // canBeApproved is ever reached, same as every other decision action. No
+  // existing-status leak: FORBIDDEN names nothing about the draft, where the
+  // old INVALID_TRANSITION (confirming "cannot move from draft") did.
   it('refuses a draft, which has not been submitted for review', async () => {
     const id = await createSubmittedRequest(null);
     // submitted_at goes with the status: event_request_submitted_at_matches_status
@@ -198,7 +199,7 @@ describe('approveEventRequest — only a coordinator this event is not assigned 
     if (error) throw new Error(`could not return the request to draft: ${error.message}`);
 
     await expect(approveEventRequest(id, { actorId: caseyId })).rejects.toMatchObject({
-      code: 'INVALID_TRANSITION',
+      code: 'FORBIDDEN',
     });
   });
 
@@ -244,13 +245,18 @@ describe('markEventRequestApproved — the guard inside the UPDATE (SCRUM-213)',
     expect((await readRow(id)).decided_by).toBe(caseyId);
   });
 
-  it('writes when the event has no coordinator yet', async () => {
+  // SCRUM-232 AC5: no `is.null` branch in the filter any more - an event with
+  // no coordinator yet can no longer be approved by anyone, Lead included
+  // (the Lead never reaches this function, lacking event_request_approval).
+  it('writes nothing when the event has no coordinator yet', async () => {
     const id = await createSubmittedRequest(null);
 
     const { data } = await markEventRequestApproved(id, caseyId);
 
-    expect(data).not.toBeNull();
-    expect((await readRow(id)).decided_by).toBe(caseyId);
+    expect(data).toBeNull();
+    const row = await readRow(id);
+    expect(row.status).toBe('submitted');
+    expect(row.decided_by).toBeNull();
   });
 
   it('still refuses a request that has already been decided', async () => {

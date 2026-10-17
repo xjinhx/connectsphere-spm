@@ -58,13 +58,15 @@ export function canViewClarificationExchange(
   event: { organiserId: string; coordinatorId: string | null },
   actor: { userId: string; roles: readonly Role[] },
 ): boolean {
-  // Whoever may review this request may read what was said about it. An event
-  // with no coordinator yet is included, matching SCRUM-89's canReviewDetail:
-  // a coordinator can raise a clarification on an unassigned request, and
-  // refusing them the reply would lock them out of an exchange they started.
+  // Whoever may review this request may read what was said about it.
+  // SCRUM-232 AC5: an event with no coordinator yet is no longer included -
+  // matching SCRUM-89's canReviewDetail, assignment is now a precondition of
+  // review, not an interim state a coordinator can raise or read a
+  // clarification on directly. The `coordinator_assignment` branch below
+  // still gives the Lead a way to read it.
   const mayReview =
     isActionPermitted(actor.roles, 'event_request_review') &&
-    (event.coordinatorId === null || event.coordinatorId === actor.userId);
+    event.coordinatorId === actor.userId;
 
   return (
     event.organiserId === actor.userId ||
