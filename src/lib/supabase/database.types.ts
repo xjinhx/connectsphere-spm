@@ -597,6 +597,41 @@ export type Database = {
           },
         ]
       }
+      safety_check: {
+        Row: {
+          decided_at: string
+          decided_by: string
+          decision: string
+          event_request_id: string
+          id: string
+          note: string | null
+        }
+        Insert: {
+          decided_at?: string
+          decided_by: string
+          decision: string
+          event_request_id: string
+          id?: string
+          note?: string | null
+        }
+        Update: {
+          decided_at?: string
+          decided_by?: string
+          decision?: string
+          event_request_id?: string
+          id?: string
+          note?: string | null
+        }
+        Relationships: [
+          {
+            foreignKeyName: "safety_check_event_request_id_fkey"
+            columns: ["event_request_id"]
+            isOneToOne: false
+            referencedRelation: "event_request"
+            referencedColumns: ["id"]
+          },
+        ]
+      }
       setup_turnaround_affected_booking: {
         Row: {
           booking_id: string
@@ -1284,6 +1319,15 @@ export type Database = {
         Returns: Json
       }
       notify_hold_expiries: { Args: { p_now?: string }; Returns: number }
+      record_safety_check: {
+        Args: {
+          p_decided_by: string
+          p_decision: string
+          p_event_request_id: string
+          p_note: string
+        }
+        Returns: string
+      }
       slot_end_time: { Args: { p_slot: string }; Returns: string }
       slot_start_time: { Args: { p_slot: string }; Returns: string }
       update_venue: {
@@ -1321,6 +1365,7 @@ export type Database = {
         | "confirmed"
         | "completed"
         | "cancelled"
+        | "preparation"
     }
     CompositeTypes: {
       [_ in never]: never
@@ -1461,6 +1506,7 @@ export const Constants = {
         "confirmed",
         "completed",
         "cancelled",
+        "preparation",
       ],
     },
   },

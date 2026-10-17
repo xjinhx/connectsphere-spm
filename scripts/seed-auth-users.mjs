@@ -31,6 +31,7 @@ const TEST_USERS = [
   { email: 'venue-staff@example.com', role: 'venue_staff' },
   { email: 'tech-support@example.com', role: 'technical_support' },
   { email: 'attendee@example.com', role: 'attendee' },
+  { email: 'safety-officer@example.com', role: 'safety_officer' },
 ];
 
 async function findUserIdByEmail(email) {

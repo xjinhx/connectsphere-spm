@@ -69,6 +69,8 @@ export function canEnterPlanning(status: EventRequestStatus): boolean {
  *   planning -> confirmed                    arrangements in place
  *   confirmed -> planning                    AC4, a significant change
  *   confirmed -> completed                   the event has happened
+ *   confirmed -> preparation                 SCRUM-234 AC3, safety check approved
+ *   preparation -> completed | cancelled     SCRUM-234 card notes
  *   submitted onward -> cancelled            an event can be called off at any
  *                                            point before it is finished
  *
@@ -89,7 +91,8 @@ export const ALLOWED_TRANSITIONS: Readonly<Record<EventRequestStatus, readonly E
   clarification_requested: ['submitted', 'cancelled'],
   approved: ['planning', 'cancelled'],
   planning: ['confirmed', 'cancelled'],
-  confirmed: ['planning', 'completed', 'cancelled'],
+  confirmed: ['planning', 'preparation', 'completed', 'cancelled'],
+  preparation: ['completed', 'cancelled'],
   rejected: [],
   completed: [],
   cancelled: [],
@@ -98,4 +101,19 @@ export const ALLOWED_TRANSITIONS: Readonly<Record<EventRequestStatus, readonly E
 /** True if an event in `from` may move to `to`. Staying where it is is not a move. */
 export function canTransition(from: EventRequestStatus, to: EventRequestStatus): boolean {
   return ALLOWED_TRANSITIONS[from].includes(to);
+}
+
+/**
+ * SCRUM-234 AC6 — "Given an event has not been approved by the Safety Officer,
+ * when anyone attempts to move it to Preparation, then it is refused."
+ *
+ * Confirmed -> Preparation is in the lifecycle above, but only the Safety
+ * Officer's approval makes it: record_safety_check
+ * (20261017203100_operational_safety_check.sql) records the approval and moves
+ * the event together. Every other way of changing a status asks this first and
+ * refuses a move into Preparation, so there is no path to it without an
+ * approval on record.
+ */
+export function needsSafetyApproval(to: EventRequestStatus): boolean {
+  return to === 'preparation';
 }

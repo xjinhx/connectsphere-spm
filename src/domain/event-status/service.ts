@@ -1,5 +1,5 @@
 import { EventRequestIdSchema } from './schema';
-import { canEnterPlanning, canTransition } from './policy';
+import { canEnterPlanning, canTransition, needsSafetyApproval } from './policy';
 import { fetchEventRequestById, markEventRequestPlanning, markEventRequestStatus } from '@/lib/supabase/eventRequests';
 import type { EventRequestRow } from '@/lib/supabase/eventRequests';
 import type { EventRequestStatus } from '@/domain/event-request/schema';
@@ -105,7 +105,9 @@ export async function changeEventStatus(eventRequestId: string, to: EventRequest
 
   const from = (existing as unknown as EventRequestRow).status;
 
-  if (!canTransition(from, to)) {
+  // SCRUM-234 AC6: Preparation only through the Safety Officer's approval
+  // (domain/safety-check/service.ts), never as a plain status change.
+  if (!canTransition(from, to) || needsSafetyApproval(to)) {
     throw new InvalidTransitionError(from, to);
   }
 

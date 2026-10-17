@@ -53,6 +53,10 @@ export const ACTIONS = [
   // coordinator, AC4) needs the event, so it is in the service, the same split
   // as venue_booking_request.
   'equipment_request',
+  // SCRUM-234 AC7 — "As a Safety Officer, I want to run the operational safety
+  // check on a Confirmed event". Covers opening the list and the check page as
+  // well as deciding, because AC2's details are only shown to decide with.
+  'safety_check',
 ] as const;
 
 export type Action = (typeof ACTIONS)[number];
@@ -86,6 +90,7 @@ export const ROLE_PERMISSIONS: Record<Role, readonly Action[]> = {
   venue_staff: ['venue_administration', 'venue_catalogue_view'],
   technical_support: ['venue_catalogue_view', 'equipment_administration'],
   attendee: [],
+  safety_officer: ['safety_check'],
 };
 
 /** An account can hold multiple roles; its permitted actions are the union across all of them. */
