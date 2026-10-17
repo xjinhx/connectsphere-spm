@@ -49,6 +49,20 @@ describe('landingPathForRoles', () => {
     expect(landingPathForRoles(['made-up-role', 'venue_staff'])).toBe('/booking-queue');
   });
 
+  // SCRUM-232 AC1 — test case IDs from the SCRUM-232 tab of ConnectSphere_TestCases_Sprint3.xlsx.
+  it('TC-232-01: Lead lands on the unassigned queue at login', () => {
+    expect(landingPathForRoles(['operations_manager'])).toBe('/assignment-queue');
+  });
+
+  it('TC-232-02: A Coordinator does not land on the unassigned queue', () => {
+    expect(landingPathForRoles(['coordinator'])).toBe('/assigned-events');
+  });
+
+  it('TC-232-03: Lead who also holds the Coordinator role still lands on the queue', () => {
+    expect(landingPathForRoles(['coordinator', 'operations_manager'])).toBe('/assignment-queue');
+    expect(landingPathForRoles(['operations_manager', 'coordinator'])).toBe('/assignment-queue');
+  });
+
   it('falls back to the Attendee landing page for an unrecognised role', () => {
     expect(landingPathForRoles(['made-up-role'])).toBe('/register-events');
   });

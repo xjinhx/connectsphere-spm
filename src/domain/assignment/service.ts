@@ -26,6 +26,7 @@ import {
   ValidationError,
 } from '@/domain/shared/errors';
 import { isRole, type Role } from '@/domain/identity/roles';
+import { assertPermission } from '@/domain/identity/policy';
 import { fromDatabaseTime } from '@/domain/shared/times';
 import { EventRequestStatusEnum, type EventRequestStatus } from '@/domain/event-request/schema';
 import {
@@ -282,6 +283,13 @@ export interface UnassignedEvent {
   name: string;
   proposedDate: string | null;
   submittedAt: string | null;
+  // SCRUM-232 AC2 — the rest of what the Lead sees before assigning.
+  /** Null until the organiser has been linked to a client organisation. */
+  clientOrganisation: { id: string; name: string } | null;
+  /** SCRUM-238. `HH:MM` Singapore time; null until the organiser gives them. */
+  startTime: string | null;
+  endTime: string | null;
+  expectedAttendance: number | null;
 }
 
 /**
@@ -307,7 +315,135 @@ export async function listUnassignedEvents(): Promise<UnassignedEvent[]> {
     name: row.name,
     proposedDate: row.proposed_date,
     submittedAt: row.submitted_at,
+    clientOrganisation: row.client_organisation,
+    startTime: row.start_time === null ? null : fromDatabaseTime(row.start_time),
+    endTime: row.end_time === null ? null : fromDatabaseTime(row.end_time),
+    expectedAttendance: row.expected_attendance,
   }));
+}
+
+// ---------------------------------------------------------------------------
+// SCRUM-232 — the Lead's assignment record for one event
+// ---------------------------------------------------------------------------
+
+/** One replaced assignment, with who made each change (AC3's "my name"). */
+export interface AssignmentRecordEntry {
+  coordinatorName: string | null;
+  /** Falls back to this when the profile has no name recorded, same as the picker (SCRUM-232). */
+  coordinatorEmail: string | null;
+  assignedByName: string | null;
+  assignedByEmail: string | null;
+  assignedAt: string;
+  replacedByCoordinatorName: string | null;
+  replacedByCoordinatorEmail: string | null;
+  /** The Lead who made the reassignment. */
+  replacedByName: string | null;
+  replacedByEmail: string | null;
+  replacedAt: string;
+}
+
+export interface AssignmentRecord {
+  event: UnassignedEvent & { status: EventRequestStatus };
+  /** Null until a coordinator is assigned. */
+  current: {
+    coordinatorId: string;
+    coordinatorName: string | null;
+    coordinatorEmail: string | null;
+    assignedByName: string | null;
+    assignedByEmail: string | null;
+    assignedAt: string;
+  } | null;
+  /** Oldest first. */
+  history: AssignmentRecordEntry[];
+}
+
+/**
+ * AC3 — an event's assignment as the Lead sees it: who it is assigned to, who
+ * assigned it and when, and every reassignment before that with who made it.
+ * AC4 — only an account with the Lead's permission may read it; the page shows
+ * everyone else that it is not for their role.
+ *
+ * The assignment and its history come from one read (fetchEventAssignmentWithHistory),
+ * so they always agree, for the reason given on getCoordinatorView. The event's
+ * own details are a second read; they are not what a reassignment changes.
+ */
+export async function getAssignmentRecord(
+  eventRequestId: string,
+  actor: { roles: Role[] },
+): Promise<AssignmentRecord> {
+  assertPermission(actor.roles, 'coordinator_assignment');
+
+  const parsedId = EventRequestIdSchema.safeParse(eventRequestId);
+  if (!parsedId.success) throw new NotFoundError('Event request');
+
+  const [assignment, details] = await Promise.all([
+    fetchEventAssignmentWithHistory(parsedId.data),
+    fetchEventRequestById(parsedId.data),
+  ]);
+  if (assignment.error) throw new ValidationError('The event request could not be read.', assignment.error.message);
+  if (details.error) throw new ValidationError('The event request could not be read.', details.error.message);
+  if (!assignment.data || !details.data) throw new NotFoundError('Event request');
+
+  const event = assignment.data as unknown as EventAssignmentWithHistoryRow;
+  const row = details.data as unknown as EventRequestRow;
+  const historyRows: CoordinatorHistoryRow[] = event.event_request_coordinator_history ?? [];
+
+  const allIds = [
+    ...(event.coordinator_id ? [event.coordinator_id] : []),
+    ...(event.assigned_by ? [event.assigned_by] : []),
+    ...historyRows.flatMap((h) => [h.coordinator_id, h.assigned_by, h.replaced_by, h.replaced_by_coordinator_id]),
+  ];
+  const people = await readContactProfiles(allIds);
+  const nameOf = (id: string) => people.get(id)?.full_name ?? null;
+
+  // Same fallback as listAssignableCoordinators (SCRUM-232): until SCRUM-205
+  // lets accounts record a name, AC3's "recorded with my name" would
+  // otherwise render as "an unnamed account" for every account seeded
+  // without one. Only fetched for ids that actually lack a name.
+  const idsNeedingEmail = [...new Set(allIds)].filter((id) => !nameOf(id));
+  const emailEntries = await Promise.all(
+    idsNeedingEmail.map(async (id) => [id, await readAccountEmail(id)] as const),
+  );
+  const emailById = new Map(emailEntries);
+  const emailOf = (id: string) => emailById.get(id) ?? null;
+
+  return {
+    event: {
+      id: row.id,
+      reference: row.reference,
+      name: row.name,
+      status: row.status,
+      proposedDate: row.proposed_date,
+      submittedAt: row.submitted_at,
+      clientOrganisation: row.client_organisation,
+      startTime: row.start_time === null ? null : fromDatabaseTime(row.start_time),
+      endTime: row.end_time === null ? null : fromDatabaseTime(row.end_time),
+      expectedAttendance: row.expected_attendance,
+    },
+    current:
+      event.coordinator_id && event.assigned_at
+        ? {
+            coordinatorId: event.coordinator_id,
+            coordinatorName: nameOf(event.coordinator_id),
+            coordinatorEmail: emailOf(event.coordinator_id),
+            assignedByName: event.assigned_by ? nameOf(event.assigned_by) : null,
+            assignedByEmail: event.assigned_by ? emailOf(event.assigned_by) : null,
+            assignedAt: event.assigned_at,
+          }
+        : null,
+    history: historyRows.map((h) => ({
+      coordinatorName: nameOf(h.coordinator_id),
+      coordinatorEmail: emailOf(h.coordinator_id),
+      assignedByName: nameOf(h.assigned_by),
+      assignedByEmail: emailOf(h.assigned_by),
+      assignedAt: h.assigned_at,
+      replacedByCoordinatorName: nameOf(h.replaced_by_coordinator_id),
+      replacedByCoordinatorEmail: emailOf(h.replaced_by_coordinator_id),
+      replacedByName: nameOf(h.replaced_by),
+      replacedByEmail: emailOf(h.replaced_by),
+      replacedAt: h.replaced_at,
+    })),
+  };
 }
 
 // ---------------------------------------------------------------------------
@@ -317,8 +453,10 @@ export async function listUnassignedEvents(): Promise<UnassignedEvent[]> {
 /** One choice in the picker an Operations Manager assigns from. */
 export interface AssignableCoordinator {
   id: string;
-  /** Null when the profile has no name recorded yet — shown as the id's stand-in. */
+  /** Null when the profile has no name recorded yet — the picker falls back to email. */
   name: string | null;
+  /** The account's ConnectSphere sign-in address, used when name is null. */
+  email: string | null;
 }
 
 /**
@@ -332,6 +470,14 @@ export interface AssignableCoordinator {
  *
  * No workload count is returned with each name. AC2 applies no limit
  * (clarification #92), so a count here would suggest a cap that does not exist.
+ *
+ * Email fallback added for SCRUM-232: nothing in the app writes
+ * profiles.full_name yet (SCRUM-205 "Maintain my profile details", the story
+ * that owns it, is still To Do and unassigned), so a freshly created
+ * coordinator has none and the Lead could not tell them apart in the picker.
+ * This relaxes /api/coordinators' original "names only, no email" choice
+ * (SCRUM-94/95) - flagged for Marcus to review, not yet confirmed with him.
+ * Remove this fallback once SCRUM-205 lands and profiles actually get names.
  */
 export async function listAssignableCoordinators(): Promise<AssignableCoordinator[]> {
   const { data, error } = await listCoordinatorProfiles();
@@ -340,9 +486,17 @@ export async function listAssignableCoordinators(): Promise<AssignableCoordinato
   }
 
   const rows = (data ?? []) as { id: string; full_name: string | null; roles: unknown }[];
-  return rows
-    .filter((row) => canReceiveAssignment(((row.roles as unknown[] | null) ?? []).filter(isRole)))
-    .map((row) => ({ id: row.id, name: row.full_name }));
+  const eligible = rows.filter((row) =>
+    canReceiveAssignment(((row.roles as unknown[] | null) ?? []).filter(isRole)),
+  );
+
+  return Promise.all(
+    eligible.map(async (row) => ({
+      id: row.id,
+      name: row.full_name,
+      email: row.full_name ? null : await readAccountEmail(row.id),
+    })),
+  );
 }
 
 // ---------------------------------------------------------------------------

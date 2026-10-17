@@ -48,7 +48,7 @@ export function canRequestReplacement(status: EventRequestStatus): boolean {
 /**
  * SCRUM-229 AC4 (CONTEXT.md: Replaced booking): a booking is replaced when it
  * is released and a replacement request for it has an approved line, which is
- * what released it (20261016160410).
+ * what released it (20261017211239).
  */
 export function isReplacedBooking(status: VenueBookingStatus, replacementLineStatuses: readonly string[]): boolean {
   return status === 'released' && replacementLineStatuses.includes('approved');
