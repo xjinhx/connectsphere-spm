@@ -60,9 +60,7 @@ describe('notificationHref', () => {
     );
   });
 
-  it('leaves coordinator_unassigned on the organiser default - the previous coordinator has nothing left to open', () => {
-    expect(notificationHref({ type: 'coordinator_unassigned', eventRequestId })).toBe(
-      '/events/event-1',
-    );
+  it('routes coordinator_unassigned to the previous coordinator\'s own events list, not the organiser default', () => {
+    expect(notificationHref({ type: 'coordinator_unassigned', eventRequestId })).toBe('/my-events');
   });
 });

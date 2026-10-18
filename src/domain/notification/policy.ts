@@ -41,17 +41,22 @@ export function canAccessNotification(recipientId: string, actorId: string): boo
  * 'coordinator_unassigned' is sent to the *previous* coordinator, who loses
  * both routes the moment the reassignment lands (not the current
  * coordinator_id, and - unless they separately hold the Lead role - not
- * covered by coordinator_assignment either). That denial is correct, not a
- * bug: AC3 is purely informational ("you are no longer the coordinator"),
- * and there is nothing left for them to act on, so it keeps the organiser's
- * /events/<id> default rather than being added to a facing-type set.
+ * covered by coordinator_assignment either). Review feedback on SCRUM-197
+ * (Dylan, PR #117): the organiser default still hits Access Denied - the
+ * same failure mode SCRUM-241 exists to fix - so it routes to their own
+ * /my-events instead (SCRUM-97), which needs no event id and shows every
+ * event still actually assigned to them.
  */
 const COORDINATOR_FACING_TYPES = new Set<string>(['coordinator_assigned', 'venue_booking_update']);
 const LEAD_FACING_TYPES = new Set<string>(['request_submitted']);
+const OWN_EVENTS_LIST_TYPES = new Set<string>(['coordinator_unassigned']);
 
 export function notificationHref(notification: { type: string; eventRequestId: string }): string {
   if (LEAD_FACING_TYPES.has(notification.type)) {
     return `/assignment-queue/${notification.eventRequestId}`;
+  }
+  if (OWN_EVENTS_LIST_TYPES.has(notification.type)) {
+    return '/my-events';
   }
   return COORDINATOR_FACING_TYPES.has(notification.type)
     ? `/events/${notification.eventRequestId}/review`
