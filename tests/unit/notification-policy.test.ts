@@ -52,4 +52,15 @@ describe('notificationHref', () => {
   it('defaults an unrecognised type to the plain event page', () => {
     expect(notificationHref({ type: 'something_new', eventRequestId })).toBe('/events/event-1');
   });
+
+  // SCRUM-197: two more types, neither coordinator-facing in the SCRUM-241 sense.
+  it('routes a request_submitted (Lead-facing) to their assignment-queue record', () => {
+    expect(notificationHref({ type: 'request_submitted', eventRequestId })).toBe(
+      '/assignment-queue/event-1',
+    );
+  });
+
+  it('routes coordinator_unassigned to the previous coordinator\'s own events list, not the organiser default', () => {
+    expect(notificationHref({ type: 'coordinator_unassigned', eventRequestId })).toBe('/my-events');
+  });
 });

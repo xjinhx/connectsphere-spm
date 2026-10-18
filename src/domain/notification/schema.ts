@@ -28,6 +28,13 @@ export const NOTIFICATION_TYPES = [
   // SCRUM-148/149/151: a decision on a coordinator's venue booking request, or
   // a confirmed booking affected by withdrawn availability.
   'venue_booking_update',
+  // SCRUM-197 AC1: an Event Coordinator Lead (operations_manager), told a
+  // newly submitted request needs a coordinator assigned.
+  'request_submitted',
+  // SCRUM-197 AC3: the previous coordinator, told an event was reassigned
+  // away from them. The new coordinator reuses 'coordinator_assigned'
+  // (same meaning as SCRUM-94: "you now have this event").
+  'coordinator_unassigned',
 ] as const;
 export const NotificationTypeSchema = z.enum(NOTIFICATION_TYPES);
 export type NotificationType = z.infer<typeof NotificationTypeSchema>;
