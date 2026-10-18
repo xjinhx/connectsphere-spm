@@ -53,7 +53,7 @@ async function findUserIdByEmail(email) {
   return data.users.find((user) => user.email === email)?.id;
 }
 
-async function ensureCoordinator(email) {
+async function ensureCoordinator(email, roles = ['coordinator']) {
   const { data: created, error: createError } = await admin.auth.admin.createUser({
     email,
     password: TEST_PASSWORD,
@@ -66,9 +66,9 @@ async function ensureCoordinator(email) {
     }
     userId = await findUserIdByEmail(email);
   }
-  const { error: rolesError } = await admin.from('profiles').update({ roles: ['coordinator'] }).eq('id', userId);
+  const { error: rolesError } = await admin.from('profiles').update({ roles }).eq('id', userId);
   if (rolesError) throw new Error(`Failed to set roles for ${email}: ${rolesError.message}`);
-  console.log(`Ready: ${email} / ${TEST_PASSWORD} (coordinator)`);
+  console.log(`Ready: ${email} / ${TEST_PASSWORD} (${roles.join(', ')})`);
   return userId;
 }
 
@@ -126,6 +126,7 @@ async function api(session, method, path, body) {
 async function main() {
   const coordinatorDId = await ensureCoordinator('coordinator-d@example.com');
   await ensureCoordinator('coordinator-c@example.com'); // TC-233-02: no events, left alone
+  await ensureCoordinator('coord-venue@example.com', ['coordinator', 'venue_staff']); // TC-233-09
 
   const { data: venue, error: venueError } = await admin
     .from('venues')
@@ -205,6 +206,7 @@ async function main() {
   console.log('  coordinator@example.com   - Coordinator A (3 active: Demo A, Approved Demo, Planning Demo; Reject/Done/Cancel Demo excluded)');
   console.log('  coordinator-d@example.com - Coordinator D (1 active: Demo B)');
   console.log('  coordinator-c@example.com - no events (TC-233-02: should still be listed, empty)');
+  console.log('  coord-venue@example.com   - roles [coordinator, venue_staff] (TC-233-09: denied, mixed roles)');
   console.log('\nFor TC-233-06 (live reassignment): as the Lead, reassign S233 Demo A from');
   console.log(`  Coordinator A to Coordinator D via /assignment-queue/${demoA.id}, then reload`);
   console.log('  /coordinator-overview and confirm it moved from A\'s list to D\'s.');
