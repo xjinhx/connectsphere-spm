@@ -11,6 +11,8 @@ const TYPE_LABELS: Record<string, string> = {
   coordinator_assigned: 'Coordinator assigned',
   coordinator_named: 'Coordinator named',
   venue_booking_update: 'Venue booking',
+  request_submitted: 'Needs a coordinator',
+  coordinator_unassigned: 'Coordinator removed',
 };
 
 /**
