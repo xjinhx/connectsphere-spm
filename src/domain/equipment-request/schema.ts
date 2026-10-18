@@ -124,3 +124,55 @@ export const AddEquipmentLineOutcomeSchema = z.object({
   sameTypeLines: z.array(EquipmentRequestLineSchema),
 });
 export type AddEquipmentLineOutcome = z.infer<typeof AddEquipmentLineOutcomeSchema>;
+
+// ---------------------------------------------------------------------------
+// SCRUM-164 — Queue of equipment requests awaiting review
+// ---------------------------------------------------------------------------
+
+/**
+ * An equipment request's status, as SCRUM-166 (Update the status of an
+ * equipment request) names them: under review when raised (its AC1), then
+ * partially fulfilled, fulfilled or unable to fulfil (its AC2).
+ *
+ * DUMMY(SCRUM-166) D-19: nothing in the app sets a status yet; testers set it
+ * by hand. The column and these values are real.
+ */
+export const EQUIPMENT_REQUEST_STATUSES = ['under_review', 'partially_fulfilled', 'fulfilled', 'unable_to_fulfil'] as const;
+export const EquipmentRequestStatusSchema = z.enum(EQUIPMENT_REQUEST_STATUSES);
+export type EquipmentRequestStatus = z.infer<typeof EquipmentRequestStatusSchema>;
+
+export const EQUIPMENT_REQUEST_STATUS_LABELS: Record<EquipmentRequestStatus, string> = {
+  under_review: 'Under review',
+  partially_fulfilled: 'Partially fulfilled',
+  fulfilled: 'Fulfilled',
+  unable_to_fulfil: 'Unable to fulfil',
+};
+
+/** AC1: one requested item and its quantity, as the queue shows it. */
+export const EquipmentQueueLineSchema = z.object({
+  id: z.string().uuid(),
+  equipmentName: z.string(),
+  quantity: z.number().int(),
+});
+export type EquipmentQueueLine = z.infer<typeof EquipmentQueueLineSchema>;
+
+/**
+ * One outstanding equipment request in the queue.
+ *
+ * AC1: its event, the event's date and the requested items with their
+ * quantities. AC4: how many items are still unavailable.
+ */
+export const EquipmentQueueEntrySchema = z.object({
+  eventRequestId: z.string().uuid(),
+  eventName: z.string(),
+  eventReference: z.string(),
+  /** The event's date (YYYY-MM-DD), or null when the event has none yet. */
+  eventDate: z.string().nullable(),
+  status: EquipmentRequestStatusSchema,
+  lines: z.array(EquipmentQueueLineSchema),
+  /** AC4: lines marked unavailable, each counted once whatever its quantity. */
+  unavailableCount: z.number().int().min(0),
+  /** When the request was raised: its first line was added (SCRUM-160 AC10). */
+  raisedAt: z.string(),
+});
+export type EquipmentQueueEntry = z.infer<typeof EquipmentQueueEntrySchema>;

@@ -128,3 +128,24 @@ export async function fetchEquipmentRequestLine(eventRequestId: string, lineId: 
 export async function fetchReservedLineIds(lineIds: readonly string[]) {
   return db().from('equipment_reservation').select('line_id').in('line_id', [...lineIds]);
 }
+
+/**
+ * SCRUM-164 AC1, AC3, AC5: every equipment request whose status is one of
+ * `statuses`, at every location, with its event and its lines in the order
+ * they were added. Which statuses count as outstanding is the domain's call
+ * (OUTSTANDING_EQUIPMENT_REQUEST_STATUSES), so they are passed in.
+ *
+ * DUMMY(SCRUM-166) D-19: status and unavailable are set by hand until
+ * SCRUM-166 sets them; this reads them as stored.
+ */
+const QUEUE_SELECT =
+  'event_request_id, status, event_request ( name, reference, proposed_date ), equipment_request_line ( id, quantity, unavailable, created_at, equipment ( name ) )';
+
+export async function fetchEquipmentRequestsByStatus(statuses: readonly string[]) {
+  return db()
+    .from('equipment_request')
+    .select(QUEUE_SELECT)
+    .in('status', [...statuses])
+    .order('created_at', { referencedTable: 'equipment_request_line' })
+    .order('id', { referencedTable: 'equipment_request_line' });
+}

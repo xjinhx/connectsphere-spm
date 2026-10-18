@@ -2,6 +2,7 @@ import { isCurrentCoordinator } from '@/domain/assignment/policy';
 import type { EventRequestStatus } from '@/domain/event-request/schema';
 import { isActionPermitted } from '@/domain/identity/permissions';
 import type { Role } from '@/domain/identity/roles';
+import type { EquipmentRequestStatus } from './schema';
 
 /**
  * Equipment request rules (SCRUM-160 Record the equipment an event needs).
@@ -89,3 +90,31 @@ export function needsReservationConfirmation(
 
 export const RESERVATION_WARNING_MESSAGE =
   'This item has already been reserved. Confirm to apply the change to its reservation.';
+
+// ---------------------------------------------------------------------------
+// SCRUM-164 — Queue of equipment requests awaiting review
+// ---------------------------------------------------------------------------
+
+/**
+ * AC1: "equipment requests ... that are not yet resolved". AC3: fulfilled and
+ * unable to fulfil no longer appear as outstanding. AC4: partially fulfilled
+ * remains listed. Under review is how every request starts (SCRUM-166 AC1), so
+ * it is outstanding too.
+ */
+export const OUTSTANDING_EQUIPMENT_REQUEST_STATUSES = [
+  'under_review',
+  'partially_fulfilled',
+] as const satisfies readonly EquipmentRequestStatus[];
+
+export function isOutstandingEquipmentRequest(status: EquipmentRequestStatus): boolean {
+  return (OUTSTANDING_EQUIPMENT_REQUEST_STATUSES as readonly EquipmentRequestStatus[]).includes(status);
+}
+
+/**
+ * AC4: "shows how many items are still unavailable". Each unavailable line
+ * counts once, whatever its quantity (PO, 18 Oct 2026; TC-164-10): Mic x2 and
+ * Lectern x1 unavailable is 2 items, not 3.
+ */
+export function countUnavailableItems(lines: readonly { unavailable: boolean }[]): number {
+  return lines.filter((line) => line.unavailable).length;
+}
