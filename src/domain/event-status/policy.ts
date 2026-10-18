@@ -109,7 +109,7 @@ export function canTransition(from: EventRequestStatus, to: EventRequestStatus):
  *
  * Confirmed -> Preparation is in the lifecycle above, but only the Safety
  * Officer's approval makes it: record_safety_check
- * (20261017203100_operational_safety_check.sql) records the approval and moves
+ * (20261018030100_operational_safety_check.sql) records the approval and moves
  * the event together. Every other way of changing a status asks this first and
  * refuses a move into Preparation, so there is no path to it without an
  * approval on record.

@@ -66,7 +66,7 @@ export async function fetchSafetyChecks(eventRequestId: string) {
 
 /**
  * AC3-AC6: one call to record_safety_check
- * (20261017203100_operational_safety_check.sql), which records the decision
+ * (20261018030100_operational_safety_check.sql), which records the decision
  * and moves the event in one transaction. Resolves to 'recorded', or
  * 'not_confirmed' when the event is not Confirmed and nothing changed.
  */
