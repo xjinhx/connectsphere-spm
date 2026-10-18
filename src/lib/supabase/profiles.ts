@@ -47,6 +47,22 @@ export async function listCoordinatorProfiles() {
     .order('full_name', { ascending: true });
 }
 
+/**
+ * SCRUM-197 AC1 — every account holding the Event Coordinator Lead role
+ * (`operations_manager` in code — the "Event Coordinator Lead" display name
+ * is cosmetic only, CLAUDE.md "Agreed on day 1"), so each can be notified
+ * that a newly submitted request needs a coordinator assigned.
+ *
+ * Same `contains` shape as listCoordinatorProfiles, for the same reason:
+ * roles is a text[] and an account can hold more than one role.
+ */
+export async function listOperationsManagerProfiles() {
+  return createAdminClient()
+    .from('profiles')
+    .select('id, full_name, roles')
+    .contains('roles', ['operations_manager']);
+}
+
 /** SCRUM-148 AC1 — the names of the Venue Staff who decided a booking request's lines. */
 export async function fetchProfileNames(accountIds: readonly string[]) {
   return createAdminClient().from('profiles').select('id, full_name').in('id', [...accountIds]);
