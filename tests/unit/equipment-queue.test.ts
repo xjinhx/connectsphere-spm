@@ -1,6 +1,7 @@
 import { describe, expect, it } from 'vitest';
 import {
   countUnavailableItems,
+  daysUntilEvent,
   isOutstandingEquipmentRequest,
   sortEquipmentQueue,
   toEquipmentQueueSort,
@@ -120,5 +121,18 @@ describe('countUnavailableItems: SCRUM-164 AC4', () => {
 
   it('TC-164-09 no unavailable item counts as 0', () => {
     expect(countUnavailableItems([projector])).toBe(0);
+  });
+});
+
+describe('daysUntilEvent', () => {
+  it('counts calendar days from today, across a month end', () => {
+    expect(daysUntilEvent('2026-10-18', '2026-10-18')).toBe(0);
+    expect(daysUntilEvent('2026-10-19', '2026-10-18')).toBe(1);
+    expect(daysUntilEvent('2026-11-05', '2026-10-28')).toBe(8);
+    expect(daysUntilEvent('2026-10-17', '2026-10-18')).toBe(-1);
+  });
+
+  it('is null for an event with no date', () => {
+    expect(daysUntilEvent(null, '2026-10-18')).toBeNull();
   });
 });

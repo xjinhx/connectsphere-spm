@@ -158,3 +158,14 @@ export function sortEquipmentQueue<T extends { eventRequestId: string; eventDate
   };
   return [...entries].sort(order[sort]);
 }
+
+/**
+ * Days from `today` to the event's date (both YYYY-MM-DD, Singapore): 0 on
+ * the day, negative once it has passed, null when the event has no date. The
+ * queue shows it beside the date so the nearest events stand out.
+ */
+export function daysUntilEvent(eventDate: string | null, today: string): number | null {
+  if (eventDate === null) return null;
+  const DAY_MS = 24 * 60 * 60 * 1000;
+  return Math.round((Date.parse(`${eventDate}T00:00:00Z`) - Date.parse(`${today}T00:00:00Z`)) / DAY_MS);
+}
