@@ -1,4 +1,5 @@
 import { beforeEach, describe, expect, it, vi } from 'vitest';
+import { NextRequest } from 'next/server';
 
 /**
  * SCRUM-164 through the real API route. Only the session (getCurrentActor) and
@@ -7,7 +8,8 @@ import { beforeEach, describe, expect, it, vi } from 'vitest';
  *
  * What is proved here is the route's half: only Technical Support Staff get the
  * queue (TC-164-03 - every other role is refused with 403 before anything is
- * read), and a missing session is 401.
+ * read), a missing session is 401, and the sort in the URL reaches the service
+ * (AC2).
  *
  * Test case IDs are from the SCRUM-164 tab (TC-164-nn).
  */
@@ -27,7 +29,7 @@ function signInAs(...roles: Role[]) {
   vi.mocked(getCurrentActor).mockResolvedValue({ userId: ACCOUNT, fullName: 'Test', roles, clientOrganisation: null });
 }
 
-const get = () => GET();
+const get = (query = '') => GET(new NextRequest(`http://localhost/api/equipment-queue${query}`));
 
 beforeEach(() => {
   vi.clearAllMocks();
@@ -60,5 +62,27 @@ describe('SCRUM-164: who may open the queue', () => {
     vi.mocked(getCurrentActor).mockRejectedValue(new UnauthenticatedError());
     expect((await get()).status).toBe(401);
     expect(listEquipmentQueue).not.toHaveBeenCalled();
+  });
+});
+
+describe('SCRUM-164 AC2: the sort in the URL', () => {
+  it('TC-164-04 passes ?sort=event-date to the service', async () => {
+    signInAs('technical_support');
+    vi.mocked(listEquipmentQueue).mockResolvedValue([]);
+
+    await get('?sort=event-date');
+
+    expect(listEquipmentQueue).toHaveBeenCalledWith('event-date');
+  });
+
+  it('falls back to the order raised for a missing or unknown sort', async () => {
+    signInAs('technical_support');
+    vi.mocked(listEquipmentQueue).mockResolvedValue([]);
+
+    await get();
+    await get('?sort=nonsense');
+
+    expect(listEquipmentQueue).toHaveBeenNthCalledWith(1, 'raised');
+    expect(listEquipmentQueue).toHaveBeenNthCalledWith(2, 'raised');
   });
 });

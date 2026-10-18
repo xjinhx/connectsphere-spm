@@ -118,3 +118,43 @@ export function isOutstandingEquipmentRequest(status: EquipmentRequestStatus): b
 export function countUnavailableItems(lines: readonly { unavailable: boolean }[]): number {
   return lines.filter((line) => line.unavailable).length;
 }
+
+export const EQUIPMENT_QUEUE_SORTS = ['raised', 'event-date'] as const;
+export type EquipmentQueueSort = (typeof EQUIPMENT_QUEUE_SORTS)[number];
+
+/** A sort named in the URL, or the default when it is missing or unknown. */
+export function toEquipmentQueueSort(value: unknown): EquipmentQueueSort {
+  return EQUIPMENT_QUEUE_SORTS.find((sort) => sort === value) ?? 'raised';
+}
+
+/**
+ * The order the queue is shown in. The same two orders as SCRUM-147's booking
+ * queue (sortBookingQueue), so the two queues behave alike.
+ *
+ * 'raised' (the default; the card sets none): the oldest request first.
+ * 'event-date' (AC2): the soonest event first. Dates are compared as
+ *   YYYY-MM-DD strings, which order the same way as the calendar, never as
+ *   displayed text (TC-164-05: 3 Jan 2027 sorts after 28 Dec 2026). An event
+ *   with no date yet goes last: there is nothing to say it is soon.
+ *
+ * Ties fall back to the other order, then the event id, so the result is
+ * stable. Returns a new array; the input is not reordered in place.
+ */
+export function sortEquipmentQueue<T extends { eventRequestId: string; eventDate: string | null; raisedAt: string }>(
+  entries: readonly T[],
+  sort: EquipmentQueueSort,
+): T[] {
+  const byRaised = (a: T, b: T) => Date.parse(a.raisedAt) - Date.parse(b.raisedAt);
+  const byDate = (a: T, b: T) => {
+    if (a.eventDate === b.eventDate) return 0;
+    if (a.eventDate === null) return 1;
+    if (b.eventDate === null) return -1;
+    return a.eventDate.localeCompare(b.eventDate);
+  };
+  const byEvent = (a: T, b: T) => a.eventRequestId.localeCompare(b.eventRequestId);
+  const order: Record<EquipmentQueueSort, (a: T, b: T) => number> = {
+    raised: (a, b) => byRaised(a, b) || byDate(a, b) || byEvent(a, b),
+    'event-date': (a, b) => byDate(a, b) || byRaised(a, b) || byEvent(a, b),
+  };
+  return [...entries].sort(order[sort]);
+}

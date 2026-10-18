@@ -25,6 +25,8 @@ import {
   countUnavailableItems,
   linesOfSameType,
   needsReservationConfirmation,
+  sortEquipmentQueue,
+  type EquipmentQueueSort,
 } from './policy';
 import {
   AddEquipmentLineInputSchema,
@@ -427,7 +429,8 @@ function toQueueEntry(row: QueueRow): EquipmentQueueEntry | null {
 }
 
 /**
- * SCRUM-164 AC1, AC3 to AC5 - every outstanding equipment request.
+ * SCRUM-164 AC1 to AC5 - every outstanding equipment request, in the order
+ * `sort` asks for (sortEquipmentQueue, policy.ts).
  *
  * AC1: each with its event, event date, items and quantities. AC3: fulfilled
  * and unable to fulfil are not read. AC4: partially fulfilled is, with its
@@ -437,10 +440,11 @@ function toQueueEntry(row: QueueRow): EquipmentQueueEntry | null {
  * checked by the caller before this is called, the same split as SCRUM-147's
  * listPendingBookingQueue.
  */
-export async function listEquipmentQueue(): Promise<EquipmentQueueEntry[]> {
+export async function listEquipmentQueue(sort: EquipmentQueueSort = 'raised'): Promise<EquipmentQueueEntry[]> {
   const { data, error } = await fetchEquipmentRequestsByStatus(OUTSTANDING_EQUIPMENT_REQUEST_STATUSES);
   if (error || !data) {
     throw new ValidationError('Could not load the equipment request queue.', error?.message);
   }
-  return (data as unknown as QueueRow[]).flatMap((row) => toQueueEntry(row) ?? []);
+  const entries = (data as unknown as QueueRow[]).flatMap((row) => toQueueEntry(row) ?? []);
+  return sortEquipmentQueue(entries, sort);
 }

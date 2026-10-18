@@ -134,8 +134,8 @@ async function setUnavailable(eventId: string, equipmentId: string, unavailable:
 }
 
 /** The queue, narrowed to this run's events. */
-async function queue(): Promise<EquipmentQueueEntry[]> {
-  return (await listEquipmentQueue()).filter((entry) => eventIds.includes(entry.eventRequestId));
+async function queue(sort: 'raised' | 'event-date' = 'raised'): Promise<EquipmentQueueEntry[]> {
+  return (await listEquipmentQueue(sort)).filter((entry) => eventIds.includes(entry.eventRequestId));
 }
 
 let evtA: string;
@@ -217,6 +217,18 @@ describe('SCRUM-164 AC1: each outstanding request with its event, date, items an
     await admin.from('equipment_request').insert({ event_request_id: data.id, technical_requirements: 'Two lapel mics' });
 
     expect((await queue()).map((e) => e.eventRequestId)).not.toContain(data.id);
+  });
+});
+
+describe('SCRUM-164 AC2: sorted by event date', () => {
+  it('TC-164-04 puts the soonest event first: EVT-B, EVT-A, EVT-C', async () => {
+    const order = (await queue('event-date')).map((e) => e.eventRequestId).filter((id) => [evtA, evtB, evtC].includes(id));
+    expect(order).toEqual([evtB, evtA, evtC]);
+  });
+
+  it('TC-164-06 the default order is the order raised (A, C, B), not the event date', async () => {
+    const order = (await queue()).map((e) => e.eventRequestId).filter((id) => [evtA, evtB, evtC].includes(id));
+    expect(order).toEqual([evtA, evtC, evtB]);
   });
 });
 
