@@ -789,6 +789,7 @@ export type Database = {
           event_request_id: string
           expected_attendance: number | null
           id: string
+          replaces_booking_id: string | null
           requested_by: string
           room_layout: string | null
           venue_id: string
@@ -800,6 +801,7 @@ export type Database = {
           event_request_id: string
           expected_attendance?: number | null
           id?: string
+          replaces_booking_id?: string | null
           requested_by: string
           room_layout?: string | null
           venue_id: string
@@ -811,6 +813,7 @@ export type Database = {
           event_request_id?: string
           expected_attendance?: number | null
           id?: string
+          replaces_booking_id?: string | null
           requested_by?: string
           room_layout?: string | null
           venue_id?: string
@@ -821,6 +824,20 @@ export type Database = {
             columns: ["event_request_id"]
             isOneToOne: false
             referencedRelation: "event_request"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "venue_booking_request_replaces_booking_id_fkey"
+            columns: ["replaces_booking_id"]
+            isOneToOne: false
+            referencedRelation: "affected_booking_slot"
+            referencedColumns: ["booking_id"]
+          },
+          {
+            foreignKeyName: "venue_booking_request_replaces_booking_id_fkey"
+            columns: ["replaces_booking_id"]
+            isOneToOne: false
+            referencedRelation: "venue_booking"
             referencedColumns: ["id"]
           },
           {
@@ -1071,6 +1088,64 @@ export type Database = {
           },
         ]
       }
+      venue_suitability_check: {
+        Row: {
+          checked_at: string
+          checked_by: string
+          event_request_id: string
+          id: string
+          needs: Json
+          requirements: Json
+          venue_booking_request_id: string | null
+          venue_id: string
+          verdict: string
+        }
+        Insert: {
+          checked_at?: string
+          checked_by: string
+          event_request_id: string
+          id?: string
+          needs: Json
+          requirements: Json
+          venue_booking_request_id?: string | null
+          venue_id: string
+          verdict: string
+        }
+        Update: {
+          checked_at?: string
+          checked_by?: string
+          event_request_id?: string
+          id?: string
+          needs?: Json
+          requirements?: Json
+          venue_booking_request_id?: string | null
+          venue_id?: string
+          verdict?: string
+        }
+        Relationships: [
+          {
+            foreignKeyName: "venue_suitability_check_event_request_id_fkey"
+            columns: ["event_request_id"]
+            isOneToOne: false
+            referencedRelation: "event_request"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "venue_suitability_check_venue_booking_request_id_fkey"
+            columns: ["venue_booking_request_id"]
+            isOneToOne: false
+            referencedRelation: "venue_booking_request"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "venue_suitability_check_venue_id_fkey"
+            columns: ["venue_id"]
+            isOneToOne: false
+            referencedRelation: "venues"
+            referencedColumns: ["id"]
+          },
+        ]
+      }
       venue_unavailability_notice: {
         Row: {
           coordinator_id: string
@@ -1285,6 +1360,7 @@ export type Database = {
           p_event_request_id: string
           p_expected_attendance?: number
           p_lines: Json
+          p_replaces_booking_id?: string
           p_requested_by: string
           p_room_layout?: string
           p_venue_id: string
