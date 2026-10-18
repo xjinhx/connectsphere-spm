@@ -29,10 +29,30 @@ export function canAccessNotification(recipientId: string, actorId: string): boo
  * (src/domain/review/service.ts, src/domain/assignment/service.ts), whose
  * own /events/<id> is correct. Any future type defaults to the organiser's
  * page, matching the behaviour before this fix.
+ *
+ * SCRUM-197 adds two more: 'request_submitted' is sent to every Event
+ * Coordinator Lead (operations_manager) before any coordinator is assigned,
+ * so neither /events/<id> nor /events/<id>/review is open to them yet (both
+ * require either the organiser's organisation or the current coordinator) -
+ * it routes to their own /assignment-queue/<id> instead, gated on the
+ * coordinator_assignment permission alone (see assignment-queue/[id]/page.tsx),
+ * which assigning the event from there satisfies directly.
+ *
+ * 'coordinator_unassigned' is sent to the *previous* coordinator, who loses
+ * both routes the moment the reassignment lands (not the current
+ * coordinator_id, and - unless they separately hold the Lead role - not
+ * covered by coordinator_assignment either). That denial is correct, not a
+ * bug: AC3 is purely informational ("you are no longer the coordinator"),
+ * and there is nothing left for them to act on, so it keeps the organiser's
+ * /events/<id> default rather than being added to a facing-type set.
  */
 const COORDINATOR_FACING_TYPES = new Set<string>(['coordinator_assigned', 'venue_booking_update']);
+const LEAD_FACING_TYPES = new Set<string>(['request_submitted']);
 
 export function notificationHref(notification: { type: string; eventRequestId: string }): string {
+  if (LEAD_FACING_TYPES.has(notification.type)) {
+    return `/assignment-queue/${notification.eventRequestId}`;
+  }
   return COORDINATOR_FACING_TYPES.has(notification.type)
     ? `/events/${notification.eventRequestId}/review`
     : `/events/${notification.eventRequestId}`;
