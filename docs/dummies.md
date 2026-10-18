@@ -594,7 +594,7 @@ switch them the next time they edit those files.
 - **Added by:** SCRUM-164 AC3, AC4 — branch `equipment-request-queue`
 - **Waiting on:** SCRUM-166 (Update the status of an equipment request)
 - **Where:**
-  `supabase/migrations/20261018150000_equipment_request_status.sql` — the
+  `supabase/migrations/20261018174009_equipment_request_status.sql` — the
   `equipment_request.status` and `equipment_request_line.unavailable` columns
   (`DUMMY(SCRUM-166) D-19`);
   `src/domain/equipment-request/schema.ts` — `EQUIPMENT_REQUEST_STATUSES`
