@@ -91,6 +91,13 @@ _Avoid_: equipment item (that is a catalogue item), row
 The free text on an equipment request saying what Technical Support Staff need to know beyond the items, stored as typed (SCRUM-160 AC5, AC6).
 _Avoid_: notes, technical support notes (that is the organiser's SCRUM-80 field)
 
+**Equipment request status**:
+How far Technical Support Staff have got with an equipment request: _Under review_ when raised, then _Partially fulfilled_, _Fulfilled_ or _Unable to fulfil_ (SCRUM-166). Under review and Partially fulfilled are **outstanding** and listed in the equipment request queue; Fulfilled and Unable to fulfil are resolved (SCRUM-164 AC3, AC4). Set by hand until SCRUM-166 (dummy D-19).
+_Avoid_: open, closed, done, pending (that word is for venue booking requests)
+
+**Unavailable** (equipment line):
+An equipment line Technical Support Staff cannot meet, on a partially fulfilled request (SCRUM-166 AC3). The queue counts each unavailable line once, whatever its quantity (SCRUM-164 AC4; PO, 18 Oct 2026). Not the same as a catalogue item's _Unavailable_ operational status, which is about the item itself.
+
 **Reserved** (equipment line):
 An equipment line whose equipment has been set aside for the event. Reducing or removing it needs the coordinator to confirm a warning first (SCRUM-160 AC8). Reserving is SCRUM-167's; until then a line is marked reserved by hand (dummy D-18).
 _Avoid_: booked, held (those words are for venues)

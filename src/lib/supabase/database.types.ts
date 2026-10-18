@@ -122,18 +122,21 @@ export type Database = {
         Row: {
           created_at: string
           event_request_id: string
+          status: string
           technical_requirements: string | null
           updated_at: string
         }
         Insert: {
           created_at?: string
           event_request_id: string
+          status?: string
           technical_requirements?: string | null
           updated_at?: string
         }
         Update: {
           created_at?: string
           event_request_id?: string
+          status?: string
           technical_requirements?: string | null
           updated_at?: string
         }
@@ -155,6 +158,7 @@ export type Database = {
           event_request_id: string
           id: string
           quantity: number
+          unavailable: boolean
           updated_at: string
         }
         Insert: {
@@ -164,6 +168,7 @@ export type Database = {
           event_request_id: string
           id?: string
           quantity: number
+          unavailable?: boolean
           updated_at?: string
         }
         Update: {
@@ -173,6 +178,7 @@ export type Database = {
           event_request_id?: string
           id?: string
           quantity?: number
+          unavailable?: boolean
           updated_at?: string
         }
         Relationships: [

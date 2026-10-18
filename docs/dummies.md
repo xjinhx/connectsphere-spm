@@ -586,3 +586,35 @@ switch them the next time they edit those files.
   SCRUM-160 AC7 and AC8 (TC-160-19 to TC-160-23) with a line reserved through
   the app.
 - **Status:** Active.
+
+### D-19 — An equipment request's status and unavailable items are set by hand
+
+- **Kind:** Out-of-sprint stand-in (setting an equipment request's status is
+  SCRUM-166, not in this sprint)
+- **Added by:** SCRUM-164 AC3, AC4 — branch `equipment-request-queue`
+- **Waiting on:** SCRUM-166 (Update the status of an equipment request)
+- **Where:**
+  `supabase/migrations/20261018150000_equipment_request_status.sql` — the
+  `equipment_request.status` and `equipment_request_line.unavailable` columns
+  (`DUMMY(SCRUM-166) D-19`);
+  `src/domain/equipment-request/schema.ts` — `EQUIPMENT_REQUEST_STATUSES`
+  (`DUMMY(SCRUM-166) D-19`);
+  `src/lib/supabase/equipmentRequests.ts` — `fetchEquipmentRequestsByStatus()`
+  (`DUMMY(SCRUM-166) D-19`);
+  `tests/integration/equipment-queue.test.ts` — `setStatus()` and
+  `setUnavailable()` (`DUMMY(SCRUM-166) D-19`)
+- **What is real and what is faked:** the queue is real. It reads the stored
+  status and lines: under review and partially fulfilled are listed, fulfilled
+  and unable to fulfil are not (AC3), and a partially fulfilled request shows
+  how many of its lines are unavailable (AC4). The columns are real too,
+  shaped the way SCRUM-166's ACs name them, and every request starts under
+  review (SCRUM-166 AC1). Only the setting is faked: nothing in the app changes
+  a status or marks a line unavailable, so testers do it by hand in Studio:
+  `update equipment_request set status = 'partially_fulfilled' where event_request_id = '<event id>';`
+  and `update equipment_request_line set unavailable = true where id = '<line id>';`
+- **To replace:** SCRUM-166 writes to these two columns from its status form
+  (adding its own identity, timestamp and reason columns alongside), keeps the
+  four status values, and removes the markers. Re-run SCRUM-164 AC3 and AC4
+  (TC-164-07 to TC-164-12) and `tests/integration/equipment-queue.test.ts`
+  with statuses set through the app.
+- **Status:** Active.
