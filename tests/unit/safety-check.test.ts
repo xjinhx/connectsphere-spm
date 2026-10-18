@@ -1,4 +1,5 @@
 import { describe, expect, it } from 'vitest';
+import { holdsSafetyOfficerAndCoordinator } from '@/components/navigation/RolePagesBar';
 import { canTransition, needsSafetyApproval } from '@/domain/event-status/policy';
 import { isActionPermitted } from '@/domain/identity/permissions';
 import { landingPathForRoles, type Role } from '@/domain/identity/roles';
@@ -147,5 +148,14 @@ describe('AC3 — Preparation as the event page shows it (card notes, for SCRUM-
   it('TC-234-19: Preparation has the card\'s one-line definition', () => {
     expect(EVENT_REQUEST_STATUS_LABELS.preparation).toBe('Preparation');
     expect(EVENT_REQUEST_STATUS_DEFINITIONS.preparation).toBe('Passed its safety check and being prepared for the day.');
+  });
+});
+
+describe('AC1 — an account that is also a Coordinator can reach its other pages', () => {
+  it('TC-234-03: the page bar is shown only to an account holding both roles', () => {
+    expect(holdsSafetyOfficerAndCoordinator(['coordinator', 'safety_officer'])).toBe(true);
+    expect(holdsSafetyOfficerAndCoordinator(['safety_officer'])).toBe(false);
+    expect(holdsSafetyOfficerAndCoordinator(['coordinator'])).toBe(false);
+    expect(holdsSafetyOfficerAndCoordinator(['operations_manager', 'safety_officer'])).toBe(false);
   });
 });

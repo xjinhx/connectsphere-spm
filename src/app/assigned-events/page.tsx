@@ -1,5 +1,6 @@
 import Link from 'next/link';
 import { getCurrentActor } from '@/lib/auth/currentActor';
+import { RolePagesBar } from '@/components/navigation/RolePagesBar';
 import { hasRole } from '@/domain/identity/policy';
 import { listMyAssignedEvents } from '@/domain/assignment/service';
 import { isAwaitingReview } from '@/domain/review/policy';
@@ -63,6 +64,8 @@ export default async function EventCoordinatorAssignedEventsPage() {
 
   return (
     <main className="mx-auto max-w-4xl p-6">
+      {/* SCRUM-234 — for an account that is also a Safety Officer only. */}
+      <RolePagesBar roles={actor.roles} current="/assigned-events" />
       <div className="mb-6 flex items-start justify-between gap-4">
         <div>
           <h1 className="text-2xl font-semibold">Assigned events</h1>
