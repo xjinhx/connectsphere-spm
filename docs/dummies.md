@@ -227,7 +227,18 @@ switch them the next time they edit those files.
   SCRUM-24's mechanism; the `event_request_coordinator_history` row written by
   the same update holds who, from whom, to whom and when. Re-run US-8.1-TC03
   (SCRUM-96 AC1).
-- **Status:** Active
+- **Status:** Replaced (SCRUM-197). `reassignCoordinator()` now notifies both
+  coordinators with `notifyBestEffort()` straight after the reassignment write
+  succeeds: the previous coordinator gets a new type, `coordinator_unassigned`
+  ("You are no longer the coordinator for …"), and the new coordinator reuses
+  `coordinator_assigned` (SCRUM-94's own type — same meaning, "you now have
+  this event"). Both types are widened into the check constraint by
+  `20261018060000_notifications_assignment_types.sql`. The event's reference
+  and name are read with a separate `fetchEventRequestById()` call, since
+  `EventAssignmentRow` carries neither. The marker is removed. Re-checked with
+  US-8.1-TC03 (SCRUM-96 AC1) in `tests/integration/reassign-coordinator.test.ts`
+  — now also asserts a `coordinator_unassigned` row for the previous
+  coordinator and a `coordinator_assigned` row for the new one.
 
 ### D-08 — The coordinator isn't notified when a request is resubmitted
 

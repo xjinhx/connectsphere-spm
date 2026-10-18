@@ -119,7 +119,8 @@ export async function markAsRead(notificationId: string, actorId: string): Promi
  * notifyBestEffort. Gives DUMMY(SCRUM-24) D-03, D-05, D-06 and D-08 a real
  * table to write to; only D-03 is actually wired and Replaced by this PR
  * (SCRUM-193/198) - D-05, D-06 and D-08 remain Active until their own
- * stories call this. See docs/dummies.md.
+ * stories call this. D-06 is since Replaced by SCRUM-197. See
+ * docs/dummies.md.
  */
 /**
  * Best-effort notification. The caller's own write (a review decision or
