@@ -115,7 +115,6 @@ function assert(condition, message) {
 }
 
 async function main() {
-  const organiserId = await findUserIdByEmail('organiser@example.com');
   const opsManagerId = await findUserIdByEmail('ops-manager@example.com');
   const leadCoordId = await findUserIdByEmail('lead-coord@example.com'); // coordinator + operations_manager
   const coordinatorAId = await findUserIdByEmail('coordinator@example.com');
