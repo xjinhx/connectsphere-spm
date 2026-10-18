@@ -5,15 +5,15 @@ import { useRouter } from 'next/navigation';
 import { SAFETY_CHECK_DECISION_LABELS, type SafetyCheckDecision } from '@/domain/safety-check/schema';
 
 /**
- * SCRUM-234 AC3-AC5 — the Safety Officer's decision: approve, request changes
- * with a note, or reject with a reason. On success the page is refreshed so
+ * SCRUM-234 AC3, AC4 — the Safety Officer's decision: approve, or reject the
+ * safety arrangement or request changes, with a reason either way. On success the page is refreshed so
  * the new status and the recorded decision come from the server; on refusal
  * the message from RecordSafetyCheckInputSchema (e.g. a blank note) is shown
  * as-is.
  */
 const NOTE_PROMPT: Record<Exclude<SafetyCheckDecision, 'approved'>, { label: string; placeholder: string }> = {
-  changes_requested: { label: 'Note for the coordinator', placeholder: 'What needs to change before it is safe to run?' },
-  rejected: { label: 'Reason', placeholder: 'Why is this event being rejected?' },
+  changes_requested: { label: 'Reason (shown to the coordinator)', placeholder: 'What needs to change before it is safe to run?' },
+  rejected: { label: 'Reason (shown to the coordinator)', placeholder: 'Why is the safety arrangement being rejected?' },
 };
 
 export function SafetyCheckDecisionForm({ eventRequestId }: { eventRequestId: string }) {

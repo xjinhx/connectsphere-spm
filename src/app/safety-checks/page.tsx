@@ -8,7 +8,7 @@ import { getCurrentActor } from '@/lib/auth/currentActor';
 /**
  * SCRUM-234 AC1 — the Safety Officer's landing page: the Confirmed events
  * awaiting an operational safety check, each opening its check page (AC2).
- * AC7 — anyone without the role is told the page is not for them.
+ * AC6 — anyone without the role is told the page is not for them.
  */
 
 export const dynamic = 'force-dynamic';

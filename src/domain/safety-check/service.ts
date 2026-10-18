@@ -54,7 +54,7 @@ type Actor = { userId: string; roles: readonly Role[] };
 
 export const NOT_SAFETY_OFFICER_MESSAGE = 'Only a Safety Officer can run the operational safety check.';
 
-/** AC7: refused before anything about an event is read. */
+/** AC6: refused before anything about an event is read. */
 function assertSafetyOfficer(actor: Actor): void {
   if (!canRunSafetyCheck(actor.roles)) throw new ForbiddenError(NOT_SAFETY_OFFICER_MESSAGE);
 }
@@ -114,7 +114,7 @@ export async function listEventsAwaitingSafetyCheck(actor: Actor): Promise<Safet
 }
 
 // ---------------------------------------------------------------------------
-// AC3-AC5 — the decisions on record
+// AC3, AC4 — the decisions on record
 // ---------------------------------------------------------------------------
 
 type CheckRow = { id: string; decision: string; note: string | null; decided_by: string; decided_at: string };
@@ -152,8 +152,8 @@ async function readChecks(eventRequestId: string): Promise<SafetyCheckRecord[]> 
 }
 
 /**
- * AC4, AC5: the event's latest safety check, for its assigned coordinator's
- * event page, or null when it has none. Refused for anyone else.
+ * AC4: the event's latest safety check, for its assigned coordinator's event
+ * page (they see the reason), or null when it has none. Refused for anyone else.
  */
 export async function getLatestSafetyCheck(eventRequestId: string, actor: Actor): Promise<SafetyCheckRecord | null> {
   const event = await readEvent(eventRequestId);
@@ -255,12 +255,13 @@ function venuesOf(bookings: readonly BookingRow[], event: EventRequestRow): Safe
 type LineRow = { quantity: number; equipment: { name: string } | null };
 
 /**
- * AC2: "the event's expected attendance, venue capacity and layout,
- * accessibility needs and requested equipment". Anything never recorded reads
+ * AC2: "its expected attendance, the venue's capacity for the requested
+ * layout, the accessibility answer with its features and notes, and the
+ * requested equipment". Anything never recorded reads
  * "Not specified" (TC-234-06), the same words as Venue Staff's requirements
  * (SCRUM-143 AC4).
  *
- * Opened by the Safety Officer only (AC7). The event can be in any status, so
+ * Opened by the Safety Officer only (AC6). The event can be in any status, so
  * a decided check stays readable; whether a decision can be recorded is
  * awaitingCheck.
  */
@@ -309,15 +310,16 @@ export async function getSafetyCheckView(eventRequestId: string, actor: Actor): 
 }
 
 // ---------------------------------------------------------------------------
-// AC3-AC7 — recording a decision
+// AC3-AC6 — recording a decision
 // ---------------------------------------------------------------------------
 
 /**
  * AC3: approve - the decision, the Safety Officer and the time are recorded
  * and the event moves to Preparation.
- * AC4: request changes with a note - the event returns to Planning.
- * AC5: reject with a reason - the event returns to Planning, not Cancelled.
- * AC7: refused for anyone without the Safety Officer role, before the event is
+ * AC4: reject the safety arrangement or request changes, with a reason - the
+ * decision, the reason, the Safety Officer and the time are recorded and the
+ * event returns to Planning, not Cancelled (#130).
+ * AC6: refused for anyone without the Safety Officer role, before the event is
  * read. The decider is the signed-in account.
  *
  * The decision and the status move are one database call

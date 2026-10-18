@@ -102,11 +102,11 @@ The role that runs the operational safety check (SCRUM-234). An account holding 
 _Avoid_: safety lead, inspector
 
 **Operational safety check**:
-The Safety Officer's review of a Confirmed event against its attendance, each booked venue's capacity and layout, its accessibility needs and its equipment, before it moves into Preparation (SCRUM-234). Its decision is _Approved_ (to Preparation), _Changes requested_ with a note, or _Rejected_ with a reason (both back to Planning, customer clarification #130). Each decision is kept; an event confirmed again gets a new check.
+The Safety Officer's review of a Confirmed event against its attendance, each booked venue's capacity and layout, its accessibility needs and its equipment, before it moves into Preparation (SCRUM-234). Its decision is _Approved_ (to Preparation), or _Changes requested_ or _Rejected_, each with a reason the assigned coordinator sees (both back to Planning, customer clarification #130; Change Log CL-27). Each decision is kept; an event confirmed again gets a new check.
 _Avoid_: safety review, risk assessment
 
 **Preparation**:
-The status after Confirmed, reached only through the Safety Officer's approval (SCRUM-234 AC3, AC6). It goes on to Completed or Cancelled.
+The status after Confirmed, reached only through the Safety Officer's approval (SCRUM-234 AC3, AC5): "passed its safety check and being prepared for the day". It goes on to Completed or Cancelled (Change Log CL-27).
 _Avoid_: ready, safety approved (as a status name)
 
 ### Access

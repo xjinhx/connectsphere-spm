@@ -15,11 +15,11 @@ export async function GET(_req: NextRequest, { params }: { params: Promise<{ id:
 }
 
 /**
- * SCRUM-234 AC3-AC5 — record the Safety Officer's decision:
+ * SCRUM-234 AC3, AC4 — record the Safety Officer's decision:
  * { decision: 'approved' | 'changes_requested' | 'rejected', note?: string }.
  *
  * The Safety Officer deciding is whoever is signed in (getCurrentActor), never
- * an id sent in the body. AC7: anyone else is refused (403) before the event
+ * an id sent in the body. AC6: anyone else is refused (403) before the event
  * is read.
  */
 export async function POST(req: NextRequest, { params }: { params: Promise<{ id: string }> }) {

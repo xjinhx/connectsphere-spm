@@ -3,7 +3,8 @@ import { formatSingaporeDateTime } from '@/domain/shared/dates';
 
 /**
  * SCRUM-234 — one safety check decision: what was decided, by whom and when
- * (AC3), with the note (AC4) or reason (AC5). Shown to the assigned
+ * (AC3), with the reason for a rejection or a request for changes (AC4).
+ * Shown to the assigned
  * coordinator on the event, and as the history on the Safety Officer's page.
  */
 const TONE: Record<SafetyCheckRecord['decision'], string> = {
@@ -14,7 +15,7 @@ const TONE: Record<SafetyCheckRecord['decision'], string> = {
 
 const NOTE_LABEL: Record<SafetyCheckRecord['decision'], string | null> = {
   approved: null,
-  changes_requested: 'Changes needed',
+  changes_requested: 'Reason',
   rejected: 'Reason',
 };
 

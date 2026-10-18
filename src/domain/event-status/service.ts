@@ -105,7 +105,7 @@ export async function changeEventStatus(eventRequestId: string, to: EventRequest
 
   const from = (existing as unknown as EventRequestRow).status;
 
-  // SCRUM-234 AC6: Preparation only through the Safety Officer's approval
+  // SCRUM-234 AC5: Preparation only through the Safety Officer's approval
   // (domain/safety-check/service.ts), never as a plain status change.
   if (!canTransition(from, to) || needsSafetyApproval(to)) {
     throw new InvalidTransitionError(from, to);

@@ -322,8 +322,8 @@ export const EVENT_REQUEST_STATUS_DEFINITIONS: Record<EventRequestStatus, string
   rejected: 'Not approved; it cannot be edited or resubmitted.',
   planning: 'Venue and equipment arrangements are being made.',
   confirmed: 'All essential arrangements are in place.',
-  // SCRUM-234 — team wording, as the rest of this map.
-  preparation: 'Passed the operational safety check and being prepared to run.',
+  // SCRUM-234 card notes (TC-234-19).
+  preparation: 'Passed its safety check and being prepared for the day.',
   completed: 'The event has taken place.',
   cancelled: 'The event has been called off and will not go ahead.',
 };

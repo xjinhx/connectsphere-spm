@@ -47,7 +47,7 @@ export function isRole(value: unknown): value is Role {
  * SCRUM-234 AC1 — the same for the Safety Officer: an account holding the role
  * lands on the safety check list wherever it sits in the list. The Lead's rule
  * is checked first, so an account holding both keeps SCRUM-232's landing page
- * (no card says otherwise).
+ * (agreed in Change Log CL-27).
  *
  * Falls back to the Attendee landing page when the list is empty or unset.
  */

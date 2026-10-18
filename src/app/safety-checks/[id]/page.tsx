@@ -15,12 +15,12 @@ import { getCurrentActor } from '@/lib/auth/currentActor';
 /**
  * SCRUM-234 — one event's operational safety check, for the Safety Officer.
  *
- * AC2 — expected attendance, each booked venue's capacity and layout,
- * accessibility needs and requested equipment, with anything never recorded
- * shown as "Not specified".
- * AC3-AC5 — the decision form, while the event is Confirmed. Afterwards the
+ * AC2 — expected attendance, each booked venue's capacity for the requested
+ * layout, the accessibility answer with its features and notes, and the
+ * requested equipment, with anything never recorded shown as "Not specified".
+ * AC3, AC4 — the decision form, while the event is Confirmed. Afterwards the
  * page shows the decision instead, and every earlier check below it.
- * AC7 — anyone without the role is told the page is not for them.
+ * AC6 — anyone without the role is told the page is not for them.
  */
 
 export const dynamic = 'force-dynamic';

@@ -6,9 +6,9 @@
 -- run."
 --
 -- The card names a role and a status the database does not have yet: the
--- Safety Officer (AC1, AC7) and Preparation (AC3, AC6). This adds them, and
+-- Safety Officer (AC1, AC6) and Preparation (AC3, AC5). This adds them, and
 -- nothing else. The check itself is the next file,
--- 20261018030100_operational_safety_check.sql.
+-- 20261018193100_operational_safety_check.sql.
 --
 -- Nothing may *use* the new status in this file: Postgres refuses a new enum
 -- value in the same transaction that adds it (see

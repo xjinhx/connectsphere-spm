@@ -26,24 +26,26 @@ import { ensureTestClientOrganisation, TEST_CLIENT_ORGANISATION_ID } from './fix
  * real database can show is here: that a decision and the event's new status
  * land together, and that a refusal leaves both exactly as they were.
  *
- * AC text is from the Jira card (authoritative):
- *   AC1 "Given an account holds the Safety Officer role, when they log in,
- *        then they land on the list of Confirmed events awaiting a safety
+ * AC text is from the Jira card (authoritative), as updated by Change Log
+ * CL-27 (18 Oct):
+ *   AC1 "Given an account holds the Safety Officer role, when that user logs
+ *        in, then they land on a list of Confirmed events awaiting a safety
  *        check."
- *   AC2 "Given I open an event's safety check, then I see its expected
- *        attendance, venue capacity and layout, accessibility needs and
- *        requested equipment."
- *   AC3 "Given an event is Confirmed, when I approve its safety check, then
- *        the decision, my name and the time are recorded and the event moves
- *        to Preparation."
- *   AC4 "Given I request changes with a note, then the event returns to
- *        Planning and the assigned coordinator sees the note."
- *   AC5 "Given I reject it with a reason, then the reason is recorded and the
- *        event returns to Planning" (customer clarification #130: not
- *        Cancelled; it is revised and resubmitted).
- *   AC6 "Given an event has not been approved by the Safety Officer, when
- *        anyone attempts to move it to Preparation, then it is refused."
- *   AC7 "Given I do not hold the Safety Officer role, when I attempt to record
+ *   AC2 "Given I open an event awaiting a check, when the page loads, then its
+ *        expected attendance, the venue's capacity for the requested layout,
+ *        the accessibility answer with its features and notes, and the
+ *        requested equipment are shown."
+ *   AC3 "Given I approve the event, when I save, then my decision, name and
+ *        time are recorded and the event moves to Preparation."
+ *   AC4 "Given I reject the safety arrangement or request changes, when I
+ *        save with a reason, then my decision, the reason, my name and the
+ *        time are recorded, the event returns to Planning, and its assigned
+ *        coordinator sees the reason." (Customer clarification #130: not
+ *        Cancelled; it is revised and resubmitted.)
+ *   AC5 "Given an event has not been approved by the Safety Officer, when
+ *        anyone tries to move it to Preparation, then the move is refused and
+ *        the status is unchanged."
+ *   AC6 "Given a user without the Safety Officer role, when they try to record
  *        a safety decision, then it is refused."
  *
  * Test case IDs are from the SCRUM-234 tab of Team_Owned_ScrumsTest.xlsx
@@ -290,8 +292,8 @@ describe('AC3 — approve', () => {
   });
 });
 
-describe('AC4 — request changes', () => {
-  it('TC-234-10: returns the event to Planning and the assigned coordinator sees the note', async () => {
+describe('AC4 — request changes, with a reason', () => {
+  it('TC-234-10: records the decision, reason, name and time, returns the event to Planning, and the assigned coordinator sees the reason', async () => {
     const id = await createConfirmedEvent();
     const note = 'Add a second fire marshal for 150 guests';
 
@@ -302,14 +304,14 @@ describe('AC4 — request changes', () => {
     expect(await getLatestSafetyCheck(id, coordinator)).toMatchObject({ decision: 'changes_requested', note });
   });
 
-  it('a coordinator the event is not assigned to cannot read the note', async () => {
+  it('a coordinator the event is not assigned to cannot read the reason', async () => {
     const id = await createConfirmedEvent();
     await recordSafetyCheckDecision(id, { decision: 'changes_requested', note: 'Widen the aisle' }, safetyOfficer);
     await expect(getLatestSafetyCheck(id, otherCoordinator)).rejects.toBeInstanceOf(ForbiddenError);
   });
 });
 
-describe('AC5 — reject', () => {
+describe('AC4 — reject the safety arrangement, with a reason', () => {
   it('TC-234-11: records the reason and returns the event to Planning, not Cancelled', async () => {
     const id = await createConfirmedEvent();
     const reason = 'Evacuation route blocked by stage layout';
@@ -334,8 +336,8 @@ describe('AC5 — reject', () => {
   });
 });
 
-describe('AC4/AC5 — a note or reason is required', () => {
-  it('TC-234-12: a blank note or a reason of only spaces is refused and nothing changes', async () => {
+describe('AC4 — a reason is required for both', () => {
+  it('TC-234-12: a blank reason or one of only spaces is refused and nothing changes', async () => {
     const id = await createConfirmedEvent();
     await expect(
       recordSafetyCheckDecision(id, { decision: 'changes_requested', note: '' }, safetyOfficer),
@@ -347,7 +349,7 @@ describe('AC4/AC5 — a note or reason is required', () => {
     expect(await storedChecks(id)).toEqual([]);
   });
 
-  it('the database refuses a blank note too, and the status change goes with it', async () => {
+  it('the database refuses a blank reason too, and the status change goes with it', async () => {
     const id = await createConfirmedEvent();
     const { error } = await admin.rpc('record_safety_check', {
       p_event_request_id: id,
@@ -361,7 +363,7 @@ describe('AC4/AC5 — a note or reason is required', () => {
   });
 });
 
-describe('AC6 — no move to Preparation without the Safety Officer', () => {
+describe('AC5 — no move to Preparation without the Safety Officer', () => {
   it('TC-234-13/14: a plain status change to Preparation is refused and the event stays Confirmed', async () => {
     const id = await createConfirmedEvent();
     await expect(changeEventStatus(id, 'preparation')).rejects.toBeInstanceOf(InvalidTransitionError);
@@ -381,7 +383,7 @@ describe('AC6 — no move to Preparation without the Safety Officer', () => {
   });
 });
 
-describe('AC7 — only the Safety Officer decides', () => {
+describe('AC6 — only the Safety Officer decides', () => {
   it('TC-234-16: every other role is refused and nothing is recorded', async () => {
     const id = await createConfirmedEvent();
     for (const account of [coordinator, manager, venueStaff, organiser]) {

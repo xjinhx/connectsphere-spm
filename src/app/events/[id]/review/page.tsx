@@ -184,8 +184,8 @@ export default async function ReviewEventRequestPage({
     }
   }
 
-  // SCRUM-234 AC4/AC5 — the assigned coordinator sees the Safety Officer's
-  // latest decision, with the note or reason. Read for canManage only, the
+  // SCRUM-234 AC4 — the assigned coordinator sees the Safety Officer's
+  // latest decision, with its reason. Read for canManage only, the
   // same gate as the decision sections below: the Lead is not shown it.
   const safetyCheck = request.canManage ? await getLatestSafetyCheck(request.id, actor) : null;
 

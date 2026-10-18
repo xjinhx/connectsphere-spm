@@ -25,18 +25,18 @@ export const SAFETY_CHECK_DECISION_LABELS: Record<SafetyCheckDecision, string> =
 
 /** 1000 characters, as the other free-text notes (the column check is the backstop). */
 export const SAFETY_NOTE_MAX_LENGTH = 1000;
-export const NOTE_REQUIRED_MESSAGE = 'Enter a note saying what needs to change.';
-export const REASON_REQUIRED_MESSAGE = 'Enter the reason for rejecting.';
+/** AC4: "when I save with a reason", for a rejection and a request for changes alike. */
+export const REASON_REQUIRED_MESSAGE = 'Enter the reason for your decision.';
 const NOTE_TOO_LONG_MESSAGE = `Must be ${SAFETY_NOTE_MAX_LENGTH} characters or fewer.`;
 
 /**
- * AC3: "when I approve it" - no note.
- * AC4: "when I request changes with a note".
- * AC5: "when I reject it with a reason".
+ * AC3: "Given I approve the event, when I save" - no reason.
+ * AC4: "Given I reject the safety arrangement or request changes, when I save
+ * with a reason" - both need one (Change Log CL-27 merged the two criteria).
  *
- * The note is trimmed; one that is empty or only spaces is refused for AC4 and
- * AC5 (TC-234-12), with the field named. An approval keeps no note, so any
- * note sent with one is dropped rather than refused.
+ * The reason is trimmed; one that is empty or only spaces is refused
+ * (TC-234-12), with the field named. An approval keeps no reason, so any sent
+ * with one is dropped rather than refused. Stored in the `note` column.
  */
 export const RecordSafetyCheckInputSchema = z
   .object({
@@ -54,7 +54,7 @@ export const RecordSafetyCheckInputSchema = z
       ctx.addIssue({
         code: z.ZodIssueCode.custom,
         path: ['note'],
-        message: input.decision === 'rejected' ? REASON_REQUIRED_MESSAGE : NOTE_REQUIRED_MESSAGE,
+        message: REASON_REQUIRED_MESSAGE,
       });
       return z.NEVER;
     }
@@ -62,7 +62,7 @@ export const RecordSafetyCheckInputSchema = z
   });
 export type RecordSafetyCheckInput = z.infer<typeof RecordSafetyCheckInputSchema>;
 
-/** One recorded decision: what, the note or reason, who and when (AC3-AC5). */
+/** One recorded decision: what, the reason, who and when (AC3, AC4). */
 export const SafetyCheckRecordSchema = z.object({
   id: z.string().uuid(),
   decision: SafetyCheckDecisionSchema,
@@ -92,8 +92,8 @@ export type SafetyCheckQueueItem = z.infer<typeof SafetyCheckQueueItemSchema>;
 const InUseSchema = z.object({ description: z.string(), fromEvent: z.boolean() });
 
 /**
- * AC2: one venue the event is booked at, with its capacity and layout, and the
- * attendance and accessibility needs that booking goes by. Bookings made from
+ * AC2: one venue the event is booked at, with its capacity for the requested
+ * layout, and the attendance and accessibility needs that booking goes by. Bookings made from
  * the same request share these, so they are one entry with each date and time.
  */
 export const SafetyCheckVenueSchema = z.object({

@@ -20,7 +20,7 @@ function db(): SupabaseClient<Database> {
 /**
  * AC1: every Confirmed event, earliest first, with its confirmed bookings'
  * venues for the list. Confirmed is "awaiting a check": a decision moves the
- * event out of it (AC3-AC5), and one confirmed again is awaiting a new one.
+ * event out of it (AC3, AC4), and one confirmed again is awaiting a new one.
  */
 export async function fetchEventsAwaitingSafetyCheck() {
   return db()
@@ -36,8 +36,8 @@ export async function fetchEventsAwaitingSafetyCheck() {
 }
 
 /**
- * AC2: an event's confirmed bookings, each with its venue's capacity and
- * layouts and the venue requirements of the request it was booked from
+ * AC2: an event's confirmed bookings, each with its venue's capacity for each
+ * layout and the venue requirements of the request it was booked from
  * (SCRUM-230), so the check can show the layout and attendance in use.
  */
 export async function fetchConfirmedBookingsForSafetyCheck(eventRequestId: string) {
@@ -54,7 +54,7 @@ export async function fetchConfirmedBookingsForSafetyCheck(eventRequestId: strin
     .order('start_time');
 }
 
-/** AC3-AC5: the event's safety checks, newest first. */
+/** AC3, AC4: the event's safety checks, newest first. */
 export async function fetchSafetyChecks(eventRequestId: string) {
   return db()
     .from('safety_check')
@@ -65,8 +65,8 @@ export async function fetchSafetyChecks(eventRequestId: string) {
 }
 
 /**
- * AC3-AC6: one call to record_safety_check
- * (20261018030100_operational_safety_check.sql), which records the decision
+ * AC3-AC5: one call to record_safety_check
+ * (20261018193100_operational_safety_check.sql), which records the decision
  * and moves the event in one transaction. Resolves to 'recorded', or
  * 'not_confirmed' when the event is not Confirmed and nothing changed.
  */

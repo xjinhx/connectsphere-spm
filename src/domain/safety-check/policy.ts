@@ -22,7 +22,7 @@ export function isAwaitingSafetyCheck(status: EventRequestStatus): boolean {
 export const NOT_AWAITING_CHECK_MESSAGE = 'Only a Confirmed event can be given a safety check decision.';
 
 /**
- * AC3-AC5: where each decision sends the event. Rejecting returns it to
+ * AC3, AC4: where each decision sends the event. Rejecting returns it to
  * Planning, not Cancelled (customer clarification #130: it is revised and
  * resubmitted). record_safety_check restates this in SQL; change one, change
  * the other.
@@ -33,15 +33,16 @@ export const STATUS_AFTER_DECISION: Readonly<Record<SafetyCheckDecision, EventRe
   rejected: 'planning',
 };
 
-/** AC7: the list, the check page and every decision are the Safety Officer's. */
+/** AC6: the list, the check page and every decision are the Safety Officer's. */
 export function canRunSafetyCheck(roles: readonly Role[]): boolean {
   return isActionPermitted(roles, 'safety_check');
 }
 
 /**
- * AC4: "the assigned coordinator sees the note" (and, by the same reading,
- * AC5's reason). The event's current coordinator, and the Safety Officer who
- * runs the checks; nobody else is named by the card.
+ * AC4: "its assigned coordinator sees the reason", for a rejection and a
+ * request for changes alike. The event's current coordinator, and the Safety
+ * Officer who runs the checks; nobody else is named by the card (other staff
+ * seeing it is a separate story, per the PO, 18 Oct).
  */
 export function canViewSafetyOutcome(
   actor: { userId: string; roles: readonly Role[] },

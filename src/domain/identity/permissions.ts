@@ -57,8 +57,8 @@ export const ACTIONS = [
   // coordinator, AC4) needs the event, so it is in the service, the same split
   // as venue_booking_request.
   'equipment_request',
-  // SCRUM-234 AC7 — "As a Safety Officer, I want to run the operational safety
-  // check on a Confirmed event". Covers opening the list and the check page as
+  // SCRUM-234 AC6 — "As a Safety Officer, I want to review each confirmed
+  // event's safety arrangements"; a seventh role (Change Log CL-27). Covers opening the list and the check page as
   // well as deciding, because AC2's details are only shown to decide with.
   'safety_check',
 ] as const;
