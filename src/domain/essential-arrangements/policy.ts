@@ -12,7 +12,7 @@ import { ARRANGEMENTS, type Arrangement, type ArrangementNeeds } from './schema'
  * and so does every other status (TC-100-04).
  *
  * Restated in SQL by record_essential_arrangements
- * (20261017084246_event_essential_arrangements.sql), which checks it again with
+ * (20261018150054_event_essential_arrangements.sql), which checks it again with
  * the event row locked; change one, change the other.
  */
 export function canChangeEssentialArrangements(status: EventRequestStatus): boolean {
