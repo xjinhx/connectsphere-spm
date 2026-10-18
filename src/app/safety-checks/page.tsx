@@ -9,6 +9,11 @@ import { getCurrentActor } from '@/lib/auth/currentActor';
  * SCRUM-234 AC1 — the Safety Officer's landing page: the Confirmed events
  * awaiting an operational safety check, each opening its check page (AC2).
  * AC6 — anyone without the role is told the page is not for them.
+ *
+ * An account that is also a Coordinator lands here (AC1, Change Log CL-27), so
+ * the header links to its coordinator pages too: there is no navigation menu
+ * yet (uilogicissue U4), and without them it could only reach its assigned
+ * events by typing the address. The same buttons /assigned-events uses.
  */
 
 export const dynamic = 'force-dynamic';
@@ -27,16 +32,35 @@ export default async function SafetyCheckListPage() {
   }
 
   const events = await listEventsAwaitingSafetyCheck(actor);
+  const alsoCoordinator = actor.roles.includes('coordinator');
 
   return (
     <main className="mx-auto max-w-4xl p-6">
-      <div className="mb-6">
-        <h1 className="text-2xl font-semibold">Safety checks</h1>
-        <p className="mt-1 text-sm text-[var(--text-muted)]">
-          {events.length === 0
-            ? 'No Confirmed events are awaiting a safety check.'
-            : `${events.length} Confirmed ${events.length === 1 ? 'event is' : 'events are'} awaiting a safety check.`}
-        </p>
+      <div className="mb-6 flex items-start justify-between gap-4">
+        <div>
+          <h1 className="text-2xl font-semibold">Safety checks</h1>
+          <p className="mt-1 text-sm text-[var(--text-muted)]">
+            {events.length === 0
+              ? 'No Confirmed events are awaiting a safety check.'
+              : `${events.length} Confirmed ${events.length === 1 ? 'event is' : 'events are'} awaiting a safety check.`}
+          </p>
+        </div>
+        {alsoCoordinator ? (
+          <div className="flex gap-2">
+            <Link
+              href="/assigned-events"
+              className="inline-block w-fit rounded-md border border-[var(--border)] bg-[var(--surface)] px-4 py-2 text-sm font-medium hover:bg-slate-50"
+            >
+              Assigned events
+            </Link>
+            <Link
+              href="/my-events"
+              className="inline-block w-fit rounded-md border border-[var(--border)] bg-[var(--surface)] px-4 py-2 text-sm font-medium hover:bg-slate-50"
+            >
+              My events
+            </Link>
+          </div>
+        ) : null}
       </div>
 
       {events.length === 0 ? (
