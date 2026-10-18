@@ -218,6 +218,44 @@ export type Database = {
           },
         ]
       }
+      event_essential_arrangements: {
+        Row: {
+          equipment: boolean
+          event_request_id: string
+          recorded_at: string
+          recorded_by: string
+          registration: boolean
+          technical_support: boolean
+          venue: boolean
+        }
+        Insert: {
+          equipment: boolean
+          event_request_id: string
+          recorded_at?: string
+          recorded_by: string
+          registration: boolean
+          technical_support: boolean
+          venue: boolean
+        }
+        Update: {
+          equipment?: boolean
+          event_request_id?: string
+          recorded_at?: string
+          recorded_by?: string
+          registration?: boolean
+          technical_support?: boolean
+          venue?: boolean
+        }
+        Relationships: [
+          {
+            foreignKeyName: "event_essential_arrangements_event_request_id_fkey"
+            columns: ["event_request_id"]
+            isOneToOne: true
+            referencedRelation: "event_request"
+            referencedColumns: ["id"]
+          },
+        ]
+      }
       event_request: {
         Row: {
           accessibility_notes: string | null
@@ -1360,6 +1398,17 @@ export type Database = {
         Returns: Json
       }
       notify_hold_expiries: { Args: { p_now?: string }; Returns: number }
+      record_essential_arrangements: {
+        Args: {
+          p_equipment: boolean
+          p_event_request_id: string
+          p_recorded_by: string
+          p_registration: boolean
+          p_technical_support: boolean
+          p_venue: boolean
+        }
+        Returns: string
+      }
       slot_end_time: { Args: { p_slot: string }; Returns: string }
       slot_start_time: { Args: { p_slot: string }; Returns: string }
       update_venue: {
