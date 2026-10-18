@@ -2,6 +2,7 @@ import {
   assignCoordinatorToEventRequest,
   fetchEventRequestById,
   listEventRequestsForCoordinator,
+  listEventRequestsForCoordinators,
   listUnassignedSubmittedEventRequests,
   type EventRequestRow,
 } from '@/lib/supabase/eventRequests';
@@ -39,6 +40,7 @@ import {
   canBeReassigned,
   canReceiveAssignment,
   canViewCoordinatorDetails,
+  isActiveEventStatus,
   isCurrentCoordinator,
 } from './policy';
 
@@ -495,6 +497,82 @@ export async function listAssignableCoordinators(): Promise<AssignableCoordinato
       id: row.id,
       name: row.full_name,
       email: row.full_name ? null : await readAccountEmail(row.id),
+    })),
+  );
+}
+
+// ---------------------------------------------------------------------------
+// SCRUM-233 — the Lead's overview of every coordinator's assignments
+// ---------------------------------------------------------------------------
+
+/** One coordinator's row on the Lead's overview. */
+export interface CoordinatorWorkload {
+  coordinatorId: string;
+  /** Null when the profile has no name recorded yet — falls back to email, same as the picker. */
+  coordinatorName: string | null;
+  coordinatorEmail: string | null;
+  /** AC2 — Completed, Cancelled and Rejected events are already excluded. */
+  activeEvents: AssignedEvent[];
+}
+
+/**
+ * AC1 — every coordinator, with their active events (status and proposed
+ * date). AC2 — Completed, Cancelled and Rejected events are filtered out
+ * before grouping, so they never appear as active for anyone.
+ *
+ * AC3 is met by construction: an event groups under whichever coordinator_id
+ * it currently holds, which is exactly what SCRUM-96's reassignment updates,
+ * so a reassigned event appears only under its new coordinator the next time
+ * this is read — there is no separate "old owner" list to also clear.
+ *
+ * AC4 — gated by `coordinator_assignment`, the same permission SCRUM-232's
+ * assignment record and SCRUM-94/96's assign and reassign routes use; today
+ * only the Event Coordinator Lead (operations_manager) holds it.
+ *
+ * Every coordinator is listed even with zero active events, so the Lead can
+ * see who has room to take on more, not only who is already busy.
+ */
+export async function getCoordinatorOverview(actor: { roles: Role[] }): Promise<CoordinatorWorkload[]> {
+  assertPermission(actor.roles, 'coordinator_assignment');
+
+  const { data, error } = await listCoordinatorProfiles();
+  if (error) throw new ValidationError('The coordinators could not be read.', error.message);
+  const coordinators = (data ?? []) as { id: string; full_name: string | null; roles: unknown }[];
+  if (coordinators.length === 0) return [];
+
+  const { data: eventRows, error: eventsError } = await listEventRequestsForCoordinators(
+    coordinators.map((row) => row.id),
+  );
+  if (eventsError) {
+    throw new ValidationError('The assigned events could not be read.', eventsError.message);
+  }
+  const rows = (eventRows ?? []) as unknown as EventRequestRow[];
+
+  const activeEventsByCoordinator = new Map<string, AssignedEvent[]>();
+  for (const row of rows) {
+    if (!row.coordinator_id || !isActiveEventStatus(row.status)) continue;
+    const events = activeEventsByCoordinator.get(row.coordinator_id) ?? [];
+    events.push({
+      id: row.id,
+      reference: row.reference,
+      name: row.name,
+      status: row.status,
+      proposedDate: row.proposed_date,
+      assignedAt: row.assigned_at,
+      submittedAt: row.submitted_at,
+      startTime: row.start_time === null ? null : fromDatabaseTime(row.start_time),
+      endTime: row.end_time === null ? null : fromDatabaseTime(row.end_time),
+      clientOrganisation: row.client_organisation,
+    });
+    activeEventsByCoordinator.set(row.coordinator_id, events);
+  }
+
+  return Promise.all(
+    coordinators.map(async (row) => ({
+      coordinatorId: row.id,
+      coordinatorName: row.full_name,
+      coordinatorEmail: row.full_name ? null : await readAccountEmail(row.id),
+      activeEvents: activeEventsByCoordinator.get(row.id) ?? [],
     })),
   );
 }

@@ -38,6 +38,18 @@ export function canReceiveAssignment(roles: readonly Role[]): boolean {
 }
 
 /**
+ * SCRUM-233 AC2 — "Completed, Cancelled or Rejected" events do not count as
+ * active on the Lead's overview. Stated as the three excluded statuses,
+ * rather than listing every status that does count, so a future status
+ * defaults to showing up as active unless someone deliberately excludes it.
+ */
+const INACTIVE_EVENT_STATUSES: readonly EventRequestStatus[] = ['completed', 'cancelled', 'rejected'];
+
+export function isActiveEventStatus(status: EventRequestStatus): boolean {
+  return !INACTIVE_EVENT_STATUSES.includes(status);
+}
+
+/**
  * AC2 — a coordinator already holding three events takes a fourth. There is no
  * workload limit to apply (clarification #92), so this states the rule rather
  * than counting anything: the number of events a coordinator holds never

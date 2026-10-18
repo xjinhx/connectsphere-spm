@@ -51,13 +51,22 @@ export default async function EventOpsManagerAssignmentQueuePage() {
 
   return (
     <main className="mx-auto max-w-6xl p-6">
-      <div className="mb-6">
-        <h1 className="text-2xl font-semibold">Assignment queue</h1>
-        <p className="mt-1 text-sm text-[var(--text-muted)]">
-          {events.length === 0
-            ? 'No submitted events are waiting for a coordinator.'
-            : `${events.length} submitted ${events.length === 1 ? 'event needs' : 'events need'} a coordinator.`}
-        </p>
+      <div className="mb-6 flex items-start justify-between gap-4">
+        <div>
+          <h1 className="text-2xl font-semibold">Assignment queue</h1>
+          <p className="mt-1 text-sm text-[var(--text-muted)]">
+            {events.length === 0
+              ? 'No submitted events are waiting for a coordinator.'
+              : `${events.length} submitted ${events.length === 1 ? 'event needs' : 'events need'} a coordinator.`}
+          </p>
+        </div>
+        {/* SCRUM-233 — balance workload and spot events that need reassigning. */}
+        <Link
+          href="/coordinator-overview"
+          className="inline-block w-fit shrink-0 rounded-md border border-[var(--border)] bg-[var(--surface)] px-4 py-2 text-sm font-medium hover:bg-slate-50"
+        >
+          Coordinator overview
+        </Link>
       </div>
 
       {events.length === 0 ? (
