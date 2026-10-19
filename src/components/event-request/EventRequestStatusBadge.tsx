@@ -28,6 +28,8 @@ const STATUS_CLASS: Record<EventRequestStatus, string> = {
   // finished, so grey like draft.
   planning: 'bg-indigo-50 text-indigo-700',
   confirmed: 'bg-green-100 text-green-800',
+  // SCRUM-234 — same reasoning: teal, one step on from Confirmed.
+  preparation: 'bg-teal-50 text-teal-700',
   completed: 'bg-slate-100 text-slate-700',
   cancelled: 'bg-slate-100 text-[var(--text-muted)] line-through',
 };

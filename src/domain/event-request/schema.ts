@@ -286,6 +286,8 @@ export const EventRequestStatusEnum = z.enum([
   'rejected',
   'planning',
   'confirmed',
+  // SCRUM-234 AC3: Confirmed and passed the operational safety check.
+  'preparation',
   'completed',
   'cancelled',
 ]);
@@ -300,6 +302,7 @@ export const EVENT_REQUEST_STATUS_LABELS: Record<EventRequestStatus, string> = {
   rejected: 'Rejected',
   planning: 'Planning',
   confirmed: 'Confirmed',
+  preparation: 'Preparation',
   completed: 'Completed',
   cancelled: 'Cancelled',
 };
@@ -319,6 +322,8 @@ export const EVENT_REQUEST_STATUS_DEFINITIONS: Record<EventRequestStatus, string
   rejected: 'Not approved; it cannot be edited or resubmitted.',
   planning: 'Venue and equipment arrangements are being made.',
   confirmed: 'All essential arrangements are in place.',
+  // SCRUM-234 card notes (TC-234-19).
+  preparation: 'Passed its safety check and being prepared for the day.',
   completed: 'The event has taken place.',
   cancelled: 'The event has been called off and will not go ahead.',
 };

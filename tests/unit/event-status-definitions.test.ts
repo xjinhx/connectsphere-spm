@@ -23,6 +23,8 @@ const AC1_CASES = [
   ['TC-99-05', 'rejected'],
   ['TC-99-06', 'planning'],
   ['TC-99-07', 'confirmed'],
+  // SCRUM-234 added Preparation after the workbook was written; no TC-99 id.
+  ['SCRUM-234', 'preparation'],
   ['TC-99-08', 'completed'],
   ['TC-99-09', 'cancelled'],
 ] as const;
