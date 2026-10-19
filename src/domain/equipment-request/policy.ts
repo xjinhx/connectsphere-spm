@@ -2,6 +2,7 @@ import { isCurrentCoordinator } from '@/domain/assignment/policy';
 import type { EventRequestStatus } from '@/domain/event-request/schema';
 import { isActionPermitted } from '@/domain/identity/permissions';
 import type { Role } from '@/domain/identity/roles';
+import type { EquipmentRequestStatus } from './schema';
 
 /**
  * Equipment request rules (SCRUM-160 Record the equipment an event needs).
@@ -89,3 +90,82 @@ export function needsReservationConfirmation(
 
 export const RESERVATION_WARNING_MESSAGE =
   'This item has already been reserved. Confirm to apply the change to its reservation.';
+
+// ---------------------------------------------------------------------------
+// SCRUM-164 — Queue of equipment requests awaiting review
+// ---------------------------------------------------------------------------
+
+/**
+ * AC1: "equipment requests ... that are not yet resolved". AC3: fulfilled and
+ * unable to fulfil no longer appear as outstanding. AC4: partially fulfilled
+ * remains listed. Under review is how every request starts (SCRUM-166 AC1), so
+ * it is outstanding too.
+ */
+export const OUTSTANDING_EQUIPMENT_REQUEST_STATUSES = [
+  'under_review',
+  'partially_fulfilled',
+] as const satisfies readonly EquipmentRequestStatus[];
+
+export function isOutstandingEquipmentRequest(status: EquipmentRequestStatus): boolean {
+  return (OUTSTANDING_EQUIPMENT_REQUEST_STATUSES as readonly EquipmentRequestStatus[]).includes(status);
+}
+
+/**
+ * AC4: "shows how many items are still unavailable". Each unavailable line
+ * counts once, whatever its quantity (PO, 18 Oct 2026; TC-164-10): Mic x2 and
+ * Lectern x1 unavailable is 2 items, not 3.
+ */
+export function countUnavailableItems(lines: readonly { unavailable: boolean }[]): number {
+  return lines.filter((line) => line.unavailable).length;
+}
+
+export const EQUIPMENT_QUEUE_SORTS = ['raised', 'event-date'] as const;
+export type EquipmentQueueSort = (typeof EQUIPMENT_QUEUE_SORTS)[number];
+
+/** A sort named in the URL, or the default when it is missing or unknown. */
+export function toEquipmentQueueSort(value: unknown): EquipmentQueueSort {
+  return EQUIPMENT_QUEUE_SORTS.find((sort) => sort === value) ?? 'raised';
+}
+
+/**
+ * The order the queue is shown in. The same two orders as SCRUM-147's booking
+ * queue (sortBookingQueue), so the two queues behave alike.
+ *
+ * 'raised' (the default; the card sets none): the oldest request first.
+ * 'event-date' (AC2): the soonest event first. Dates are compared as
+ *   YYYY-MM-DD strings, which order the same way as the calendar, never as
+ *   displayed text (TC-164-05: 3 Jan 2027 sorts after 28 Dec 2026). An event
+ *   with no date yet goes last: there is nothing to say it is soon.
+ *
+ * Ties fall back to the other order, then the event id, so the result is
+ * stable. Returns a new array; the input is not reordered in place.
+ */
+export function sortEquipmentQueue<T extends { eventRequestId: string; eventDate: string | null; raisedAt: string }>(
+  entries: readonly T[],
+  sort: EquipmentQueueSort,
+): T[] {
+  const byRaised = (a: T, b: T) => Date.parse(a.raisedAt) - Date.parse(b.raisedAt);
+  const byDate = (a: T, b: T) => {
+    if (a.eventDate === b.eventDate) return 0;
+    if (a.eventDate === null) return 1;
+    if (b.eventDate === null) return -1;
+    return a.eventDate.localeCompare(b.eventDate);
+  };
+  const byEvent = (a: T, b: T) => a.eventRequestId.localeCompare(b.eventRequestId);
+  const order: Record<EquipmentQueueSort, (a: T, b: T) => number> = {
+    raised: (a, b) => byRaised(a, b) || byDate(a, b) || byEvent(a, b),
+    'event-date': (a, b) => byDate(a, b) || byRaised(a, b) || byEvent(a, b),
+  };
+  return [...entries].sort(order[sort]);
+}
+
+/**
+ * Days from `today` to the event's date (both YYYY-MM-DD, Singapore): 0 on
+ * the day, negative once it has passed, null when the event has no date. The
+ * queue shows it beside the date so the nearest events stand out.
+ */
+export function daysUntilEvent(eventDate: string | null, today: string): number | null {
+  if (eventDate === null) return null;
+  const DAY_MS = 24 * 60 * 60 * 1000;
+  return Math.round((Date.parse(`${eventDate}T00:00:00Z`) - Date.parse(`${today}T00:00:00Z`)) / DAY_MS);
+}

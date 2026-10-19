@@ -10,6 +10,7 @@ import {
   fetchEquipmentRequest,
   fetchEquipmentRequestLine,
   fetchEquipmentRequestLines,
+  fetchEquipmentRequestsByStatus,
   fetchReservedLineIds,
   insertEquipmentRequestLine,
   updateEquipmentRequestLineQuantity,
@@ -17,15 +18,20 @@ import {
 } from '@/lib/supabase/equipmentRequests';
 import {
   EVENT_NOT_OPEN_FOR_EQUIPMENT_MESSAGE,
+  OUTSTANDING_EQUIPMENT_REQUEST_STATUSES,
   RESERVATION_WARNING_MESSAGE,
   acceptsEquipmentRequest,
   canViewEquipmentRequest,
+  countUnavailableItems,
   linesOfSameType,
   needsReservationConfirmation,
+  sortEquipmentQueue,
+  type EquipmentQueueSort,
 } from './policy';
 import {
   AddEquipmentLineInputSchema,
   AddEquipmentLineOutcomeSchema,
+  EquipmentQueueEntrySchema,
   EquipmentRequestLineIdSchema,
   QUANTITY_AT_LEAST_ONE_MESSAGE,
   SaveTechnicalRequirementsInputSchema,
@@ -33,6 +39,7 @@ import {
   EquipmentRequestViewSchema,
   UpdateEquipmentLineInputSchema,
   type AddEquipmentLineOutcome,
+  type EquipmentQueueEntry,
   type EquipmentRequestLine,
   type EquipmentRequestView,
 } from './schema';
@@ -371,4 +378,73 @@ export async function saveTechnicalRequirements(
     throw new ValidationError('The technical requirements could not be saved.', error?.message);
   }
   return { technicalRequirements: (data as { technical_requirements: string | null }).technical_requirements };
+}
+
+// ---------------------------------------------------------------------------
+// SCRUM-164 — Queue of equipment requests awaiting review
+// ---------------------------------------------------------------------------
+
+type QueueRow = {
+  event_request_id: string;
+  status: string;
+  event_request: { name: string; reference: string; proposed_date: string | null } | null;
+  equipment_request_line: {
+    id: string;
+    quantity: number;
+    unavailable: boolean;
+    created_at: string;
+    equipment: { name: string } | null;
+  }[];
+};
+
+/**
+ * One queue entry, or null for a request with no lines. A request exists from
+ * the first save of its technical requirements, but it is raised when its
+ * first item is added (SCRUM-160 AC10), so one with no items is not yet
+ * awaiting review.
+ */
+function toQueueEntry(row: QueueRow): EquipmentQueueEntry | null {
+  const [firstLine] = row.equipment_request_line;
+  if (!firstLine) return null;
+  // NOT NULL foreign key: a request always has its event.
+  if (!row.event_request) {
+    throw new ValidationError('An equipment request is missing its event.', { eventRequestId: row.event_request_id });
+  }
+  return EquipmentQueueEntrySchema.parse({
+    eventRequestId: row.event_request_id,
+    eventName: row.event_request.name,
+    eventReference: row.event_request.reference,
+    eventDate: row.event_request.proposed_date,
+    status: row.status,
+    lines: row.equipment_request_line.map((line) => ({
+      id: line.id,
+      // The foreign key is restrict, so a line always has its catalogue item.
+      equipmentName: line.equipment?.name ?? '',
+      quantity: line.quantity,
+    })),
+    unavailableCount: countUnavailableItems(row.equipment_request_line),
+    // Lines are read oldest first, so the first one is when it was raised.
+    raisedAt: firstLine.created_at,
+  });
+}
+
+/**
+ * SCRUM-164 AC1 to AC5 - every outstanding equipment request, in the order
+ * `sort` asks for (sortEquipmentQueue, policy.ts).
+ *
+ * AC1: each with its event, event date, items and quantities. AC3: fulfilled
+ * and unable to fulfil are not read. AC4: partially fulfilled is, with its
+ * unavailable count. AC5: nothing filters by location or equipment type.
+ *
+ * Who may see it (Technical Support Staff, equipment_administration) is
+ * checked by the caller before this is called, the same split as SCRUM-147's
+ * listPendingBookingQueue.
+ */
+export async function listEquipmentQueue(sort: EquipmentQueueSort = 'raised'): Promise<EquipmentQueueEntry[]> {
+  const { data, error } = await fetchEquipmentRequestsByStatus(OUTSTANDING_EQUIPMENT_REQUEST_STATUSES);
+  if (error || !data) {
+    throw new ValidationError('Could not load the equipment request queue.', error?.message);
+  }
+  const entries = (data as unknown as QueueRow[]).flatMap((row) => toQueueEntry(row) ?? []);
+  return sortEquipmentQueue(entries, sort);
 }
