@@ -14,7 +14,9 @@ import {
   type ReferenceRow,
 } from '@/lib/supabase/eventRequests';
 import { fetchAccessibilityFeatures, fetchLocations } from '@/lib/supabase/venues';
+import { listOperationsManagerProfiles } from '@/lib/supabase/profiles';
 import { getCurrentActor, type Actor } from '@/lib/auth/currentActor';
+import { notifyBestEffort } from '@/domain/notification/service';
 import { hasRole } from '@/domain/identity/policy';
 import {
   ForbiddenError,
@@ -481,6 +483,11 @@ export async function getEventRequestDraftForEditing(id: string): Promise<EventR
  *
  * AC2 — an incomplete draft is refused with every incomplete field named, and
  * nothing about it changes, so it stays editable.
+ *
+ * SCRUM-197 AC1 — once the submission is saved, every Event Coordinator Lead
+ * (`operations_manager` in code) is notified, because assignment is their
+ * responsibility. Best-effort and after the write succeeds: a notification
+ * failure must never undo or block the submission itself.
  */
 export async function submitEventRequest(id: string): Promise<EventRequest> {
   const actor = await getCurrentActor();
@@ -507,7 +514,37 @@ export async function submitEventRequest(id: string): Promise<EventRequest> {
   }
   // No row matched: another call submitted it first (see the `status` filter).
   if (!data) throw new InvalidTransitionError('submitted', 'submitted');
-  return toEventRequest(data as unknown as EventRequestRow);
+  const submitted = toEventRequest(data as unknown as EventRequestRow);
+
+  await notifyLeadsOfSubmission(submitted);
+
+  return submitted;
+}
+
+/**
+ * SCRUM-197 AC1 — one notification per Event Coordinator Lead. Leads are
+ * read fresh on every submission rather than cached, since the set of
+ * accounts holding the role can change between submissions.
+ */
+async function notifyLeadsOfSubmission(request: EventRequest): Promise<void> {
+  const { data: leads, error } = await listOperationsManagerProfiles();
+  if (error) {
+    // Best-effort by design (see submitEventRequest above): log and move on
+    // rather than fail the submission because the Lead list could not be read.
+    console.error('Could not read Event Coordinator Leads to notify', request.id, error.message);
+    return;
+  }
+
+  await Promise.all(
+    (leads ?? []).map((lead) =>
+      notifyBestEffort({
+        recipientId: lead.id,
+        type: 'request_submitted',
+        eventRequestId: request.id,
+        message: `${request.reference} (${request.name}) has been submitted and needs a coordinator assigned.`,
+      }),
+    ),
+  );
 }
 
 // ---------------------------------------------------------------------------

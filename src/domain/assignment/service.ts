@@ -2,6 +2,7 @@ import {
   assignCoordinatorToEventRequest,
   fetchEventRequestById,
   listEventRequestsForCoordinator,
+  listEventRequestsForCoordinators,
   listUnassignedSubmittedEventRequests,
   type EventRequestRow,
 } from '@/lib/supabase/eventRequests';
@@ -39,6 +40,7 @@ import {
   canBeReassigned,
   canReceiveAssignment,
   canViewCoordinatorDetails,
+  isActiveEventStatus,
   isCurrentCoordinator,
 } from './policy';
 
@@ -500,6 +502,82 @@ export async function listAssignableCoordinators(): Promise<AssignableCoordinato
 }
 
 // ---------------------------------------------------------------------------
+// SCRUM-233 — the Lead's overview of every coordinator's assignments
+// ---------------------------------------------------------------------------
+
+/** One coordinator's row on the Lead's overview. */
+export interface CoordinatorWorkload {
+  coordinatorId: string;
+  /** Null when the profile has no name recorded yet — falls back to email, same as the picker. */
+  coordinatorName: string | null;
+  coordinatorEmail: string | null;
+  /** AC2 — Completed, Cancelled and Rejected events are already excluded. */
+  activeEvents: AssignedEvent[];
+}
+
+/**
+ * AC1 — every coordinator, with their active events (status and proposed
+ * date). AC2 — Completed, Cancelled and Rejected events are filtered out
+ * before grouping, so they never appear as active for anyone.
+ *
+ * AC3 is met by construction: an event groups under whichever coordinator_id
+ * it currently holds, which is exactly what SCRUM-96's reassignment updates,
+ * so a reassigned event appears only under its new coordinator the next time
+ * this is read — there is no separate "old owner" list to also clear.
+ *
+ * AC4 — gated by `coordinator_assignment`, the same permission SCRUM-232's
+ * assignment record and SCRUM-94/96's assign and reassign routes use; today
+ * only the Event Coordinator Lead (operations_manager) holds it.
+ *
+ * Every coordinator is listed even with zero active events, so the Lead can
+ * see who has room to take on more, not only who is already busy.
+ */
+export async function getCoordinatorOverview(actor: { roles: Role[] }): Promise<CoordinatorWorkload[]> {
+  assertPermission(actor.roles, 'coordinator_assignment');
+
+  const { data, error } = await listCoordinatorProfiles();
+  if (error) throw new ValidationError('The coordinators could not be read.', error.message);
+  const coordinators = (data ?? []) as { id: string; full_name: string | null; roles: unknown }[];
+  if (coordinators.length === 0) return [];
+
+  const { data: eventRows, error: eventsError } = await listEventRequestsForCoordinators(
+    coordinators.map((row) => row.id),
+  );
+  if (eventsError) {
+    throw new ValidationError('The assigned events could not be read.', eventsError.message);
+  }
+  const rows = (eventRows ?? []) as unknown as EventRequestRow[];
+
+  const activeEventsByCoordinator = new Map<string, AssignedEvent[]>();
+  for (const row of rows) {
+    if (!row.coordinator_id || !isActiveEventStatus(row.status)) continue;
+    const events = activeEventsByCoordinator.get(row.coordinator_id) ?? [];
+    events.push({
+      id: row.id,
+      reference: row.reference,
+      name: row.name,
+      status: row.status,
+      proposedDate: row.proposed_date,
+      assignedAt: row.assigned_at,
+      submittedAt: row.submitted_at,
+      startTime: row.start_time === null ? null : fromDatabaseTime(row.start_time),
+      endTime: row.end_time === null ? null : fromDatabaseTime(row.end_time),
+      clientOrganisation: row.client_organisation,
+    });
+    activeEventsByCoordinator.set(row.coordinator_id, events);
+  }
+
+  return Promise.all(
+    coordinators.map(async (row) => ({
+      coordinatorId: row.id,
+      coordinatorName: row.full_name,
+      coordinatorEmail: row.full_name ? null : await readAccountEmail(row.id),
+      activeEvents: activeEventsByCoordinator.get(row.id) ?? [],
+    })),
+  );
+}
+
+// ---------------------------------------------------------------------------
 // SCRUM-96 — Reassign an event to another coordinator
 // SCRUM-98 — See who my coordinator is
 // ---------------------------------------------------------------------------
@@ -582,14 +660,11 @@ async function reassignedMeanwhileError(coordinatorId: string | null): Promise<C
  * Who may reassign is checked in the route through SCRUM-69's permission
  * matrix (`coordinator_assignment`), the same as SCRUM-94's assign.
  *
- * DUMMY(SCRUM-24) D-06: AC1 also says both coordinators are notified. The
- * Notification System (SCRUM-24) is not in this sprint, so nothing is sent:
- * the recorded reassignment is the minimum honest implementation, and
- * event_request_coordinator_history holds exactly what a notification to
- * either coordinator would need (who, from whom, to whom, when). When
- * SCRUM-24 lands, raise both notifications from here, where
- * previousCoordinatorId and coordinatorId are both to hand. See
- * docs/dummies.md.
+ * SCRUM-197 AC3 — AC1 also says both coordinators are notified. Both the
+ * previous and the new coordinator are notified from here (replaces dummy
+ * D-06, now Replaced; docs/dummies.md), straight after the reassignment is
+ * recorded, best-effort via notifyBestEffort so a notification failure
+ * cannot undo the reassignment.
  *
  * SCRUM-215: two managers reassigning at once. Each says which coordinator
  * they are moving the event away from (`fromCoordinatorId`, the one they saw),
@@ -661,6 +736,28 @@ export async function reassignCoordinator(
   if (row.coordinator_id === null || row.assigned_by === null || row.assigned_at === null) {
     throw new ValidationError('The reassignment was recorded incompletely.');
   }
+
+  // SCRUM-197 AC3 — both the previous and the new coordinator are notified.
+  // Best-effort: the reassignment above already succeeded, so a
+  // notification failure must not undo it. EventAssignmentRow carries no
+  // reference/name, so they are read separately, the same reasoning as
+  // alreadyAssignedError's separate name lookup above.
+  const { data: eventDetails } = await fetchEventRequestById(row.id);
+  const eventRow = eventDetails as unknown as EventRequestRow | null;
+  const eventLabel = eventRow ? `${eventRow.reference} (${eventRow.name})` : 'this event';
+
+  await notifyBestEffort({
+    recipientId: previousCoordinatorId,
+    type: 'coordinator_unassigned',
+    eventRequestId: row.id,
+    message: `You are no longer the coordinator for ${eventLabel}.`,
+  });
+  await notifyBestEffort({
+    recipientId: row.coordinator_id,
+    type: 'coordinator_assigned',
+    eventRequestId: row.id,
+    message: `You have been assigned to ${eventLabel}.`,
+  });
 
   return {
     id: row.id,

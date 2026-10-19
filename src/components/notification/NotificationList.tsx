@@ -3,6 +3,7 @@
 import Link from 'next/link';
 import { useState } from 'react';
 import type { Notification } from '@/domain/notification/schema';
+import { notificationHref } from '@/domain/notification/policy';
 
 const TYPE_LABELS: Record<string, string> = {
   clarification_requested: 'Clarification requested',
@@ -11,11 +12,16 @@ const TYPE_LABELS: Record<string, string> = {
   coordinator_assigned: 'Coordinator assigned',
   coordinator_named: 'Coordinator named',
   venue_booking_update: 'Venue booking',
+  request_submitted: 'Needs a coordinator',
+  coordinator_unassigned: 'Coordinator removed',
 };
 
 /**
  * SCRUM-193 AC1: message, related event, time - already in each row.
  * SCRUM-193 AC3: opening a notification marks it read.
+ * SCRUM-241: the link target depends on who the notification is for
+ * (notificationHref) - a coordinator-facing type can't open the
+ * organiser's /events/<id>, see src/domain/notification/policy.ts.
  */
 export function NotificationList({ initialNotifications }: { initialNotifications: Notification[] }) {
   const [notifications, setNotifications] = useState(initialNotifications);
@@ -52,7 +58,7 @@ export function NotificationList({ initialNotifications }: { initialNotification
       {notifications.map((notification) => (
         <li key={notification.id}>
           <Link
-            href={`/events/${notification.eventRequestId}`}
+            href={notificationHref(notification)}
             onClick={() => openNotification(notification)}
             className={`block w-full rounded-md border px-4 py-3 text-left text-sm transition-colors ${
               notification.readAt === null

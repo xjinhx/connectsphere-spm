@@ -27,9 +27,8 @@ import { ensureTestClientOrganisation } from './fixtures/clientOrganisation';
  * test, which never holds a client (docs/architecture.md).
  *
  * Not covered here, verify manually or later:
- *   SCRUM-96 AC1 "both are notified": no notification story this sprint, so
- *        nothing is sent. Flag for re-execution once the Notification System
- *        exists.
+ *   SCRUM-96 AC1 "both are notified": now covered below (SCRUM-197), which
+ *        wires the actual notifyBestEffort calls into reassignCoordinator.
  *   SCRUM-96 AC4 through the clarification routes: their access check is on
  *        Dylan's unmerged branch. Re-run AC4 by hand once it merges. The
  *        review read (SCRUM-89) is covered below.
@@ -230,6 +229,37 @@ describe('reassignCoordinator: SCRUM-96 AC1 and AC2', () => {
     });
 
     expect(new Date(outcome.assignedAt).getTime()).toBeGreaterThan(firstAssignedAt);
+  });
+
+  // SCRUM-96 AC1, SCRUM-197 AC3: both coordinators are notified.
+  it('notifies the previous coordinator and the new coordinator (SCRUM-197 AC3)', async () => {
+    const id = await createSubmittedRequest(coordinatorA);
+
+    await reassignCoordinator(id, {
+      coordinatorId: coordinatorB.id,
+      fromCoordinatorId: coordinatorA.id,
+      actorId: manager.id,
+    });
+
+    const { data: previousNotification } = await supabase
+      .from('notifications')
+      .select('type, message')
+      .eq('recipient_id', coordinatorA.id)
+      .eq('event_request_id', id)
+      .order('created_at', { ascending: false })
+      .limit(1)
+      .maybeSingle();
+    expect(previousNotification?.type).toBe('coordinator_unassigned');
+
+    const { data: newNotification } = await supabase
+      .from('notifications')
+      .select('type, message')
+      .eq('recipient_id', coordinatorB.id)
+      .eq('event_request_id', id)
+      .order('created_at', { ascending: false })
+      .limit(1)
+      .maybeSingle();
+    expect(newNotification?.type).toBe('coordinator_assigned');
   });
 
   it('refuses an event that has no coordinator, and records no history', async () => {
