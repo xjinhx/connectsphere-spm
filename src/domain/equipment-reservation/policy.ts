@@ -1,9 +1,13 @@
 import { datesInRange } from '@/domain/venues/policy';
-import type { AvailabilityLine, DateWindow } from './schema';
+import type { AvailabilityLine, DateWindow, OutstandingLine } from './schema';
 
 /**
- * Equipment availability rules (SCRUM-167). Pure functions: no Supabase, no
- * Next.js.
+ * Equipment availability and reservation rules (SCRUM-167, SCRUM-173). Pure
+ * functions: no Supabase, no Next.js.
+ *
+ * reserve_equipment (supabase/migrations/20261022011508_reserve_equipment.sql)
+ * applies the window and busiest-day rules again inside the write, with the
+ * item locked, so the check and the reservation agree.
  */
 
 /** A YYYY-MM-DD date moved by whole days. */
@@ -97,4 +101,16 @@ export function checkLines(
     left.set(line.equipmentId, (left.get(line.equipmentId) ?? 0) - covered);
     return { ...line, available, shortfall: line.requested - covered };
   });
+}
+
+/**
+ * 173 AC7: "outstanding quantities shown separately". The lines with units
+ * still to reserve, and how many; a fully reserved line is left out.
+ */
+export function outstandingLines(
+  lines: readonly { lineId: string; equipmentName: string; requested: number; reserved: number }[],
+): OutstandingLine[] {
+  return lines
+    .filter((line) => line.requested > line.reserved)
+    .map((line) => ({ ...line, outstanding: line.requested - line.reserved }));
 }
