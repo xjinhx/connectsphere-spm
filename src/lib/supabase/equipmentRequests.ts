@@ -119,12 +119,10 @@ export async function fetchEquipmentRequestLine(eventRequestId: string, lineId: 
 }
 
 /**
- * AC7, AC8: the lines, out of `lineIds`, that have been reserved: those whose
- * reservation is still Reserved (SCRUM-167 gave the table a status).
+ * AC7, AC8: the lines, out of `lineIds`, that have been reserved.
  *
- * DUMMY(SCRUM-173) D-18: reads equipment_reservation, whose rows are still
- * inserted by hand until SCRUM-173 reserves through the app. SCRUM-173 keeps
- * the signature.
+ * Reads SCRUM-173's reservations (D-18, replaced): a line is reserved while
+ * its reservation is still Reserved, not once it has been released.
  */
 export async function fetchReservedLineIds(lineIds: readonly string[]) {
   return db().from('equipment_reservation').select('line_id').in('line_id', [...lineIds]).eq('status', 'reserved');

@@ -99,7 +99,7 @@ _Avoid_: open, closed, done, pending (that word is for venue booking requests)
 An equipment line Technical Support Staff cannot meet, on a partially fulfilled request (SCRUM-166 AC3). The queue counts each unavailable line once, whatever its quantity (SCRUM-164 AC4; PO, 18 Oct 2026). Not the same as a catalogue item's _Unavailable_ operational status, which is about the item itself.
 
 **Reserved** (equipment line):
-An equipment line whose equipment has been set aside for the event. Reducing or removing it needs the coordinator to confirm a warning first (SCRUM-160 AC8). A **reservation** holds a quantity of the line's item for the event's commitment window, Reserved until it is Released (SCRUM-177). Reserving is SCRUM-173's; until then a line is reserved by hand (dummy D-18).
+An equipment line whose equipment has been set aside for the event. Reducing or removing it needs the coordinator to confirm a warning first (SCRUM-160 AC8). Technical Support Staff reserve it with a **reservation** (SCRUM-173): a quantity of the line's item held for the event's commitment window, Reserved until it is Released (SCRUM-177).
 _Avoid_: booked, held (those words are for venues)
 
 **Commitment window** (equipment):
