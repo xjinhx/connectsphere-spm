@@ -1,6 +1,6 @@
 # ConnectSphere — Customer Clarifications Register (G9)
 
-As of 17 Oct 2026. Source: G9 GitHub Discussions extract of 6 Oct 2026 (saved here as `2026-10-06_discussions-extract.md`): 121 threads, 120 answered plus the #1 announcement. Week 7 changes: `project-scope.md` §6A.
+As of 17 Oct 2026. Source: G9 GitHub Discussions extract of 6 Oct 2026 (saved here as `20261006 - IS212-2026-discussions.md`): 121 threads, 120 answered plus the #1 announcement. Week 7 changes: #128 in that extract.
 
 **#130, #131 and #132** were added 17 Oct from the team's consolidated summary of the client's clarifications (posted to the team, 17 Oct), not from an extract. Check the wording against the next extract and correct here if it differs. **#133** (must the app show the signed-in role?) is still unanswered.
 Thread `#NN` = https://github.com/SinYang13/IS212-2026/discussions/NN
@@ -22,7 +22,7 @@ Thread `#NN` = https://github.com/SinYang13/IS212-2026/discussions/NN
 | Attendee Registration | = registering for an event (view, register, status, withdraw), NOT account creation | #49 |
 | Setup/turnaround | Configurable per venue, **in 15-minute steps**; included in availability and conflict checks; bookings that become a problem are identified, not removed (W7-1). Replaces the slot-adjacent rule of #123 | #128, #126, #131, W7-1 |
 | Booking unit | **15 minutes** is the smallest unit of booking; no fixed lunch or dinner blackout (12:00–13:00 is valid). Replaces AM/PM/Night slots for **all venue-related timing: the organiser's event request and the coordinator's venue booking request**. The **07:00–24:00 operating window stays**; bookings inside it are in 15-minute increments | #126, #128, #131 |
-| Week 7 changes (all six) | Now required in R1: setup/turnaround (W7-1), venue unavailable after booking (W7-2), multiple venues per event (W7-3), hold expiry (W7-4), Event Coordinator Lead (W7-5), Operational Safety Check with a new Safety Officer role (W7-6). The customer expects no further R1 changes | #128, `project-scope.md` §6A |
+| Week 7 changes (all six) | Now required in R1: setup/turnaround (W7-1), venue unavailable after booking (W7-2), multiple venues per event (W7-3), hold expiry (W7-4), Event Coordinator Lead (W7-5), Operational Safety Check with a new Safety Officer role (W7-6). The customer expects no further R1 changes | #128 |
 
 **Not required in R1**
 | Topic | Ruling | Ref |
