@@ -82,7 +82,11 @@ export function AppHeader({ homeHref, navItems, account, roles, workingRole }: A
         </nav>
 
         <div className="ml-auto flex items-center gap-2">
-          {roles.length > 1 && <WorkingAsMenu roles={roles} workingRole={workingRole} />}
+          {roles.length > 1 && (
+            <div className="hidden md:block">
+              <WorkingAsMenu roles={roles} workingRole={workingRole} />
+            </div>
+          )}
           <NotificationBell />
           <AccountMenu account={account} workingRole={workingRole} />
         </div>
@@ -91,6 +95,12 @@ export function AppHeader({ homeHref, navItems, account, roles, workingRole }: A
       {menuOpen && (
         <nav id="app-nav-menu" aria-label="Main" className="space-y-1 border-t border-[var(--border)] px-4 py-3 md:hidden">
           {links('column')}
+          {/* Below 768 px "Working as" moves into the folded menu, so the header row fits a phone. */}
+          {roles.length > 1 && (
+            <div className="border-t border-[var(--border)] pt-3">
+              <WorkingAsMenu roles={roles} workingRole={workingRole} />
+            </div>
+          )}
         </nav>
       )}
     </header>

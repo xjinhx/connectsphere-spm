@@ -37,10 +37,17 @@ export function AccountMenu({ account, workingRole }: { account: AccountDisplay;
         aria-haspopup="true"
         aria-expanded={open}
         aria-controls="account-menu"
+        aria-label={`Account menu for ${account.primary}`}
         onClick={() => setOpen((value) => !value)}
-        className="max-w-[12rem] truncate rounded-md border border-[var(--border)] px-3 py-1.5 text-sm font-medium transition-colors hover:bg-slate-100"
+        className="inline-flex max-w-[12rem] items-center gap-2 rounded-md border border-[var(--border)] px-2.5 py-1.5 text-sm font-medium transition-colors hover:bg-slate-100"
       >
-        {account.primary}
+        {/* At phone width only the icon shows, so the button fits beside the
+            menu button, ConnectSphere and the bell (AC2 with AC6). */}
+        <svg aria-hidden="true" viewBox="0 0 24 24" className="h-5 w-5 shrink-0" fill="none" stroke="currentColor" strokeWidth="2">
+          <circle cx="12" cy="8" r="4" />
+          <path d="M4 21c0-4 4-6 8-6s8 2 8 6" strokeLinecap="round" />
+        </svg>
+        <span className="hidden truncate sm:inline">{account.primary}</span>
       </button>
 
       {open && (
