@@ -46,6 +46,9 @@ export function AppHeader({ homeHref, navItems, account, roles, workingRole }: A
           key={item.href}
           href={item.href}
           aria-current={current ? 'page' : undefined}
+          // Close the folded menu on any tap, including one on the page already open,
+          // where the path does not change and the effect above would not run.
+          onClick={layout === 'column' ? () => setMenuOpen(false) : undefined}
           className={[
             'rounded-md px-3 py-2 text-sm font-medium transition-colors',
             layout === 'column' ? 'block' : '',
