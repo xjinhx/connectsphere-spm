@@ -16,6 +16,10 @@ export function LogoutButton() {
 
   async function handleLogout() {
     setIsLoggingOut(true);
+    // SCRUM-249 AC5: forget the "Working as" choice, so the next login starts on
+    // the default role. Done before signing out, while the request is still
+    // authenticated; a failure here must not stop the logout.
+    await fetch('/api/me/working-as', { method: 'DELETE' }).catch(() => undefined);
     const supabase = createSupabaseBrowserClient();
     await supabase.auth.signOut();
     router.push('/login');
