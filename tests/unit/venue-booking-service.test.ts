@@ -139,6 +139,37 @@ describe('AC1: assigned coordinator, approved event', () => {
     expect(outcome.lines[0]?.status).toBe('pending');
   });
 
+  // SCRUM-142-TC18 (SCRUM-258): the date is written as entered, with no
+  // conversion that could move it a day.
+  it('writes a four-digit-year date exactly as entered', async () => {
+    mockEvent('approved');
+    mockWriteAndReadBack();
+
+    const outcome = await submitVenueBookingRequest(EVENT_ID, COORDINATOR_ID, {
+      venueId: VENUE_ID,
+      lines: [{ date: '2026-12-31', start: '09:00', end: '12:00' }],
+    });
+
+    expect(createVenueBookingRequest).toHaveBeenCalledWith(
+      expect.objectContaining({ lines: [{ date: '2026-12-31', start: '09:00', end: '12:00' }] }),
+    );
+    expect(outcome.lines.map((line) => line.date)).toEqual(['2026-12-31']);
+    expect(outcome.lines.every((line) => line.status === 'pending')).toBe(true);
+  });
+
+  // SCRUM-142-TC20 (SCRUM-258): the latest valid date, 31 Dec 9999.
+  it('accepts 31 Dec 9999, the latest valid date', async () => {
+    mockEvent('approved');
+    mockWriteAndReadBack();
+
+    const outcome = await submitVenueBookingRequest(EVENT_ID, COORDINATOR_ID, {
+      venueId: VENUE_ID,
+      lines: [{ date: '9999-12-31', start: '09:00', end: '12:00' }],
+    });
+
+    expect(outcome.lines.map((line) => line.date)).toEqual(['9999-12-31']);
+  });
+
   // SCRUM-142-TC06, in times: two periods on the same date are two lines.
   it('carries two periods on the same date as two lines, each Pending', async () => {
     mockEvent('approved');
@@ -317,6 +348,36 @@ describe('AC5: mandatory field left empty on an approved event', () => {
 
     expect(error.code).toBe('VALIDATION_ERROR');
     expect(flaggedFields(error)).toMatch(/date/i);
+    expect(createVenueBookingRequest).not.toHaveBeenCalled();
+  });
+
+  // SCRUM-142-TC19 (SCRUM-258): a five-digit year is refused beside the line's
+  // Date field, not left to fail later as a 500.
+  it('refuses a five-digit year, creates nothing and flags the date as not valid', async () => {
+    const error = await caught(
+      submitVenueBookingRequest(EVENT_ID, COORDINATOR_ID, {
+        venueId: VENUE_ID,
+        lines: [{ date: '20266-12-10', start: '09:00', end: '12:00' }],
+      }),
+    );
+
+    expect(error.code).toBe('VALIDATION_ERROR');
+    expect(error.details).toMatchObject({ lineErrors: [{ date: ['Choose a valid date.'] }] });
+    expect(createVenueBookingRequest).not.toHaveBeenCalled();
+  });
+
+  // SCRUM-142-TC20 (SCRUM-258): 31 Dec 9999 is the latest valid date, so 1 Jan
+  // 10000 is the first one refused.
+  it('refuses 1 Jan 10000, the first date after the latest valid one', async () => {
+    const error = await caught(
+      submitVenueBookingRequest(EVENT_ID, COORDINATOR_ID, {
+        venueId: VENUE_ID,
+        lines: [{ date: '10000-01-01', start: '09:00', end: '12:00' }],
+      }),
+    );
+
+    expect(error.code).toBe('VALIDATION_ERROR');
+    expect(error.details).toMatchObject({ lineErrors: [{ date: ['Choose a valid date.'] }] });
     expect(createVenueBookingRequest).not.toHaveBeenCalled();
   });
 
