@@ -413,8 +413,8 @@ push --dry-run` to review, then `npx supabase db push` to apply.
 - **Push your branch and merge `main` into it at least every 2 days** while
   work is in progress. Small, frequent merges keep conflicts small (professor
   consultation, 15 Sep 2026).
-- PR required for everything, with at least 1 approving review before merge
-  (2 for critical-path PRs this sprint). No direct pushes to `main`.
+- PR required for everything, with at least 1 approving review before merge.
+  No direct pushes to `main`.
 - Reference the SCRUM ticket ID in the PR title/description. If a PR is a
   starting proposal for a shared file (e.g. a schema others will build on),
   say so explicitly in the description.
