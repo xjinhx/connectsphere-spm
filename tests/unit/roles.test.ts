@@ -45,8 +45,30 @@ describe('landingPathForRoles', () => {
     expect(landingPathForRoles(['attendee'])).toBe('/register-events');
   });
 
-  it('uses the first recognised role when an account holds several', () => {
+  it('ignores an unrecognised role and uses the recognised one', () => {
     expect(landingPathForRoles(['made-up-role', 'venue_staff'])).toBe('/booking-queue');
+  });
+
+  // SCRUM-249 — the default role follows one fixed order, not the order roles
+  // are stored in (PO, 22 Oct 2026). Test case IDs from the Sprint 4 sheet.
+  it('TC-249-14: lands by the fixed role order, whatever the stored order', () => {
+    expect(landingPathForRoles(['coordinator', 'technical_support'])).toBe('/equipment-queue');
+    expect(landingPathForRoles(['technical_support', 'coordinator'])).toBe('/equipment-queue');
+    expect(landingPathForRoles(['coordinator', 'venue_staff'])).toBe('/booking-queue');
+    expect(landingPathForRoles(['event_organiser', 'coordinator'])).toBe('/assigned-events');
+    expect(landingPathForRoles(['attendee', 'event_organiser'])).toBe('/events');
+  });
+
+  it('TC-254-04: Technical Support Staff stored second still lands on the equipment queue', () => {
+    expect(landingPathForRoles(['coordinator', 'technical_support'])).toBe('/equipment-queue');
+  });
+
+  it('TC-254-05: a Lead who is also Technical Support Staff lands on the Lead page', () => {
+    expect(landingPathForRoles(['technical_support', 'operations_manager'])).toBe('/assignment-queue');
+  });
+
+  it('a Safety Officer who is also Technical Support Staff lands on the safety checks', () => {
+    expect(landingPathForRoles(['technical_support', 'safety_officer'])).toBe('/safety-checks');
   });
 
   // SCRUM-232 AC1 — test case IDs from the SCRUM-232 tab of ConnectSphere_TestCases_Sprint3.xlsx.
