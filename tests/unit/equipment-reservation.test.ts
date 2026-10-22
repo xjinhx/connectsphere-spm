@@ -1,9 +1,9 @@
 import { describe, expect, it } from 'vitest';
-import { outstandingLines } from '@/domain/equipment-reservation/policy';
+import { outstandingLines, partialReservationOffer } from '@/domain/equipment-reservation/policy';
 import { ReserveEquipmentInputSchema } from '@/domain/equipment-reservation/schema';
 
 /**
- * SCRUM-173: the reservation rules on their own, in
+ * SCRUM-173 and SCRUM-175: the reservation rules on their own, in
  * src/domain/equipment-reservation/policy.ts and schema.ts. Against the
  * database, through the service, in
  * tests/integration/equipment-reservation.test.ts; the reserve route in
@@ -36,5 +36,23 @@ describe('ReserveEquipmentInputSchema (173 AC1)', () => {
 
   it.each([0, -1, 2.5, '4', undefined])('refuses %s', (quantity) => {
     expect(ReserveEquipmentInputSchema.safeParse({ quantity }).success).toBe(false);
+  });
+});
+
+describe('partialReservationOffer (SCRUM-175)', () => {
+  it('TC-175-01 (AC1): 5 available, 6 asked: offers the 5, short by 1', () => {
+    expect(partialReservationOffer(6, 5)).toEqual({ quantity: 5, shortfall: 1 });
+  });
+
+  it('TC-175-03 (AC3): none available: offers nothing, no partial of zero', () => {
+    expect(partialReservationOffer(2, 0)).toBeNull();
+  });
+
+  it('TC-175-02 (AC2): asking for exactly what is available needs no offer', () => {
+    expect(partialReservationOffer(5, 5)).toBeNull();
+  });
+
+  it('asking for fewer than are available needs no offer either', () => {
+    expect(partialReservationOffer(3, 5)).toBeNull();
   });
 });
