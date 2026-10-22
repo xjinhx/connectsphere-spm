@@ -86,6 +86,15 @@ export function formatSingaporeDate(date: ISODate): string {
   }).format(instant);
 }
 
+/**
+ * e.g. "01/11/2026". The team's agreed form for dates shown to users (Sprint 4
+ * Planning). Rearranges the calendar date as it is; no time zone involved.
+ */
+export function formatDayMonthYear(date: ISODate): string {
+  const [year, month, day] = date.split('-');
+  return `${day}/${month}/${year}`;
+}
+
 /** e.g. "10 Sep 2026, 7:15 pm GMT+8" - the zone is shown so AC#5 is visible. */
 export function formatSingaporeDateTime(instant: Date | string): string {
   const date = typeof instant === 'string' ? new Date(instant) : instant;
