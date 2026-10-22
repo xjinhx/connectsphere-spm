@@ -9,6 +9,10 @@ import type { ISODate } from '@/domain/shared/dates';
  * extend these shapes rather than declaring their own.
  */
 
+// Same convention as event-status/schema.ts: each domain validates the id
+// shape locally rather than importing another domain's copy.
+export const EventRequestIdSchema = z.string().uuid();
+
 /** Registered (AC1); Withdrawn is SCRUM-184's, nothing sets it yet. */
 export const RegistrationStatusSchema = z.enum(['registered', 'withdrawn']);
 export type RegistrationStatus = z.infer<typeof RegistrationStatusSchema>;
