@@ -103,6 +103,27 @@ describe('venueBookingRequestErrorDetails (AC5)', () => {
     expect(details.lineErrors).toEqual([{ start: ['Choose a start time.'], end: ['Choose an end time.'] }]);
   });
 
+  // SCRUM-258: the line date is checked with isISODate, so a value that is not
+  // a real YYYY-MM-DD date is "not valid", not "missing". 31 Dec 9999 is the
+  // latest valid date (SCRUM-142-TC19, TC20).
+  it.each([
+    ['a five-digit year', '20266-12-10'],
+    ['1 Jan 10000, the first date after the latest valid one', '10000-01-01'],
+    ['a date that does not exist', '2026-02-30'],
+    ['a date in another format', '15/11/2026'],
+  ])('refuses %s as not a valid date', (_label, date) => {
+    const details = detailsFor({ venueId: VENUE_ID, lines: [{ date, start: '09:00', end: '12:00' }] });
+    expect(details.lineErrors).toEqual([{ date: ['Choose a valid date.'] }]);
+  });
+
+  it.each([['2026-12-31'], ['9999-12-31']])('accepts %s', (date) => {
+    const result = CreateVenueBookingRequestInputSchema.safeParse({
+      venueId: VENUE_ID,
+      lines: [{ date, start: '09:00', end: '12:00' }],
+    });
+    expect(result.success && result.data.lines[0]?.date).toBe(date);
+  });
+
   it('names the empty date and the missing times on the line they belong to', () => {
     const details = detailsFor({ venueId: VENUE_ID, lines: [{ date: '', start: '', end: '' }] });
     expect(details.lineErrors).toEqual([
