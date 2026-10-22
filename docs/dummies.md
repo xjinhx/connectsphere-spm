@@ -575,7 +575,7 @@ switch them the next time they edit those files.
 - **Kind:** Out-of-sprint stand-in (reserving equipment is SCRUM-167, a
   stretch story not built this sprint)
 - **Added by:** SCRUM-160 AC8 — branch `event-equipment-request`
-- **Waiting on:** SCRUM-167 (equipment reservation)
+- **Waiting on:** SCRUM-167 (equipment reservation); since Sprint 4, SCRUM-173
 - **Where:**
   `supabase/migrations/20261017175923_event_equipment_request.sql` — the
   `equipment_reservation` table (`DUMMY(SCRUM-167) D-18`);
@@ -596,6 +596,26 @@ switch them the next time they edit those files.
   SCRUM-167's migration if it is not reused, and remove the markers. Re-run
   SCRUM-160 AC7 and AC8 (TC-160-19 to TC-160-23) with a line reserved through
   the app.
+- **Updated by SCRUM-167 (Sprint 4), now waiting on SCRUM-173.** Since the
+  Sprint 4 cards, checking availability is SCRUM-167 and reserving is
+  SCRUM-173. `20261022004756_equipment_commitment_window.sql` keeps
+  `equipment_reservation` and gives it what SCRUM-167's check reads: a
+  quantity, the commitment window it holds and a Reserved/Released status. A
+  row inserted with only its `line_id` still works (the
+  `equipment_reservation_fill` trigger takes the line's quantity and the
+  event's window), so the Studio insert above and `scripts/seed-scrum164.mjs`
+  run unchanged; `scripts/seed-b1.mjs` inserts the B1 holds the same way. A
+  confirmed reduction of a reserved line now lowers its reservation to match
+  (`equipment_request_line_cap_reservation`). `fetchReservedLineIds()` keeps
+  its signature and counts only reservations still Reserved. The markers in
+  `equipmentRequests.ts` and the integration test now read
+  `DUMMY(SCRUM-173) D-18`; the ones in the SCRUM-160 migration and
+  `scripts/seed-scrum164.mjs` are left as they are (a merged migration is not
+  edited, and the seed is SCRUM-164's).
+- **To replace (SCRUM-173):** reserve through the app into the same table,
+  mark this entry Replaced and remove the `DUMMY(SCRUM-173) D-18` markers.
+  Re-run SCRUM-160 AC7 and AC8 (TC-160-19 to TC-160-23) with a line reserved
+  through the app.
 - **Status:** Active.
 
 ### D-19 — An equipment request's status and unavailable items are set by hand
