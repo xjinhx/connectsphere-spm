@@ -575,7 +575,7 @@ switch them the next time they edit those files.
 - **Kind:** Out-of-sprint stand-in (reserving equipment is SCRUM-167, a
   stretch story not built this sprint)
 - **Added by:** SCRUM-160 AC8 — branch `event-equipment-request`
-- **Waiting on:** SCRUM-167 (equipment reservation)
+- **Waiting on:** SCRUM-167 (equipment reservation); since Sprint 4, SCRUM-173
 - **Where:**
   `supabase/migrations/20261017175923_event_equipment_request.sql` — the
   `equipment_reservation` table (`DUMMY(SCRUM-167) D-18`);
@@ -596,6 +596,26 @@ switch them the next time they edit those files.
   SCRUM-167's migration if it is not reused, and remove the markers. Re-run
   SCRUM-160 AC7 and AC8 (TC-160-19 to TC-160-23) with a line reserved through
   the app.
+- **Updated by SCRUM-167 (Sprint 4), now waiting on SCRUM-173.** Since the
+  Sprint 4 cards, checking availability is SCRUM-167 and reserving is
+  SCRUM-173. `20261022004756_equipment_commitment_window.sql` keeps
+  `equipment_reservation` and gives it what SCRUM-167's check reads: a
+  quantity, the commitment window it holds and a Reserved/Released status. A
+  row inserted with only its `line_id` still works (the
+  `equipment_reservation_fill` trigger takes the line's quantity and the
+  event's window), so the Studio insert above and `scripts/seed-scrum164.mjs`
+  run unchanged; `scripts/seed-b1.mjs` inserts the B1 holds the same way. A
+  confirmed reduction of a reserved line now lowers its reservation to match
+  (`equipment_request_line_cap_reservation`). `fetchReservedLineIds()` keeps
+  its signature and counts only reservations still Reserved. The markers in
+  `equipmentRequests.ts` and the integration test now read
+  `DUMMY(SCRUM-173) D-18`; the ones in the SCRUM-160 migration and
+  `scripts/seed-scrum164.mjs` are left as they are (a merged migration is not
+  edited, and the seed is SCRUM-164's).
+- **To replace (SCRUM-173):** reserve through the app into the same table,
+  mark this entry Replaced and remove the `DUMMY(SCRUM-173) D-18` markers.
+  Re-run SCRUM-160 AC7 and AC8 (TC-160-19 to TC-160-23) with a line reserved
+  through the app.
 - **Status:** Active.
 
 ### D-19 — An equipment request's status and unavailable items are set by hand
@@ -628,4 +648,26 @@ switch them the next time they edit those files.
   four status values, and removes the markers. Re-run SCRUM-164 AC3 and AC4
   (TC-164-07 to TC-164-12) and `tests/integration/equipment-queue.test.ts`
   with statuses set through the app.
+- **Status:** Active.
+
+### D-20 — Each role's nav holds only its landing page
+
+- **Kind:** Stand-in code (each role's nav items belong to its own Role
+  Navigation story)
+- **Added by:** SCRUM-249 Shared header
+- **Waiting on:** SCRUM-250 (Event Organiser), 251 (Event Coordinator), 252
+  (Event Coordinator Lead), 253 (Venue Staff), 254 (Technical Support Staff),
+  255 (Attendee), 256 (Safety Officer) — one marker per role
+- **Where:** `src/domain/navigation/roleNav.ts` — `ROLE_NAV`, one
+  `DUMMY(SCRUM-25x) D-20` line per role
+- **What is real and what is faked:** the header is real: it renders the nav
+  of the role being worked as, highlights the current item (SCRUM-249 AC4)
+  and folds it into a menu button below 768 px (AC6). Only the items are
+  faked: until each nav story lands, a role's nav is a single link to its
+  landing page, so AC4 and AC6 have a real item to test against.
+- **To replace:** each nav story replaces its own role's entry in `ROLE_NAV`
+  with the items its AC2 lists, in that order, and removes its marker line.
+  Keep the landing page first (the `ROLE_NAV` test in
+  `tests/unit/shared-header.test.ts` checks it). Re-run TC-249-15 to TC-249-17
+  (AC4) and TC-249-25 to TC-249-27 (AC6) for that role.
 - **Status:** Active.

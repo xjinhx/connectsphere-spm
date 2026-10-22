@@ -57,10 +57,10 @@ import { ensureTestClientOrganisation, TEST_CLIENT_ORGANISATION_ID } from './fix
  *   AC11 "Given an event is already in Planning, when an equipment request is
  *         raised against it, then the status remains Planning."
  *
- * Reserving equipment is SCRUM-167, not built. A line is reserved here by a
- * row in the stand-in equipment_reservation table (dummy D-18), inserted by
- * hand as testers do; the warning runs against it for real, so AC8's tests
- * count. Re-run them once SCRUM-167 replaces the stand-in.
+ * Reserving equipment is SCRUM-173, not built yet. A line is reserved here by a
+ * row in equipment_reservation (dummy D-18), inserted by hand as testers do;
+ * the warning runs against it for real, so AC8's tests count. Re-run them once
+ * SCRUM-173 replaces the stand-in.
  *
  * Test case IDs are from the Sprint 3 sheet's SCRUM-160 tab (TC-160-nn).
  */
@@ -159,9 +159,27 @@ async function addItem(name: string): Promise<string> {
   return item.id;
 }
 
-/** DUMMY(SCRUM-167) D-18: marks a line reserved the way testers do, by hand. */
+/**
+ * DUMMY(SCRUM-173) D-18: marks a line reserved the way testers do, by hand.
+ * Since SCRUM-167 a reservation holds a quantity and a window; these events
+ * have no venue booking, so the window is given here rather than worked out
+ * from one.
+ */
 async function reserve(lineId: string): Promise<void> {
-  const { error } = await admin.from('equipment_reservation').insert({ line_id: lineId });
+  const { data: line, error: lineError } = await admin
+    .from('equipment_request_line')
+    .select('event_request_id, equipment_id, quantity')
+    .eq('id', lineId)
+    .single();
+  if (lineError) throw new Error(`could not read test line: ${lineError.message}`);
+  const { error } = await admin.from('equipment_reservation').insert({
+    line_id: lineId,
+    event_request_id: line.event_request_id,
+    equipment_id: line.equipment_id,
+    quantity: line.quantity,
+    window_start: '2026-12-01',
+    window_end: '2026-12-02',
+  });
   if (error) throw new Error(`could not reserve test line: ${error.message}`);
 }
 

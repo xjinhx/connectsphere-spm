@@ -201,20 +201,58 @@ export type Database = {
       equipment_reservation: {
         Row: {
           created_at: string
+          equipment_id: string
+          event_request_id: string
           id: string
           line_id: string
+          quantity: number
+          reserved_by: string | null
+          status: string
+          updated_at: string
+          window_end: string
+          window_start: string
         }
         Insert: {
           created_at?: string
+          equipment_id: string
+          event_request_id: string
           id?: string
           line_id: string
+          quantity: number
+          reserved_by?: string | null
+          status?: string
+          updated_at?: string
+          window_end: string
+          window_start: string
         }
         Update: {
           created_at?: string
+          equipment_id?: string
+          event_request_id?: string
           id?: string
           line_id?: string
+          quantity?: number
+          reserved_by?: string | null
+          status?: string
+          updated_at?: string
+          window_end?: string
+          window_start?: string
         }
         Relationships: [
+          {
+            foreignKeyName: "equipment_reservation_equipment_id_fkey"
+            columns: ["equipment_id"]
+            isOneToOne: false
+            referencedRelation: "equipment"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "equipment_reservation_event_request_id_fkey"
+            columns: ["event_request_id"]
+            isOneToOne: false
+            referencedRelation: "event_request"
+            referencedColumns: ["id"]
+          },
           {
             foreignKeyName: "equipment_reservation_line_id_fkey"
             columns: ["line_id"]
@@ -1423,6 +1461,13 @@ export type Database = {
           p_venue_name: string
         }
         Returns: string
+      }
+      equipment_window: {
+        Args: { p_event_request_id: string }
+        Returns: {
+          window_end: string
+          window_start: string
+        }[]
       }
       format_singapore_instant: { Args: { p_instant: string }; Returns: string }
       is_quarter_hour: { Args: { p_time: string }; Returns: boolean }

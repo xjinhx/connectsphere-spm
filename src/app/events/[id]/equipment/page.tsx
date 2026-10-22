@@ -3,14 +3,17 @@ import { notFound } from 'next/navigation';
 import AddEquipmentLineForm from '@/components/equipment-request/AddEquipmentLineForm';
 import EquipmentLineEditor from '@/components/equipment-request/EquipmentLineEditor';
 import TechnicalRequirementsForm from '@/components/equipment-request/TechnicalRequirementsForm';
+import { EquipmentAvailabilitySection } from '@/components/equipment-reservation/EquipmentAvailabilitySection';
 import { EventRequestStatusBadge } from '@/components/event-request/EventRequestStatusBadge';
 import { EQUIPMENT_CATEGORY_LABELS } from '@/domain/equipment/schema';
 import { listEquipmentOptions } from '@/domain/equipment/service';
 import type { EquipmentRequestView } from '@/domain/equipment-request/schema';
 import { getEquipmentRequest } from '@/domain/equipment-request/service';
+import type { EquipmentAvailability } from '@/domain/equipment-reservation/schema';
+import { checkEquipmentAvailability } from '@/domain/equipment-reservation/service';
 import { isActionPermitted } from '@/domain/identity/permissions';
 import { formatSingaporeDate } from '@/domain/shared/dates';
-import { ForbiddenError, NotFoundError } from '@/domain/shared/errors';
+import { ForbiddenError, NotFoundError, ValidationError } from '@/domain/shared/errors';
 import { getCurrentActor } from '@/lib/auth/currentActor';
 
 /**
@@ -25,6 +28,10 @@ import { getCurrentActor } from '@/lib/auth/currentActor';
  * Anyone else - a coordinator the event is not assigned to included - is
  * refused by getEquipmentRequest and sees why, with nothing about the request
  * shown (TC-160-10: no add control).
+ *
+ * SCRUM-167: the availability check over the event's commitment window, run on
+ * each load, for Technical Support Staff and the coordinator alike, so an item
+ * that is not free shows as unavailable once it is asked for.
  *
  * A server component reading through the domain service, and force-dynamic,
  * so after a save the list is read back from the stored rows (TC-160-01).
@@ -64,6 +71,17 @@ export default async function EventEquipmentRequestPage({ params }: { params: Pr
   // AC1: the catalogue the coordinator chooses from (SCRUM-240 AC5). Read only
   // when the add form will render.
   const options = request.canEdit ? await listEquipmentOptions() : [];
+
+  // SCRUM-167 AC3: an event with no approved venue booking is refused the
+  // check, and the page says why rather than failing.
+  let availability: EquipmentAvailability | null = null;
+  let refusal: string | null = null;
+  try {
+    availability = await checkEquipmentAvailability(id, actor);
+  } catch (error) {
+    if (!(error instanceof ValidationError)) throw error;
+    refusal = error.message;
+  }
 
   return (
     <main className="mx-auto max-w-3xl px-4 py-8">
@@ -141,6 +159,12 @@ export default async function EventEquipmentRequestPage({ params }: { params: Pr
           <AddEquipmentLineForm eventRequestId={request.eventRequestId} options={options} />
         </section>
       ) : null}
+
+      <EquipmentAvailabilitySection
+        eventRequestId={request.eventRequestId}
+        availability={availability}
+        refusal={refusal}
+      />
 
       {/* AC6: the notes, shown with the equipment list. Kept as typed, line
           breaks included (AC5, TC-160-14). */}

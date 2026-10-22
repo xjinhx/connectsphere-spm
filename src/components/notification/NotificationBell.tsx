@@ -36,12 +36,18 @@ export function NotificationBell() {
     };
   }, [pathname]);
 
+  // SCRUM-249 AC2: shown as a bell in the shared header. The word stays for
+  // screen readers; the badge is still hidden at 0 (SCRUM-193).
   return (
     <Link
       href="/notifications"
-      className="relative rounded-md border border-[var(--border)] px-3 py-1.5 text-sm font-medium transition-colors hover:bg-[var(--surface)]"
+      className="relative inline-flex items-center rounded-md border border-[var(--border)] px-2.5 py-1.5 text-sm font-medium transition-colors hover:bg-slate-100"
     >
-      Notifications
+      <svg aria-hidden="true" viewBox="0 0 24 24" className="h-5 w-5" fill="none" stroke="currentColor" strokeWidth="2">
+        <path d="M18 8a6 6 0 1 0-12 0c0 7-3 9-3 9h18s-3-2-3-9" strokeLinecap="round" strokeLinejoin="round" />
+        <path d="M13.73 21a2 2 0 0 1-3.46 0" strokeLinecap="round" strokeLinejoin="round" />
+      </svg>
+      <span className="sr-only">Notifications</span>
       {unreadCount !== null && unreadCount > 0 && (
         <span
           className="ml-2 inline-flex min-w-[1.25rem] items-center justify-center rounded-full bg-[var(--danger)] px-1.5 py-0.5 text-xs font-semibold text-white"

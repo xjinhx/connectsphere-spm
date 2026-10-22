@@ -28,32 +28,56 @@ export const ROLE_LANDING_PATH: Record<Role, string> = {
   safety_officer: '/safety-checks',
 };
 
-const DEFAULT_ROLE: Role = 'attendee';
+/**
+ * SCRUM-249 — the name each role is shown under in the header (account menu,
+ * "Working as"). operations_manager is shown as Event Coordinator Lead, its
+ * display name (customer #129); the role in code is unchanged.
+ */
+export const ROLE_LABELS: Record<Role, string> = {
+  event_organiser: 'Event Organiser',
+  coordinator: 'Event Coordinator',
+  operations_manager: 'Event Coordinator Lead',
+  venue_staff: 'Venue Staff',
+  technical_support: 'Technical Support Staff',
+  attendee: 'Attendee',
+  safety_officer: 'Safety Officer',
+};
+
+/**
+ * SCRUM-249 — which role an account starts in when it holds several (customer
+ * clarification #56 allows that), highest first. Agreed with the PO, 22 Oct
+ * 2026: the default no longer depends on the order roles are stored in, so an
+ * account holding Technical Support Staff lands on /equipment-queue unless it
+ * is also a Lead or Safety Officer (SCRUM-254 AC1). The Lead first and the
+ * Safety Officer second keep SCRUM-232 AC1 and SCRUM-234 AC1 (Change Log
+ * CL-27). The other roles are one click away in "Working as" (SCRUM-249 AC5).
+ */
+export const DEFAULT_ROLE_ORDER: readonly Role[] = [
+  'operations_manager',
+  'safety_officer',
+  'technical_support',
+  'venue_staff',
+  'coordinator',
+  'event_organiser',
+  'attendee',
+];
+
+const FALLBACK_ROLE: Role = 'attendee';
 
 export function isRole(value: unknown): value is Role {
   return RoleSchema.safeParse(value).success;
 }
 
 /**
- * An account can hold multiple roles (see AccountRolesSchema; customer
- * clarification #56); login only needs one landing page, so the first role in
- * the account's list wins.
- *
- * SCRUM-232 AC1 — except the Event Coordinator Lead (operations_manager): an
- * account holding it lands on the unassigned queue wherever the role sits in
- * the list, so a Lead who is also a Coordinator is not sent to their own
- * assigned events first.
- *
- * SCRUM-234 AC1 — the same for the Safety Officer: an account holding the role
- * lands on the safety check list wherever it sits in the list. The Lead's rule
- * is checked first, so an account holding both keeps SCRUM-232's landing page
- * (agreed in Change Log CL-27).
- *
- * Falls back to the Attendee landing page when the list is empty or unset.
+ * SCRUM-249 — the role an account starts in: its highest role in
+ * DEFAULT_ROLE_ORDER. Unrecognised values are ignored, and an account with no
+ * recognised role falls back to Attendee.
  */
+export function defaultRoleFor(roles: readonly unknown[] | undefined): Role {
+  return DEFAULT_ROLE_ORDER.find((role) => roles?.includes(role)) ?? FALLBACK_ROLE;
+}
+
+/** The landing page of the role an account starts in (see defaultRoleFor). */
 export function landingPathForRoles(roles: readonly unknown[] | undefined): string {
-  if (roles?.includes('operations_manager')) return ROLE_LANDING_PATH.operations_manager;
-  if (roles?.includes('safety_officer')) return ROLE_LANDING_PATH.safety_officer;
-  const firstKnownRole = roles?.find(isRole);
-  return ROLE_LANDING_PATH[firstKnownRole ?? DEFAULT_ROLE];
+  return ROLE_LANDING_PATH[defaultRoleFor(roles)];
 }
