@@ -122,3 +122,67 @@ jobs:
       - name: Stop stack
         if: always()
         run: supabase stop
+
+  # End-to-end tests (Playwright): the real pages in a browser, clicked through
+  # as a user would (tests/e2e/README.md). Its own job, so it can be switched off
+  # without touching the others: set the repository variable E2E_ENABLED to
+  # 'false' and it is skipped. On trial: continue-on-error shows a failure
+  # without blocking the merge; remove that line to make it required.
+  e2e:
+    name: End-to-end tests (Playwright)
+    if: vars.E2E_ENABLED != 'false'
+    runs-on: ubuntu-latest
+    timeout-minutes: 20
+    continue-on-error: true
+    steps:
+      - uses: actions/checkout@v4
+
+      - uses: actions/setup-node@v4
+        with:
+          node-version: '20'
+          cache: npm
+
+      - run: npm ci
+
+      - name: Install Supabase CLI
+        uses: supabase/setup-cli@v1
+        with:
+          version: latest
+
+      # Migrations and supabase/seed.sql (the seeded venues the tests use).
+      - name: Start local Supabase stack
+        uses: nick-fields/retry@v3
+        with:
+          timeout_minutes: 3
+          max_attempts: 3
+          retry_wait_seconds: 15
+          command: supabase start
+
+      # The committed local demo keys (.env.test). The app and the seed script
+      # both read .env.local.
+      - name: Use the local stack settings
+        run: cp .env.test .env.local
+
+      - name: Seed the test accounts
+        run: node --experimental-websocket scripts/seed-auth-users.mjs
+
+      - name: Install Chromium
+        run: npx playwright install --with-deps chromium
+
+      - name: Build the app
+        run: npm run build
+
+      - name: End-to-end tests
+        run: npm run test:e2e
+
+      - name: Upload Playwright report
+        if: failure()
+        uses: actions/upload-artifact@v4
+        with:
+          name: playwright-report
+          path: playwright-report/
+          retention-days: 7
+
+      - name: Stop stack
+        if: always()
+        run: supabase stop
