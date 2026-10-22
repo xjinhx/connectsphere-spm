@@ -6,6 +6,9 @@ import {
   eventRequestSaveSchema,
 } from '@/domain/event-request/schema';
 import {
+  hasLongYear,
+  isISODate,
+  LATEST_DATE,
   formatSingaporeDate,
   formatSingaporeDateTime,
   isPastDate,
@@ -184,5 +187,30 @@ describe('SCRUM-76 — the proposed date must be a real four-digit-year date', (
     if (!result.success) {
       expect(result.error.flatten().fieldErrors.proposedDate).toEqual([CHOOSE_A_VALID_DATE]);
     }
+  });
+});
+
+/**
+ * The form keeps the Proposed date to a four-digit year (a browser date input
+ * takes up to six); hasLongYear() is how it tells, and LATEST_DATE is its max.
+ */
+describe('SCRUM-76 — the form keeps the proposed date to a four-digit year', () => {
+  it('sees a year of five or six digits as too long', () => {
+    expect(hasLongYear('20266-12-10')).toBe(true);
+    expect(hasLongYear('202666-12-10')).toBe(true);
+    expect(hasLongYear('10000-01-01')).toBe(true);
+  });
+
+  it('lets a four-digit year, and an empty or part-typed value, through', () => {
+    expect(hasLongYear('2026-12-10')).toBe(false);
+    expect(hasLongYear('9999-12-31')).toBe(false);
+    expect(hasLongYear('0006-02-20')).toBe(false);
+    expect(hasLongYear('')).toBe(false);
+  });
+
+  it('has a latest date that is itself the last valid date', () => {
+    expect(LATEST_DATE).toBe('9999-12-31');
+    expect(isISODate(LATEST_DATE)).toBe(true);
+    expect(hasLongYear(LATEST_DATE)).toBe(false);
   });
 });
