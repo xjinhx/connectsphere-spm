@@ -332,7 +332,7 @@ describe('SCRUM-173: reserving for the commitment window', () => {
     const e1 = await createEvent('S4-E1 173-09', E1_DATES);
     const line = await request(e1, item, 3);
     const reservation = await reserveEquipment(e1, line, technicalSupport.userId, { quantity: 3 });
-    // DUMMY(SCRUM-177) D-20: released by hand; releasing is SCRUM-177's.
+    // DUMMY(SCRUM-177) D-21: released by hand; releasing is SCRUM-177's.
     await admin.from('equipment_reservation').update({ status: 'released' }).eq('id', reservation.id);
 
     const { reservations, outstanding } = await listEventReservations(e1, technicalSupport);
