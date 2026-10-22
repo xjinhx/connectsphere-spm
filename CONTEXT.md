@@ -106,6 +106,10 @@ _Avoid_: booked, held (those words are for venues)
 The days an event's equipment is committed to it: from the day before its first confirmed venue booking (collection day, F-1) to its last booked day (Return Day, L), both included; the units are free again from L+1 (SCRUM-167 AC1, SCRUM-173 AC3). Whole days, so a morning and an afternoon event on the same date share it. What is **available** to an event is the item's quantity, less units out of service (SCRUM-170), less the most units other events hold on any single day of the window (SCRUM-167 AC9); the event's own reservations are not counted against it (AC4).
 _Avoid_: booking period, hold (those words are for venues)
 
+**Out of service** (equipment units):
+Units of a catalogue item that Technical Support Staff have recorded as Unavailable, Damaged or Under maintenance: a count per status on the item, which keeps its total quantity (SCRUM-170). They are excluded from what is available in every window, with no end date, until the count is lowered (returned to service). Not the same as the item's own operational status (SCRUM-240): an item whose own status is not Available has no units available at all.
+_Avoid_: broken, written off, unavailable units (that word is one of the three statuses)
+
 ### Safety
 
 **Safety Officer**:

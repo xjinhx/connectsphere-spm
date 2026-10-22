@@ -13,8 +13,8 @@
 // Technical Support would in the app. Each case has its own item, so cases do
 // not affect each other; run this again before re-running one that writes.
 //
-// SCRUM-175 and SCRUM-170's rows on the sheet are not seeded: those stories are
-// not built yet.
+// SCRUM-170 (TC-170-01 to TC-170-11) is seeded too: its items, the units already
+// out of service, and the events that check them. SCRUM-175's rows are not.
 //
 // Safe to run again: every "B1 " event (its lines, reservations and bookings go
 // with it), venue and EQ- item it made is deleted first.
@@ -79,6 +79,7 @@ check('clear B1 events', await supabase.from('event_request').delete().like('nam
 check('clear B1 venues', await supabase.from('venues').delete().like('name', `${PREFIX} %`));
 check('clear B1 items', await supabase.from('equipment').delete().like('name', 'EQ-167-%'));
 check('clear B1 items', await supabase.from('equipment').delete().like('name', 'EQ-173-%'));
+check('clear B1 items', await supabase.from('equipment').delete().like('name', 'EQ-170-%'));
 
 const existingLocation = await supabase.from('locations').select('id').eq('name', LOCATION).maybeSingle();
 check('location', existingLocation);
@@ -92,6 +93,8 @@ const ITEMS = {
   'EQ-167-06': 10, 'EQ-167-07': 10, 'EQ-167-08': 10, 'EQ-167-09': 10, 'EQ-167-10': 10,
   'EQ-173-01': 10, 'EQ-173-02': 10, 'EQ-173-03': 10, 'EQ-173-04': 1, 'EQ-173-05': 10,
   'EQ-173-06A': 10, 'EQ-173-06B': 10, 'EQ-173-07A': 10, 'EQ-173-07B': 4, 'EQ-173-08': 10, 'EQ-173-09': 10,
+  'EQ-170-01': 10, 'EQ-170-02': 10, 'EQ-170-03': 10, 'EQ-170-04': 10, 'EQ-170-05': 10, 'EQ-170-06': 10,
+  'EQ-170-07': 10, 'EQ-170-08': 10, 'EQ-170-09A': 10, 'EQ-170-09B': 10, 'EQ-170-09C': 10, 'EQ-170-10': 10,
 };
 const item = {};
 for (const [name, quantity] of Object.entries(ITEMS)) {
@@ -104,6 +107,20 @@ for (const [name, quantity] of Object.entries(ITEMS)) {
       .single(),
   );
   item[name] = saved.id;
+}
+
+// SCRUM-170: units already out of service at seed (TC-170-04, 05, 08), and items
+// whose own status is not Available (TC-170-09, set as in SCRUM-240's catalogue).
+const SEEDED_STATE = {
+  'EQ-170-04': { units_damaged: 2 },
+  'EQ-170-05': { units_under_maintenance: 2 },
+  'EQ-170-08': { units_damaged: 8 },
+  'EQ-170-09A': { operational_status: 'damaged' },
+  'EQ-170-09B': { operational_status: 'unavailable' },
+  'EQ-170-09C': { operational_status: 'under_maintenance' },
+};
+for (const [name, state] of Object.entries(SEEDED_STATE)) {
+  check(`state ${name}`, await supabase.from('equipment').update(state).eq('id', item[name]));
 }
 
 // --- Events -----------------------------------------------------------------
@@ -302,6 +319,16 @@ created.push(await hold('H-167-07', dates('2026-11-13', '2026-11-14'), 'EQ-167-0
 created.push(await hold('H-167-09', dates('2026-11-07', '2026-11-08'), 'EQ-167-09', 4));
 created.push(await hold('H-167-10A', dates('2026-11-08', '2026-11-09'), 'EQ-167-10', 4));
 created.push(await hold('H-167-10B', dates('2026-11-13', '2026-11-14'), 'EQ-167-10', 4));
+
+// SCRUM-170.
+for (const name of ['EQ-170-01', 'EQ-170-02', 'EQ-170-03', 'EQ-170-04', 'EQ-170-07', 'EQ-170-09A', 'EQ-170-09B', 'EQ-170-09C', 'EQ-170-10']) {
+  await request(e1, name, 2);
+}
+await request(am, 'EQ-170-01', 2); // TC-170-01: a second window
+const far = await createEvent('S4-FAR', { booked: dates('2027-06-01', '2027-06-02') });
+await request(far, 'EQ-170-05', 2); // TC-170-05: a far future window
+created.push(far);
+created.push(await hold('H-170-10', dates('2026-11-10', '2026-11-12'), 'EQ-170-10', 6)); // TC-170-10
 
 console.log('\nSCRUM-167/173 events (open each at the link, as tech-support@example.com unless the case says otherwise):');
 for (const event of created) {
