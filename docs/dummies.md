@@ -702,3 +702,54 @@ switch them the next time they edit those files.
   column. Release through it in `scripts/seed-b1.mjs` and TC-173-09, remove
   the markers, and re-run TC-173-09.
 - **Status:** Active.
+
+### D-22 — An event's registration period is set by the seed script
+
+- **Kind:** In-sprint stand-in (setting the period is SCRUM-185 AC5, in
+  Sprint 4 but owned by Dylan)
+- **Added by:** SCRUM-181 AC2, AC3, AC4 (TC-181-05 to TC-181-13) — branch
+  `event-register`
+- **Waiting on:** SCRUM-185 AC5 (the coordinator sets the registration start
+  and end dates)
+- **Where:** `scripts/seed-event-registration-test-data.mjs` — the header
+  comment (`DUMMY(SCRUM-185) D-22`), and the `registration_start_date` /
+  `registration_end_date` it writes for each event
+- **What is real and what is faked:** the period is real. The columns
+  `event_request.registration_start_date` and `registration_end_date` (dates,
+  both inclusive, added by SCRUM-181's migration
+  `20261023001039_event_registration.sql`) are what SCRUM-181 reads, in the
+  service and again in `register_for_event`, to refuse registering before the
+  start date (AC2) or after the end date (AC3). Only the setting is faked:
+  nothing in the app writes the columns yet, so the seed script sets them,
+  relative to today, for each test case. An event with no period takes no
+  registrations and is not found on the Attendee's page.
+- **To replace:** SCRUM-185 AC5's form saves to the same two columns (both
+  together; the table refuses one without the other, or an end before the
+  start). Set the periods through the form for TC-181-05 to TC-181-12 instead
+  of the seed, remove the marker, and re-run those test cases.
+- **Status:** Active.
+
+### D-23 — Places always remain
+
+- **Kind:** In-sprint stand-in (refusing a full event is SCRUM-182, in
+  Sprint 4)
+- **Added by:** SCRUM-181 AC1 ("places remain", TC-181-02) — branch
+  `event-register`
+- **Waiting on:** SCRUM-182 AC1 (a full event refuses registration) and AC2
+  (two people taking the last place at the same moment)
+- **Where:** `supabase/migrations/20261023001039_event_registration.sql` —
+  `event_has_places_remaining` (`DUMMY(SCRUM-182) D-23`)
+- **What is real and what is faked:** registering is real and goes through one
+  database function, `register_for_event`, which locks the event row, checks
+  the period and the duplicate, then asks `event_has_places_remaining` and
+  returns `'full'` if it says no (the service turns that into a 409
+  `CAPACITY_EXCEEDED`). Only the answer is faked: the function always returns
+  true. `event_request.registration_capacity` exists (null until set; what it
+  is set to is SCRUM-185 AC6's rule) but nothing counts against it yet.
+- **To replace:** SCRUM-182 replaces the body of `event_has_places_remaining`
+  in a new migration with a count of the event's Registered rows against
+  `registration_capacity`. `register_for_event` already calls it with the
+  event row locked, so two registrations for the last place are counted one
+  after the other. Remove the marker and re-run TC-181-02 (the last place can
+  still be taken) and `tests/integration/register-for-event.test.ts`.
+- **Status:** Active.
