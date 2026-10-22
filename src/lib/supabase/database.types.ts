@@ -92,6 +92,9 @@ export type Database = {
           name: string
           operational_status: string
           quantity: number
+          units_damaged: number
+          units_unavailable: number
+          units_under_maintenance: number
           updated_at: string
         }
         Insert: {
@@ -103,6 +106,9 @@ export type Database = {
           name: string
           operational_status?: string
           quantity: number
+          units_damaged?: number
+          units_unavailable?: number
+          units_under_maintenance?: number
           updated_at?: string
         }
         Update: {
@@ -114,6 +120,9 @@ export type Database = {
           name?: string
           operational_status?: string
           quantity?: number
+          units_damaged?: number
+          units_unavailable?: number
+          units_under_maintenance?: number
           updated_at?: string
         }
         Relationships: []
