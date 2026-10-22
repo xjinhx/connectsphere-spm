@@ -24,6 +24,11 @@ export function addDays(date: string, days: number): string {
  *
  * Null when there are none: 167 AC3 and 173 AC2 refuse an event with no
  * approved venue booking.
+ *
+ * The same rule is equipment_window() in
+ * supabase/migrations/20261022004756_equipment_commitment_window.sql, for the
+ * database (the reservation fill trigger, and SCRUM-173's reserve_equipment).
+ * Change both together.
  */
 export function commitmentWindow(bookingDates: readonly string[]): DateWindow | null {
   if (bookingDates.length === 0) return null;
