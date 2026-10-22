@@ -36,7 +36,7 @@ describe('SCRUM-254 AC2: the nav shows the three items in order', () => {
     ]);
   });
 
-  it('TC-254-07: each page highlights only its own item', () => {
+  it('TC-254-07 / TC-254-08: each page highlights only its own item', () => {
     const current = (pathname: string) =>
       ROLE_NAV.technical_support.filter((item) => isNavItemCurrent(pathname, item.href)).map((item) => item.label);
 

@@ -54,7 +54,7 @@ function hrefOf(html: string, text: string): string | null {
 }
 
 describe('SCRUM-254 AC3: back links from a venue and its calendar', () => {
-  it('TC-254-10: the venue page links back to /venues', async () => {
+  it('TC-254-12: the venue page links back to /venues', async () => {
     vi.mocked(getVenue).mockResolvedValue({
       id: VENUE_ID,
       name: 'Marina Bay Ballroom',
@@ -77,7 +77,7 @@ describe('SCRUM-254 AC3: back links from a venue and its calendar', () => {
     expect(hrefOf(html, 'Back to catalogue')).toBe('/venues');
   });
 
-  it('TC-254-11 / TC-254-13: the calendar links back to its own venue', async () => {
+  it('TC-254-13 / TC-254-15: the calendar links back to its own venue', async () => {
     // A rejected date range still renders the page, which is all this test needs.
     vi.mocked(getVenueCalendar).mockRejectedValue(new ValidationError('Choose a valid range.'));
 
