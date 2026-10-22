@@ -257,6 +257,7 @@ export function RequestVenueBookingForm({
                   <input
                     id={`${idPrefix}-date-${index}`}
                     type="date"
+                    max="9999-12-31"
                     value={line.date}
                     onChange={(event) => updateLine(index, { date: event.target.value })}
                     aria-invalid={lineErrors.date ? true : undefined}
