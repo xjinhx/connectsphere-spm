@@ -680,3 +680,25 @@ switch them the next time they edit those files.
   (TC-164-07 to TC-164-12) and `tests/integration/equipment-queue.test.ts`
   with statuses set through the app.
 - **Status:** Active.
+
+### D-20 — Each role's nav holds only its landing page
+
+- **Kind:** Stand-in code (each role's nav items belong to its own Role
+  Navigation story)
+- **Added by:** SCRUM-249 Shared header
+- **Waiting on:** SCRUM-250 (Event Organiser), 251 (Event Coordinator), 252
+  (Event Coordinator Lead), 253 (Venue Staff), 254 (Technical Support Staff),
+  255 (Attendee), 256 (Safety Officer) — one marker per role
+- **Where:** `src/domain/navigation/roleNav.ts` — `ROLE_NAV`, one
+  `DUMMY(SCRUM-25x) D-20` line per role
+- **What is real and what is faked:** the header is real: it renders the nav
+  of the role being worked as, highlights the current item (SCRUM-249 AC4)
+  and folds it into a menu button below 768 px (AC6). Only the items are
+  faked: until each nav story lands, a role's nav is a single link to its
+  landing page, so AC4 and AC6 have a real item to test against.
+- **To replace:** each nav story replaces its own role's entry in `ROLE_NAV`
+  with the items its AC2 lists, in that order, and removes its marker line.
+  Keep the landing page first (the `ROLE_NAV` test in
+  `tests/unit/shared-header.test.ts` checks it). Re-run TC-249-15 to TC-249-17
+  (AC4) and TC-249-25 to TC-249-27 (AC6) for that role.
+- **Status:** Active.

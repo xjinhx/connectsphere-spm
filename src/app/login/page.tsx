@@ -27,6 +27,10 @@ export default function LoginPage() {
     const rolesResponse = await fetch(`/api/accounts/${data.user.id}/roles`);
     const roles = rolesResponse.ok ? ((await rolesResponse.json()).roles as unknown[]) : undefined;
 
+    // SCRUM-249 AC5: every login starts on the default role, even if an earlier
+    // session ended without Log out (idle expiry) and left a "Working as" choice.
+    await fetch('/api/me/working-as', { method: 'DELETE' }).catch(() => undefined);
+
     router.push(landingPathForRoles(roles));
     router.refresh();
     return { ok: true };
