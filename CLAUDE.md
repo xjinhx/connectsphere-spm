@@ -118,10 +118,10 @@ replacement venues, Operational Safety Check, Event Coordinator Lead,
 assignment notifications, equipment catalogue. Fix bugs in them (see "Bugs");
 extend them only through a story.
 
-**Reviews:** Jinhong (Scrum Master) takes no user stories and reviews all
-PRs; Marcus is assistant reviewer. First review within 24 hours, by anyone
-other than the author. Marcus never reviews his own PRs. If PRs pile up near
-the end of the Sprint, whoever is free helps, coordinating with Jinhong.
+**Reviews:** Jinhong (Scrum Master) and Marcus will review all PRs. First
+review within 24 hours, by anyone other than the author. Marcus never reviews
+his own PRs. If PRs pile up near the end of the Sprint, whoever is free
+helps, coordinating with Jinhong.
 
 **Working agreements:** first PR by day 3, half the points merged by day 8.
 Branch from `main` rather than stacking PRs. Claim dummy numbers on Slack. Use
