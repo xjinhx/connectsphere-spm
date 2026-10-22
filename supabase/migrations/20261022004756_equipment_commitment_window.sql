@@ -33,6 +33,11 @@
 -- -----------------------------------------------------------------------------
 -- AC1: F-1 to L. Both null when the event has no confirmed venue booking (AC3).
 -- A released booking (SCRUM-231) no longer counts.
+--
+-- The same rule is commitmentWindow() in
+-- src/domain/equipment-reservation/policy.ts, which the availability check
+-- uses; this copy is for the database (the fill trigger below, and
+-- SCRUM-173's reserve_equipment). Change both together.
 create or replace function equipment_window(p_event_request_id uuid)
 returns table (window_start date, window_end date)
 language sql
@@ -51,6 +56,12 @@ $$;
 -- Rows inserted by hand under D-18 named only a line. Fill them in where the
 -- event has a confirmed booking, and drop the rest: they were test rows on
 -- events that could never have reserved anything.
+--
+-- Before pushing this to the cloud database, check what would be dropped:
+--   select r.* from equipment_reservation r
+--   join equipment_request_line l on l.id = r.line_id
+--   where not exists (select 1 from venue_booking b
+--                     where b.event_request_id = l.event_request_id and b.status = 'confirmed');
 alter table equipment_reservation
   add column event_request_id uuid references event_request (id) on delete cascade,
   add column equipment_id uuid references equipment (id) on delete restrict,
