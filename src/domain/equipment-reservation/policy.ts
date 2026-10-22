@@ -61,11 +61,12 @@ export function heldOnBusiestDay(held: readonly HeldUnits[], window: DateWindow)
 /**
  * 167 Definitions (CL-46): "the item's quantity, minus units out of service
  * (SCRUM-170), minus the highest number of units committed to other events on
- * any single day of the window". Never below 0. Out of service is SCRUM-170's
- * and not recorded yet, so none are taken off.
+ * any single day of the window". Never below 0 (SCRUM-170 AC6). The caller
+ * passes the item's units in service (SCRUM-170's unitsInService), so units
+ * out of service are already off.
  */
-export function availableUnits(itemQuantity: number, othersOnBusiestDay: number): number {
-  return Math.max(itemQuantity - othersOnBusiestDay, 0);
+export function availableUnits(unitsInService: number, othersOnBusiestDay: number): number {
+  return Math.max(unitsInService - othersOnBusiestDay, 0);
 }
 
 /** One line of the event's request, with how much of it has been reserved. */
