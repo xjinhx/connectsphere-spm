@@ -125,3 +125,13 @@ _Avoid_: ready, safety approved (as a status name)
 **Anyone with access** (to an event):
 The people whose role and relationship to the event let them see its protected details: its Event Organiser, its Event Coordinator (or any coordinator while it has none), and Event Operations Managers (customer clarification #91). A same-organisation colleague can open the event but is not included.
 _Avoid_: "anyone" on its own (Sprint 1 read it as anyone signed in)
+
+### Header and navigation
+
+**Default role**:
+The role an account holding several roles starts in at every login: its highest in the fixed order Event Coordinator Lead, Safety Officer, Technical Support Staff, Venue Staff, Event Coordinator, Event Organiser, Attendee (SCRUM-249; PO, 22 Oct 2026). Not the order roles are stored in.
+_Avoid_: primary role, first role
+
+**Working role**:
+The role chosen in "Working as" (SCRUM-249 AC5), or the default role until one is chosen. It decides the landing page and nav, and lasts until logout. It does not narrow what the API allows: every role the account holds still applies (SCRUM-206 AC2).
+_Avoid_: active role, current permissions
