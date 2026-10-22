@@ -238,7 +238,7 @@ async function reserve(event, lineId, quantity) {
 }
 
 /**
- * DUMMY(SCRUM-177) D-20: releases the line's reservation by hand. Releasing is
+ * DUMMY(SCRUM-177) D-21: releases the line's reservation by hand. Releasing is
  * SCRUM-177's; TC-173-09 only needs a Released one to list.
  */
 async function releaseByHand(event, lineId) {
