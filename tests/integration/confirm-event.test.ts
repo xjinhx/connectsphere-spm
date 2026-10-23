@@ -69,13 +69,18 @@ const EQ2_NAME = `EQ-102-02 ${RUN}`;
 // Each event has days of its own, three apart, so no two events' bookings or
 // equipment windows (the day before to the last day) overlap.
 let nextDay = 0;
-function freshDays(count = 1): string[] {
-  const first = nextDay;
-  nextDay += count + 2;
-  return Array.from({ length: count }, (_, index) => {
-    const day = new Date(Date.UTC(2027, 3, 1 + first + index));
-    return day.toISOString().slice(0, 10);
-  });
+const dayFromStart = (offset: number) => new Date(Date.UTC(2027, 3, 1 + offset)).toISOString().slice(0, 10);
+
+function freshDay(): string {
+  const day = dayFromStart(nextDay);
+  nextDay += 3;
+  return day;
+}
+
+function freshTwoDays(): [string, string] {
+  const days: [string, string] = [dayFromStart(nextDay), dayFromStart(nextDay + 1)];
+  nextDay += 4;
+  return days;
 }
 
 const dmy = (date: string) => date.split('-').reverse().join('/');
@@ -129,27 +134,28 @@ async function markEssential(eventId: string, essential: Partial<EssentialArrang
 
 type Line = { date: string; start: string; end: string };
 
-/** A venue booking request for the lines, as the coordinator raises it (an Approved event moves to Planning). */
-async function requestVenue(eventId: string, venueId: string, lines: Line[]): Promise<{ requestId: string; lineIds: string[] }> {
+/** A venue booking request for one line, as the coordinator raises it (an Approved event moves to Planning). */
+async function requestVenue(eventId: string, venueId: string, line: Line): Promise<{ requestId: string; lineId: string }> {
   const { data: requestId, error } = await admin.rpc('create_venue_booking_request', {
     p_event_request_id: eventId,
     p_venue_id: venueId,
     p_requested_by: coordinator.userId,
-    p_lines: lines,
+    p_lines: [line],
   });
   if (error || !requestId) throw new Error(`could not request test booking: ${error?.message}`);
-  const { data: rows } = await admin
+  const { data: row, error: lineError } = await admin
     .from('venue_booking_request_line')
     .select('id')
     .eq('request_id', requestId)
-    .order('date');
-  return { requestId: requestId as string, lineIds: (rows ?? []).map((row) => row.id as string) };
+    .single();
+  if (lineError) throw new Error(`could not read test line: ${lineError.message}`);
+  return { requestId: requestId as string, lineId: row.id as string };
 }
 
 /** A confirmed booking: requested, then approved by Venue Staff. Returns its id. */
 async function bookVenue(eventId: string, venueId: string, line: Line): Promise<string> {
-  const { requestId, lineIds } = await requestVenue(eventId, venueId, [line]);
-  await decideVenueBookingRequest(requestId, venueStaff.userId, { decisions: [{ lineId: lineIds[0], decision: 'approve' }] });
+  const { requestId, lineId } = await requestVenue(eventId, venueId, line);
+  await decideVenueBookingRequest(requestId, venueStaff.userId, { decisions: [{ lineId, decision: 'approve' }] });
   const { data, error } = await admin
     .from('venue_booking')
     .select('id')
@@ -243,9 +249,9 @@ afterAll(async () => {
 describe('AC1 — an essential venue that is not complete', () => {
   it('TC-102-01: a Pending line refuses confirmation, naming the line; still Planning', async () => {
     const id = await createApprovedEvent();
-    const [day] = freshDays();
+    const day = freshDay();
     await markEssential(id, { venue: 'essential' });
-    await requestVenue(id, marina, [{ date: day, start: '10:00', end: '12:00' }]);
+    await requestVenue(id, marina, { date: day, start: '10:00', end: '12:00' });
 
     expect(await refusalOf(id)).toEqual([`Venue: Marina Bay Ballroom ${RUN}, ${dmy(day)}, 10:00 to 12:00 is not yet approved.`]);
     expect(await storedStatus(id)).toBe('planning');
@@ -253,10 +259,10 @@ describe('AC1 — an essential venue that is not complete', () => {
 
   it('TC-102-02: an approved booking does not make up for another line still Pending', async () => {
     const id = await createApprovedEvent();
-    const [first, second] = freshDays(2);
+    const [first, second] = freshTwoDays();
     await markEssential(id, { venue: 'essential' });
     await bookVenue(id, bugis, { date: first, start: '10:00', end: '12:00' });
-    await requestVenue(id, jurong, [{ date: second, start: '14:00', end: '16:00' }]);
+    await requestVenue(id, jurong, { date: second, start: '14:00', end: '16:00' });
 
     expect(await refusalOf(id)).toEqual([
       `Venue: Jurong East Training Room ${RUN}, ${dmy(second)}, 14:00 to 16:00 is not yet approved.`,
@@ -266,11 +272,11 @@ describe('AC1 — an essential venue that is not complete', () => {
 
   it('TC-102-03: with its only line rejected, the venue has no approved booking', async () => {
     const id = await createApprovedEvent();
-    const [day] = freshDays();
+    const day = freshDay();
     await markEssential(id, { venue: 'essential' });
-    const { requestId, lineIds } = await requestVenue(id, marina, [{ date: day, start: '10:00', end: '12:00' }]);
+    const { requestId, lineId } = await requestVenue(id, marina, { date: day, start: '10:00', end: '12:00' });
     await decideVenueBookingRequest(requestId, venueStaff.userId, {
-      decisions: [{ lineId: lineIds[0], decision: 'reject', reason: 'Ballroom closed for a private function' }],
+      decisions: [{ lineId, decision: 'reject', reason: 'Ballroom closed for a private function' }],
     });
 
     expect(await refusalOf(id)).toEqual([NO_APPROVED_BOOKING]);
@@ -279,7 +285,7 @@ describe('AC1 — an essential venue that is not complete', () => {
 
   it('TC-102-04: a booking made affected by an unavailable period refuses confirmation, naming it', async () => {
     const id = await createApprovedEvent();
-    const [day] = freshDays();
+    const day = freshDay();
     await markEssential(id, { venue: 'essential' });
     await bookVenue(id, bugis, { date: day, start: '10:00', end: '12:00' });
     await markPeriodUnavailable(bugis, { date: day, start: '10:00', end: '11:00', reason: 'Ceiling repair' }, venueStaff.userId);
@@ -294,7 +300,7 @@ describe('AC1 — an essential venue that is not complete', () => {
 describe('AC2 — essential equipment that is not fully reserved', () => {
   it('TC-102-05: a line 2 short refuses confirmation, naming only that item', async () => {
     const id = await createApprovedEvent();
-    const [day] = freshDays();
+    const day = freshDay();
     await markEssential(id, { equipment: 'essential' });
     await bookVenue(id, marina, { date: day, start: '10:00', end: '12:00' });
     await requestEquipment(id, eq1, 4, 2);
@@ -306,7 +312,7 @@ describe('AC2 — essential equipment that is not fully reserved', () => {
 
   it('TC-102-06: essential with nothing requested refuses confirmation', async () => {
     const id = await createApprovedEvent();
-    const [day] = freshDays();
+    const day = freshDay();
     await markEssential(id, { equipment: 'essential' });
     await bookVenue(id, marina, { date: day, start: '10:00', end: '12:00' });
 
@@ -316,9 +322,9 @@ describe('AC2 — essential equipment that is not fully reserved', () => {
 
   it('TC-102-07: one refusal names the venue line and the item together', async () => {
     const id = await createApprovedEvent();
-    const [day] = freshDays();
+    const day = freshDay();
     await markEssential(id, { venue: 'essential', equipment: 'essential' });
-    await requestVenue(id, marina, [{ date: day, start: '10:00', end: '12:00' }]);
+    await requestVenue(id, marina, { date: day, start: '10:00', end: '12:00' });
     await requestEquipment(id, eq1, 2);
 
     expect(await refusalOf(id)).toEqual([
@@ -330,7 +336,7 @@ describe('AC2 — essential equipment that is not fully reserved', () => {
 
   it('TC-102-10: equipment essential and fully reserved: confirmed', async () => {
     const id = await createApprovedEvent();
-    const [day] = freshDays();
+    const day = freshDay();
     await markEssential(id, { equipment: 'essential' });
     await bookVenue(id, jurong, { date: day, start: '10:00', end: '12:00' });
     await requestEquipment(id, eq2, 2, 2);
@@ -343,7 +349,7 @@ describe('AC2 — essential equipment that is not fully reserved', () => {
 describe('AC3 — venue essential and every booking approved', () => {
   it('TC-102-08: two approved bookings and nothing else essential: confirmed', async () => {
     const id = await createApprovedEvent();
-    const [first, second] = freshDays(2);
+    const [first, second] = freshTwoDays();
     await markEssential(id, { venue: 'essential' });
     await bookVenue(id, marina, { date: first, start: '10:00', end: '12:00' });
     await bookVenue(id, bugis, { date: second, start: '10:00', end: '12:00' });
@@ -354,7 +360,7 @@ describe('AC3 — venue essential and every booking approved', () => {
 
   it('TC-102-09: a released booking does not count against confirmation', async () => {
     const id = await createApprovedEvent();
-    const [day] = freshDays();
+    const day = freshDay();
     await markEssential(id, { venue: 'essential' });
     await bookVenue(id, bugis, { date: day, start: '10:00', end: '12:00' });
     const released = await bookVenue(id, marina, { date: day, start: '10:00', end: '12:00' });
@@ -368,7 +374,7 @@ describe('AC3 — venue essential and every booking approved', () => {
 describe('AC4 — nothing marked essential', () => {
   it('TC-102-11: confirmed', async () => {
     const id = await createApprovedEvent();
-    const [day] = freshDays();
+    const day = freshDay();
     await markEssential(id, {});
     await bookVenue(id, marina, { date: day, start: '10:00', end: '12:00' });
 
@@ -380,15 +386,15 @@ describe('AC4 — nothing marked essential', () => {
 describe('AC5 — incomplete arrangements that are not essential stay open', () => {
   it('TC-102-12: confirmed; the line is still Pending and the item still has 2 to reserve', async () => {
     const id = await createApprovedEvent();
-    const [day] = freshDays();
+    const day = freshDay();
     await markEssential(id, {});
-    const { lineIds } = await requestVenue(id, jurong, [{ date: day, start: '14:00', end: '16:00' }]);
+    const { lineId } = await requestVenue(id, jurong, { date: day, start: '14:00', end: '16:00' });
     await requestEquipment(id, eq1, 2);
 
     await expect(confirmEvent(id, asCoordinator())).resolves.toEqual({ id, status: 'confirmed' });
     expect(await storedStatus(id)).toBe('confirmed');
 
-    const { data: line } = await admin.from('venue_booking_request_line').select('status').eq('id', lineIds[0]).single();
+    const { data: line } = await admin.from('venue_booking_request_line').select('status').eq('id', lineId).single();
     expect(line?.status).toBe('pending');
     const { outstanding } = await listEventReservations(id, asCoordinator());
     expect(outstanding).toMatchObject([{ equipmentName: EQ1_NAME, outstanding: 2 }]);
@@ -396,7 +402,7 @@ describe('AC5 — incomplete arrangements that are not essential stay open', () 
 
   it('TC-102-13: confirmed with venue not essential; the booking is still affected', async () => {
     const id = await createApprovedEvent();
-    const [day] = freshDays();
+    const day = freshDay();
     await markEssential(id, {});
     const bookingId = await bookVenue(id, bugis, { date: day, start: '10:00', end: '12:00' });
     await markPeriodUnavailable(bugis, { date: day, start: '10:00', end: '11:00', reason: 'Ceiling repair' }, venueStaff.userId);
@@ -410,7 +416,7 @@ describe('AC5 — incomplete arrangements that are not essential stay open', () 
 describe('AC6 — the organiser is told', () => {
   it('TC-102-14: a confirmation notifies the organiser that the event is confirmed', async () => {
     const id = await createApprovedEvent();
-    const [day] = freshDays();
+    const day = freshDay();
     await markEssential(id, { venue: 'essential' });
     await bookVenue(id, marina, { date: day, start: '10:00', end: '12:00' });
 
@@ -424,9 +430,9 @@ describe('AC6 — the organiser is told', () => {
 
   it('TC-102-15: a refused confirmation sends no notification', async () => {
     const id = await createApprovedEvent();
-    const [day] = freshDays();
+    const day = freshDay();
     await markEssential(id, { venue: 'essential' });
-    await requestVenue(id, marina, [{ date: day, start: '10:00', end: '12:00' }]);
+    await requestVenue(id, marina, { date: day, start: '10:00', end: '12:00' });
 
     await refusalOf(id);
     expect(await confirmedNotifications(id)).toEqual([]);
