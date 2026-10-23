@@ -57,10 +57,9 @@ import { ensureTestClientOrganisation, TEST_CLIENT_ORGANISATION_ID } from './fix
  *   AC11 "Given an event is already in Planning, when an equipment request is
  *         raised against it, then the status remains Planning."
  *
- * Reserving equipment is SCRUM-173, not built yet. A line is reserved here by a
- * row in equipment_reservation (dummy D-18), inserted by hand as testers do;
- * the warning runs against it for real, so AC8's tests count. Re-run them once
- * SCRUM-173 replaces the stand-in.
+ * A line is reserved here by a row in SCRUM-173's equipment_reservation, which
+ * replaced the stand-in table of dummy D-18; the warning runs against it for
+ * real, so AC8's tests count.
  *
  * Test case IDs are from the Sprint 3 sheet's SCRUM-160 tab (TC-160-nn).
  */
@@ -160,10 +159,10 @@ async function addItem(name: string): Promise<string> {
 }
 
 /**
- * DUMMY(SCRUM-173) D-18: marks a line reserved the way testers do, by hand.
- * Since SCRUM-167 a reservation holds a quantity and a window; these events
- * have no venue booking, so the window is given here rather than worked out
- * from one.
+ * Reserves the whole line with a row in SCRUM-173's equipment_reservation.
+ * These events have no venue booking, so the reservation's window is given
+ * here rather than worked out from one; reserving through the app is
+ * SCRUM-173's tests/integration/equipment-reservation.test.ts.
  */
 async function reserve(lineId: string): Promise<void> {
   const { data: line, error: lineError } = await admin

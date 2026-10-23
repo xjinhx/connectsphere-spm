@@ -118,9 +118,7 @@ replacement venues, Operational Safety Check, Event Coordinator Lead,
 assignment notifications, equipment catalogue. Fix bugs in them (see "Bugs");
 extend them only through a story.
 
-**Reviews:** Jinhong (Scrum Master) takes no user stories and reviews all
-PRs; Marcus is assistant reviewer. Critical-path PRs (SCRUM-173, 167, 181,
-249, 111, 102, 190) need **two** reviewers and are reviewed first. First
+**Reviews:** Jinhong (Scrum Master) and Marcus will review all PRs. First
 review within 24 hours, by anyone other than the author. Marcus never reviews
 his own PRs. If PRs pile up near the end of the Sprint, whoever is free
 helps, coordinating with Jinhong.
@@ -415,8 +413,8 @@ push --dry-run` to review, then `npx supabase db push` to apply.
 - **Push your branch and merge `main` into it at least every 2 days** while
   work is in progress. Small, frequent merges keep conflicts small (professor
   consultation, 15 Sep 2026).
-- PR required for everything, with at least 1 approving review before merge
-  (2 for critical-path PRs this sprint). No direct pushes to `main`.
+- PR required for everything, with at least 1 approving review before merge.
+  No direct pushes to `main`.
 - Reference the SCRUM ticket ID in the PR title/description. If a PR is a
   starting proposal for a shared file (e.g. a schema others will build on),
   say so explicitly in the description.

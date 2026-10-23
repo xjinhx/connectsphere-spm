@@ -231,6 +231,66 @@ describe('SCRUM-142 against a real database', () => {
     ).rejects.toMatchObject({ code: 'VALIDATION_ERROR' });
     expect(await requestsFor(eventId)).toHaveLength(0);
   });
+
+  // SCRUM-142-TC18 (SCRUM-258, AC1): the date reaches the row as entered.
+  it('stores a four-digit-year date exactly as entered', async () => {
+    const eventId = await createEvent('approved', coordinatorId);
+
+    await submitVenueBookingRequest(eventId, coordinatorId, {
+      venueId,
+      lines: [{ date: '2026-12-31', start: '09:00', end: '12:00' }],
+    });
+
+    const rows = await requestsFor(eventId);
+    expect(rows).toHaveLength(1);
+    expect(rows[0]?.venue_booking_request_line).toEqual([
+      { date: '2026-12-31', start_time: '09:00:00', end_time: '12:00:00', time_slots: null, status: 'pending' },
+    ]);
+  });
+
+  // SCRUM-142-TC19 (SCRUM-258, AC5): a five-digit year is a refusal, not a 500.
+  it('refuses a five-digit year beside the line\'s date, writes nothing and leaves the event Approved', async () => {
+    const eventId = await createEvent('approved', coordinatorId);
+
+    await expect(
+      submitVenueBookingRequest(eventId, coordinatorId, {
+        venueId,
+        lines: [{ date: '20266-12-10', start: '09:00', end: '12:00' }],
+      }),
+    ).rejects.toMatchObject({
+      code: 'VALIDATION_ERROR',
+      details: { lineErrors: [{ date: ['Choose a valid date.'] }] },
+    });
+    expect(await requestsFor(eventId)).toHaveLength(0);
+    expect(await statusOf(eventId)).toBe('approved');
+  });
+
+  // SCRUM-142-TC20 (SCRUM-258, AC1, AC5): 31 Dec 9999 is the latest valid date.
+  it('stores 31 Dec 9999 and refuses 1 Jan 10000', async () => {
+    const latestEventId = await createEvent('approved', coordinatorId);
+    await submitVenueBookingRequest(latestEventId, coordinatorId, {
+      venueId,
+      lines: [{ date: '9999-12-31', start: '09:00', end: '12:00' }],
+    });
+    const stored = await requestsFor(latestEventId);
+    expect(stored).toHaveLength(1);
+    expect(stored[0]?.venue_booking_request_line).toEqual([
+      { date: '9999-12-31', start_time: '09:00:00', end_time: '12:00:00', time_slots: null, status: 'pending' },
+    ]);
+
+    const afterEventId = await createEvent('approved', coordinatorId);
+    await expect(
+      submitVenueBookingRequest(afterEventId, coordinatorId, {
+        venueId,
+        lines: [{ date: '10000-01-01', start: '09:00', end: '12:00' }],
+      }),
+    ).rejects.toMatchObject({
+      code: 'VALIDATION_ERROR',
+      details: { lineErrors: [{ date: ['Choose a valid date.'] }] },
+    });
+    expect(await requestsFor(afterEventId)).toHaveLength(0);
+    expect(await statusOf(afterEventId)).toBe('approved');
+  });
 });
 
 /**

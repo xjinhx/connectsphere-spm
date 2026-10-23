@@ -1,19 +1,19 @@
-// Seeds the manual run of SCRUM-167 (TC-167-01 to TC-167-10) from the B1 test
-// case sheet, "B1 Seed and Run Order". Needs
-// 20261022004756_equipment_commitment_window applied (`npm run db:reset` after
-// pulling it) and `npm run seed:users`.
+// Seeds the manual run of SCRUM-167, SCRUM-173 and SCRUM-175 (TC-167-01 to
+// TC-167-10, TC-173-01 to TC-173-09, TC-175-01 to TC-175-03) from the B1 test
+// case sheet, "B1 Seed and Run Order". Needs 20261022004756_equipment_commitment_window and
+// 20261022011508_reserve_equipment applied (`npm run db:reset` after pulling
+// them) and `npm run seed:users`.
 //
-//   node scripts/seed-b1.mjs        Every SCRUM-167 event, item and hold (resets them all)
+//   node scripts/seed-b1.mjs        Every SCRUM-167/173/175 event, item and hold (resets them all)
 //
 // Dates are the sheet's: F = 10/11/26, S4-E1's first booked day. Every event is
 // Approved, assigned to coordinator@example.com (S4-PM: coordinator2@example.com),
 // with confirmed venue bookings at a venue of its own, so no two events' bookings
-// clash. Each case has its own item, so cases do not affect each other.
+// clash. Other events' holds are reserved through reserve_equipment, as
+// Technical Support would in the app. Each case has its own item, so cases do
+// not affect each other; run this again before re-running one that writes.
 //
-// Reserving through the app is SCRUM-173. Until then holds are inserted by hand
-// (DUMMY(SCRUM-173) D-18; the sheet's "or inserted by the seed script"): a row
-// naming a line and a quantity, which the database holds for the line's event's
-// whole commitment window.
+// SCRUM-170's rows on the sheet are not seeded yet.
 //
 // Safe to run again: every "B1 " event (its lines, reservations and bookings go
 // with it), venue and EQ- item it made is deleted first.
@@ -67,7 +67,7 @@ async function ensureUser(email, roles, fullName) {
 
 // --- Accounts ---------------------------------------------------------------
 const coordinator = await ensureUser('coordinator@example.com', ['coordinator'], 'Coordinator A');
-// S4-PM's coordinator.
+// TC-173-04: the afternoon event's coordinator.
 const coordinator2 = await ensureUser('coordinator2@example.com', ['coordinator'], 'Coordinator B');
 const techSupport = await ensureUser('tech-support@example.com', ['technical_support'], 'Tech Support');
 const organiser = await ensureUser('organiser@example.com', ['event_organiser'], 'Organiser');
@@ -78,6 +78,7 @@ check('clear B1 events', await supabase.from('event_request').delete().like('nam
 check('clear B1 venues', await supabase.from('venues').delete().like('name', `${PREFIX} %`));
 check('clear B1 items', await supabase.from('equipment').delete().like('name', 'EQ-167-%'));
 check('clear B1 items', await supabase.from('equipment').delete().like('name', 'EQ-173-%'));
+check('clear B1 items', await supabase.from('equipment').delete().like('name', 'EQ-175-%'));
 
 const existingLocation = await supabase.from('locations').select('id').eq('name', LOCATION).maybeSingle();
 check('location', existingLocation);
@@ -89,6 +90,9 @@ const locationId =
 const ITEMS = {
   'EQ-167-01': 10, 'EQ-167-02': 10, 'EQ-167-03': 10, 'EQ-167-04': 10, 'EQ-167-05': 10,
   'EQ-167-06': 10, 'EQ-167-07': 10, 'EQ-167-08': 10, 'EQ-167-09': 10, 'EQ-167-10': 10,
+  'EQ-173-01': 10, 'EQ-173-02': 10, 'EQ-173-03': 10, 'EQ-173-04': 1, 'EQ-173-05': 10,
+  'EQ-173-06A': 10, 'EQ-173-06B': 10, 'EQ-173-07A': 10, 'EQ-173-07B': 4, 'EQ-173-08': 10, 'EQ-173-09': 10,
+  'EQ-175-01': 10, 'EQ-175-02': 10, 'EQ-175-03': 10,
 };
 const item = {};
 for (const [name, quantity] of Object.entries(ITEMS)) {
@@ -119,7 +123,8 @@ const PM = { start: '14:00', end: '18:00' };
 
 /**
  * One Approved event. `booked`: its confirmed venue booking dates; `pending`:
- * dates of a venue booking request still Pending instead (TC-167-03).
+ * dates of a venue booking request still Pending instead (TC-167-03); neither:
+ * no venue booking request at all (TC-173-02).
  */
 async function createEvent(key, { booked = [], pending = [], times = DAY, coordinatorId = coordinator }) {
   const name = `${PREFIX} ${key}`;
@@ -131,7 +136,7 @@ async function createEvent(key, { booked = [], pending = [], times = DAY, coordi
       .from('event_request')
       .insert({
         name,
-        purpose: 'SCRUM-167 manual test',
+        purpose: 'SCRUM-167/173 manual test',
         description: 'Seeded by scripts/seed-b1.mjs',
         organiser_id: organiser,
         status: 'approved',
@@ -205,9 +210,26 @@ async function request(event, itemName, quantity, coordinatorId = coordinator) {
   return line.id;
 }
 
-/** DUMMY(SCRUM-173) D-18: reserves `quantity` of the line by hand, for its event's commitment window. */
+/** Reserves `quantity` of the line through reserve_equipment, as Technical Support would in the app. */
 async function reserve(event, lineId, quantity) {
-  check(`reserve for ${event.name}`, await supabase.from('equipment_reservation').insert({ line_id: lineId, quantity }));
+  const { data, error } = await supabase.rpc('reserve_equipment', {
+    p_line_id: lineId,
+    p_quantity: quantity,
+    p_reserved_by: techSupport,
+  });
+  if (error) throw new Error(`reserve for ${event.name}: ${error.message}`);
+  if (data?.outcome !== 'reserved') throw new Error(`reserve for ${event.name}: ${JSON.stringify(data)}`);
+}
+
+/**
+ * DUMMY(SCRUM-177) D-21: releases the line's reservation by hand. Releasing is
+ * SCRUM-177's; TC-173-09 only needs a Released one to list.
+ */
+async function releaseByHand(event, lineId) {
+  check(
+    `release for ${event.name}`,
+    await supabase.from('equipment_reservation').update({ status: 'released' }).eq('line_id', lineId),
+  );
 }
 
 /** Another event holding `quantity` of the item: requested and reserved. */
@@ -230,19 +252,51 @@ await reserve(e1, await request(e1, 'EQ-167-06', 6), 4); // TC-167-06: 4 already
 await request(e1, 'EQ-167-07', 2); // TC-167-07
 await request(e1, 'EQ-167-09', 2); // TC-167-09
 await request(e1, 'EQ-167-10', 2); // TC-167-10
+await request(e1, 'EQ-173-01', 4); // TC-173-01
+await request(e1, 'EQ-173-03', 4); // TC-173-03
+await reserve(e1, await request(e1, 'EQ-173-06A', 4), 4); // TC-173-06
+await reserve(e1, await request(e1, 'EQ-173-06B', 2), 2); // TC-173-06
+await reserve(e1, await request(e1, 'EQ-173-07A', 4), 4); // TC-173-07
+await reserve(e1, await request(e1, 'EQ-173-07B', 6), 4); // TC-173-07: only 4 exist
+const released = await request(e1, 'EQ-173-09', 3); // TC-173-09: reserved, then released
+await reserve(e1, released, 3);
+await releaseByHand(e1, released);
+await request(e1, 'EQ-175-01', 6); // TC-175-01: 5 available
+await request(e1, 'EQ-175-02', 5); // TC-175-02: exactly 5 available
+await request(e1, 'EQ-175-03', 2); // TC-175-03: none available
 
-// TC-167-03: venue booking request still Pending.
+// TC-167-03, TC-173-08: venue booking request still Pending.
 const pend = await createEvent('S4-PEND', { pending: dates('2026-11-10', '2026-11-12') });
 await request(pend, 'EQ-167-03', 2);
+await request(pend, 'EQ-173-08', 2);
 created.push(pend);
 
-// TC-167-08: same date, morning and afternoon.
+// TC-173-02: no venue booking request at all.
+const nb = await createEvent('S4-NB', {});
+await request(nb, 'EQ-173-02', 2);
+created.push(nb);
+
+// TC-167-08, TC-173-04: same date, morning and afternoon.
 const am = await createEvent('S4-AM', { booked: ['2026-11-20'], times: AM });
 await reserve(am, await request(am, 'EQ-167-08', 4), 4);
+await reserve(am, await request(am, 'EQ-173-04', 1), 1);
 created.push(am);
 const pm = await createEvent('S4-PM', { booked: ['2026-11-20'], times: PM, coordinatorId: coordinator2 });
-await request(pm, 'EQ-167-08', 2, coordinator2);
+await request(pm, 'EQ-167-08', 2, coordinator2); // TC-167-08. TC-173-04's line is added by coordinator2 in the run.
 created.push(pm);
+
+// TC-173-05: 30 days.
+const long = await createEvent('S4-LONG', { booked: dates('2026-12-01', '2026-12-30') });
+await request(long, 'EQ-173-05', 2);
+created.push(long);
+
+// TC-173-03: collecting on S4-E1's L (12 Nov) and on L+1 (13 Nov).
+const l = await createEvent('H-173-03L', { booked: ['2026-11-13'] });
+await request(l, 'EQ-173-03', 10);
+created.push(l);
+const n = await createEvent('H-173-03N', { booked: ['2026-11-14'] });
+await request(n, 'EQ-173-03', 10);
+created.push(n);
 
 // Holds by other events.
 created.push(await hold('H-167-01', dates('2026-11-14', '2026-11-15'), 'EQ-167-01', 4));
@@ -253,7 +307,15 @@ created.push(await hold('H-167-09', dates('2026-11-07', '2026-11-08'), 'EQ-167-0
 created.push(await hold('H-167-10A', dates('2026-11-08', '2026-11-09'), 'EQ-167-10', 4));
 created.push(await hold('H-167-10B', dates('2026-11-13', '2026-11-14'), 'EQ-167-10', 4));
 
-console.log('\nSCRUM-167 events (open each at the link, as tech-support@example.com):');
+// SCRUM-175.
+const e1b = await createEvent('S4-E1B', { booked: dates('2026-11-10', '2026-11-12') });
+await request(e1b, 'EQ-175-02', 5); // TC-175-02: checked after S4-E1 takes the last 5
+created.push(e1b);
+created.push(await hold('H-175-01', dates('2026-11-08', '2026-11-09'), 'EQ-175-01', 5));
+created.push(await hold('H-175-02', dates('2026-11-10', '2026-11-12'), 'EQ-175-02', 5));
+created.push(await hold('H-175-03', dates('2026-11-10', '2026-11-12'), 'EQ-175-03', 10));
+
+console.log('\nSCRUM-167/173/175 events (open each at the link, as tech-support@example.com unless the case says otherwise):');
 for (const event of created) {
   console.log(`  ${event.reference}  ${event.key.padEnd(10)} http://localhost:3000/events/${event.id}/equipment`);
 }

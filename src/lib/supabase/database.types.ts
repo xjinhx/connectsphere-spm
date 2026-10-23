@@ -1516,6 +1516,10 @@ export type Database = {
         }
         Returns: string
       }
+      reserve_equipment: {
+        Args: { p_line_id: string; p_quantity: number; p_reserved_by: string }
+        Returns: Json
+      }
       slot_end_time: { Args: { p_slot: string }; Returns: string }
       slot_start_time: { Args: { p_slot: string }; Returns: string }
       update_venue: {

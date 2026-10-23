@@ -616,7 +616,16 @@ switch them the next time they edit those files.
   mark this entry Replaced and remove the `DUMMY(SCRUM-173) D-18` markers.
   Re-run SCRUM-160 AC7 and AC8 (TC-160-19 to TC-160-23) with a line reserved
   through the app.
-- **Status:** Active.
+- **Status:** Replaced (SCRUM-173, Sprint 4). Technical Support Staff reserve
+  through `reserve_equipment` (`20261022011508_reserve_equipment.sql`) from
+  the Outstanding list on the event's equipment page. The
+  `DUMMY(SCRUM-173) D-18` markers in `equipmentRequests.ts` and
+  `tests/integration/equipment-request.test.ts` are removed; that test's
+  `reserve()` still inserts a row (its events have no venue booking), and
+  `tests/integration/equipment-reservation.test.ts` reserves a line through
+  the app and checks SCRUM-160 AC8 against it. `scripts/seed-b1.mjs` reserves
+  through `reserve_equipment`. `tests/integration/equipment-availability.test.ts`
+  (SCRUM-167) still inserts its holds directly, as test data.
 
 ### D-19 — An equipment request's status and unavailable items are set by hand
 
@@ -670,4 +679,26 @@ switch them the next time they edit those files.
   Keep the landing page first (the `ROLE_NAV` test in
   `tests/unit/shared-header.test.ts` checks it). Re-run TC-249-15 to TC-249-17
   (AC4) and TC-249-25 to TC-249-27 (AC6) for that role.
+- **Status:** Active.
+
+### D-21 — An equipment reservation is released by hand
+
+- **Kind:** In-sprint stand-in (releasing a reservation is SCRUM-177, in
+  Sprint 4 but owned by someone else)
+- **Added by:** SCRUM-173 AC6 (TC-173-09) — branch `equipment-reservation`
+- **Waiting on:** SCRUM-177 (release reserved equipment)
+- **Where:**
+  `scripts/seed-b1.mjs` — `releaseByHand()` (`DUMMY(SCRUM-177) D-21`);
+  `tests/integration/equipment-reservation.test.ts` — TC-173-09
+  (`DUMMY(SCRUM-177) D-21`)
+- **What is real and what is faked:** the listing is real. SCRUM-173 AC6 lists
+  each reservation with its status, Reserved or Released, read from
+  `equipment_reservation.status`, and a Released one no longer holds its units
+  (the line shows as outstanding again; SCRUM-167's check no longer counts it).
+  Only the release is faked: nothing in the app releases a reservation yet, so
+  the seed and the test set the status by hand:
+  `update equipment_reservation set status = 'released' where id = '<reservation id>';`
+- **To replace:** SCRUM-177 releases through the app into the same status
+  column. Release through it in `scripts/seed-b1.mjs` and TC-173-09, remove
+  the markers, and re-run TC-173-09.
 - **Status:** Active.

@@ -34,10 +34,11 @@ import { ensureTestClientOrganisation, TEST_CLIENT_ORGANISATION_ID } from './fix
  * is three weeks from today and every date moves with it (the sheet's Offset
  * column), so the cases never run against past dates.
  *
- * Reserving through the app is SCRUM-173. Until then reservations are inserted
- * by hand (dummy D-18), the sheet's "or inserted by the seed script": a row
- * naming a line holds the line's quantity, or the one given, for its event's
- * whole commitment window. The check reads those rows for real. Each case has
+ * Reservations are inserted directly as test data, the sheet's "or inserted by
+ * the seed script" (reserving through the app is SCRUM-173's, tested in
+ * tests/integration/equipment-reservation.test.ts): a row naming a line holds
+ * the line's quantity, or the one given, for its event's whole commitment
+ * window. The check reads those rows for real. Each case has
  * its own items, as on the sheet.
  */
 
@@ -152,8 +153,8 @@ async function request(eventId: string, equipmentId: string, quantity: number): 
 }
 
 /**
- * DUMMY(SCRUM-173) D-18: reserves `quantity` of the line by hand, for its
- * event's commitment window (the fill trigger works the window out).
+ * Reserves `quantity` of the line directly, as test data, for its event's
+ * commitment window (the fill trigger works the window out).
  */
 async function reserveByHand(lineId: string, quantity: number): Promise<string> {
   const { data, error } = await admin
