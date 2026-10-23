@@ -12,7 +12,9 @@ import { getCurrentActor } from '@/lib/auth/currentActor';
  *
  * 201 with { reservation } (AC1, AC3, AC5). 400 when the event has no
  * approved venue booking (AC2) or the quantity is more than the line still
- * needs; 409 when fewer units are available (AC4), with how many.
+ * needs; 409 when fewer units are available (AC4), nothing reserved, with
+ * details { available, offer }: SCRUM-175's partial reservation of what is
+ * available and the shortfall, or null when none are available.
  *
  * Technical Support Staff only (equipment_administration, SCRUM-69's matrix),
  * checked before the body is read.
