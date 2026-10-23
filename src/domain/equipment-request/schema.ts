@@ -95,6 +95,8 @@ export const EquipmentRequestLineSchema = z.object({
   quantity: z.number().int(),
   /** AC7, AC8: whether the item has been reserved; reducing a reserved item needs a confirmation. */
   reserved: z.boolean(),
+  /** SCRUM-166 AC3: marked unavailable by Technical Support Staff (only while partially fulfilled). */
+  unavailable: z.boolean(),
   createdAt: z.string(),
 });
 export type EquipmentRequestLine = z.infer<typeof EquipmentRequestLineSchema>;
@@ -111,6 +113,26 @@ export const EquipmentRequestViewSchema = z.object({
   technicalRequirements: z.string().nullable(),
   /** Whether the signed-in account may change it: the assigned coordinator, while the event is open to it. */
   canEdit: z.boolean(),
+  /**
+   * SCRUM-166: the request's status, who set it and when, and the reason when
+   * it cannot be fulfilled. Null while the event has no request yet (no line
+   * added). Shown to Technical Support Staff and the assigned coordinator
+   * (AC2).
+   */
+  requestStatus: z
+    .object({
+      // Lazy: the four statuses are defined in the SCRUM-164 section below.
+      status: z.lazy(() => EquipmentRequestStatusSchema),
+      /** AC2: the name of whoever set it; null while it is still the status it was raised with (AC1). */
+      setByName: z.string().nullable(),
+      /** AC2: when it was set (ISO timestamp); null as for setByName. */
+      setAt: z.string().nullable(),
+      /** AC4: why it cannot be fulfilled; null for every other status. */
+      unableReason: z.string().nullable(),
+    })
+    .nullable(),
+  /** SCRUM-166 AC2: whether the signed-in account may set the status - Technical Support Staff. */
+  canSetStatus: z.boolean(),
 });
 export type EquipmentRequestView = z.infer<typeof EquipmentRequestViewSchema>;
 
@@ -132,13 +154,15 @@ export type AddEquipmentLineOutcome = z.infer<typeof AddEquipmentLineOutcomeSche
 /**
  * An equipment request's status, as SCRUM-166 (Update the status of an
  * equipment request) names them: under review when raised (its AC1), then
- * partially fulfilled, fulfilled or unable to fulfil (its AC2).
- *
- * DUMMY(SCRUM-166) D-19: nothing in the app sets a status yet; testers set it
- * by hand. The column and these values are real.
+ * partially fulfilled, fulfilled or unable to fulfil (its AC2). Technical
+ * Support Staff set them through updateEquipmentRequestStatus (SCRUM-166,
+ * D-19 replaced).
  */
 export const EQUIPMENT_REQUEST_STATUSES = ['under_review', 'partially_fulfilled', 'fulfilled', 'unable_to_fulfil'] as const;
-export const EquipmentRequestStatusSchema = z.enum(EQUIPMENT_REQUEST_STATUSES);
+export const CHOOSE_STATUS_MESSAGE = 'Choose a status.';
+export const EquipmentRequestStatusSchema = z.enum(EQUIPMENT_REQUEST_STATUSES, {
+  errorMap: () => ({ message: CHOOSE_STATUS_MESSAGE }),
+});
 export type EquipmentRequestStatus = z.infer<typeof EquipmentRequestStatusSchema>;
 
 export const EQUIPMENT_REQUEST_STATUS_LABELS: Record<EquipmentRequestStatus, string> = {
@@ -176,3 +200,35 @@ export const EquipmentQueueEntrySchema = z.object({
   raisedAt: z.string(),
 });
 export type EquipmentQueueEntry = z.infer<typeof EquipmentQueueEntrySchema>;
+
+// ---------------------------------------------------------------------------
+// SCRUM-166 — Update the status of an equipment request
+// ---------------------------------------------------------------------------
+
+/** AC4: the reason is stored with the request; the same limit as the technical requirements. */
+export const UNABLE_REASON_MAX_LENGTH = 1000;
+
+/**
+ * AC2: "when I set its status to partially fulfilled, fulfilled or unable to
+ * fulfil". Under review can be set again too: any status can be set again,
+ * and only the latest is kept (TC-166-06).
+ *
+ * unavailableLineIds: AC3, the lines Technical Support Staff mark unavailable.
+ * Only kept for partially fulfilled. reason: AC4, only kept for unable to
+ * fulfil. Text that is only spaces counts as no reason (TC-166-15). Whether
+ * each is present when its status needs it is policy.ts
+ * (statusUpdateProblem), so both are optional here.
+ */
+export const UpdateEquipmentRequestStatusInputSchema = z.object({
+  status: EquipmentRequestStatusSchema,
+  unavailableLineIds: z
+    .array(EquipmentRequestLineIdSchema, { invalid_type_error: 'Unavailable items must be a list of lines.' })
+    .max(200, 'Too many unavailable items.')
+    .default([]),
+  reason: z
+    .string({ invalid_type_error: 'The reason must be text.' })
+    .max(UNABLE_REASON_MAX_LENGTH, `The reason must be ${UNABLE_REASON_MAX_LENGTH} characters or fewer.`)
+    .nullish()
+    .transform((text) => (text == null || text.trim() === '' ? null : text.trim())),
+});
+export type UpdateEquipmentRequestStatusInput = z.infer<typeof UpdateEquipmentRequestStatusInputSchema>;
