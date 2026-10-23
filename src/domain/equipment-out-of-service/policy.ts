@@ -4,7 +4,7 @@ import { OUT_OF_SERVICE_LABELS, OUT_OF_SERVICE_STATUSES, type OutOfServiceCounts
 /**
  * SCRUM-170 rules. Pure functions: no Supabase, no Next.js.
  *
- * reserve_equipment (supabase/migrations/20261022100038_equipment_out_of_service.sql)
+ * reserve_equipment (supabase/migrations/20261023102427_equipment_out_of_service.sql)
  * applies unitsInService again inside the write, so SCRUM-167's check and
  * SCRUM-173's reservation agree.
  */

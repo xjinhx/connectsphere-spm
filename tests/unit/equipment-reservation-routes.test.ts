@@ -83,4 +83,22 @@ describe('POST .../lines/[lineId]/reservation (SCRUM-173)', () => {
     expect(response.status).toBe(409);
     expect(await response.json()).toMatchObject({ details: { available: 0 } });
   });
+
+  it('TC-175-01 (SCRUM-175 AC1): the 409 carries how many are available and the partial offer', async () => {
+    signInAs('technical_support');
+    vi.mocked(reserveEquipment).mockRejectedValue(
+      new UnavailableError("Only 5 available for the event's window.", {
+        available: 5,
+        offer: { quantity: 5, shortfall: 1 },
+      }),
+    );
+
+    const response = await reserve({ quantity: 6 });
+
+    expect(response.status).toBe(409);
+    expect(await response.json()).toMatchObject({
+      message: "Only 5 available for the event's window.",
+      details: { available: 5, offer: { quantity: 5, shortfall: 1 } },
+    });
+  });
 });

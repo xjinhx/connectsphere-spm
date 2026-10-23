@@ -14,7 +14,14 @@ import {
   fetchReservation,
   reserveEquipmentLine,
 } from '@/lib/supabase/equipmentReservations';
-import { availableUnits, checkLines, commitmentWindow, heldOnBusiestDay, outstandingLines } from './policy';
+import {
+  availableUnits,
+  checkLines,
+  commitmentWindow,
+  heldOnBusiestDay,
+  outstandingLines,
+  partialReservationOffer,
+} from './policy';
 import {
   CHECK_NEEDS_APPROVED_BOOKING_MESSAGE,
   EquipmentAvailabilitySchema,
@@ -233,9 +240,14 @@ function quantityError(message: string): ValidationError {
  * AC2 no approved venue booking: refused, nothing reserved.
  * AC3 it holds F-1 to L, both included.
  * AC4 an item reserved for a morning event is not available to an afternoon
- *     event that date: refused, nothing reserved. Offering the part that is
- *     free is SCRUM-175's, so the refusal only says how many are available.
+ *     event that date: refused, nothing reserved.
  * AC5 no cap on the window's length.
+ *
+ * SCRUM-175 Prevent reserving more than is available: a quantity above what
+ * is available is refused, nothing reserved (AC1, AC3), with how many are
+ * available and the part that can be reserved instead (partialReservationOffer;
+ * none when nothing is available). Reserving exactly what is available
+ * succeeds (AC2).
  *
  * Technical Support Staff only (equipment_administration), checked by the
  * route. Reserving again on the same line adds to its reservation, up to what
@@ -275,13 +287,18 @@ export async function reserveEquipment(
           ? 'This line is already fully reserved.'
           : `Only ${result.outstanding} still to reserve on this line.`,
       );
-    case 'not_enough_available':
+    case 'not_enough_available': {
+      // SCRUM-175: nothing is reserved for the quantity asked. AC1: told how
+      // many are available and offered those, with the shortfall; AC3: with
+      // none available, refused as unavailable and nothing offered.
+      const available = result.available ?? 0;
       throw new UnavailableError(
-        result.available === 0
+        available === 0
           ? "This item is unavailable for the event's window."
-          : `Only ${result.available} available for the event's window.`,
-        { available: result.available },
+          : `Only ${available} available for the event's window.`,
+        { available, offer: partialReservationOffer(parsed.data.quantity, available) },
       );
+    }
     case 'reserved': {
       const { data: row, error: readError } = await fetchReservation(result.reservationId ?? '');
       if (readError || !row) throw new ValidationError('The reservation could not be read back.', readError?.message);

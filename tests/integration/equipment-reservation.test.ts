@@ -400,3 +400,55 @@ describe('SCRUM-173: reserving for the commitment window', () => {
     expect(await storedReservations(e1)).toMatchObject([{ quantity: 2 }]);
   });
 });
+
+// -----------------------------------------------------------------------------
+// SCRUM-175 — Prevent reserving more than is available
+// -----------------------------------------------------------------------------
+
+describe('SCRUM-175: preventing a reservation above what is available', () => {
+  it('TC-175-01 (AC1): one more than is available: nothing reserved, told 5 are available, offered 5 short by 1', async () => {
+    const item = await addItem('EQ-175-01');
+    await hold('H-175-01', [d(-2), d(-1)], item, 5); // Return Day F-1, inside S4-E1's window
+    const e1 = await createEvent('S4-E1 175-01', E1_DATES);
+    const line = await request(e1, item, 6);
+
+    await expect(reserveEquipment(e1, line, technicalSupport.userId, { quantity: 6 })).rejects.toMatchObject({
+      code: 'UNAVAILABLE',
+      message: "Only 5 available for the event's window.",
+      details: { available: 5, offer: { quantity: 5, shortfall: 1 } },
+    });
+    expect(await storedReservations(e1)).toEqual([]);
+
+    // Taking the offer reserves the 5, and the line is still 1 short.
+    await reserveEquipment(e1, line, technicalSupport.userId, { quantity: 5 });
+    const { outstanding } = await listEventReservations(e1, technicalSupport);
+    expect(outstanding).toMatchObject([{ requested: 6, reserved: 5, outstanding: 1 }]);
+  });
+
+  it('TC-175-02 (AC2): reserving exactly what is available succeeds, and another event then sees 0', async () => {
+    const item = await addItem('EQ-175-02');
+    await hold('H-175-02', E1_DATES, item, 5);
+    const e1 = await createEvent('S4-E1 175-02', E1_DATES);
+    const e1b = await createEvent('S4-E1B 175-02', E1_DATES);
+    const line = await request(e1, item, 5);
+    await request(e1b, item, 5);
+
+    const reservation = await reserveEquipment(e1, line, technicalSupport.userId, { quantity: 5 });
+    expect(reservation).toMatchObject({ quantity: 5, status: 'reserved' });
+    expect(await checkedLine(e1b, item)).toMatchObject({ available: 0, shortfall: 5 });
+  });
+
+  it('TC-175-03 (AC3): nothing available: refused as unavailable, no partial offered', async () => {
+    const item = await addItem('EQ-175-03');
+    await hold('H-175-03', E1_DATES, item, 10);
+    const e1 = await createEvent('S4-E1 175-03', E1_DATES);
+    const line = await request(e1, item, 2);
+
+    await expect(reserveEquipment(e1, line, technicalSupport.userId, { quantity: 2 })).rejects.toMatchObject({
+      code: 'UNAVAILABLE',
+      message: "This item is unavailable for the event's window.",
+      details: { available: 0, offer: null },
+    });
+    expect(await storedReservations(e1)).toEqual([]);
+  });
+});
