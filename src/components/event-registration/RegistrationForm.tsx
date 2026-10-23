@@ -29,7 +29,7 @@ type ApiError = {
   details?: { fieldErrors?: Partial<Record<Field, string[]>>; registration?: Registration };
 };
 
-export function RegistrationForm({ eventRequestId }: { eventRequestId: string }) {
+export function RegistrationForm({ eventRequestId, eventName }: { eventRequestId: string; eventName: string }) {
   const [values, setValues] = useState<RegistrationInput>({ fullName: '', email: '', contactNumber: '' });
   const [fieldErrors, setFieldErrors] = useState<Partial<Record<Field, string[]>>>({});
   const [error, setError] = useState<string | null>(null);
@@ -69,12 +69,19 @@ export function RegistrationForm({ eventRequestId }: { eventRequestId: string })
   }
 
   if (registered) {
-    return <RegistrationConfirmation registration={registered} heading="Registration confirmed. Your place is recorded." />;
+    return (
+      <RegistrationConfirmation
+        registration={registered}
+        eventName={eventName}
+        heading="Registration confirmed. Your place is recorded."
+      />
+    );
   }
   if (existing) {
     return (
       <RegistrationConfirmation
         registration={existing}
+        eventName={eventName}
         heading="You are already registered for this event. Your existing registration:"
         tone="notice"
       />

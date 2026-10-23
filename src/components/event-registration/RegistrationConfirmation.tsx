@@ -4,14 +4,17 @@ import { formatDayMonthYear, toSingaporeISODate } from '@/domain/shared/dates';
 /**
  * SCRUM-181 — a registration as the attendee sees it: the confirmation after
  * registering (AC1), and the existing registration shown when they try again
- * (AC5). `heading` says which.
+ * (AC5). `heading` says which. The confirmation names the event, the details
+ * entered and the status Registered (Jira note, 23/10/2026, CL-59).
  */
 export function RegistrationConfirmation({
   registration,
+  eventName,
   heading,
   tone = 'success',
 }: {
   registration: Registration;
+  eventName: string;
   heading: string;
   tone?: 'success' | 'notice';
 }) {
@@ -24,6 +27,8 @@ export function RegistrationConfirmation({
     >
       <h2 className="text-sm font-semibold">{heading}</h2>
       <dl className="mt-3 grid grid-cols-[max-content_1fr] gap-x-4 gap-y-1 text-sm">
+        <dt className="text-[var(--text-muted)]">Event</dt>
+        <dd>{eventName}</dd>
         <dt className="text-[var(--text-muted)]">Reference</dt>
         <dd>{registration.reference}</dd>
         <dt className="text-[var(--text-muted)]">Status</dt>

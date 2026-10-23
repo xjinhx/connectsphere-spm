@@ -43,13 +43,17 @@ export default async function AttendeeEventRegistrationPage({ params }: { params
       </dl>
 
       {view.registration ? (
-        <RegistrationConfirmation registration={view.registration} heading="You are registered for this event." />
+        <RegistrationConfirmation
+          registration={view.registration}
+          eventName={view.eventName}
+          heading="You are registered for this event."
+        />
       ) : view.periodRefusal ? (
         <p role="status" className="mt-6 rounded-lg border border-[var(--border)] bg-[var(--surface)] p-4 text-sm">
           {view.periodRefusal}
         </p>
       ) : canRegister ? (
-        <RegistrationForm eventRequestId={view.eventRequestId} />
+        <RegistrationForm eventRequestId={view.eventRequestId} eventName={view.eventName} />
       ) : (
         <p className="mt-6 text-sm text-[var(--text-muted)]">Only attendees can register for events.</p>
       )}
