@@ -242,7 +242,7 @@ export async function submitVenueBookingRequest(
   }
 
   const lines: RequestedLine[] = parsedInput.data.lines.map((line) => ({
-    date: line.date.toISOString().slice(0, 10),
+    date: line.date,
     start: line.start,
     end: line.end,
   }));
