@@ -161,7 +161,7 @@ describe('AC2 — essential equipment that is not fully reserved', () => {
   });
 });
 
-describe('AC1, AC2 — both outstanding', () => {
+describe('AC2 — equipment still named when the venue is outstanding too', () => {
   it('TC-102-07: both arrangements are returned, and one refusal names both', () => {
     const outstanding = outstandingEssentialArrangements(
       snapshot({
