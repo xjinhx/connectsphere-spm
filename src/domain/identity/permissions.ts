@@ -61,6 +61,11 @@ export const ACTIONS = [
   // event's safety arrangements"; a seventh role (Change Log CL-27). Covers opening the list and the check page as
   // well as deciding, because AC2's details are only shown to decide with.
   'safety_check',
+  // SCRUM-110 — "As an Event Coordinator, I want to update descriptive event
+  // information without triggering a review of arrangements". The narrower
+  // rule (this event's assigned coordinator, AC1) needs the event, so it is in
+  // the service, the same split as essential_arrangements_record.
+  'event_information_edit',
 ] as const;
 
 export type Action = (typeof ACTIONS)[number];
@@ -91,6 +96,8 @@ export const ROLE_PERMISSIONS: Record<Role, readonly Action[]> = {
     'essential_arrangements_record',
     // SCRUM-160: record the equipment their event needs.
     'equipment_request',
+    // SCRUM-110 AC1: only the event's assigned coordinator, so no other role.
+    'event_information_edit',
   ],
   operations_manager: ['venue_catalogue_view', 'coordinator_assignment', 'account_role_management'],
   venue_staff: ['venue_administration', 'venue_catalogue_view'],
