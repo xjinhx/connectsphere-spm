@@ -52,9 +52,16 @@ function endAfterStart(range: { start?: unknown; end?: unknown }, ctx: z.Refinem
 
 export const VenueBookingRequestLineInputSchema = z
   .object({
-    // AC5: an empty, blank or missing date coerces to an Invalid Date, which
-    // would otherwise read "Invalid date" rather than say what to do.
-    date: z.coerce.date({ errorMap: () => ({ message: 'Choose a date.' }) }),
+    // AC5: an empty, blank or missing date says what to do ("Choose a date.").
+    // SCRUM-258: any other value must be a real YYYY-MM-DD date. z.coerce.date()
+    // let a five-digit year through, and the service then failed (500) turning
+    // it back into a date string. 31 Dec 9999 is the latest date; 1 Jan 10000
+    // is refused, with no other limit (Product Owner, SCRUM-258).
+    date: z
+      .string({ required_error: 'Choose a date.', invalid_type_error: 'Choose a date.' })
+      .trim()
+      .min(1, 'Choose a date.')
+      .pipe(z.string().refine(isISODate, 'Choose a valid date.')),
     start: requiredTime('Choose a start time.', StartTimeSchema),
     end: requiredTime('Choose an end time.', EndTimeSchema),
   })
