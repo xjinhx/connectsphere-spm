@@ -35,6 +35,9 @@ export const NOTIFICATION_TYPES = [
   // away from them. The new coordinator reuses 'coordinator_assigned'
   // (same meaning as SCRUM-94: "you now have this event").
   'coordinator_unassigned',
+  // SCRUM-102 AC6 (moved from SCRUM-198 AC4, CL-09): the organiser, told their
+  // event is confirmed.
+  'event_confirmed',
 ] as const;
 export const NotificationTypeSchema = z.enum(NOTIFICATION_TYPES);
 export type NotificationType = z.infer<typeof NotificationTypeSchema>;

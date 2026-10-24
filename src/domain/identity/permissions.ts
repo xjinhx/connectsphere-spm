@@ -70,6 +70,10 @@ export const ACTIONS = [
   // re-confirm the arrangements that change flags. Only the event's assigned
   // coordinator, checked in the service like event_information_edit.
   'event_schedule_change',
+  // SCRUM-102 — "As an Event Coordinator, I want the system to stop me
+  // confirming an event while something essential is still outstanding". The
+  // narrower rule, the event's assigned coordinator only, is in the service.
+  'event_confirmation',
 ] as const;
 
 export type Action = (typeof ACTIONS)[number];
@@ -104,6 +108,8 @@ export const ROLE_PERMISSIONS: Record<Role, readonly Action[]> = {
     'event_information_edit',
     // SCRUM-111 AC1, AC9: only the event's assigned coordinator.
     'event_schedule_change',
+    // SCRUM-102: confirm their event once its essential arrangements are complete.
+    'event_confirmation',
   ],
   operations_manager: ['venue_catalogue_view', 'coordinator_assignment', 'account_role_management'],
   venue_staff: ['venue_administration', 'venue_catalogue_view'],

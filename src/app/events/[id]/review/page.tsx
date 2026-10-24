@@ -25,6 +25,8 @@ import { getEventInformation } from '@/domain/event-information/service';
 import { ArrangementReviewPanel } from '@/components/event-request/ArrangementReviewPanel';
 import { EventSchedulePanel } from '@/components/event-request/EventSchedulePanel';
 import { getEventSchedule } from '@/domain/significant-change/service';
+import { ConfirmEventButton } from '@/components/event-request/ConfirmEventButton';
+import { canBeConfirmed } from '@/domain/event-status/policy';
 import {
   describeAccessibility,
   describeEquipment,
@@ -331,6 +333,15 @@ export default async function ReviewEventRequestPage({
           Shown in every status (AC2); the form only where the coordinator may
           change the set. */}
       <EssentialArrangementsPanel requestId={request.id} view={essentialArrangements} />
+
+      {/* SCRUM-102 — confirm the event, right under the essential set it is
+          checked against. Planning only (TC-102-16), and only for the assigned
+          coordinator (canManage), so the Lead viewing read-only never sees it. */}
+      {request.canManage && canBeConfirmed(request.status) ? (
+        <section className="mt-6 rounded-lg border border-[var(--border)] bg-[var(--surface)] p-4">
+          <ConfirmEventButton requestId={request.id} />
+        </section>
+      ) : null}
 
       {/* SCRUM-231 AC1-AC4 — the event's venue bookings, each released on its
           own with a reason. Releasing an affected one closes the outstanding

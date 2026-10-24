@@ -679,7 +679,12 @@ switch them the next time they edit those files.
   Keep the landing page first (the `ROLE_NAV` test in
   `tests/unit/shared-header.test.ts` checks it). Re-run TC-249-15 to TC-249-17
   (AC4) and TC-249-25 to TC-249-27 (AC6) for that role.
-- **Status:** Active.
+- **Status:** Partly replaced. **Technical Support Staff:** replaced by
+  SCRUM-254 (branch `tech-support-nav`): Equipment requests, Equipment
+  catalogue, Venues; marker removed. The SCRUM-164 tabs (`TechnicalSupportNav`)
+  were removed in the same change, since the nav bar now does their job on
+  every page (PO, 22 Oct 2026). **Other roles:** still active, waiting on
+  SCRUM-250 to 253, 255 and 256.
 
 ### D-21 — An equipment reservation is released by hand
 
