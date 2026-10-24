@@ -1,4 +1,6 @@
 import { z } from 'zod';
+import type { OperationalStatus } from '@/domain/equipment/schema';
+import { unitsInService } from '@/domain/equipment-out-of-service/policy';
 import { canViewEquipmentRequest } from '@/domain/equipment-request/policy';
 import type { Role } from '@/domain/identity/roles';
 import { ForbiddenError, NotFoundError, UnavailableError, ValidationError } from '@/domain/shared/errors';
@@ -47,7 +49,19 @@ import {
 
 type Actor = { userId: string; roles: readonly Role[] };
 
-type LineRow = { id: string; equipment_id: string; quantity: number; equipment: { name: string; quantity: number } | null };
+type LineRow = {
+  id: string;
+  equipment_id: string;
+  quantity: number;
+  equipment: {
+    name: string;
+    quantity: number;
+    operational_status: OperationalStatus;
+    units_unavailable: number;
+    units_damaged: number;
+    units_under_maintenance: number;
+  } | null;
+};
 
 type ReservationRow = {
   id: string;
@@ -157,7 +171,23 @@ export async function checkEquipmentAvailability(eventRequestId: string, actor: 
   const lines = await readLineRows(event.id);
   const reserved = reservedByLine(await readReservationRows(event.id));
 
-  const itemQuantities = new Map(lines.map((line) => [line.equipment_id, line.equipment?.quantity ?? 0]));
+  // SCRUM-170 AC1, AC5: only units in service can be available at all.
+  const itemQuantities = new Map(
+    lines.map((line) => [
+      line.equipment_id,
+      line.equipment
+        ? unitsInService({
+            quantity: line.equipment.quantity,
+            operationalStatus: line.equipment.operational_status,
+            counts: {
+              unavailable: line.equipment.units_unavailable,
+              damaged: line.equipment.units_damaged,
+              underMaintenance: line.equipment.units_under_maintenance,
+            },
+          })
+        : 0,
+    ]),
+  );
   const held = new Map<string, { quantity: number; window: DateWindow }[]>();
   if (itemQuantities.size > 0) {
     const { data, error } = await fetchOtherEventsReservations(event.id, [...itemQuantities.keys()], window);
