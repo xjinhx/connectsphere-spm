@@ -1,4 +1,6 @@
 import { z } from 'zod';
+import type { ReservationStatus } from '@/domain/equipment-reservation/schema';
+import type { VenueBookingRequestLineStatus, VenueBookingStatus } from '@/domain/venue-booking/schema';
 
 /**
  * SCRUM-100 — Record which arrangements are essential for an event.
@@ -64,4 +66,31 @@ export interface EssentialArrangementsView {
   canChange: boolean;
   /** Set when the status refuses a change, to say why (AC3: return it to Planning). */
   changeRefusal: string | null;
+}
+
+/** SCRUM-102: a booking request line or a venue booking, as a refusal names it. */
+export interface VenuePeriod {
+  venueName: string;
+  /** YYYY-MM-DD. */
+  date: string;
+  /** HH:MM, Singapore time. */
+  startTime: string;
+  endTime: string;
+}
+
+/**
+ * SCRUM-102 — what the confirmation check reads about one event: its essential
+ * set, every booking request line and venue booking with its status, which of
+ * the bookings are affected (CONTEXT.md), and its equipment as SCRUM-173's
+ * equipment section has it (reservations, and the lines still to reserve).
+ */
+export interface ConfirmationSnapshot {
+  needs: ArrangementNeeds;
+  venueLines: readonly (VenuePeriod & { status: VenueBookingRequestLineStatus })[];
+  venueBookings: readonly (VenuePeriod & { id: string; status: VenueBookingStatus })[];
+  affectedBookings: readonly { bookingId: string }[];
+  equipment: {
+    reservations: readonly { status: ReservationStatus }[];
+    outstanding: readonly { equipmentName: string; outstanding: number }[];
+  };
 }

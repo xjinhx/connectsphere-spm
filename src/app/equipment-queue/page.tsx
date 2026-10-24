@@ -1,5 +1,4 @@
 import Link from 'next/link';
-import { TechnicalSupportNav } from '@/components/equipment/TechnicalSupportNav';
 import { EquipmentRequestStatusBadge } from '@/components/equipment-request/EquipmentRequestStatusBadge';
 import {
   EQUIPMENT_QUEUE_SORTS,
@@ -82,8 +81,6 @@ export default async function TechSupportEquipmentQueuePage({
 
   return (
     <main className="mx-auto max-w-6xl p-6">
-      <TechnicalSupportNav current="queue" />
-
       <h1 className="text-2xl font-semibold">Equipment request queue</h1>
       <p className="mt-1 text-sm text-[var(--text-muted)]">
         Equipment requests awaiting review, for events at every location. Work through them before their events

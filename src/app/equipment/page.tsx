@@ -10,7 +10,6 @@ import {
 import { getCurrentActor } from '@/lib/auth/currentActor';
 import AddEquipmentForm from '@/components/equipment/AddEquipmentForm';
 import EquipmentRowEditor from '@/components/equipment/EquipmentRowEditor';
-import { TechnicalSupportNav } from '@/components/equipment/TechnicalSupportNav';
 import OutOfServiceEditor from '@/components/equipment-out-of-service/OutOfServiceEditor';
 
 /**
@@ -52,8 +51,6 @@ export default async function EquipmentCataloguePage() {
 
   return (
     <main className="mx-auto max-w-5xl p-6">
-      {/* SCRUM-164: Technical Support Staff move between this and their request queue. */}
-      {canManage ? <TechnicalSupportNav current="catalogue" /> : null}
       <h1 className="mb-2 text-2xl font-semibold">Equipment catalogue</h1>
       <p className="mb-6 text-sm text-[var(--text-muted)]">
         The equipment ConnectSphere owns, with the quantity held and where it is kept.

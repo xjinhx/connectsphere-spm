@@ -63,7 +63,7 @@ A period at one venue kept for one event by Venue Staff until an expiry, so the 
 _Avoid_: tentative booking, reservation, provisional booking
 
 **Outstanding action**:
-An open item on an event that its coordinator must deal with, such as releasing or replacing an affected booking. It closes when that is done.
+An open item on an event that its coordinator must deal with, such as releasing or replacing an affected booking. It closes when that is done. Confirming the event doesn't close it (SCRUM-102 AC5).
 _Avoid_: task, alert
 
 ### Equipment
@@ -109,6 +109,14 @@ _Avoid_: booking period, hold (those words are for venues)
 **Out of service** (equipment units):
 Units of a catalogue item that Technical Support Staff have recorded as Unavailable, Damaged or Under maintenance: a count per status on the item, which keeps its total quantity (SCRUM-170). They are excluded from what is available in every window, with no end date, until the count is lowered (returned to service). Not the same as the item's own operational status (SCRUM-240): an item whose own status is not Available has no units available at all.
 _Avoid_: broken, written off, unavailable units (that word is one of the three statuses)
+
+### Confirmation
+
+**Essential arrangement**:
+An arrangement (venue, equipment, technical support or registration) the coordinator has marked as one the event can't be confirmed without (SCRUM-100, SCRUM-102).
+
+**Complete** (of an arrangement):
+Venue is complete when the event has at least one confirmed booking, no Pending booking line and no affected booking. Equipment is complete when every line is fully reserved, and is never complete when nothing is requested (SCRUM-102).
 
 ### Safety
 

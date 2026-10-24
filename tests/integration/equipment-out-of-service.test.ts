@@ -14,7 +14,7 @@ import { ensureTestClientOrganisation, TEST_CLIENT_ORGANISATION_ID } from './fix
 /**
  * SCRUM-170 Exclude equipment that is unavailable, damaged or under
  * maintenance, against the local Supabase stack, with
- * 20261023102427_equipment_out_of_service applied.
+ * 20261024084449_equipment_out_of_service applied.
  *
  * AC text is from the Jira card as updated by Change Log CL-46, summarised on
  * the B1 test case sheet:
