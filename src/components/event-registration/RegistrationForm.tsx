@@ -104,12 +104,15 @@ export function RegistrationForm({ eventRequestId, eventName }: { eventRequestId
             autoComplete={field.autoComplete}
             value={values[field.name]}
             onChange={(change) => setValues({ ...values, [field.name]: change.target.value })}
-            aria-invalid={fieldErrors[field.name] ? true : undefined}
+            aria-invalid={Boolean(fieldErrors[field.name])}
             aria-describedby={fieldErrors[field.name] ? `registration-${field.name}-error` : undefined}
-            className="mt-1 w-full rounded-md border border-[var(--border)] bg-[var(--surface)] px-3 py-2 text-sm"
+            // A flagged field gets a red border as well as its message, the same as FormField.
+            className={`mt-1 w-full rounded-md border bg-[var(--surface)] px-3 py-2 text-sm outline-none focus:border-[var(--brand)] ${
+              fieldErrors[field.name] ? 'border-[var(--danger)]' : 'border-[var(--border)]'
+            }`}
           />
           {fieldErrors[field.name] ? (
-            <p id={`registration-${field.name}-error`} className="mt-1 text-xs text-[var(--danger)]">
+            <p id={`registration-${field.name}-error`} className="mt-1 text-sm text-[var(--danger)]">
               {fieldErrors[field.name]?.join(' ')}
             </p>
           ) : null}
