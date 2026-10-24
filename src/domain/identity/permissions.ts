@@ -61,6 +61,10 @@ export const ACTIONS = [
   // event's safety arrangements"; a seventh role (Change Log CL-27). Covers opening the list and the check page as
   // well as deciding, because AC2's details are only shown to decide with.
   'safety_check',
+  // SCRUM-181 — "As an Attendee, I want to register for an event and provide
+  // the information required". Attendees sign in with the Attendee role, and
+  // AC5 matches a registration to that signed-in account (PO, 23/10/2026).
+  'event_registration',
   // SCRUM-102 — "As an Event Coordinator, I want the system to stop me
   // confirming an event while something essential is still outstanding". The
   // narrower rule, the event's assigned coordinator only, is in the service.
@@ -101,7 +105,8 @@ export const ROLE_PERMISSIONS: Record<Role, readonly Action[]> = {
   operations_manager: ['venue_catalogue_view', 'coordinator_assignment', 'account_role_management'],
   venue_staff: ['venue_administration', 'venue_catalogue_view'],
   technical_support: ['venue_catalogue_view', 'equipment_administration'],
-  attendee: [],
+  // SCRUM-181: register for an event.
+  attendee: ['event_registration'],
   safety_officer: ['safety_check'],
 };
 

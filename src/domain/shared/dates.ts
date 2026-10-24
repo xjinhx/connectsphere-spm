@@ -86,7 +86,10 @@ export function formatSingaporeDate(date: ISODate): string {
   }).format(instant);
 }
 
-/** e.g. "10/11/2026": DD/MM/YYYY, the format agreed at Sprint 4 Planning. */
+/**
+ * e.g. "10/11/2026": DD/MM/YYYY, the format agreed at Sprint 4 Planning.
+ * Rearranges the calendar date as it is; no time zone involved.
+ */
 export function formatDayMonthYear(date: ISODate): string {
   const [year, month, day] = date.split('-');
   return `${day}/${month}/${year}`;

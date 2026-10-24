@@ -318,6 +318,50 @@ export type Database = {
           },
         ]
       }
+      event_registration: {
+        Row: {
+          attendee_id: string
+          contact_number: string
+          email: string
+          event_request_id: string
+          full_name: string
+          id: string
+          reference: string
+          registered_at: string
+          status: string
+        }
+        Insert: {
+          attendee_id: string
+          contact_number: string
+          email: string
+          event_request_id: string
+          full_name: string
+          id?: string
+          reference?: string
+          registered_at?: string
+          status?: string
+        }
+        Update: {
+          attendee_id?: string
+          contact_number?: string
+          email?: string
+          event_request_id?: string
+          full_name?: string
+          id?: string
+          reference?: string
+          registered_at?: string
+          status?: string
+        }
+        Relationships: [
+          {
+            foreignKeyName: "event_registration_event_request_id_fkey"
+            columns: ["event_request_id"]
+            isOneToOne: false
+            referencedRelation: "event_request"
+            referencedColumns: ["id"]
+          },
+        ]
+      }
       event_request: {
         Row: {
           accessibility_notes: string | null
@@ -344,7 +388,10 @@ export type Database = {
           proposed_date: string | null
           purpose: string | null
           reference: string
+          registration_capacity: number | null
+          registration_end_date: string | null
           registration_required: boolean | null
+          registration_start_date: string | null
           rejection_reason: string | null
           room_layout: string | null
           start_time: string | null
@@ -379,7 +426,10 @@ export type Database = {
           proposed_date?: string | null
           purpose?: string | null
           reference?: string
+          registration_capacity?: number | null
+          registration_end_date?: string | null
           registration_required?: boolean | null
+          registration_start_date?: string | null
           rejection_reason?: string | null
           room_layout?: string | null
           start_time?: string | null
@@ -414,7 +464,10 @@ export type Database = {
           proposed_date?: string | null
           purpose?: string | null
           reference?: string
+          registration_capacity?: number | null
+          registration_end_date?: string | null
           registration_required?: boolean | null
+          registration_start_date?: string | null
           rejection_reason?: string | null
           room_layout?: string | null
           start_time?: string | null
@@ -1487,6 +1540,10 @@ export type Database = {
           window_start: string
         }[]
       }
+      event_has_places_remaining: {
+        Args: { p_event_request_id: string }
+        Returns: boolean
+      }
       format_singapore_instant: { Args: { p_instant: string }; Returns: string }
       is_quarter_hour: { Args: { p_time: string }; Returns: boolean }
       mark_period_unavailable: {
@@ -1519,6 +1576,17 @@ export type Database = {
           p_decision: string
           p_event_request_id: string
           p_note: string
+        }
+        Returns: string
+      }
+      register_for_event: {
+        Args: {
+          p_attendee_id: string
+          p_contact_number: string
+          p_email: string
+          p_event_request_id: string
+          p_full_name: string
+          p_today: string
         }
         Returns: string
       }
