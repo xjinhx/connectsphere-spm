@@ -1,6 +1,7 @@
 import { formatWindow } from '@/components/equipment-reservation/EquipmentAvailabilitySection';
 import ReserveEquipmentForm from '@/components/equipment-reservation/ReserveEquipmentForm';
 import { RESERVATION_STATUS_LABELS, type EventReservations } from '@/domain/equipment-reservation/schema';
+import { formatSingaporeDateTime } from '@/domain/shared/dates';
 
 /**
  * SCRUM-173 AC6, AC7: the event's equipment section.
@@ -10,6 +11,9 @@ import { RESERVATION_STATUS_LABELS, type EventReservations } from '@/domain/equi
  *     not listed. Technical Support Staff reserve from here (AC1): each
  *     outstanding line has a Reserve form, refused when the event has no
  *     approved venue booking (AC2) or not enough is available (AC4).
+ *
+ * SCRUM-111 AC7: a reservation flagged by a change to the event's date or
+ * times shows Review required, with the cause and when it was set.
  */
 export function EventReservationsSection({
   eventRequestId,
@@ -44,7 +48,17 @@ export function EventReservationsSection({
                     <td className="p-3">{reservation.equipmentName}</td>
                     <td className="p-3">{reservation.quantity}</td>
                     <td className="p-3">{formatWindow(reservation.window)}</td>
-                    <td className="p-3">{RESERVATION_STATUS_LABELS[reservation.status]}</td>
+                    <td className="p-3">
+                      {RESERVATION_STATUS_LABELS[reservation.status]}
+                      {reservation.reviewRequired ? (
+                        <p className="mt-1 text-xs text-[var(--warning)]">
+                          <span className="font-medium">Review required:</span> {reservation.reviewRequiredCause}
+                          {reservation.reviewRequiredAt
+                            ? ` (${formatSingaporeDateTime(reservation.reviewRequiredAt)})`
+                            : ''}
+                        </p>
+                      ) : null}
+                    </td>
                   </tr>
                 ))}
               </tbody>

@@ -66,6 +66,10 @@ export const ACTIONS = [
   // rule (this event's assigned coordinator, AC1) needs the event, so it is in
   // the service, the same split as essential_arrangements_record.
   'event_information_edit',
+  // SCRUM-111 — change the date, times, attendance or venue requirements and
+  // re-confirm the arrangements that change flags. Only the event's assigned
+  // coordinator, checked in the service like event_information_edit.
+  'event_schedule_change',
 ] as const;
 
 export type Action = (typeof ACTIONS)[number];
@@ -98,6 +102,8 @@ export const ROLE_PERMISSIONS: Record<Role, readonly Action[]> = {
     'equipment_request',
     // SCRUM-110 AC1: only the event's assigned coordinator, so no other role.
     'event_information_edit',
+    // SCRUM-111 AC1, AC9: only the event's assigned coordinator.
+    'event_schedule_change',
   ],
   operations_manager: ['venue_catalogue_view', 'coordinator_assignment', 'account_role_management'],
   venue_staff: ['venue_administration', 'venue_catalogue_view'],

@@ -31,7 +31,7 @@ export async function fetchLinesWithItems(eventRequestId: string) {
 export async function fetchEventReservations(eventRequestId: string) {
   return db()
     .from('equipment_reservation')
-    .select('id, line_id, equipment_id, quantity, window_start, window_end, status, created_at, equipment ( name )')
+    .select('id, line_id, equipment_id, quantity, window_start, window_end, status, created_at, review_required, review_required_at, review_required_cause, equipment ( name )')
     .eq('event_request_id', eventRequestId)
     .order('created_at')
     .order('id');
@@ -70,7 +70,7 @@ export async function reserveEquipmentLine(lineId: string, quantity: number, res
 export async function fetchReservation(reservationId: string) {
   return db()
     .from('equipment_reservation')
-    .select('id, line_id, equipment_id, quantity, window_start, window_end, status, created_at, equipment ( name )')
+    .select('id, line_id, equipment_id, quantity, window_start, window_end, status, created_at, review_required, review_required_at, review_required_cause, equipment ( name )')
     .eq('id', reservationId)
     .single();
 }
