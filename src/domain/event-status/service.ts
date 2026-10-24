@@ -1,9 +1,26 @@
 import { EventRequestIdSchema } from './schema';
-import { canEnterPlanning, canTransition, needsSafetyApproval } from './policy';
+import { canBeConfirmed, canEnterPlanning, canTransition, confirmationStatusRefusal, needsSafetyApproval } from './policy';
 import { fetchEventRequestById, markEventRequestPlanning, markEventRequestStatus } from '@/lib/supabase/eventRequests';
 import type { EventRequestRow } from '@/lib/supabase/eventRequests';
+import { fetchEventBookingRequests, type EventBookingRequestRow } from '@/lib/supabase/venueBookingRequests';
 import type { EventRequestStatus } from '@/domain/event-request/schema';
-import { NotFoundError, ValidationError, InvalidTransitionError } from '@/domain/shared/errors';
+import type { Role } from '@/domain/identity/roles';
+import { isCurrentCoordinator } from '@/domain/assignment/policy';
+import { listAffectedBookings } from '@/domain/availability/service';
+import { listEventReservations } from '@/domain/equipment-reservation/service';
+import { confirmationRefusal, outstandingEssentialArrangements } from '@/domain/essential-arrangements/policy';
+import { getEssentialArrangements } from '@/domain/essential-arrangements/service';
+import { notifyBestEffort } from '@/domain/notification/service';
+import { fromDatabaseTime } from '@/domain/shared/times';
+import { VenueBookingRequestLineStatusEnum } from '@/domain/venue-booking/schema';
+import { listEventVenueBookings } from '@/domain/venue-booking/service';
+import {
+  ConflictError,
+  ForbiddenError,
+  NotFoundError,
+  ValidationError,
+  InvalidTransitionError,
+} from '@/domain/shared/errors';
 
 export interface PlanningOutcome {
   id: string;
@@ -122,4 +139,93 @@ export async function changeEventStatus(eventRequestId: string, to: EventRequest
   if (!data) throw new InvalidTransitionError(from, to);
 
   return to;
+}
+
+/** Whoever is signed in, passed in by the route from getCurrentActor. */
+type Actor = { userId: string; roles: readonly Role[] };
+
+export interface ConfirmationOutcome {
+  id: string;
+  status: EventRequestStatus;
+}
+
+/** Every booking request line of the event, with its venue and status. */
+async function readVenueLines(eventRequestId: string) {
+  const { data, error } = await fetchEventBookingRequests(eventRequestId);
+  if (error || !data) throw new ValidationError("Could not read the event's booking requests.", error?.message);
+
+  return (data as unknown as EventBookingRequestRow[]).flatMap((request) =>
+    request.venue_booking_request_line.map((line) => ({
+      venueName: request.venues?.name ?? 'Unknown venue',
+      date: line.date,
+      startTime: fromDatabaseTime(line.start_time),
+      endTime: fromDatabaseTime(line.end_time),
+      status: VenueBookingRequestLineStatusEnum.parse(line.status),
+    })),
+  );
+}
+
+/**
+ * SCRUM-102 — Block confirmation until essential arrangements are complete.
+ *
+ * The event's assigned coordinator confirms it (TC-102-17), from Planning only
+ * (TC-102-16). Refused while an essential arrangement is outstanding, naming
+ * every one (AC1, AC2; outstandingEssentialArrangements); confirmed otherwise
+ * (AC3 to AC5). Confirming closes nothing: a Pending line, a line still to
+ * reserve or an affected booking that is not essential stays open (AC5).
+ *
+ * Checked in the same order as recordEssentialArrangements (SCRUM-100): the
+ * coordinator first, so someone the event is not assigned to learns nothing
+ * more about it, then the status, then the arrangements.
+ *
+ * The check and the move are separate statements. changeEventStatus moves the
+ * event only if it is still in Planning, so a confirmation never lands on an
+ * event cancelled or confirmed in between, but a booking released in that same
+ * instant is not seen. A database function holding a lock would not close
+ * that: releasing a booking (SCRUM-231) and marking a period unavailable
+ * (SCRUM-151) do not lock the event.
+ *
+ * AC6: the Event Organiser is told, best effort like SCRUM-198's
+ * notifications: one that fails is logged and never undoes the confirmation.
+ */
+export async function confirmEvent(eventRequestId: string, actor: Actor): Promise<ConfirmationOutcome> {
+  const parsedId = EventRequestIdSchema.safeParse(eventRequestId);
+  if (!parsedId.success) throw new NotFoundError('Event request');
+
+  const { data, error } = await fetchEventRequestById(parsedId.data);
+  if (error) throw new ValidationError('The event request could not be read.', error.message);
+  if (!data) throw new NotFoundError('Event request');
+  const event = data as unknown as EventRequestRow;
+
+  if (!isCurrentCoordinator(event.coordinator_id, actor.userId)) {
+    throw new ForbiddenError('This event is not assigned to you.');
+  }
+  if (!canBeConfirmed(event.status)) throw new ConflictError(confirmationStatusRefusal(event.status));
+
+  const [essential, venueLines, venueBookings, affectedBookings, equipment] = await Promise.all([
+    getEssentialArrangements(event.id, actor.userId),
+    readVenueLines(event.id),
+    listEventVenueBookings(event.id, actor.userId),
+    listAffectedBookings(event.id),
+    listEventReservations(event.id, actor),
+  ]);
+  const outstanding = outstandingEssentialArrangements({
+    needs: essential.needs,
+    venueLines,
+    venueBookings,
+    affectedBookings,
+    equipment,
+  });
+  if (outstanding.length > 0) throw new ConflictError(confirmationRefusal(outstanding), { outstanding });
+
+  await changeEventStatus(event.id, 'confirmed');
+
+  await notifyBestEffort({
+    recipientId: event.organiser_id,
+    type: 'event_confirmed',
+    eventRequestId: event.id,
+    message: `${event.reference} (${event.name}) is confirmed.`,
+  });
+
+  return { id: event.id, status: 'confirmed' };
 }
