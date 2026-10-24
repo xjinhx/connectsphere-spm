@@ -87,8 +87,8 @@ export function formatSingaporeDate(date: ISODate): string {
 }
 
 /**
- * e.g. "01/11/2026". The team's agreed form for dates shown to users (Sprint 4
- * Planning). Rearranges the calendar date as it is; no time zone involved.
+ * e.g. "10/11/2026": DD/MM/YYYY, the format agreed at Sprint 4 Planning.
+ * Rearranges the calendar date as it is; no time zone involved.
  */
 export function formatDayMonthYear(date: ISODate): string {
   const [year, month, day] = date.split('-');
