@@ -17,7 +17,7 @@ export type PeriodRefusalReason = 'not_started' | 'ended';
  * `YYYY-MM-DD` sorts lexicographically, so a string compare is a date compare.
  *
  * Restated in SQL by register_for_event
- * (20261023001039_event_registration.sql), which checks it again with the
+ * (20261024130843_event_registration.sql), which checks it again with the
  * event row locked; change one, change the other.
  */
 export function periodRefusalReason(period: RegistrationPeriod, today: ISODate): PeriodRefusalReason | null {

@@ -722,7 +722,7 @@ switch them the next time they edit those files.
 - **What is real and what is faked:** the period is real. The columns
   `event_request.registration_start_date` and `registration_end_date` (dates,
   both inclusive, added by SCRUM-181's migration
-  `20261023001039_event_registration.sql`) are what SCRUM-181 reads, in the
+  `20261024130843_event_registration.sql`) are what SCRUM-181 reads, in the
   service and again in `register_for_event`, to refuse registering before the
   start date (AC2) or after the end date (AC3). Only the setting is faked:
   nothing in the app writes the columns yet, so the seed script sets them,
@@ -742,7 +742,7 @@ switch them the next time they edit those files.
   `event-register`
 - **Waiting on:** SCRUM-182 AC1 (a full event refuses registration) and AC2
   (two people taking the last place at the same moment)
-- **Where:** `supabase/migrations/20261023001039_event_registration.sql` —
+- **Where:** `supabase/migrations/20261024130843_event_registration.sql` —
   `event_has_places_remaining` (`DUMMY(SCRUM-182) D-23`)
 - **What is real and what is faked:** registering is real and goes through one
   database function, `register_for_event`, which locks the event row, checks
