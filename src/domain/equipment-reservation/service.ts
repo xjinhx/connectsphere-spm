@@ -58,6 +58,9 @@ type ReservationRow = {
   window_end: string;
   status: string;
   created_at: string;
+  review_required: boolean;
+  review_required_at: string | null;
+  review_required_cause: string | null;
   equipment: { name: string } | null;
 };
 
@@ -126,6 +129,9 @@ function toReservation(row: ReservationRow): EquipmentReservation {
     window: { start: row.window_start, end: row.window_end },
     status: row.status,
     reservedAt: row.created_at,
+    reviewRequired: row.review_required,
+    reviewRequiredAt: row.review_required_at,
+    reviewRequiredCause: row.review_required_cause,
   });
 }
 

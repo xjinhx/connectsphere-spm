@@ -206,7 +206,12 @@ export type Database = {
           id: string
           line_id: string
           quantity: number
+          reconfirmed_at: string | null
+          reconfirmed_by: string | null
           reserved_by: string | null
+          review_required: boolean
+          review_required_at: string | null
+          review_required_cause: string | null
           status: string
           updated_at: string
           window_end: string
@@ -219,7 +224,12 @@ export type Database = {
           id?: string
           line_id: string
           quantity: number
+          reconfirmed_at?: string | null
+          reconfirmed_by?: string | null
           reserved_by?: string | null
+          review_required?: boolean
+          review_required_at?: string | null
+          review_required_cause?: string | null
           status?: string
           updated_at?: string
           window_end: string
@@ -232,7 +242,12 @@ export type Database = {
           id?: string
           line_id?: string
           quantity?: number
+          reconfirmed_at?: string | null
+          reconfirmed_by?: string | null
           reserved_by?: string | null
+          review_required?: boolean
+          review_required_at?: string | null
+          review_required_cause?: string | null
           status?: string
           updated_at?: string
           window_end?: string
@@ -309,6 +324,9 @@ export type Database = {
           clarification_note: string | null
           clarification_requested_at: string | null
           clarification_requested_by: string | null
+          client_contact_email: string | null
+          client_contact_name: string | null
+          client_contact_phone: string | null
           client_organisation_id: string | null
           coordinator_id: string | null
           created_at: string
@@ -320,6 +338,7 @@ export type Database = {
           equipment_required: boolean | null
           expected_attendance: number | null
           id: string
+          internal_notes: string | null
           name: string
           organiser_id: string
           preferred_location_id: string | null
@@ -344,6 +363,9 @@ export type Database = {
           clarification_note?: string | null
           clarification_requested_at?: string | null
           clarification_requested_by?: string | null
+          client_contact_email?: string | null
+          client_contact_name?: string | null
+          client_contact_phone?: string | null
           client_organisation_id?: string | null
           coordinator_id?: string | null
           created_at?: string
@@ -355,6 +377,7 @@ export type Database = {
           equipment_required?: boolean | null
           expected_attendance?: number | null
           id?: string
+          internal_notes?: string | null
           name: string
           organiser_id: string
           preferred_location_id?: string | null
@@ -379,6 +402,9 @@ export type Database = {
           clarification_note?: string | null
           clarification_requested_at?: string | null
           clarification_requested_by?: string | null
+          client_contact_email?: string | null
+          client_contact_name?: string | null
+          client_contact_phone?: string | null
           client_organisation_id?: string | null
           coordinator_id?: string | null
           created_at?: string
@@ -390,6 +416,7 @@ export type Database = {
           equipment_required?: boolean | null
           expected_attendance?: number | null
           id?: string
+          internal_notes?: string | null
           name?: string
           organiser_id?: string
           preferred_location_id?: string | null
@@ -800,10 +827,15 @@ export type Database = {
           end_time: string
           event_request_id: string
           id: string
+          reconfirmed_at: string | null
+          reconfirmed_by: string | null
           release_reason: string | null
           released_at: string | null
           released_by: string | null
           request_line_id: string | null
+          review_required: boolean
+          review_required_at: string | null
+          review_required_cause: string | null
           slot: string | null
           start_time: string
           status: string
@@ -815,10 +847,15 @@ export type Database = {
           end_time: string
           event_request_id: string
           id?: string
+          reconfirmed_at?: string | null
+          reconfirmed_by?: string | null
           release_reason?: string | null
           released_at?: string | null
           released_by?: string | null
           request_line_id?: string | null
+          review_required?: boolean
+          review_required_at?: string | null
+          review_required_cause?: string | null
           slot?: string | null
           start_time: string
           status?: string
@@ -830,10 +867,15 @@ export type Database = {
           end_time?: string
           event_request_id?: string
           id?: string
+          reconfirmed_at?: string | null
+          reconfirmed_by?: string | null
           release_reason?: string | null
           released_at?: string | null
           released_by?: string | null
           request_line_id?: string | null
+          review_required?: boolean
+          review_required_at?: string | null
+          review_required_cause?: string | null
           slot?: string | null
           start_time?: string
           status?: string
@@ -1420,6 +1462,24 @@ export type Database = {
       }
     }
     Functions: {
+      change_event_schedule: {
+        Args: {
+          p_accessibility_notes: string
+          p_accessibility_required: boolean
+          p_acknowledged: boolean
+          p_booking_cause: string
+          p_coordinator_id: string
+          p_end_time: string
+          p_event_request_id: string
+          p_expected_attendance: number
+          p_expected_updated_at: string
+          p_proposed_date: string
+          p_reservation_cause: string
+          p_room_layout: string
+          p_start_time: string
+        }
+        Returns: Json
+      }
       clock_minutes: { Args: { p_time: string }; Returns: number }
       create_venue: {
         Args: {
