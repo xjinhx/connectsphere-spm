@@ -43,6 +43,7 @@ import { getCurrentActor } from '@/lib/auth/currentActor';
 import { SafetyCheckOutcome } from '@/components/safety-check/SafetyCheckOutcome';
 import { getLatestSafetyCheck } from '@/domain/safety-check/service';
 import { formatSingaporeDate, formatSingaporeDateTime } from '@/domain/shared/dates';
+import { reviewBackLink } from '@/domain/navigation/reviewBackLink';
 
 /**
  * US-7.1 AC2 (`ConnectSphere_Test_Cases_v3.xlsx`, US-7.1-TC02) — open a
@@ -72,8 +73,10 @@ function Row({ label, value }: { label: string; value: string }) {
 
 export default async function ReviewEventRequestPage({
   params,
+  searchParams,
 }: {
   params: Promise<{ id: string }>;
+  searchParams?: Promise<{ from?: string | string[] }>;
 }) {
   const actor = await getCurrentActor();
   // The same permission the API route asserts, so the page and the route can
@@ -97,6 +100,8 @@ export default async function ReviewEventRequestPage({
   }
 
   const { id } = await params;
+  // SCRUM-251 AC3: back to Review queue or My events, whichever it was opened from.
+  const backLink = reviewBackLink((await searchParams)?.from);
 
   let request: ReviewDetail;
   let exchange: ClarificationExchange;
@@ -123,8 +128,8 @@ export default async function ReviewEventRequestPage({
     if (error instanceof ForbiddenError) {
       return (
         <main className="mx-auto max-w-2xl p-8">
-          <Link href="/assigned-events" className="text-sm text-[var(--brand)] hover:underline">
-            ← Assigned events
+          <Link href={backLink.href} className="text-sm text-[var(--brand)] hover:underline">
+            ← {backLink.label}
           </Link>
           <h1 className="mt-4 text-2xl font-semibold">Review request</h1>
           <p className="mt-4 text-[var(--text-muted)]">
@@ -193,8 +198,8 @@ export default async function ReviewEventRequestPage({
 
   return (
     <main className="mx-auto max-w-2xl px-4 py-8">
-      <Link href="/assigned-events" className="text-sm text-[var(--brand)] hover:underline">
-        ← Assigned events
+      <Link href={backLink.href} className="text-sm text-[var(--brand)] hover:underline">
+        ← {backLink.label}
       </Link>
 
       <div className="mt-4 flex flex-wrap items-center gap-3">
