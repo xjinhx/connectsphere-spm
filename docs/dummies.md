@@ -652,12 +652,23 @@ switch them the next time they edit those files.
   a status or marks a line unavailable, so testers do it by hand in Studio:
   `update equipment_request set status = 'partially_fulfilled' where event_request_id = '<event id>';`
   and `update equipment_request_line set unavailable = true where id = '<line id>';`
-- **To replace:** SCRUM-166 writes to these two columns from its status form
+- **To replace:** ~~SCRUM-166 writes to these two columns from its status form
   (adding its own identity, timestamp and reason columns alongside), keeps the
   four status values, and removes the markers. Re-run SCRUM-164 AC3 and AC4
   (TC-164-07 to TC-164-12) and `tests/integration/equipment-queue.test.ts`
-  with statuses set through the app.
-- **Status:** Active.
+  with statuses set through the app.~~ Done.
+- **Status:** Replaced (SCRUM-166, branch `equipment-request-status`).
+  Technical Support Staff set the status and the unavailable lines on the
+  event's equipment request page, through `updateEquipmentRequestStatus` and
+  `set_equipment_request_status`
+  (`20261023044500_equipment_request_status_update.sql`, which adds
+  `status_set_by`, `status_set_at` and `unable_reason`). The four status values
+  are kept. `tests/integration/equipment-queue.test.ts` now sets statuses
+  through the app (`setStatus()`; `setUnavailable()` is gone), and
+  `scripts/seed-scrum164.mjs` still writes them straight to the table as
+  fixture data, without the marker. The marker comment in the applied
+  migration `20261018174009_equipment_request_status.sql` is left as it is,
+  since a migration on `main` is not edited.
 
 ### D-20 — Each role's nav holds only its landing page
 

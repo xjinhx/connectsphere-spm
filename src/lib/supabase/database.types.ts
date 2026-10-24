@@ -123,21 +123,30 @@ export type Database = {
           created_at: string
           event_request_id: string
           status: string
+          status_set_at: string | null
+          status_set_by: string | null
           technical_requirements: string | null
+          unable_reason: string | null
           updated_at: string
         }
         Insert: {
           created_at?: string
           event_request_id: string
           status?: string
+          status_set_at?: string | null
+          status_set_by?: string | null
           technical_requirements?: string | null
+          unable_reason?: string | null
           updated_at?: string
         }
         Update: {
           created_at?: string
           event_request_id?: string
           status?: string
+          status_set_at?: string | null
+          status_set_by?: string | null
           technical_requirements?: string | null
+          unable_reason?: string | null
           updated_at?: string
         }
         Relationships: [
@@ -1506,6 +1515,16 @@ export type Database = {
       }
       reserve_equipment: {
         Args: { p_line_id: string; p_quantity: number; p_reserved_by: string }
+        Returns: Json
+      }
+      set_equipment_request_status: {
+        Args: {
+          p_event_request_id: string
+          p_reason: string
+          p_set_by: string
+          p_status: string
+          p_unavailable_line_ids: string[]
+        }
         Returns: Json
       }
       slot_end_time: { Args: { p_slot: string }; Returns: string }
