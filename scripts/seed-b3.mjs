@@ -87,6 +87,17 @@ const techSupport = await ensureUser('tech-support@example.com', ['technical_sup
 // TC-102-12: the Pending line is still in the Venue Staff queue.
 const venueStaff = await ensureUser('venue-staff@example.com', ['venue_staff'], 'Venue Staff');
 
+// TC-104-13: the organiser's event requests list only opens for an organiser
+// linked to a client organisation (SCRUM-204 AC2).
+const organisation = await single(
+  'client organisation',
+  supabase.from('client_organisations').upsert({ name: 'B3 Client' }, { onConflict: 'name' }).select('id').single(),
+);
+check(
+  'link organiser',
+  await supabase.from('profiles').update({ client_organisation_id: organisation.id }).eq('id', organiser),
+);
+
 // --- Start clean ------------------------------------------------------------
 check('clear B3 events', await supabase.from('event_request').delete().like('name', `${PREFIX} %`));
 check('clear B3 items', await supabase.from('equipment').delete().like('name', 'EQ-102-%'));
