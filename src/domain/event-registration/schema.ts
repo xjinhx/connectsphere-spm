@@ -1,12 +1,14 @@
 import { z } from 'zod';
 import type { ISODate } from '@/domain/shared/dates';
+import type { ClockRange } from '@/domain/shared/times';
 
 /**
  * SCRUM-181 — Register for an event.
  *
  * The registration record is shared: SCRUM-182 (refusing a full event),
  * SCRUM-184 (withdrawing) and SCRUM-185 (the registration list) read and
- * extend these shapes rather than declaring their own.
+ * extend these shapes rather than declaring their own. SCRUM-180 (browsing
+ * open events and my registrations) adds the shapes at the end.
  */
 
 // Same convention as event-status/schema.ts: each domain validates the id
@@ -71,4 +73,28 @@ export interface RegistrationPageView {
   periodRefusal: string | null;
   /** The viewer's Registered registration for this event, if any (AC5). */
   registration: Registration | null;
+}
+
+/**
+ * SCRUM-180 — a venue the event is held at: the venue of each of its confirmed
+ * bookings. A released booking's venue is not one (SCRUM-231).
+ */
+export interface EventVenue {
+  name: string;
+  /** Null when none is recorded for the venue. */
+  address: string | null;
+}
+
+/**
+ * SCRUM-180 AC1 — one event open for registration, as Open events lists it:
+ * name, date, start and end times and venue. The date and times are the
+ * event's own, so a reschedule shows wherever they are read.
+ */
+export interface OpenEvent {
+  eventRequestId: string;
+  eventName: string;
+  eventDate: ISODate | null;
+  /** Null until the event has times. */
+  times: ClockRange | null;
+  venues: EventVenue[];
 }

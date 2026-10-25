@@ -2,6 +2,8 @@ import {
   EventRequestIdSchema,
   RegistrationInputSchema,
   RegistrationStatusSchema,
+  type EventVenue,
+  type OpenEvent,
   type Registration,
   type RegistrationPageView,
   type RegistrationPeriod,
@@ -9,7 +11,10 @@ import {
 import {
   ALREADY_REGISTERED,
   NO_PLACES_REMAINING,
+  bookedVenues,
   endedMessage,
+  eventTimes,
+  isOpenForRegistration,
   notStartedMessage,
   registrationPeriodRefusal,
 } from './policy';
@@ -17,6 +22,7 @@ import { todayInSingapore } from '@/domain/shared/dates';
 import { CapacityExceededError, ConflictError, NotFoundError, ValidationError } from '@/domain/shared/errors';
 import {
   createRegistrationRow,
+  fetchOpenEvents,
   fetchRegisteredRegistration,
   fetchRegistrationEvent,
 } from '@/lib/supabase/eventRegistrations';
@@ -106,6 +112,48 @@ export async function getRegistrationPage(
     periodRefusal: registrationPeriodRefusal(period, todayInSingapore(now)),
     registration: await readRegistration(eventRequestId, attendeeId),
   };
+}
+
+/** SCRUM-180: an event row with its times and the venues of its bookings. */
+type ListedEventRow = {
+  id: string;
+  name: string;
+  proposed_date: string | null;
+  start_time: string | null;
+  end_time: string | null;
+  venue_booking: { status: string; venues: EventVenue | null }[];
+};
+
+type OpenEventRow = ListedEventRow & {
+  registration_start_date: string | null;
+  registration_end_date: string | null;
+};
+
+function toOpenEvent(row: ListedEventRow): OpenEvent {
+  return {
+    eventRequestId: row.id,
+    eventName: row.name,
+    eventDate: row.proposed_date,
+    times: eventTimes(row.start_time, row.end_time),
+    venues: bookedVenues(row.venue_booking),
+  };
+}
+
+/**
+ * SCRUM-180 AC1, AC2 — the events open for registration today (Singapore
+ * date), soonest first. The query already filters by the period; the same
+ * rule is applied again here so the list and the event page's form agree on
+ * every boundary, whatever the query does.
+ */
+export async function listOpenEvents(now: Date = new Date()): Promise<OpenEvent[]> {
+  const today = todayInSingapore(now);
+  const { data, error } = await fetchOpenEvents(today);
+  if (error) throw new ValidationError('The events open for registration could not be read.', error.message);
+  return ((data ?? []) as unknown as OpenEventRow[])
+    .filter((row) =>
+      isOpenForRegistration({ startDate: row.registration_start_date, endDate: row.registration_end_date }, today),
+    )
+    .map(toOpenEvent);
 }
 
 /**

@@ -29,6 +29,30 @@ export async function fetchRegistrationEvent(eventRequestId: string) {
     .maybeSingle();
 }
 
+/**
+ * SCRUM-180: each of the event's bookings with its venue's name and address.
+ * The service keeps the confirmed ones (bookedVenues).
+ */
+const BOOKED_VENUES = 'venue_booking (status, venues (name, address))';
+
+/**
+ * SCRUM-180 AC1, AC2: the events whose registration period includes `today`
+ * (a Singapore date; both ends inclusive), soonest first. Only the columns the
+ * list shows, plus the period, so nothing internal reaches an attendee
+ * (SCRUM-72 AC1). An event with no period never matches.
+ */
+export async function fetchOpenEvents(today: string) {
+  return db()
+    .from('event_request')
+    .select(
+      `id, name, proposed_date, start_time, end_time, registration_start_date, registration_end_date, ${BOOKED_VENUES}`,
+    )
+    .lte('registration_start_date', today)
+    .gte('registration_end_date', today)
+    .order('proposed_date', { ascending: true })
+    .order('name', { ascending: true });
+}
+
 /** AC5: the attendee's Registered registration for this event, or null. */
 export async function fetchRegisteredRegistration(eventRequestId: string, attendeeId: string) {
   return db()
