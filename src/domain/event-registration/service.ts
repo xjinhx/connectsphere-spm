@@ -15,6 +15,7 @@ import {
   bookedVenues,
   endedMessage,
   eventTimes,
+  isEventCancelled,
   isOpenForRegistration,
   notStartedMessage,
   registrationPeriodRefusal,
@@ -156,14 +157,15 @@ type MyRegistrationRow = {
   id: string;
   reference: string;
   status: string;
-  event_request: EventRow;
+  event_request: EventRow & { status: string };
 };
 
 /**
  * SCRUM-180 AC4 — the signed-in attendee's registrations, each with its
  * event's name, date, times and venue and the registration's status, soonest
  * event first. `attendeeId` is whoever is signed in, from the page, never from
- * a request, so only their own registrations are read.
+ * a request, so only their own registrations are read. AC6: a cancelled
+ * event's registration is still listed, marked as cancelled.
  */
 export async function listMyRegistrations(attendeeId: string): Promise<MyRegistration[]> {
   const { data, error } = await fetchMyRegistrations(attendeeId);
@@ -174,6 +176,7 @@ export async function listMyRegistrations(attendeeId: string): Promise<MyRegistr
       registrationId: row.id,
       reference: row.reference,
       status: RegistrationStatusSchema.parse(row.status),
+      eventCancelled: isEventCancelled(row.event_request.status),
     }))
     .sort(bySoonestEvent);
 }

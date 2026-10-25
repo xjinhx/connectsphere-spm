@@ -113,4 +113,6 @@ export interface MyRegistration extends OpenEvent {
   registrationId: string;
   reference: string;
   status: RegistrationStatus;
+  /** AC6: the event was cancelled; the registration stays listed, marked Cancelled. */
+  eventCancelled: boolean;
 }

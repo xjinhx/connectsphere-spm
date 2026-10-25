@@ -30,7 +30,9 @@ function eventSummary(event: OpenEvent): string {
  * AC4: My registrations, below, lists the signed-in attendee's own
  * registrations with each event's details and the registration's status. A
  * section here rather than a page of its own, so the Attendee nav stays the
- * one item SCRUM-255 AC2 names.
+ * one item SCRUM-255 AC2 names. AC5: the date and times are the event's
+ * current ones, so a reschedule shows. AC6: a cancelled event's registration
+ * stays listed, with the event marked Cancelled.
  */
 export default async function AttendeeRegisterEventsPage() {
   const actor = await getCurrentActor();
@@ -70,6 +72,11 @@ export default async function AttendeeRegisterEventsPage() {
               >
                 <div>
                   <span className="font-medium">{registration.eventName}</span>
+                  {registration.eventCancelled ? (
+                    <span className="ml-2 rounded-full bg-red-50 px-2 py-0.5 text-xs font-medium text-red-700">
+                      Cancelled
+                    </span>
+                  ) : null}
                   <span className="mt-1 block text-sm text-[var(--text-muted)]">{eventSummary(registration)}</span>
                 </div>
                 <span className="rounded-full border border-[var(--border)] px-2 py-0.5 text-xs font-medium">

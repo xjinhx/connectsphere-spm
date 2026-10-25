@@ -59,12 +59,13 @@ export async function fetchOpenEvents(today: string) {
 /**
  * SCRUM-180 AC4: every registration the attendee has made, whatever its
  * status, each with its event's attendee columns. Filtered by attendee_id, so
- * nobody else's registration (or name, or email) is read.
+ * nobody else's registration (or name, or email) is read. AC6: the event's
+ * status too, only so a cancelled event can be marked.
  */
 export async function fetchMyRegistrations(attendeeId: string) {
   return db()
     .from('event_registration')
-    .select(`id, reference, status, event_request (${ATTENDEE_EVENT_COLUMNS})`)
+    .select(`id, reference, status, event_request (${ATTENDEE_EVENT_COLUMNS}, status)`)
     .eq('attendee_id', attendeeId)
     .order('registered_at', { ascending: false });
 }

@@ -21,7 +21,9 @@ import { TEST_CLIENT_ORGANISATION_ID, ensureTestClientOrganisation } from './fix
  *   AC4 my registrations are listed with the event name, date, start and end
  *       times, venue and my registration status;
  *   AC5 a rescheduled event shows its new date and times against my
- *       registration.
+ *       registration;
+ *   AC6 a cancelled event's registration is shown with the event marked
+ *       Cancelled.
  *
  * Runs against the local Supabase stack. The clock is fixed by passing `now`.
  * Other tests' events may also be open on the fixed date, so each test looks
@@ -426,5 +428,29 @@ describe('AC5: a rescheduled event shows its new date and times against my regis
     const [registration] = await listMyRegistrations(attendee);
 
     expect(registration).toMatchObject({ eventDate: '2026-11-25', times: { start: '18:15', end: '22:15' } });
+  });
+});
+
+describe('AC6: a cancelled event is marked Cancelled against my registration', () => {
+  it('TC-180-14 the registration stays listed, with the event marked cancelled; the others are not', async () => {
+    const attendee = await createUser('attendee-14');
+    const gala = await createEvent('Year-End Gala', { date: '2026-11-26' });
+    const night = await createEvent('Client Appreciation Night', { date: '2026-11-27' });
+    await register(gala, attendee);
+    await register(night, attendee);
+
+    // Cancelling is SCRUM-102 / 177's (B3); this writes the status that flow sets.
+    const { error } = await admin
+      .from('event_request')
+      .update({ status: 'cancelled', submitted_at: new Date().toISOString() })
+      .eq('id', gala);
+    if (error) throw new Error(`could not cancel test event: ${error.message}`);
+
+    const registrations = await listMyRegistrations(attendee);
+
+    expect(registrations).toMatchObject([
+      { eventRequestId: gala, status: 'registered', eventCancelled: true },
+      { eventRequestId: night, status: 'registered', eventCancelled: false },
+    ]);
   });
 });

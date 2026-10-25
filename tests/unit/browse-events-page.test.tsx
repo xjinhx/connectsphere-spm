@@ -6,7 +6,7 @@ import type { ReactElement } from 'react';
  * SCRUM-180 Browse open events and see my registrations (Jira, authoritative).
  * The Attendee's pages rendered for real, with the session and the service
  * replaced: what Open events shows (AC1), what the event page shows (AC3) and
- * what My registrations shows (AC4).
+ * what My registrations shows (AC4, AC6).
  * Which events the service returns is tests/unit/browse-events-service.test.ts;
  * that nothing internal is read is tests/integration/browse-events.test.ts.
  *
@@ -61,6 +61,7 @@ function registrationFor(event: OpenEvent, overrides: Partial<MyRegistration> = 
     registrationId: `reg-${event.eventRequestId}`,
     reference: 'REG-2026-0001',
     status: 'registered',
+    eventCancelled: false,
     ...overrides,
   };
 }
@@ -159,6 +160,22 @@ describe('My registrations (AC4)', () => {
 
     expect(html).toContain('You have not registered for any events yet.');
     expect(html).not.toContain('<ul');
+  });
+});
+
+describe('a cancelled event in My registrations (AC6)', () => {
+  it('TC-180-14 the registration stays listed, with the event marked Cancelled', async () => {
+    const html = myRegistrations(await renderOpenEvents([], [registrationFor(NIGHT, { eventCancelled: true })]));
+
+    expect(html).toContain('Client Appreciation Night');
+    expect(html).toContain('>Cancelled<');
+    expect(html).toContain('>Registered<');
+  });
+
+  it('TC-180-15 an event that is not cancelled is not marked Cancelled', async () => {
+    const html = myRegistrations(await renderOpenEvents([], [registrationFor(NIGHT), registrationFor(BRIEFING)]));
+
+    expect(html).not.toContain('Cancelled');
   });
 });
 

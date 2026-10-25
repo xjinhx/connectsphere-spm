@@ -65,6 +65,15 @@ export function isOpenForRegistration(
   return periodRefusalReason({ startDate: period.startDate, endDate: period.endDate }, today) === null;
 }
 
+/**
+ * SCRUM-180 AC6 — whether My registrations marks the event Cancelled. Only the
+ * Cancelled status does: any other status, Confirmed and Preparation included,
+ * is shown unmarked.
+ */
+export function isEventCancelled(eventStatus: string): boolean {
+  return eventStatus === 'cancelled';
+}
+
 /** SCRUM-180 AC1 — the event's start and end times, or null until both are set. */
 export function eventTimes(startTime: string | null, endTime: string | null): ClockRange | null {
   if (!startTime || !endTime) return null;

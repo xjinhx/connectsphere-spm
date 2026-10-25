@@ -4,7 +4,7 @@ import { beforeEach, describe, expect, it, vi } from 'vitest';
  * SCRUM-180 Browse open events and see my registrations (Jira, authoritative).
  * The service's own decisions, with the data layer replaced by spies: which
  * events Open events lists (AC1, AC2) and how My registrations lists the
- * attendee's registrations (AC4). The same reads against the database run in
+ * attendee's registrations (AC4) and marks a cancelled event (AC6). The same reads against the database run in
  * tests/integration/browse-events.test.ts.
  *
  * Test case IDs are from SCRUM-180-test-cases.xlsx (TC-180-nn). "Today" is
@@ -36,6 +36,8 @@ function eventRow(overrides: Record<string, unknown> = {}) {
     registration_start_date: '2026-10-27',
     registration_end_date: '2026-11-04',
     venue_booking: [{ status: 'confirmed', venues: BALLROOM }],
+    // Read only for My registrations (AC6).
+    status: 'confirmed',
     ...overrides,
   };
 }
@@ -140,6 +142,7 @@ describe('AC4: my registrations are listed with the event and my status', () => 
         registrationId: '1',
         reference: 'REG-2026-0001',
         status: 'registered',
+        eventCancelled: false,
         eventRequestId: NIGHT_ID,
         eventName: 'Client Appreciation Night',
         eventDate: '2026-11-15',
@@ -150,6 +153,7 @@ describe('AC4: my registrations are listed with the event and my status', () => 
         registrationId: '2',
         reference: 'REG-2026-0002',
         status: 'registered',
+        eventCancelled: false,
         eventRequestId: BRIEFING_ID,
         eventName: 'Product Launch Briefing',
         eventDate: '2026-11-15',
@@ -183,5 +187,26 @@ describe('AC4: my registrations are listed with the event and my status', () => 
     const order = (await listMyRegistrations(ATTENDEE)).map((registration) => registration.eventRequestId);
 
     expect(order).toEqual(['sooner', 'later', 'undated']);
+  });
+});
+
+describe('AC6: a cancelled event is marked Cancelled against my registration', () => {
+  it('TC-180-14 the registration stays listed, with the event marked cancelled', async () => {
+    attendeeHas(registrationRow('1', 'registered', eventRow({ status: 'cancelled' })));
+
+    const [registration] = await listMyRegistrations(ATTENDEE);
+
+    expect(registration).toMatchObject({ eventName: 'Client Appreciation Night', status: 'registered', eventCancelled: true });
+  });
+
+  it('TC-180-15 events that are Confirmed or in Preparation are not marked cancelled', async () => {
+    attendeeHas(
+      registrationRow('1', 'registered', eventRow({ status: 'confirmed' })),
+      registrationRow('2', 'registered', { ...BRIEFING, status: 'preparation' }),
+    );
+
+    const marked = (await listMyRegistrations(ATTENDEE)).map((registration) => registration.eventCancelled);
+
+    expect(marked).toEqual([false, false]);
   });
 });
