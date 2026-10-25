@@ -1,14 +1,17 @@
 // Seeds the manual run of basket B3 from Marcus's Sprint 4 test case sheets.
-// So far SCRUM-102 (TC-102-01 to TC-102-17); SCRUM-104, 105, 177 and 256 add
-// their events here as they are built. Needs
-// 20261023121849_event_confirmed_notification applied (`npm run db:reset` after
+// So far SCRUM-102 (TC-102-01 to TC-102-17) and SCRUM-104 (TC-104-01 to
+// TC-104-14); SCRUM-105, 177 and 256 add their events here as they are built.
+// Needs 20261025084357_event_completion applied (`npm run db:reset` after
 // pulling it) and `npm run seed:users`.
 //
-//   node scripts/seed-b3.mjs        Every B3 event and item (resets them all)
+//   node scripts/seed-b3.mjs                    Every B3 event and item (resets them all)
+//   node scripts/seed-b3.mjs completion-check   SCRUM-104: run the completion check once, as pg_cron does daily
 //
 // Each case has its own event, named as on the sheet (E102-A ...), at the
-// seeded Marina Bay Ballroom, Bugis Seminar Room and Jurong East Training Room,
-// on dates from 10/11/2026 that no two events' bookings share. Every event is
+// seeded Marina Bay Ballroom, Bugis Seminar Room and Jurong East Training Room.
+// SCRUM-102's are on dates from 10/11/2026, in the morning; SCRUM-104's are on
+// dates relative to the day the seed is run, in the afternoon, so no two
+// events' bookings meet. Every event is
 // assigned to coordinator@example.com with organiser@example.com as its
 // organiser, and is in Planning unless the case says otherwise. Bookings,
 // lines and unavailable periods are written as the app stores them;
@@ -34,6 +37,14 @@ if (!['127.0.0.1', 'localhost'].includes(new URL(supabaseUrl).hostname)) {
 }
 
 const supabase = createClient(supabaseUrl, serviceRoleKey);
+
+// SCRUM-104 AC2, AC3: the function pg_cron runs daily at 00:05 Singapore time.
+if (process.argv[2] === 'completion-check') {
+  const { data, error } = await supabase.rpc('complete_past_events');
+  if (error) throw new Error(`completion check: ${error.message}`);
+  console.log(`Completion check run: ${data} event(s) completed.`);
+  process.exit(0);
+}
 const TEST_PASSWORD = 'TestPass123!';
 const PREFIX = 'B3';
 const UNAVAILABLE_REASON = 'Ceiling repair (B3 seed)';
@@ -108,18 +119,23 @@ const AFTERNOON = { start: '14:00', end: '16:00' };
 /**
  * One event, assigned and approved, then moved to `status` (Planning unless
  * the case says otherwise). `essential` lists the arrangements marked
- * essential (SCRUM-100); the rest are not required.
+ * essential (SCRUM-100); the rest are not required. A Draft is neither
+ * submitted, decided nor assigned; a Submitted one is not decided yet; a
+ * Rejected one carries its reason, as the event_request constraints require.
+ * `extra` is written as it is (SCRUM-104's completed_at and completed_by).
  */
-async function createEvent(key, { status = 'planning', essential = [], date = '2026-11-10' } = {}) {
+async function createEvent(key, { status = 'planning', essential = [], date = '2026-11-10', extra = {} } = {}) {
   const name = `${PREFIX} ${key}`;
   const now = new Date().toISOString();
+  const draft = status === 'draft';
+  const decided = !draft && status !== 'submitted';
   const event = await single(
     `insert ${name}`,
     supabase
       .from('event_request')
       .insert({
         name,
-        purpose: 'SCRUM-102 manual test',
+        purpose: `SCRUM-${key.slice(1, 4)} manual test`,
         description: 'Seeded by scripts/seed-b3.mjs',
         organiser_id: organiser,
         status,
@@ -127,13 +143,15 @@ async function createEvent(key, { status = 'planning', essential = [], date = '2
         start_time: MORNING.start,
         end_time: MORNING.end,
         expected_attendance: 50,
-        submitted_at: now,
-        decision: 'approved',
-        decided_by: coordinator,
-        decided_at: now,
-        coordinator_id: coordinator,
-        assigned_by: opsManager,
-        assigned_at: now,
+        submitted_at: draft ? null : now,
+        decision: decided ? (status === 'rejected' ? 'rejected' : 'approved') : null,
+        rejection_reason: status === 'rejected' ? 'Date clashes with a client blackout (B3 seed)' : null,
+        decided_by: decided ? coordinator : null,
+        decided_at: decided ? now : null,
+        coordinator_id: draft ? null : coordinator,
+        assigned_by: draft ? null : opsManager,
+        assigned_at: draft ? null : now,
+        ...extra,
       })
       .select('id, reference')
       .single(),
@@ -331,8 +349,104 @@ created.push(await createEvent('E102-N', { status: 'approved', date: '2026-11-20
 // TC-102-17: Planning, nothing essential.
 created.push(await createEvent('E102-O', { date: '2026-11-20' }));
 
+// --- SCRUM-104 ---------------------------------------------------------------
+// Dates relative to today in Singapore, the day the completion check and
+// "has its end date passed" are judged against.
+const today = new Intl.DateTimeFormat('en-CA', { timeZone: 'Asia/Singapore' }).format(new Date());
+function day(offset) {
+  const date = new Date(`${today}T00:00:00Z`);
+  date.setUTCDate(date.getUTCDate() + offset);
+  return date.toISOString().slice(0, 10);
+}
+const LATE = { start: '16:30', end: '18:00' };
+const created104 = [];
+
+// TC-104-01: Preparation, booking ended yesterday.
+const a104 = await createEvent('E104-A', { status: 'preparation', date: day(-1) });
+await book(a104, 'Marina Bay Ballroom', day(-1), AFTERNOON);
+created104.push(a104);
+
+// TC-104-03: Preparation, booking ends today.
+const b104 = await createEvent('E104-B', { status: 'preparation', date: day(0) });
+await book(b104, 'Marina Bay Ballroom', day(0), AFTERNOON);
+created104.push(b104);
+
+// TC-104-04: Preparation, booking in 10 days.
+const c104 = await createEvent('E104-C', { status: 'preparation', date: day(10) });
+await book(c104, 'Marina Bay Ballroom', day(10), AFTERNOON);
+created104.push(c104);
+
+// TC-104-05: Preparation, bookings 3 days ago and tomorrow.
+const d104 = await createEvent('E104-D', { status: 'preparation', date: day(-3) });
+await book(d104, 'Marina Bay Ballroom', day(-3), AFTERNOON);
+await book(d104, 'Marina Bay Ballroom', day(1), AFTERNOON);
+created104.push(d104);
+
+// TC-104-02: Preparation, no booking, proposed date yesterday.
+created104.push(await createEvent('E104-E', { status: 'preparation', date: day(-1) }));
+
+// TC-104-06: Confirmed, awaiting its safety check, booking ended yesterday.
+const f104 = await createEvent('E104-F', { status: 'confirmed', date: day(-1) });
+await book(f104, 'Bugis Seminar Room', day(-1), AFTERNOON);
+created104.push(f104);
+
+// TC-104-07: back in Planning after a Rejected safety check, booking ended yesterday.
+const safetyOfficer = await ensureUser('safety-officer@example.com', ['safety_officer'], 'Safety Officer');
+const g104 = await createEvent('E104-G', { date: day(-1) });
+await book(g104, 'Bugis Seminar Room', day(-1), LATE);
+check(
+  'safety check E104-G',
+  await supabase.from('safety_check').insert({
+    event_request_id: g104.id,
+    decision: 'rejected',
+    note: 'No crowd control plan for the ballroom exits (B3 seed)',
+    decided_by: safetyOfficer,
+  }),
+);
+created104.push(g104);
+
+// TC-104-08: Approved, proposed date yesterday.
+created104.push(await createEvent('E104-H', { status: 'approved', date: day(-1) }));
+
+// TC-104-09: Preparation, booking ended yesterday, for coordinator2 and the Lead to try.
+const i104 = await createEvent('E104-I', { status: 'preparation', date: day(-1) });
+await book(i104, 'Marina Bay Ballroom', day(-1), LATE);
+created104.push(i104);
+
+// TC-104-10, TC-104-13: one event in each of these statuses, ended 7 days ago (proposed date, no booking).
+for (const [key, status] of [
+  ['E104-S1', 'submitted'],
+  ['E104-S2', 'approved'],
+  ['E104-S3', 'planning'],
+  ['E104-S4', 'confirmed'],
+  ['E104-S5', 'preparation'],
+  ['E104-X1', 'cancelled'],
+  ['E104-X2', 'draft'],
+  ['E104-X3', 'rejected'],
+]) {
+  created104.push(await createEvent(key, { status, date: day(-7) }));
+}
+
+// TC-104-12: Preparation, ended 6 days ago. TC-104-11: 8 days ago.
+created104.push(await createEvent('E104-S6', { status: 'preparation', date: day(-6) }));
+created104.push(await createEvent('E104-S8', { status: 'preparation', date: day(-8) }));
+
+// TC-104-14: completed by the coordinator 9 days ago, ended 10 days ago.
+const nineDaysAgo = new Date(Date.now() - 9 * 24 * 60 * 60 * 1000).toISOString();
+created104.push(
+  await createEvent('E104-S9', {
+    status: 'completed',
+    date: day(-10),
+    extra: { completed_at: nineDaysAgo, completed_by: coordinator },
+  }),
+);
+
 console.log('\nSCRUM-102 events (open each at the link, as coordinator@example.com unless the case says otherwise):');
 for (const event of created) {
+  console.log(`  ${event.reference}  ${event.key.padEnd(7)} http://localhost:3000/events/${event.id}/review`);
+}
+console.log('\nSCRUM-104 events (E104-X2 is a Draft: organiser@example.com sees it under My event requests):');
+for (const event of created104) {
   console.log(`  ${event.reference}  ${event.key.padEnd(7)} http://localhost:3000/events/${event.id}/review`);
 }
 console.log('\nAccounts are the seed:users ones; coordinator2@example.com and venue-staff@example.com use the same password.');
