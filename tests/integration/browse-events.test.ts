@@ -19,7 +19,9 @@ import { TEST_CLIENT_ORGANISATION_ID, ensureTestClientOrganisation } from './fix
  *       not client, internal, booking, equipment, staff or other attendees'
  *       details;
  *   AC4 my registrations are listed with the event name, date, start and end
- *       times, venue and my registration status.
+ *       times, venue and my registration status;
+ *   AC5 a rescheduled event shows its new date and times against my
+ *       registration.
  *
  * Runs against the local Supabase stack. The clock is fixed by passing `now`.
  * Other tests' events may also be open on the fixed date, so each test looks
@@ -377,5 +379,52 @@ describe('AC4: my registrations are listed with the event and my status', () => 
 
     expect(statuses).toEqual(['registered', 'withdrawn']);
     expect(await listMyRegistrations(await createUser('attendee3-11'))).toEqual([]);
+  });
+});
+
+/**
+ * Moves the event, and its bookings with it. Rescheduling through the app is
+ * the change request stories' (B6), not on main yet; this writes what a
+ * reschedule changes, so the list's own reading of it is what is tested.
+ */
+async function reschedule(eventId: string, date: string, start: string, end: string): Promise<void> {
+  const { error } = await admin
+    .from('event_request')
+    .update({ proposed_date: date, start_time: start, end_time: end })
+    .eq('id', eventId);
+  if (error) throw new Error(`could not reschedule test event: ${error.message}`);
+  const { error: bookingError } = await admin
+    .from('venue_booking')
+    .update({ date, start_time: start, end_time: end })
+    .eq('event_request_id', eventId);
+  if (bookingError) throw new Error(`could not move test booking: ${bookingError.message}`);
+}
+
+describe('AC5: a rescheduled event shows its new date and times against my registration', () => {
+  it('TC-180-12 shows the new date and start and end times, still Registered', async () => {
+    const attendee = await createUser('attendee-12');
+    const night = await createEvent('Client Appreciation Night', { date: '2026-11-24' });
+    await register(night, attendee);
+
+    await reschedule(night, '2026-11-29', '19:00', '23:00');
+    const [registration] = await listMyRegistrations(attendee);
+
+    expect(registration).toMatchObject({
+      eventRequestId: night,
+      eventDate: '2026-11-29',
+      times: { start: '19:00', end: '23:00' },
+      status: 'registered',
+    });
+  });
+
+  it('TC-180-13 a change of one 15-minute step on the same date shows the new times', async () => {
+    const attendee = await createUser('attendee-13');
+    const night = await createEvent('Client Appreciation Night', { date: '2026-11-25' });
+    await register(night, attendee);
+
+    await reschedule(night, '2026-11-25', '18:15', '22:15');
+    const [registration] = await listMyRegistrations(attendee);
+
+    expect(registration).toMatchObject({ eventDate: '2026-11-25', times: { start: '18:15', end: '22:15' } });
   });
 });
