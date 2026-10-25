@@ -87,7 +87,7 @@ export async function fetchProfileNames(accountIds: readonly string[]) {
  * AC1, AC2, AC4, AC5: one call to change_event_schedule, which saves the
  * change and flags every affected arrangement in one transaction, or refuses
  * it without the acknowledgement. Resolves to {"outcome": ...}; see the
- * migration 20261024173238_review_required_flag.sql for each outcome.
+ * migration 20261025183932_review_required_flag.sql for each outcome.
  */
 export async function changeEventScheduleRow(params: {
   eventRequestId: string;
