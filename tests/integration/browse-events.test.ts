@@ -152,6 +152,10 @@ describe('AC1: an event whose registration period is open is listed', () => {
     const endsToday = await createEvent('Closes today', { start: '2026-10-25', end: '2026-10-30' });
 
     expect(await listedIds()).toEqual(expect.arrayContaining([startsToday, endsToday]));
+    // And at the other end of that Singapore day, still 30/10.
+    expect(await listedIds(new Date('2026-10-30T23:45:00+08:00'))).toEqual(
+      expect.arrayContaining([startsToday, endsToday]),
+    );
   });
 
   it('TC-180-08 an event at two venues lists both; a released booking\'s venue is left out', async () => {
@@ -169,5 +173,25 @@ describe('AC1: an event whose registration period is open is listed', () => {
       `Bugis Seminar Room ${RUN}`,
       `Marina Bay Ballroom ${RUN}`,
     ]);
+  });
+});
+
+describe('AC2: an event whose period has not opened or has closed is not listed', () => {
+  it('TC-180-03 a period starting tomorrow is not listed', async () => {
+    const opensTomorrow = await createEvent('Opens tomorrow', { start: '2026-10-31', end: '2026-11-09' });
+
+    expect(await listedIds()).not.toContain(opensTomorrow);
+  });
+
+  it('TC-180-04 a period that ended yesterday is not listed', async () => {
+    const closedYesterday = await createEvent('Closed yesterday', { start: '2026-10-20', end: '2026-10-29' });
+
+    expect(await listedIds()).not.toContain(closedYesterday);
+  });
+
+  it('TC-180-05 an event with no registration period is not listed', async () => {
+    const noPeriod = await createEvent('Partner Networking Lunch', { start: null, end: null });
+
+    expect(await listedIds()).not.toContain(noPeriod);
   });
 });

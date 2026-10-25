@@ -77,3 +77,29 @@ describe('AC1: an event whose registration period is open is listed', () => {
     }
   });
 });
+
+// The query filters by the period too; here the data layer hands back events
+// outside it, to show the service's own check leaves them out.
+describe('AC2: an event whose period has not opened or has closed is not listed', () => {
+  it('TC-180-03 a period starting tomorrow is not listed, even at 23:45 the day before', async () => {
+    databaseHas(eventRow({ registration_start_date: '2026-10-31', registration_end_date: '2026-11-09' }));
+
+    expect(await listOpenEvents(new Date('2026-10-30T23:45:00+08:00'))).toEqual([]);
+  });
+
+  it('TC-180-04 a period that ended yesterday is not listed, even at 00:15 Singapore time', async () => {
+    databaseHas(eventRow({ registration_start_date: '2026-10-20', registration_end_date: '2026-10-29' }));
+
+    // 00:15 SGT on 30/10 is still 29/10 in UTC: a UTC date would wrongly list it.
+    const events = await listOpenEvents(new Date('2026-10-30T00:15:00+08:00'));
+
+    expect(fetchOpenEvents).toHaveBeenCalledWith('2026-10-30');
+    expect(events).toEqual([]);
+  });
+
+  it('TC-180-05 an event with no registration period is not listed', async () => {
+    databaseHas(eventRow({ registration_start_date: null, registration_end_date: null }));
+
+    expect(await listOpenEvents(new Date('2026-10-30T10:00:00+08:00'))).toEqual([]);
+  });
+});
