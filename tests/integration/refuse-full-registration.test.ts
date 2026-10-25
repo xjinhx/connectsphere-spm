@@ -98,6 +98,14 @@ const registered = async (eventId: string) => (await rowsFor(eventId)).filter((r
 const race = (eventId: string, attendees: string[]) =>
   Promise.allSettled(attendees.map((attendee) => registerForEvent(eventId, attendee, VALID, NOW)));
 
+/** What one raced request got, named, so a failure says why. */
+const outcome = (result: PromiseSettledResult<unknown>) =>
+  result.status === 'fulfilled'
+    ? 'registered'
+    : result.reason instanceof CapacityExceededError
+      ? `full: ${result.reason.message}`
+      : `other: ${String(result.reason)} ${JSON.stringify((result.reason as { details?: unknown }).details)}`;
+
 /** register_for_event on its own, as the database sees it. */
 const callDatabase = (eventId: string, attendeeId: string) =>
   admin.rpc('register_for_event', {
@@ -127,7 +135,8 @@ afterAll(async () => {
   // Registrations go with their events (cascade), then the accounts can go.
   for (const id of eventIds) await admin.from('event_request').delete().eq('id', id);
   for (const id of [organiserId, ...attendeeIds]) if (id) await admin.auth.admin.deleteUser(id);
-});
+  // About fifty accounts to delete; the default 10 s hook timeout is too tight.
+}, 120_000);
 
 describe('AC1: a full event refuses registration and is shown as full', () => {
   it('TC-182-01 at capacity: refused as full by the service and by the database, and nothing is written', async () => {
@@ -193,10 +202,7 @@ describe('AC2: two attendees going for the last place at the same moment', () =>
 
       const results = await race(eventId, [await createAttendee(), await createAttendee()]);
 
-      expect(results.filter((result) => result.status === 'fulfilled')).toHaveLength(1);
-      const refused = results.find((result) => result.status === 'rejected') as PromiseRejectedResult;
-      expect(refused.reason).toBeInstanceOf(CapacityExceededError);
-      expect((refused.reason as Error).message).toBe(NO_PLACES_REMAINING);
+      expect(results.map(outcome).sort()).toEqual([`full: ${NO_PLACES_REMAINING}`, 'registered']);
       expect(await registered(eventId)).toHaveLength(3);
     }
   }, 120_000);
@@ -209,10 +215,8 @@ describe('AC2: two attendees going for the last place at the same moment', () =>
 
     const results = await race(eventId, five);
 
-    expect(results.filter((result) => result.status === 'fulfilled')).toHaveLength(1);
-    const refused = results.filter((result) => result.status === 'rejected') as PromiseRejectedResult[];
-    expect(refused).toHaveLength(4);
-    for (const result of refused) expect(result.reason).toBeInstanceOf(CapacityExceededError);
+    const full = `full: ${NO_PLACES_REMAINING}`;
+    expect(results.map(outcome).sort()).toEqual([full, full, full, full, 'registered']);
     expect(await registered(eventId)).toHaveLength(3);
   }, TIMEOUT);
 
@@ -222,7 +226,7 @@ describe('AC2: two attendees going for the last place at the same moment', () =>
 
     const results = await race(eventId, [await createAttendee(), await createAttendee()]);
 
-    expect(results.every((result) => result.status === 'fulfilled')).toBe(true);
+    expect(results.map(outcome)).toEqual(['registered', 'registered']);
     expect(await registered(eventId)).toHaveLength(3);
     await expect(registerForEvent(eventId, await createAttendee(), VALID, NOW)).rejects.toThrow(CapacityExceededError);
   }, TIMEOUT);
@@ -242,3 +246,4 @@ describe('AC2: two attendees going for the last place at the same moment', () =>
     expect((await getRegistrationPage(eventId, loser, NOW)).full).toBe(true);
   }, TIMEOUT);
 });
+
