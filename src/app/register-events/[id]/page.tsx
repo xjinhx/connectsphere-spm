@@ -1,3 +1,4 @@
+import Link from 'next/link';
 import { RegistrationConfirmation } from '@/components/event-registration/RegistrationConfirmation';
 import { RegistrationForm } from '@/components/event-registration/RegistrationForm';
 import { getRegistrationPage } from '@/domain/event-registration/service';
@@ -18,7 +19,11 @@ export const dynamic = 'force-dynamic';
  * registration instead of the form.
  *
  * Reached by its address for now: listing the events open for registration is
- * another story's, and the Attendee nav is SCRUM-255's (D-20).
+ * another story's.
+ *
+ * SCRUM-255 AC3: a back link to Open events, above everything that changes
+ * with the registration state, so every state shows it. A plain link, not
+ * history back, so it leads to Open events whatever page came before.
  */
 export default async function AttendeeEventRegistrationPage({ params }: { params: Promise<{ id: string }> }) {
   const { id } = await params;
@@ -28,7 +33,10 @@ export default async function AttendeeEventRegistrationPage({ params }: { params
 
   return (
     <main className="mx-auto flex min-h-screen max-w-xl flex-col p-8">
-      <h1 className="text-2xl font-semibold">{view.eventName}</h1>
+      <Link href="/register-events" className="self-start text-sm text-[var(--brand)] underline">
+        Back to Open events
+      </Link>
+      <h1 className="mt-3 text-2xl font-semibold">{view.eventName}</h1>
       <dl className="mt-4 grid grid-cols-[max-content_1fr] gap-x-4 gap-y-1 text-sm">
         {view.eventDate ? (
           <>
