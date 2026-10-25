@@ -34,7 +34,7 @@ export default async function EventOpsManagerAssignmentQueuePage() {
         <main className="mx-auto max-w-2xl p-8">
           <h1 className="text-2xl font-semibold">Assignment queue</h1>
           <p className="mt-4 text-[var(--text-muted)]">
-            This page is for Event Operations Managers. Your account does not currently hold that role.
+            This page is for the Event Coordinator Lead. Your account does not currently hold that role.
           </p>
         </main>
       );

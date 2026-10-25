@@ -74,6 +74,10 @@ export default async function EventAssignmentPage({ params }: { params: Promise<
         <EventRequestStatusBadge status={event.status} />
       </div>
       <p className="mt-1 font-mono text-xs text-[var(--text-muted)]">{event.reference}</p>
+      {/* SCRUM-252 AC3 — a link to the event itself, alongside the back link. */}
+      <Link href={`/events/${event.id}/review`} className="mt-2 inline-block text-sm text-[var(--brand)] hover:underline">
+        View event →
+      </Link>
 
       <dl className="mt-6 rounded border border-[var(--border)] bg-[var(--surface)] px-4">
         <Row label="Client organisation" value={event.clientOrganisation?.name ?? 'Not linked'} />

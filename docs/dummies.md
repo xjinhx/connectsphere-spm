@@ -694,8 +694,14 @@ switch them the next time they edit those files.
   SCRUM-254 (branch `tech-support-nav`): Equipment requests, Equipment
   catalogue, Venues; marker removed. The SCRUM-164 tabs (`TechnicalSupportNav`)
   were removed in the same change, since the nav bar now does their job on
-  every page (PO, 22 Oct 2026). **Other roles:** still active, waiting on
-  SCRUM-250 to 253, 255 and 256.
+  every page (PO, 22 Oct 2026). **Event Coordinator Lead:** replaced by
+  SCRUM-252: Unassigned queue (`/assignment-queue`), Coordinators
+  (`/coordinator-overview`), Venues (`/venues`), in that order; marker
+  removed. The AC text names the link as `/coordinators`, a stale path from
+  before SCRUM-233 named its own route (`/coordinator-overview`); the nav
+  links to the real route rather than a duplicate page at the AC's literal
+  path (noted for the Change Log). **Other roles:** still active, waiting on
+  SCRUM-250, 251, 253, 255 and 256.
 
 ### D-21 — An equipment reservation is released by hand
 
