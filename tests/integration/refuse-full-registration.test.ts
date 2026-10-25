@@ -95,8 +95,9 @@ async function rowsFor(eventId: string) {
 const registered = async (eventId: string) => (await rowsFor(eventId)).filter((row) => row.status === 'registered');
 
 /**
- * Withdrawing is SCRUM-184's. D-25: until it is on main, set the status it will
- * write by hand; what these cases exercise is the count, which is this story's.
+ * DUMMY(SCRUM-184) D-25: withdrawing is SCRUM-184's; until it is on main, set
+ * the status it will write by hand. What these cases exercise is the count,
+ * which is this story's.
  */
 async function withdraw(eventId: string, attendeeId: string) {
   const { error } = await admin
