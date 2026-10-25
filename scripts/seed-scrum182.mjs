@@ -139,12 +139,15 @@ async function seed() {
   check('clear old events', await supabase.from('event_request').delete().eq('description', SEEDED_BY));
 
   // [name, capacity, fillers registered, attendee@example.com registered, test cases].
-  // Every period is D-3 to D+5, so all are open today.
+  // Every period is D-3 to D+5, so all are open today. Each case that takes a
+  // place has its own event, so the run needs no re-seeding part way.
   const EVENTS = [
     [`${NIGHT} (full)`, 20, 20, false, 'TC-182-01'],
     [`${NIGHT} (no capacity)`, null, 0, false, 'TC-182-02'],
-    [`${NIGHT} (last place)`, 20, 19, false, 'TC-182-03, 04, 05, 08'],
+    [`${NIGHT} (last place)`, 20, 19, false, 'TC-182-03'],
     ['Partner Networking Lunch (full)', 20, 20, false, 'TC-182-04'],
+    [`${NIGHT} (beside a full event)`, 20, 19, false, 'TC-182-04'],
+    [`${NIGHT} (race)`, 20, 19, false, 'TC-182-05, then 08'],
     [`${NIGHT} (two places)`, 20, 18, false, 'TC-182-07'],
     [`${NIGHT} (withdrawal)`, 20, 20, false, 'TC-182-09 (then --withdraw)'],
     [`${NIGHT} (over capacity)`, 2, 3, false, 'TC-182-10 (then --withdraw-over, twice)'],
