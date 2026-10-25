@@ -92,6 +92,9 @@ export type Database = {
           name: string
           operational_status: string
           quantity: number
+          units_damaged: number
+          units_unavailable: number
+          units_under_maintenance: number
           updated_at: string
         }
         Insert: {
@@ -103,6 +106,9 @@ export type Database = {
           name: string
           operational_status?: string
           quantity: number
+          units_damaged?: number
+          units_unavailable?: number
+          units_under_maintenance?: number
           updated_at?: string
         }
         Update: {
@@ -114,6 +120,9 @@ export type Database = {
           name?: string
           operational_status?: string
           quantity?: number
+          units_damaged?: number
+          units_unavailable?: number
+          units_under_maintenance?: number
           updated_at?: string
         }
         Relationships: []
@@ -123,21 +132,30 @@ export type Database = {
           created_at: string
           event_request_id: string
           status: string
+          status_set_at: string | null
+          status_set_by: string | null
           technical_requirements: string | null
+          unable_reason: string | null
           updated_at: string
         }
         Insert: {
           created_at?: string
           event_request_id: string
           status?: string
+          status_set_at?: string | null
+          status_set_by?: string | null
           technical_requirements?: string | null
+          unable_reason?: string | null
           updated_at?: string
         }
         Update: {
           created_at?: string
           event_request_id?: string
           status?: string
+          status_set_at?: string | null
+          status_set_by?: string | null
           technical_requirements?: string | null
+          unable_reason?: string | null
           updated_at?: string
         }
         Relationships: [
@@ -300,6 +318,50 @@ export type Database = {
           },
         ]
       }
+      event_registration: {
+        Row: {
+          attendee_id: string
+          contact_number: string
+          email: string
+          event_request_id: string
+          full_name: string
+          id: string
+          reference: string
+          registered_at: string
+          status: string
+        }
+        Insert: {
+          attendee_id: string
+          contact_number: string
+          email: string
+          event_request_id: string
+          full_name: string
+          id?: string
+          reference?: string
+          registered_at?: string
+          status?: string
+        }
+        Update: {
+          attendee_id?: string
+          contact_number?: string
+          email?: string
+          event_request_id?: string
+          full_name?: string
+          id?: string
+          reference?: string
+          registered_at?: string
+          status?: string
+        }
+        Relationships: [
+          {
+            foreignKeyName: "event_registration_event_request_id_fkey"
+            columns: ["event_request_id"]
+            isOneToOne: false
+            referencedRelation: "event_request"
+            referencedColumns: ["id"]
+          },
+        ]
+      }
       event_request: {
         Row: {
           accessibility_notes: string | null
@@ -326,7 +388,10 @@ export type Database = {
           proposed_date: string | null
           purpose: string | null
           reference: string
+          registration_capacity: number | null
+          registration_end_date: string | null
           registration_required: boolean | null
+          registration_start_date: string | null
           rejection_reason: string | null
           room_layout: string | null
           start_time: string | null
@@ -361,7 +426,10 @@ export type Database = {
           proposed_date?: string | null
           purpose?: string | null
           reference?: string
+          registration_capacity?: number | null
+          registration_end_date?: string | null
           registration_required?: boolean | null
+          registration_start_date?: string | null
           rejection_reason?: string | null
           room_layout?: string | null
           start_time?: string | null
@@ -396,7 +464,10 @@ export type Database = {
           proposed_date?: string | null
           purpose?: string | null
           reference?: string
+          registration_capacity?: number | null
+          registration_end_date?: string | null
           registration_required?: boolean | null
+          registration_start_date?: string | null
           rejection_reason?: string | null
           room_layout?: string | null
           start_time?: string | null
@@ -1469,6 +1540,10 @@ export type Database = {
           window_start: string
         }[]
       }
+      event_has_places_remaining: {
+        Args: { p_event_request_id: string }
+        Returns: boolean
+      }
       format_singapore_instant: { Args: { p_instant: string }; Returns: string }
       is_quarter_hour: { Args: { p_time: string }; Returns: boolean }
       mark_period_unavailable: {
@@ -1503,6 +1578,31 @@ export type Database = {
           p_note: string
         }
         Returns: string
+      }
+      register_for_event: {
+        Args: {
+          p_attendee_id: string
+          p_contact_number: string
+          p_email: string
+          p_event_request_id: string
+          p_full_name: string
+          p_today: string
+        }
+        Returns: string
+      }
+      reserve_equipment: {
+        Args: { p_line_id: string; p_quantity: number; p_reserved_by: string }
+        Returns: Json
+      }
+      set_equipment_request_status: {
+        Args: {
+          p_event_request_id: string
+          p_reason: string
+          p_set_by: string
+          p_status: string
+          p_unavailable_line_ids: string[]
+        }
+        Returns: Json
       }
       slot_end_time: { Args: { p_slot: string }; Returns: string }
       slot_start_time: { Args: { p_slot: string }; Returns: string }

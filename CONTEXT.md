@@ -63,7 +63,7 @@ A period at one venue kept for one event by Venue Staff until an expiry, so the 
 _Avoid_: tentative booking, reservation, provisional booking
 
 **Outstanding action**:
-An open item on an event that its coordinator must deal with, such as releasing or replacing an affected booking. It closes when that is done.
+An open item on an event that its coordinator must deal with, such as releasing or replacing an affected booking. It closes when that is done. Confirming the event doesn't close it (SCRUM-102 AC5).
 _Avoid_: task, alert
 
 ### Equipment
@@ -99,12 +99,24 @@ _Avoid_: open, closed, done, pending (that word is for venue booking requests)
 An equipment line Technical Support Staff cannot meet, on a partially fulfilled request (SCRUM-166 AC3). The queue counts each unavailable line once, whatever its quantity (SCRUM-164 AC4; PO, 18 Oct 2026). Not the same as a catalogue item's _Unavailable_ operational status, which is about the item itself.
 
 **Reserved** (equipment line):
-An equipment line whose equipment has been set aside for the event. Reducing or removing it needs the coordinator to confirm a warning first (SCRUM-160 AC8). A **reservation** holds a quantity of the line's item for the event's commitment window, Reserved until it is Released (SCRUM-177). Reserving is SCRUM-173's; until then a line is reserved by hand (dummy D-18).
+An equipment line whose equipment has been set aside for the event. Reducing or removing it needs the coordinator to confirm a warning first (SCRUM-160 AC8). Technical Support Staff reserve it with a **reservation** (SCRUM-173): a quantity of the line's item held for the event's commitment window, Reserved until it is Released (SCRUM-177).
 _Avoid_: booked, held (those words are for venues)
 
 **Commitment window** (equipment):
 The days an event's equipment is committed to it: from the day before its first confirmed venue booking (collection day, F-1) to its last booked day (Return Day, L), both included; the units are free again from L+1 (SCRUM-167 AC1, SCRUM-173 AC3). Whole days, so a morning and an afternoon event on the same date share it. What is **available** to an event is the item's quantity, less units out of service (SCRUM-170), less the most units other events hold on any single day of the window (SCRUM-167 AC9); the event's own reservations are not counted against it (AC4).
 _Avoid_: booking period, hold (those words are for venues)
+
+**Out of service** (equipment units):
+Units of a catalogue item that Technical Support Staff have recorded as Unavailable, Damaged or Under maintenance: a count per status on the item, which keeps its total quantity (SCRUM-170). They are excluded from what is available in every window, with no end date, until the count is lowered (returned to service). Not the same as the item's own operational status (SCRUM-240): an item whose own status is not Available has no units available at all.
+_Avoid_: broken, written off, unavailable units (that word is one of the three statuses)
+
+### Confirmation
+
+**Essential arrangement**:
+An arrangement (venue, equipment, technical support or registration) the coordinator has marked as one the event can't be confirmed without (SCRUM-100, SCRUM-102).
+
+**Complete** (of an arrangement):
+Venue is complete when the event has at least one confirmed booking, no Pending booking line and no affected booking. Equipment is complete when every line is fully reserved, and is never complete when nothing is requested (SCRUM-102).
 
 ### Safety
 

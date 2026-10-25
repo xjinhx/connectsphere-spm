@@ -1,7 +1,10 @@
 import { z } from 'zod';
 import { assertEquipmentInCatalogue } from '@/domain/equipment/service';
 import { isCurrentCoordinator } from '@/domain/assignment/policy';
+import { isActionPermitted } from '@/domain/identity/permissions';
+import { assertPermission } from '@/domain/identity/policy';
 import type { Role } from '@/domain/identity/roles';
+import { notifyBestEffort } from '@/domain/notification/service';
 import { ConflictError, ForbiddenError, NotFoundError, ValidationError, isCheckViolation } from '@/domain/shared/errors';
 import { fetchEventRequestById, type EventRequestRow } from '@/lib/supabase/eventRequests';
 import {
@@ -13,9 +16,11 @@ import {
   fetchEquipmentRequestsByStatus,
   fetchReservedLineIds,
   insertEquipmentRequestLine,
+  setEquipmentRequestStatus,
   updateEquipmentRequestLineQuantity,
   upsertTechnicalRequirements,
 } from '@/lib/supabase/equipmentRequests';
+import { fetchProfileNames } from '@/lib/supabase/profiles';
 import {
   EVENT_NOT_OPEN_FOR_EQUIPMENT_MESSAGE,
   OUTSTANDING_EQUIPMENT_REQUEST_STATUSES,
@@ -25,7 +30,12 @@ import {
   countUnavailableItems,
   linesOfSameType,
   needsReservationConfirmation,
+  notifiesCoordinator,
   sortEquipmentQueue,
+  statusUpdateProblem,
+  statusUpdateToStore,
+  unableToFulfilMessage,
+  UNKNOWN_LINE_MESSAGE,
   type EquipmentQueueSort,
 } from './policy';
 import {
@@ -38,8 +48,10 @@ import {
   EquipmentRequestLineSchema,
   EquipmentRequestViewSchema,
   UpdateEquipmentLineInputSchema,
+  UpdateEquipmentRequestStatusInputSchema,
   type AddEquipmentLineOutcome,
   type EquipmentQueueEntry,
+  type EquipmentRequestStatus,
   type EquipmentRequestLine,
   type EquipmentRequestView,
 } from './schema';
@@ -63,6 +75,7 @@ type LineRow = {
   event_request_id: string;
   equipment_id: string;
   quantity: number;
+  unavailable: boolean;
   created_at: string;
   equipment: { name: string; category: string } | null;
 };
@@ -76,6 +89,7 @@ function toLine(row: LineRow, reserved: boolean): EquipmentRequestLine {
     category: row.equipment?.category,
     quantity: row.quantity,
     reserved,
+    unavailable: row.unavailable,
     createdAt: row.created_at,
   });
 }
@@ -133,11 +147,30 @@ async function readEventForEdit(eventRequestId: string, actorId: string): Promis
   return event;
 }
 
-/** AC5: the request's technical requirements, or null when nothing has been saved yet. */
-async function readTechnicalRequirements(eventRequestId: string): Promise<string | null> {
+type RequestRow = {
+  technical_requirements: string | null;
+  status: EquipmentRequestStatus;
+  status_set_by: string | null;
+  status_set_at: string | null;
+  unable_reason: string | null;
+};
+
+/** The event's request row, or null when no line or note has been saved yet. */
+async function readRequest(eventRequestId: string): Promise<RequestRow | null> {
   const { data, error } = await fetchEquipmentRequest(eventRequestId);
   if (error) throw new ValidationError('The equipment request could not be read.', error.message);
-  return (data as { technical_requirements: string | null } | null)?.technical_requirements ?? null;
+  return (data as RequestRow | null) ?? null;
+}
+
+/**
+ * SCRUM-166 AC2: the name of whoever set the status, the same way SCRUM-234's
+ * safety check names who decided it. Null while nobody has (AC1).
+ */
+async function readSetByName(setBy: string | null): Promise<string | null> {
+  if (setBy === null) return null;
+  const { data } = await fetchProfileNames([setBy]);
+  const name = (data as { id: string; full_name: string | null }[] | null)?.[0]?.full_name;
+  return name && name.trim() !== '' ? name : 'An unnamed account';
 }
 
 /** AC7, AC8: the ids, out of `lineIds`, of the lines that have been reserved. */
@@ -206,6 +239,7 @@ export async function getEquipmentRequest(eventRequestId: string, actor: Actor):
     throw new ForbiddenError("Only Technical Support Staff and the event's assigned coordinator can view its equipment request.");
   }
   const isCoordinator = isCurrentCoordinator(event.coordinator_id, actor.userId);
+  const request = await readRequest(event.id);
 
   return EquipmentRequestViewSchema.parse({
     eventRequestId: event.id,
@@ -214,8 +248,19 @@ export async function getEquipmentRequest(eventRequestId: string, actor: Actor):
     eventStatus: event.status,
     proposedDate: event.proposed_date,
     lines: await readLines(event.id),
-    technicalRequirements: await readTechnicalRequirements(event.id),
+    technicalRequirements: request?.technical_requirements ?? null,
     canEdit: isCoordinator && acceptsEquipmentRequest(event.status),
+    // SCRUM-166 AC1, AC2: the stored status - under review until someone
+    // sets it - with who set it and when, for both viewers.
+    requestStatus: request
+      ? {
+          status: request.status,
+          setByName: await readSetByName(request.status_set_by),
+          setAt: request.status_set_at,
+          unableReason: request.unable_reason,
+        }
+      : null,
+    canSetStatus: request !== null && isActionPermitted(actor.roles, 'equipment_administration'),
   });
 }
 
@@ -447,4 +492,82 @@ export async function listEquipmentQueue(sort: EquipmentQueueSort = 'raised'): P
   }
   const entries = (data as unknown as QueueRow[]).flatMap((row) => toQueueEntry(row) ?? []);
   return sortEquipmentQueue(entries, sort);
+}
+
+// -----------------------------------------------------------------------------
+// SCRUM-166 — Update the status of an equipment request
+// -----------------------------------------------------------------------------
+
+/**
+ * Technical Support Staff set an equipment request's status.
+ *
+ * AC2: "when I set its status to partially fulfilled, fulfilled or unable to
+ * fulfil, then the new status, my identity and the timestamp are saved and
+ * shown to the assigned coordinator." Only Technical Support Staff - the role
+ * holding equipment_administration, as for the queue (SCRUM-164) and the
+ * reservations (SCRUM-173) - may set it (TC-166-09). The identity saved is
+ * the signed-in account's, never one from the body.
+ *
+ * AC3: partially fulfilled cannot be saved until the unavailable items are
+ * marked (TC-166-11, TC-166-12). AC4: unable to fulfil cannot be saved without
+ * a reason (TC-166-14, TC-166-15), and once it is, the event's assigned
+ * coordinator - and nobody else (TC-166-16) - is notified (TC-166-13).
+ *
+ * Every rule is checked before anything is written, so a refusal leaves the
+ * request as it was. Returns the request as it now reads.
+ */
+export async function updateEquipmentRequestStatus(
+  eventRequestId: string,
+  actor: Actor,
+  input: unknown,
+): Promise<EquipmentRequestView> {
+  assertPermission([...actor.roles], 'equipment_administration');
+
+  const parsed = UpdateEquipmentRequestStatusInputSchema.safeParse(input);
+  if (!parsed.success) throw validationError(parsed.error, 'The status could not be saved.');
+
+  const event = await readEvent(eventRequestId);
+  if ((await readRequest(event.id)) === null) throw new NotFoundError('Equipment request');
+  const lines = await readLines(event.id);
+
+  const problem = statusUpdateProblem(
+    parsed.data,
+    lines.map((line) => line.id),
+  );
+  if (problem) {
+    throw new ValidationError(problem.message, { formErrors: [], fieldErrors: { [problem.field]: [problem.message] } });
+  }
+
+  const update = statusUpdateToStore(parsed.data);
+  const { data, error } = await setEquipmentRequestStatus({
+    eventRequestId: event.id,
+    status: update.status,
+    unavailableLineIds: update.unavailableLineIds,
+    reason: update.reason,
+    setBy: actor.userId,
+  });
+  if (error) throw new ValidationError('The status could not be saved.', error.message);
+  const outcome = (data as { outcome?: string } | null)?.outcome;
+  if (outcome === 'not_found') throw new NotFoundError('Equipment request');
+  if (outcome === 'unknown_line') {
+    throw new ValidationError(UNKNOWN_LINE_MESSAGE, {
+      formErrors: [],
+      fieldErrors: { unavailableLineIds: [UNKNOWN_LINE_MESSAGE] },
+    });
+  }
+  if (outcome !== 'saved') throw new ValidationError('The status could not be saved.');
+
+  // AC4: the assigned coordinator, in-app (SCRUM-193). Best effort, as for every
+  // notification: the status is already saved, and a failed notification must
+  // not undo it.
+  if (notifiesCoordinator(update.status) && event.coordinator_id && update.reason) {
+    await notifyBestEffort({
+      recipientId: event.coordinator_id,
+      type: 'equipment_unable_to_fulfil',
+      eventRequestId: event.id,
+      message: unableToFulfilMessage({ reference: event.reference, name: event.name }, update.reason),
+    });
+  }
+
+  return getEquipmentRequest(event.id, actor);
 }

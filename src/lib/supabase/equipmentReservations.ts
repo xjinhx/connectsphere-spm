@@ -1,7 +1,7 @@
 import { createAdminClient } from './admin';
 
 /**
- * Equipment availability queries (SCRUM-167).
+ * Equipment availability and reservation queries (SCRUM-167, SCRUM-173).
  *
  * Same rules as equipmentRequests.ts: the client and the query building live
  * here, src/domain/equipment-reservation/service.ts decides when to run them,
@@ -17,17 +17,23 @@ export async function fetchConfirmedBookingDates(eventRequestId: string) {
   return db().from('venue_booking').select('date').eq('event_request_id', eventRequestId).eq('status', 'confirmed');
 }
 
-/** 167 AC4: the event's request lines, in the order they were added, with each item's name and quantity. */
+/**
+ * 167 AC4: the event's request lines, in the order they were added, with each
+ * item's name and quantity, and (SCRUM-170) its own status and the units out of
+ * service.
+ */
 export async function fetchLinesWithItems(eventRequestId: string) {
   return db()
     .from('equipment_request_line')
-    .select('id, equipment_id, quantity, equipment ( name, quantity )')
+    .select(
+      'id, equipment_id, quantity, equipment ( name, quantity, operational_status, units_unavailable, units_damaged, units_under_maintenance )',
+    )
     .eq('event_request_id', eventRequestId)
     .order('created_at')
     .order('id');
 }
 
-/** 167 AC4: the event's own reservations, Reserved and Released, oldest first, with each item's name. */
+/** 173 AC6: the event's reservations, Reserved and Released, oldest first, with each item's name. */
 export async function fetchEventReservations(eventRequestId: string) {
   return db()
     .from('equipment_reservation')
@@ -55,4 +61,22 @@ export async function fetchOtherEventsReservations(
     .eq('status', 'reserved')
     .lte('window_start', window.end)
     .gte('window_end', window.start);
+}
+
+/**
+ * 173 AC1 to AC5: one call to reserve_equipment, which works out the window,
+ * checks what is free with the item locked and reserves, in one transaction.
+ * Resolves to {"outcome": ...}; see the migration for each outcome.
+ */
+export async function reserveEquipmentLine(lineId: string, quantity: number, reservedBy: string) {
+  return db().rpc('reserve_equipment', { p_line_id: lineId, p_quantity: quantity, p_reserved_by: reservedBy });
+}
+
+/** One reservation, as the service returns it after a reserve. */
+export async function fetchReservation(reservationId: string) {
+  return db()
+    .from('equipment_reservation')
+    .select('id, line_id, equipment_id, quantity, window_start, window_end, status, created_at, equipment ( name )')
+    .eq('id', reservationId)
+    .single();
 }

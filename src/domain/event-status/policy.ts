@@ -1,4 +1,4 @@
-import type { EventRequestStatus } from '@/domain/event-request/schema';
+import { EVENT_REQUEST_STATUS_LABELS, type EventRequestStatus } from '@/domain/event-request/schema';
 
 /**
  * SCRUM-101 — Move an event through its statuses as work is done.
@@ -120,4 +120,16 @@ export function canTransition(from: EventRequestStatus, to: EventRequestStatus):
  */
 export function needsSafetyApproval(to: EventRequestStatus): boolean {
   return to === 'preparation';
+}
+
+/**
+ * SCRUM-102 — only an event in Planning can be confirmed: the one status the
+ * lifecycle above moves to Confirmed (TC-102-16).
+ */
+export function canBeConfirmed(status: EventRequestStatus): boolean {
+  return canTransition(status, 'confirmed');
+}
+
+export function confirmationStatusRefusal(status: EventRequestStatus): string {
+  return `Only an event in Planning can be confirmed. This event is ${EVENT_REQUEST_STATUS_LABELS[status]}.`;
 }

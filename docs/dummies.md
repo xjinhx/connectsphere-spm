@@ -616,7 +616,16 @@ switch them the next time they edit those files.
   mark this entry Replaced and remove the `DUMMY(SCRUM-173) D-18` markers.
   Re-run SCRUM-160 AC7 and AC8 (TC-160-19 to TC-160-23) with a line reserved
   through the app.
-- **Status:** Active.
+- **Status:** Replaced (SCRUM-173, Sprint 4). Technical Support Staff reserve
+  through `reserve_equipment` (`20261022011508_reserve_equipment.sql`) from
+  the Outstanding list on the event's equipment page. The
+  `DUMMY(SCRUM-173) D-18` markers in `equipmentRequests.ts` and
+  `tests/integration/equipment-request.test.ts` are removed; that test's
+  `reserve()` still inserts a row (its events have no venue booking), and
+  `tests/integration/equipment-reservation.test.ts` reserves a line through
+  the app and checks SCRUM-160 AC8 against it. `scripts/seed-b1.mjs` reserves
+  through `reserve_equipment`. `tests/integration/equipment-availability.test.ts`
+  (SCRUM-167) still inserts its holds directly, as test data.
 
 ### D-19 — An equipment request's status and unavailable items are set by hand
 
@@ -643,12 +652,23 @@ switch them the next time they edit those files.
   a status or marks a line unavailable, so testers do it by hand in Studio:
   `update equipment_request set status = 'partially_fulfilled' where event_request_id = '<event id>';`
   and `update equipment_request_line set unavailable = true where id = '<line id>';`
-- **To replace:** SCRUM-166 writes to these two columns from its status form
+- **To replace:** ~~SCRUM-166 writes to these two columns from its status form
   (adding its own identity, timestamp and reason columns alongside), keeps the
   four status values, and removes the markers. Re-run SCRUM-164 AC3 and AC4
   (TC-164-07 to TC-164-12) and `tests/integration/equipment-queue.test.ts`
-  with statuses set through the app.
-- **Status:** Active.
+  with statuses set through the app.~~ Done.
+- **Status:** Replaced (SCRUM-166, branch `equipment-request-status`).
+  Technical Support Staff set the status and the unavailable lines on the
+  event's equipment request page, through `updateEquipmentRequestStatus` and
+  `set_equipment_request_status`
+  (`20261023044500_equipment_request_status_update.sql`, which adds
+  `status_set_by`, `status_set_at` and `unable_reason`). The four status values
+  are kept. `tests/integration/equipment-queue.test.ts` now sets statuses
+  through the app (`setStatus()`; `setUnavailable()` is gone), and
+  `scripts/seed-scrum164.mjs` still writes them straight to the table as
+  fixture data, without the marker. The marker comment in the applied
+  migration `20261018174009_equipment_request_status.sql` is left as it is,
+  since a migration on `main` is not edited.
 
 ### D-20 — Each role's nav holds only its landing page
 
@@ -670,4 +690,82 @@ switch them the next time they edit those files.
   Keep the landing page first (the `ROLE_NAV` test in
   `tests/unit/shared-header.test.ts` checks it). Re-run TC-249-15 to TC-249-17
   (AC4) and TC-249-25 to TC-249-27 (AC6) for that role.
+- **Status:** Partly replaced. **Technical Support Staff:** replaced by
+  SCRUM-254 (branch `tech-support-nav`): Equipment requests, Equipment
+  catalogue, Venues; marker removed. The SCRUM-164 tabs (`TechnicalSupportNav`)
+  were removed in the same change, since the nav bar now does their job on
+  every page (PO, 22 Oct 2026). **Other roles:** still active, waiting on
+  SCRUM-250 to 253, 255 and 256.
+
+### D-21 — An equipment reservation is released by hand
+
+- **Kind:** In-sprint stand-in (releasing a reservation is SCRUM-177, in
+  Sprint 4 but owned by someone else)
+- **Added by:** SCRUM-173 AC6 (TC-173-09) — branch `equipment-reservation`
+- **Waiting on:** SCRUM-177 (release reserved equipment)
+- **Where:**
+  `scripts/seed-b1.mjs` — `releaseByHand()` (`DUMMY(SCRUM-177) D-21`);
+  `tests/integration/equipment-reservation.test.ts` — TC-173-09
+  (`DUMMY(SCRUM-177) D-21`)
+- **What is real and what is faked:** the listing is real. SCRUM-173 AC6 lists
+  each reservation with its status, Reserved or Released, read from
+  `equipment_reservation.status`, and a Released one no longer holds its units
+  (the line shows as outstanding again; SCRUM-167's check no longer counts it).
+  Only the release is faked: nothing in the app releases a reservation yet, so
+  the seed and the test set the status by hand:
+  `update equipment_reservation set status = 'released' where id = '<reservation id>';`
+- **To replace:** SCRUM-177 releases through the app into the same status
+  column. Release through it in `scripts/seed-b1.mjs` and TC-173-09, remove
+  the markers, and re-run TC-173-09.
+- **Status:** Active.
+
+### D-22 — An event's registration period is set by the seed script
+
+- **Kind:** In-sprint stand-in (setting the period is SCRUM-185 AC5, in
+  Sprint 4 but owned by Dylan)
+- **Added by:** SCRUM-181 AC2, AC3, AC4 (TC-181-05 to TC-181-13) — branch
+  `event-register`
+- **Waiting on:** SCRUM-185 AC5 (the coordinator sets the registration start
+  and end dates)
+- **Where:** `scripts/seed-event-registration-test-data.mjs` — the header
+  comment (`DUMMY(SCRUM-185) D-22`), and the `registration_start_date` /
+  `registration_end_date` it writes for each event
+- **What is real and what is faked:** the period is real. The columns
+  `event_request.registration_start_date` and `registration_end_date` (dates,
+  both inclusive, added by SCRUM-181's migration
+  `20261024130843_event_registration.sql`) are what SCRUM-181 reads, in the
+  service and again in `register_for_event`, to refuse registering before the
+  start date (AC2) or after the end date (AC3). Only the setting is faked:
+  nothing in the app writes the columns yet, so the seed script sets them,
+  relative to today, for each test case. An event with no period takes no
+  registrations and is not found on the Attendee's page.
+- **To replace:** SCRUM-185 AC5's form saves to the same two columns (both
+  together; the table refuses one without the other, or an end before the
+  start). Set the periods through the form for TC-181-05 to TC-181-12 instead
+  of the seed, remove the marker, and re-run those test cases.
+- **Status:** Active.
+
+### D-23 — Places always remain
+
+- **Kind:** In-sprint stand-in (refusing a full event is SCRUM-182, in
+  Sprint 4)
+- **Added by:** SCRUM-181 AC1 ("places remain", TC-181-02) — branch
+  `event-register`
+- **Waiting on:** SCRUM-182 AC1 (a full event refuses registration) and AC2
+  (two people taking the last place at the same moment)
+- **Where:** `supabase/migrations/20261024130843_event_registration.sql` —
+  `event_has_places_remaining` (`DUMMY(SCRUM-182) D-23`)
+- **What is real and what is faked:** registering is real and goes through one
+  database function, `register_for_event`, which locks the event row, checks
+  the period and the duplicate, then asks `event_has_places_remaining` and
+  returns `'full'` if it says no (the service turns that into a 409
+  `CAPACITY_EXCEEDED`). Only the answer is faked: the function always returns
+  true. `event_request.registration_capacity` exists (null until set; what it
+  is set to is SCRUM-185 AC6's rule) but nothing counts against it yet.
+- **To replace:** SCRUM-182 replaces the body of `event_has_places_remaining`
+  in a new migration with a count of the event's Registered rows against
+  `registration_capacity`. `register_for_event` already calls it with the
+  event row locked, so two registrations for the last place are counted one
+  after the other. Remove the marker and re-run TC-181-02 (the last place can
+  still be taken) and `tests/integration/register-for-event.test.ts`.
 - **Status:** Active.

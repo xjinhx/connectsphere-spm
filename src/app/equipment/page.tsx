@@ -1,4 +1,7 @@
 import { listEquipment } from '@/domain/equipment/service';
+import { describeOutOfService } from '@/domain/equipment-out-of-service/policy';
+import { NO_UNITS_OUT_OF_SERVICE } from '@/domain/equipment-out-of-service/schema';
+import { listOutOfService } from '@/domain/equipment-out-of-service/service';
 import { canManageEquipment, canViewEquipmentCatalogue } from '@/domain/equipment/policy';
 import {
   EQUIPMENT_CATEGORY_LABELS,
@@ -7,7 +10,7 @@ import {
 import { getCurrentActor } from '@/lib/auth/currentActor';
 import AddEquipmentForm from '@/components/equipment/AddEquipmentForm';
 import EquipmentRowEditor from '@/components/equipment/EquipmentRowEditor';
-import { TechnicalSupportNav } from '@/components/equipment/TechnicalSupportNav';
+import OutOfServiceEditor from '@/components/equipment-out-of-service/OutOfServiceEditor';
 
 /**
  * SCRUM-240 Maintain the equipment catalogue.
@@ -44,11 +47,10 @@ export default async function EquipmentCataloguePage() {
 
   const canManage = canManageEquipment(actor.roles);
   const equipment = await listEquipment();
+  const outOfService = await listOutOfService();
 
   return (
     <main className="mx-auto max-w-5xl p-6">
-      {/* SCRUM-164: Technical Support Staff move between this and their request queue. */}
-      {canManage ? <TechnicalSupportNav current="catalogue" /> : null}
       <h1 className="mb-2 text-2xl font-semibold">Equipment catalogue</h1>
       <p className="mb-6 text-sm text-[var(--text-muted)]">
         The equipment ConnectSphere owns, with the quantity held and where it is kept.
@@ -87,6 +89,9 @@ export default async function EquipmentCataloguePage() {
                 <th scope="col" className="p-3 font-medium">
                   Operational status
                 </th>
+                <th scope="col" className="p-3 font-medium">
+                  Out of service
+                </th>
                 {canManage ? (
                   <th scope="col" className="p-3 font-medium">
                     Change status or quantity
@@ -102,6 +107,20 @@ export default async function EquipmentCataloguePage() {
                   <td className="p-3">{item.quantity}</td>
                   <td className="p-3">{item.currentLocation}</td>
                   <td className="p-3">{OPERATIONAL_STATUS_LABELS[item.operationalStatus]}</td>
+                  <td className="p-3">
+                    <p>{describeOutOfService(outOfService.get(item.id) ?? NO_UNITS_OUT_OF_SERVICE) ?? 'None'}</p>
+                    {canManage ? (
+                      <div className="mt-2">
+                        {/* Keyed on the stored counts, so the boxes reset after a save. */}
+                        <OutOfServiceEditor
+                          key={JSON.stringify(outOfService.get(item.id))}
+                          equipmentId={item.id}
+                          equipmentName={item.name}
+                          counts={outOfService.get(item.id) ?? NO_UNITS_OUT_OF_SERVICE}
+                        />
+                      </div>
+                    ) : null}
+                  </td>
                   {canManage ? (
                     <td className="p-3">
                       <EquipmentRowEditor item={item} />

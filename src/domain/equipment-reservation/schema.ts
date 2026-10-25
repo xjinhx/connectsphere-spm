@@ -1,18 +1,21 @@
 import { z } from 'zod';
+import { RequestedQuantitySchema } from '@/domain/equipment-request/schema';
 
 /**
  * Equipment availability and reservation: data shapes shared by the API routes
  * and the UI.
  *
  * SCRUM-167 Check equipment availability across the full commitment window
+ * SCRUM-173 Reserve equipment for the full commitment window and view all
+ *           reservations for the event
  *
  * An event's equipment request (SCRUM-160) says what it needs; this is how
- * much of each item is free for it over its commitment window.
+ * much of each item is free for it, and what has been set aside for it.
  */
 
 /**
- * The commitment window (167 Definitions, CL-29): the day before the event's
- * first confirmed venue booking (collection) to its last (Return Day), both
+ * The commitment window (167 AC1, 173 AC3): the day before the event's first
+ * confirmed venue booking (collection) to its last (Return Day), both
  * included, as YYYY-MM-DD.
  */
 export const DateWindowSchema = z.object({ start: z.string(), end: z.string() });
@@ -20,6 +23,10 @@ export type DateWindow = z.infer<typeof DateWindowSchema>;
 
 /** 167 AC3: "the check is refused and I am told the event needs an approved venue booking first". */
 export const CHECK_NEEDS_APPROVED_BOOKING_MESSAGE = 'This event needs an approved venue booking first.';
+
+/** 173 AC2: "told the event needs an approved venue booking before equipment can be committed". */
+export const RESERVE_NEEDS_APPROVED_BOOKING_MESSAGE =
+  'This event needs an approved venue booking before equipment can be committed.';
 
 /**
  * 167 AC4: one line of the event's equipment request, checked. "The quantity
@@ -49,3 +56,51 @@ export const EquipmentAvailabilitySchema = z.object({
   lines: z.array(AvailabilityLineSchema),
 });
 export type EquipmentAvailability = z.infer<typeof EquipmentAvailabilitySchema>;
+
+/**
+ * SCRUM-173 AC1: "reserve" a quantity of one line's item. The same whole
+ * number of at least one as the line itself (SCRUM-160 AC2).
+ */
+export const ReserveEquipmentInputSchema = z.object({ quantity: RequestedQuantitySchema });
+export type ReserveEquipmentInput = z.infer<typeof ReserveEquipmentInputSchema>;
+
+/** 173 AC6: Reserved, or Released once SCRUM-177 releases it. */
+export const RESERVATION_STATUSES = ['reserved', 'released'] as const;
+export const ReservationStatusSchema = z.enum(RESERVATION_STATUSES);
+export type ReservationStatus = z.infer<typeof ReservationStatusSchema>;
+
+export const RESERVATION_STATUS_LABELS: Record<ReservationStatus, string> = {
+  reserved: 'Reserved',
+  released: 'Released',
+};
+
+/** 173 AC6: "lists item, quantity, window and status". */
+export const EquipmentReservationSchema = z.object({
+  id: z.string().uuid(),
+  lineId: z.string().uuid(),
+  equipmentId: z.string().uuid(),
+  equipmentName: z.string(),
+  quantity: z.number().int().min(1),
+  window: DateWindowSchema,
+  status: ReservationStatusSchema,
+  reservedAt: z.string(),
+});
+export type EquipmentReservation = z.infer<typeof EquipmentReservationSchema>;
+
+/** 173 AC7: a line not yet fully reserved, and by how much. */
+export const OutstandingLineSchema = z.object({
+  lineId: z.string().uuid(),
+  equipmentName: z.string(),
+  requested: z.number().int().min(1),
+  reserved: z.number().int().min(0),
+  outstanding: z.number().int().min(1),
+});
+export type OutstandingLine = z.infer<typeof OutstandingLineSchema>;
+
+/** 173 AC6, AC7: the event's equipment section. */
+export const EventReservationsSchema = z.object({
+  eventRequestId: z.string().uuid(),
+  reservations: z.array(EquipmentReservationSchema),
+  outstanding: z.array(OutstandingLineSchema),
+});
+export type EventReservations = z.infer<typeof EventReservationsSchema>;

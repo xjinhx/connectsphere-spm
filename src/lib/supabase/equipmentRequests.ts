@@ -17,13 +17,16 @@ function db() {
 
 /** A line with the catalogue item it names, so the request can show the item's name. */
 const LINE_SELECT =
-  'id, event_request_id, equipment_id, quantity, created_at, equipment ( name, category )';
+  'id, event_request_id, equipment_id, quantity, unavailable, created_at, equipment ( name, category )';
 
-/** The event's request, or null when no line has been added yet. */
+/**
+ * The event's request, or null when no line has been added yet. With its
+ * status, who set it, when and the reason it cannot be fulfilled (SCRUM-166).
+ */
 export async function fetchEquipmentRequest(eventRequestId: string) {
   return db()
     .from('equipment_request')
-    .select('event_request_id, technical_requirements')
+    .select('event_request_id, technical_requirements, status, status_set_by, status_set_at, unable_reason')
     .eq('event_request_id', eventRequestId)
     .maybeSingle();
 }
@@ -119,12 +122,10 @@ export async function fetchEquipmentRequestLine(eventRequestId: string, lineId: 
 }
 
 /**
- * AC7, AC8: the lines, out of `lineIds`, that have been reserved: those whose
- * reservation is still Reserved (SCRUM-167 gave the table a status).
+ * AC7, AC8: the lines, out of `lineIds`, that have been reserved.
  *
- * DUMMY(SCRUM-173) D-18: reads equipment_reservation, whose rows are still
- * inserted by hand until SCRUM-173 reserves through the app. SCRUM-173 keeps
- * the signature.
+ * Reads SCRUM-173's reservations (D-18, replaced): a line is reserved while
+ * its reservation is still Reserved, not once it has been released.
  */
 export async function fetchReservedLineIds(lineIds: readonly string[]) {
   return db().from('equipment_reservation').select('line_id').in('line_id', [...lineIds]).eq('status', 'reserved');
@@ -136,8 +137,8 @@ export async function fetchReservedLineIds(lineIds: readonly string[]) {
  * they were added. Which statuses count as outstanding is the domain's call
  * (OUTSTANDING_EQUIPMENT_REQUEST_STATUSES), so they are passed in.
  *
- * DUMMY(SCRUM-166) D-19: status and unavailable are set by hand until
- * SCRUM-166 sets them; this reads them as stored.
+ * SCRUM-166 sets status and unavailable (setEquipmentRequestStatus below);
+ * this reads them as stored.
  */
 const QUEUE_SELECT =
   'event_request_id, status, event_request ( name, reference, proposed_date ), equipment_request_line ( id, quantity, unavailable, created_at, equipment ( name ) )';
@@ -149,4 +150,27 @@ export async function fetchEquipmentRequestsByStatus(statuses: readonly string[]
     .in('status', [...statuses])
     .order('created_at', { referencedTable: 'equipment_request_line' })
     .order('id', { referencedTable: 'equipment_request_line' });
+}
+
+/**
+ * SCRUM-166 AC2, AC3, AC4: saves a status, who set it and when, the lines
+ * marked unavailable and the reason, in one transaction
+ * (set_equipment_request_status). Returns {outcome: 'saved', setAt},
+ * {outcome: 'not_found'} or {outcome: 'unknown_line'}.
+ */
+export async function setEquipmentRequestStatus(update: {
+  eventRequestId: string;
+  status: string;
+  unavailableLineIds: readonly string[];
+  reason: string | null;
+  setBy: string;
+}) {
+  return db().rpc('set_equipment_request_status', {
+    p_event_request_id: update.eventRequestId,
+    p_status: update.status,
+    p_unavailable_line_ids: [...update.unavailableLineIds],
+    // Null is sent as null: only unable to fulfil keeps a reason.
+    p_reason: update.reason as string,
+    p_set_by: update.setBy,
+  });
 }

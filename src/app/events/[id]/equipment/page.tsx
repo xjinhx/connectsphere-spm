@@ -2,17 +2,20 @@ import Link from 'next/link';
 import { notFound } from 'next/navigation';
 import AddEquipmentLineForm from '@/components/equipment-request/AddEquipmentLineForm';
 import EquipmentLineEditor from '@/components/equipment-request/EquipmentLineEditor';
+import EquipmentRequestStatusForm from '@/components/equipment-request/EquipmentRequestStatusForm';
+import { EquipmentRequestStatusBadge } from '@/components/equipment-request/EquipmentRequestStatusBadge';
 import TechnicalRequirementsForm from '@/components/equipment-request/TechnicalRequirementsForm';
 import { EquipmentAvailabilitySection } from '@/components/equipment-reservation/EquipmentAvailabilitySection';
+import { EventReservationsSection } from '@/components/equipment-reservation/EventReservationsSection';
 import { EventRequestStatusBadge } from '@/components/event-request/EventRequestStatusBadge';
 import { EQUIPMENT_CATEGORY_LABELS } from '@/domain/equipment/schema';
 import { listEquipmentOptions } from '@/domain/equipment/service';
 import type { EquipmentRequestView } from '@/domain/equipment-request/schema';
 import { getEquipmentRequest } from '@/domain/equipment-request/service';
 import type { EquipmentAvailability } from '@/domain/equipment-reservation/schema';
-import { checkEquipmentAvailability } from '@/domain/equipment-reservation/service';
+import { checkEquipmentAvailability, listEventReservations } from '@/domain/equipment-reservation/service';
 import { isActionPermitted } from '@/domain/identity/permissions';
-import { formatSingaporeDate } from '@/domain/shared/dates';
+import { formatSingaporeDate, formatSingaporeDateTime } from '@/domain/shared/dates';
 import { ForbiddenError, NotFoundError, ValidationError } from '@/domain/shared/errors';
 import { getCurrentActor } from '@/lib/auth/currentActor';
 
@@ -29,9 +32,16 @@ import { getCurrentActor } from '@/lib/auth/currentActor';
  * refused by getEquipmentRequest and sees why, with nothing about the request
  * shown (TC-160-10: no add control).
  *
- * SCRUM-167: the availability check over the event's commitment window, run on
- * each load, for Technical Support Staff and the coordinator alike, so an item
- * that is not free shows as unavailable once it is asked for.
+ * SCRUM-167 and SCRUM-173: the availability check over the event's commitment
+ * window, run on each load, then its reservations and what is still
+ * outstanding (the event's equipment section). Technical Support Staff reserve
+ * each outstanding line; the coordinator sees the check, so an item that is
+ * not free shows as unavailable once they ask for it (SCRUM-173 AC4).
+ *
+ * SCRUM-166: the request's status, who set it and when (AC2), its unavailable
+ * items (AC3) and the reason it cannot be fulfilled (AC4), shown to everyone
+ * who can open the page - Technical Support Staff and the assigned
+ * coordinator. Technical Support Staff set it here (request.canSetStatus).
  *
  * A server component reading through the domain service, and force-dynamic,
  * so after a save the list is read back from the stored rows (TC-160-01).
@@ -82,6 +92,8 @@ export default async function EventEquipmentRequestPage({ params }: { params: Pr
     if (!(error instanceof ValidationError)) throw error;
     refusal = error.message;
   }
+  const reservations = await listEventReservations(id, actor);
+  const canReserve = isActionPermitted(actor.roles, 'equipment_administration');
 
   return (
     <main className="mx-auto max-w-3xl px-4 py-8">
@@ -97,6 +109,48 @@ export default async function EventEquipmentRequestPage({ params }: { params: Pr
       <p className="mt-1 text-sm text-[var(--text-muted)]">
         Event date: {request.proposedDate ? formatSingaporeDate(request.proposedDate) : 'Not yet provided'}
       </p>
+
+      {request.requestStatus ? (
+        // SCRUM-166 AC1, AC2: the status as stored - under review until it is set.
+        <section className="mt-6 rounded-lg border border-[var(--border)] bg-[var(--surface)] p-4">
+          <h2 className="text-sm font-semibold">Request status</h2>
+          <div className="mt-2 flex flex-wrap items-center gap-2 text-sm">
+            <EquipmentRequestStatusBadge status={request.requestStatus.status} />
+            {request.requestStatus.setByName && request.requestStatus.setAt ? (
+              <span className="text-[var(--text-muted)]">
+                Set by {request.requestStatus.setByName} on {formatSingaporeDateTime(request.requestStatus.setAt)}
+              </span>
+            ) : (
+              <span className="text-[var(--text-muted)]">Not yet updated by Technical Support.</span>
+            )}
+          </div>
+          {request.requestStatus.status === 'partially_fulfilled' ? (
+            // AC3: the items Technical Support identified as unavailable.
+            <p className="mt-2 text-sm">
+              Unavailable:{' '}
+              {request.lines
+                .filter((line) => line.unavailable)
+                .map((line) => `${line.equipmentName} × ${line.quantity}`)
+                .join(', ')}
+            </p>
+          ) : null}
+          {request.requestStatus.unableReason ? (
+            // AC4: why it cannot be fulfilled, kept as typed.
+            <p className="mt-2 text-sm whitespace-pre-wrap">Reason: {request.requestStatus.unableReason}</p>
+          ) : null}
+          {request.canSetStatus ? (
+            <div className="mt-4 border-t border-[var(--border)] pt-4">
+              <EquipmentRequestStatusForm
+                key={`${request.requestStatus.status}-${request.requestStatus.setAt ?? ''}`}
+                eventRequestId={request.eventRequestId}
+                status={request.requestStatus.status}
+                unableReason={request.requestStatus.unableReason}
+                lines={request.lines}
+              />
+            </div>
+          ) : null}
+        </section>
+      ) : null}
 
       <section className="mt-6">
         <h2 className="text-sm font-semibold">Equipment</h2>
@@ -165,6 +219,7 @@ export default async function EventEquipmentRequestPage({ params }: { params: Pr
         availability={availability}
         refusal={refusal}
       />
+      <EventReservationsSection {...reservations} canReserve={canReserve} />
 
       {/* AC6: the notes, shown with the equipment list. Kept as typed, line
           breaks included (AC5, TC-160-14). */}

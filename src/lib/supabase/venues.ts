@@ -243,11 +243,16 @@ export async function fetchSetupTurnaroundAffectedBookings(venueId: string, toda
  * SCRUM-239 AC2: every venue a search could return, with its opening hours.
  * Retired venues are left out, the same default as the catalogue list
  * (SCRUM-121 AC3): a retired venue can't host a new event.
+ *
+ * SCRUM-130: with what its filters look at - the venue's layouts and their
+ * capacities, its facilities and its accessibility features.
  */
 export async function fetchSearchableVenues() {
   return db()
     .from('venues')
-    .select('id, name, max_capacity, is_retired, opens_at, closes_at, setup_minutes, turnaround_minutes, locations ( id, name )')
+    .select(
+      'id, name, max_capacity, is_retired, opens_at, closes_at, setup_minutes, turnaround_minutes, locations ( id, name ), venue_layouts ( layout, capacity ), venue_facilities ( facility_id ), venue_accessibility_features ( accessibility_feature_id )',
+    )
     .eq('is_retired', false)
     .order('name');
 }
