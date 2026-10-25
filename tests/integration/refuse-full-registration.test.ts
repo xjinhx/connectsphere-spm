@@ -92,6 +92,12 @@ async function rowsFor(eventId: string) {
   return data;
 }
 
+const registered = async (eventId: string) => (await rowsFor(eventId)).filter((row) => row.status === 'registered');
+
+/** Sends one registration per attendee, all at the same moment. */
+const race = (eventId: string, attendees: string[]) =>
+  Promise.allSettled(attendees.map((attendee) => registerForEvent(eventId, attendee, VALID, NOW)));
+
 /** register_for_event on its own, as the database sees it. */
 const callDatabase = (eventId: string, attendeeId: string) =>
   admin.rpc('register_for_event', {
@@ -175,5 +181,64 @@ describe('AC1: a full event refuses registration and is shown as full', () => {
 
     expect(await rowsFor(thisEvent)).toHaveLength(2);
     expect(await rowsFor(fullEvent)).toHaveLength(2);
+  }, TIMEOUT);
+});
+
+describe('AC2: two attendees going for the last place at the same moment', () => {
+  it('TC-182-05 exactly one succeeds and the other is refused as full, every time (10 races)', async () => {
+    // One race that passes may be luck; ten in a row on fresh events is not.
+    for (let round = 0; round < 10; round += 1) {
+      const eventId = await createEvent(3);
+      await fill(eventId, 2);
+
+      const results = await race(eventId, [await createAttendee(), await createAttendee()]);
+
+      expect(results.filter((result) => result.status === 'fulfilled')).toHaveLength(1);
+      const refused = results.find((result) => result.status === 'rejected') as PromiseRejectedResult;
+      expect(refused.reason).toBeInstanceOf(CapacityExceededError);
+      expect((refused.reason as Error).message).toBe(NO_PLACES_REMAINING);
+      expect(await registered(eventId)).toHaveLength(3);
+    }
+  }, 120_000);
+
+  it('TC-182-06 five at once for one place: still exactly one, and the count never passes the capacity', async () => {
+    const eventId = await createEvent(3);
+    await fill(eventId, 2);
+    const five = [];
+    for (let i = 0; i < 5; i += 1) five.push(await createAttendee());
+
+    const results = await race(eventId, five);
+
+    expect(results.filter((result) => result.status === 'fulfilled')).toHaveLength(1);
+    const refused = results.filter((result) => result.status === 'rejected') as PromiseRejectedResult[];
+    expect(refused).toHaveLength(4);
+    for (const result of refused) expect(result.reason).toBeInstanceOf(CapacityExceededError);
+    expect(await registered(eventId)).toHaveLength(3);
+  }, TIMEOUT);
+
+  it('TC-182-07 two places left, two at once: both succeed (the lock makes the second wait, not fail)', async () => {
+    const eventId = await createEvent(3);
+    await fill(eventId, 1);
+
+    const results = await race(eventId, [await createAttendee(), await createAttendee()]);
+
+    expect(results.every((result) => result.status === 'fulfilled')).toBe(true);
+    expect(await registered(eventId)).toHaveLength(3);
+    await expect(registerForEvent(eventId, await createAttendee(), VALID, NOW)).rejects.toThrow(CapacityExceededError);
+  }, TIMEOUT);
+
+  it('TC-182-08 the attendee who lost the race is refused as full again on retry', async () => {
+    const eventId = await createEvent(3);
+    await fill(eventId, 2);
+    const [a, b] = [await createAttendee(), await createAttendee()];
+    const results = await race(eventId, [a, b]);
+    const loser = results[0]!.status === 'rejected' ? a : b;
+
+    const error = await refusal(registerForEvent(eventId, loser, VALID, NOW));
+
+    expect(error).toBeInstanceOf(CapacityExceededError);
+    expect((await rowsFor(eventId)).some((row) => row.attendee_id === loser)).toBe(false);
+    expect(await registered(eventId)).toHaveLength(3);
+    expect((await getRegistrationPage(eventId, loser, NOW)).full).toBe(true);
   }, TIMEOUT);
 });

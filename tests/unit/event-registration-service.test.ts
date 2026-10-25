@@ -349,3 +349,16 @@ describe('SCRUM-182 AC1: a full event refuses registration and is shown as full'
     await expect(registerForEvent(EVENT_ID, ATTENDEE, VALID, NOW)).rejects.toThrow(ALREADY_REGISTERED);
   });
 });
+
+describe('SCRUM-182 AC2: two attendees going for the last place at the same moment', () => {
+  it('TC-182-05, TC-182-08 when the database finds the last place taken after the read, refused as full, not as a duplicate', async () => {
+    placesTaken(19);
+    databaseSays('full');
+
+    const error = await refusal(registerForEvent(EVENT_ID, ATTENDEE_2, VALID, NOW));
+
+    expect(error).toBeInstanceOf(CapacityExceededError);
+    expect(error).not.toBeInstanceOf(ConflictError);
+    expect((error as Error).message).toBe(NO_PLACES_REMAINING);
+  });
+});
