@@ -50,6 +50,10 @@ export default function EquipmentSuitabilityForm({ eventRequestId, lines }: { ev
 
   function update(lineId: string, change: Partial<Mark>) {
     setResult(null);
+    // The server's message was about what was sent; once the item is changed it
+    // no longer applies, so it is cleared until the next save checks again.
+    setInvalidLines((current) => current.filter((id) => id !== lineId));
+    if (invalidLines.length <= 1) setError(null);
     setMarks((current) => ({ ...current, [lineId]: { ...(current[lineId] ?? { suitability: '', reason: '' }), ...change } }));
   }
 
