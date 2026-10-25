@@ -94,6 +94,20 @@ async function rowsFor(eventId: string) {
 
 const registered = async (eventId: string) => (await rowsFor(eventId)).filter((row) => row.status === 'registered');
 
+/**
+ * Withdrawing is SCRUM-184's. D-25: until it is on main, set the status it will
+ * write by hand; what these cases exercise is the count, which is this story's.
+ */
+async function withdraw(eventId: string, attendeeId: string) {
+  const { error } = await admin
+    .from('event_registration')
+    .update({ status: 'withdrawn' })
+    .eq('event_request_id', eventId)
+    .eq('attendee_id', attendeeId)
+    .eq('status', 'registered');
+  if (error) throw new Error(error.message);
+}
+
 /** Sends one registration per attendee, all at the same moment. */
 const race = (eventId: string, attendees: string[]) =>
   Promise.allSettled(attendees.map((attendee) => registerForEvent(eventId, attendee, VALID, NOW)));
@@ -247,3 +261,85 @@ describe('AC2: two attendees going for the last place at the same moment', () =>
   }, TIMEOUT);
 });
 
+describe('AC3: a place released by a withdrawal (no waiting list in Release 1)', () => {
+  it('TC-182-09 a withdrawal from a full event frees the place, the next attendee registers, and it is full again', async () => {
+    const eventId = await createEvent(3);
+    const [first] = await fill(eventId, 3);
+    const [attendee, attendee2] = [await createAttendee(), await createAttendee()];
+    await expect(registerForEvent(eventId, attendee, VALID, NOW)).rejects.toThrow(CapacityExceededError);
+
+    await withdraw(eventId, first!);
+
+    await expect(registerForEvent(eventId, attendee, VALID, NOW)).resolves.toMatchObject({ status: 'registered' });
+    // One withdrawal frees one place, not more.
+    await expect(registerForEvent(eventId, attendee2, VALID, NOW)).rejects.toThrow(CapacityExceededError);
+    const rows = await rowsFor(eventId);
+    expect(rows.filter((row) => row.status === 'registered')).toHaveLength(3);
+    expect(rows.filter((row) => row.status === 'withdrawn')).toHaveLength(1);
+  }, TIMEOUT);
+
+  it('TC-182-10 capacity below the number registered: everyone stays, and registration reopens only below the capacity (PO, 25/10/2026)', async () => {
+    const eventId = await createEvent(3);
+    const [first, second] = await fill(eventId, 3);
+    // Only the coordinator's save in SCRUM-185 changes the capacity; set by hand here.
+    await admin.from('event_request').update({ registration_capacity: 2 }).eq('id', eventId);
+    const attendee = await createAttendee();
+
+    expect(await registered(eventId)).toHaveLength(3);
+    await expect(registerForEvent(eventId, attendee, VALID, NOW)).rejects.toThrow(CapacityExceededError);
+
+    await withdraw(eventId, first!);
+    // 2 of 2: still full.
+    await expect(registerForEvent(eventId, attendee, VALID, NOW)).rejects.toThrow(CapacityExceededError);
+
+    await withdraw(eventId, second!);
+    // 1 of 2: open again.
+    await expect(registerForEvent(eventId, attendee, VALID, NOW)).resolves.toMatchObject({ status: 'registered' });
+
+    const rows = await rowsFor(eventId);
+    expect(rows.filter((row) => row.status === 'registered')).toHaveLength(2);
+    expect(rows.filter((row) => row.status === 'withdrawn')).toHaveLength(2);
+    // Nobody already registered was removed or told anything.
+    const { count } = await admin
+      .from('notifications')
+      .select('id', { count: 'exact', head: true })
+      .in('recipient_id', rows.map((row) => row.attendee_id));
+    expect(count).toBe(0);
+  }, TIMEOUT);
+
+  it('TC-182-11 the attendee who withdrew can take the freed place again, with a new reference', async () => {
+    const eventId = await createEvent(3);
+    const attendee = await createAttendee();
+    const first = await registerForEvent(eventId, attendee, VALID, NOW);
+    await fill(eventId, 2);
+
+    await withdraw(eventId, attendee);
+    const again = await registerForEvent(eventId, attendee, VALID, NOW);
+
+    expect(again.reference).not.toBe(first.reference);
+    const mine = (await rowsFor(eventId)).filter((row) => row.attendee_id === attendee);
+    expect(mine.map((row) => row.status).sort()).toEqual(['registered', 'withdrawn']);
+    expect(await registered(eventId)).toHaveLength(3);
+  }, TIMEOUT);
+
+  it('TC-182-12 no waiting list: someone refused while full is not registered, offered or notified when a place frees', async () => {
+    const eventId = await createEvent(3);
+    const [first] = await fill(eventId, 3);
+    const refused = await createAttendee();
+    await expect(registerForEvent(eventId, refused, VALID, NOW)).rejects.toThrow(CapacityExceededError);
+
+    await withdraw(eventId, first!);
+
+    // The place stays open until someone asks for it.
+    expect((await rowsFor(eventId)).some((row) => row.attendee_id === refused)).toBe(false);
+    expect(await registered(eventId)).toHaveLength(2);
+    const { count } = await admin
+      .from('notifications')
+      .select('id', { count: 'exact', head: true })
+      .eq('recipient_id', refused);
+    expect(count).toBe(0);
+    expect((await getRegistrationPage(eventId, refused, NOW)).full).toBe(false);
+
+    await expect(registerForEvent(eventId, refused, VALID, NOW)).resolves.toMatchObject({ status: 'registered' });
+  }, TIMEOUT);
+});

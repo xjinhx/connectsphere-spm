@@ -121,3 +121,11 @@ describe('SCRUM-182 whether the event is full', () => {
     expect(isEventFull(null, 0)).toBe(true);
   });
 });
+
+describe('SCRUM-182 AC3: a withdrawal gives its place back', () => {
+  it('TC-182-10 capacity 2 with 3, then 2 registered is full; with 1 it is open again (PO, 25/10/2026)', () => {
+    expect(isEventFull(2, 3)).toBe(true);
+    expect(isEventFull(2, 2)).toBe(true);
+    expect(isEventFull(2, 1)).toBe(false);
+  });
+});

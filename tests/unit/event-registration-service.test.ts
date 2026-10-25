@@ -362,3 +362,23 @@ describe('SCRUM-182 AC2: two attendees going for the last place at the same mome
     expect((error as Error).message).toBe(NO_PLACES_REMAINING);
   });
 });
+
+describe('SCRUM-182 AC3: a place released by a withdrawal', () => {
+  it('TC-182-09 one place below the capacity (a withdrawal from 20 of 20) can be registered for', async () => {
+    placesTaken(19);
+    await expect(registerForEvent(EVENT_ID, ATTENDEE, VALID, NOW)).resolves.toMatchObject({ status: 'registered' });
+  });
+
+  it('TC-182-10 capacity 2 with 3 or 2 registered is refused as full; with 1 it is open again', async () => {
+    eventWithPeriod('2026-10-27', '2026-11-04', 2);
+    for (const count of [3, 2]) {
+      placesTaken(count);
+      registrations(null);
+      await expect(registerForEvent(EVENT_ID, ATTENDEE, VALID, NOW)).rejects.toThrow(CapacityExceededError);
+    }
+    placesTaken(1);
+    registrations(null, ROW);
+    await expect(registerForEvent(EVENT_ID, ATTENDEE, VALID, NOW)).resolves.toMatchObject({ status: 'registered' });
+    expect(createRegistrationRow).toHaveBeenCalledTimes(1);
+  });
+});
