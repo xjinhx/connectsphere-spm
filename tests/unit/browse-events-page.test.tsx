@@ -5,7 +5,8 @@ import type { ReactElement } from 'react';
 /**
  * SCRUM-180 Browse open events and see my registrations (Jira, authoritative).
  * The Attendee's pages rendered for real, with the session and the service
- * replaced: what Open events shows (AC1) and what the event page shows (AC3).
+ * replaced: what Open events shows (AC1), what the event page shows (AC3) and
+ * what My registrations shows (AC4).
  * Which events the service returns is tests/unit/browse-events-service.test.ts;
  * that nothing internal is read is tests/integration/browse-events.test.ts.
  *
@@ -20,12 +21,16 @@ vi.mock('next/link', () => ({
     </a>
   ),
 }));
-vi.mock('@/domain/event-registration/service', () => ({ listOpenEvents: vi.fn(), getRegistrationPage: vi.fn() }));
+vi.mock('@/domain/event-registration/service', () => ({
+  listOpenEvents: vi.fn(),
+  listMyRegistrations: vi.fn(),
+  getRegistrationPage: vi.fn(),
+}));
 vi.mock('@/lib/auth/currentActor', () => ({ getCurrentActor: vi.fn() }));
 
-import { getRegistrationPage, listOpenEvents } from '@/domain/event-registration/service';
+import { getRegistrationPage, listMyRegistrations, listOpenEvents } from '@/domain/event-registration/service';
 import { getCurrentActor } from '@/lib/auth/currentActor';
-import type { OpenEvent, RegistrationPageView } from '@/domain/event-registration/schema';
+import type { MyRegistration, OpenEvent, RegistrationPageView } from '@/domain/event-registration/schema';
 import OpenEventsPage from '@/app/register-events/page';
 import EventPage from '@/app/register-events/[id]/page';
 
@@ -37,10 +42,36 @@ const NIGHT: OpenEvent = {
   venues: [{ name: 'Marina Bay Ballroom', address: '10 Bayfront Avenue, Singapore 018956' }],
 };
 
-async function renderOpenEvents(events: OpenEvent[]): Promise<string> {
+const ATTENDEE_ID = 'aaaaaaaa-aaaa-4aaa-8aaa-aaaaaaaaaaaa';
+
+async function renderOpenEvents(events: OpenEvent[], registrations: MyRegistration[] = []): Promise<string> {
   vi.mocked(listOpenEvents).mockResolvedValue(events);
+  vi.mocked(listMyRegistrations).mockResolvedValue(registrations);
   return renderToStaticMarkup((await OpenEventsPage()) as ReactElement);
 }
+
+/** The My registrations section of the rendered page. */
+function myRegistrations(html: string): string {
+  return html.slice(html.indexOf('id="my-registrations"'));
+}
+
+function registrationFor(event: OpenEvent, overrides: Partial<MyRegistration> = {}): MyRegistration {
+  return {
+    ...event,
+    registrationId: `reg-${event.eventRequestId}`,
+    reference: 'REG-2026-0001',
+    status: 'registered',
+    ...overrides,
+  };
+}
+
+const BRIEFING: OpenEvent = {
+  eventRequestId: '22222222-2222-4222-8222-222222222222',
+  eventName: 'Product Launch Briefing',
+  eventDate: '2026-11-15',
+  times: { start: '10:00', end: '12:00' },
+  venues: [{ name: 'Bugis Seminar Room', address: null }],
+};
 
 /**
  * The event page as getRegistrationPage describes it. Registration not open
@@ -68,7 +99,7 @@ async function renderEventPage(view: RegistrationPageView): Promise<string> {
 beforeEach(() => {
   vi.clearAllMocks();
   vi.mocked(getCurrentActor).mockResolvedValue({
-    userId: 'aaaaaaaa-aaaa-4aaa-8aaa-aaaaaaaaaaaa',
+    userId: ATTENDEE_ID,
     fullName: 'Tan Mei Ling',
     roles: ['attendee'],
     clientOrganisation: null,
@@ -98,6 +129,35 @@ describe('Open events (AC1)', () => {
     const html = await renderOpenEvents([]);
 
     expect(html).toContain('No events are open for registration right now.');
+    expect(html).not.toContain('<ul');
+  });
+});
+
+describe('My registrations (AC4)', () => {
+  it('TC-180-09 lists each registration with the event name, date, times, venue and status Registered', async () => {
+    const html = myRegistrations(await renderOpenEvents([], [registrationFor(NIGHT), registrationFor(BRIEFING)]));
+
+    expect(listMyRegistrations).toHaveBeenCalledWith(ATTENDEE_ID);
+    expect(html).toContain('Client Appreciation Night');
+    expect(html).toContain('15/11/2026 · 18:00–22:00 · Marina Bay Ballroom');
+    expect(html).toContain('Product Launch Briefing');
+    expect(html).toContain('15/11/2026 · 10:00–12:00 · Bugis Seminar Room');
+    expect(html.match(/>Registered</g)).toHaveLength(2);
+  });
+
+  it('TC-180-11 shows each registration\'s own status, Withdrawn included', async () => {
+    const html = myRegistrations(
+      await renderOpenEvents([], [registrationFor(NIGHT), registrationFor(BRIEFING, { status: 'withdrawn' })]),
+    );
+
+    expect(html).toContain('>Registered<');
+    expect(html).toContain('>Withdrawn<');
+  });
+
+  it('TC-180-11 with no registrations, says so instead of an empty list', async () => {
+    const html = myRegistrations(await renderOpenEvents([NIGHT], []));
+
+    expect(html).toContain('You have not registered for any events yet.');
     expect(html).not.toContain('<ul');
   });
 });

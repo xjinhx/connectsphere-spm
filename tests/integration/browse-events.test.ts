@@ -1,6 +1,11 @@
 import { afterAll, beforeAll, describe, expect, it } from 'vitest';
 import { createAdminClient } from '@/lib/supabase/admin';
-import { getRegistrationPage, listOpenEvents } from '@/domain/event-registration/service';
+import {
+  getRegistrationPage,
+  listMyRegistrations,
+  listOpenEvents,
+  registerForEvent,
+} from '@/domain/event-registration/service';
 import { createVenue } from '@/domain/venues/service';
 import { TEST_CLIENT_ORGANISATION_ID, ensureTestClientOrganisation } from './fixtures/clientOrganisation';
 
@@ -12,7 +17,9 @@ import { TEST_CLIENT_ORGANISATION_ID, ensureTestClientOrganisation } from './fix
  *   AC3 an event opened from the list shows only its name, description, date,
  *       start and end times, venue name and address and registration period,
  *       not client, internal, booking, equipment, staff or other attendees'
- *       details.
+ *       details;
+ *   AC4 my registrations are listed with the event name, date, start and end
+ *       times, venue and my registration status.
  *
  * Runs against the local Supabase stack. The clock is fixed by passing `now`.
  * Other tests' events may also be open on the fixed date, so each test looks
@@ -122,6 +129,11 @@ async function createEvent(name: string, options: EventOptions = {}): Promise<st
 
 async function listedIds(now: Date = NOW): Promise<string[]> {
   return (await listOpenEvents(now)).map((event) => event.eventRequestId);
+}
+
+/** Registers `attendee` through the app, as the event page does (SCRUM-181). */
+async function register(eventId: string, attendee: string, fullName = 'Tan Mei Ling'): Promise<void> {
+  await registerForEvent(eventId, attendee, { fullName, email: `${attendee}@example.com`, contactNumber: '+65 9123 4567' }, NOW);
 }
 
 beforeAll(async () => {
@@ -296,5 +308,74 @@ describe('AC3: the event page shows only what an attendee may see', () => {
       { name: `Bugis Seminar Room ${RUN}`, address: '200 Victoria Street, Singapore 188021' },
       { name: `Marina Bay Ballroom ${RUN}`, address: BALLROOM_ADDRESS },
     ]);
+  });
+});
+
+describe('AC4: my registrations are listed with the event and my status', () => {
+  it('TC-180-09 lists each with the event name, date, start and end times, venue and status Registered', async () => {
+    const attendee = await createUser('attendee-09');
+    const night = await createEvent('Client Appreciation Night', { date: '2026-11-20' });
+    const briefing = await createEvent('Product Launch Briefing', {
+      date: '2026-11-21',
+      bookings: [{ venueId: seminarRoomId, status: 'confirmed' }],
+    });
+    await register(night, attendee);
+    await register(briefing, attendee);
+
+    const registrations = await listMyRegistrations(attendee);
+
+    expect(registrations).toMatchObject([
+      {
+        eventRequestId: night,
+        eventName: `Client Appreciation Night ${RUN}`,
+        eventDate: '2026-11-20',
+        times: { start: '18:00', end: '22:00' },
+        venues: [{ name: `Marina Bay Ballroom ${RUN}` }],
+        status: 'registered',
+      },
+      {
+        eventRequestId: briefing,
+        eventName: `Product Launch Briefing ${RUN}`,
+        eventDate: '2026-11-21',
+        venues: [{ name: `Bugis Seminar Room ${RUN}` }],
+        status: 'registered',
+      },
+    ]);
+  });
+
+  it("TC-180-10 lists only my own registrations, never another attendee's", async () => {
+    const attendee = await createUser('attendee-10');
+    const otherAttendee = await createUser('attendee2-10');
+    const night = await createEvent('Client Appreciation Night');
+    const lunch = await createEvent('Partner Networking Lunch');
+    await register(night, attendee);
+    await register(night, otherAttendee, `Lim Wei Jie ${RUN}`);
+    await register(lunch, otherAttendee, `Lim Wei Jie ${RUN}`);
+
+    const registrations = await listMyRegistrations(attendee);
+
+    expect(registrations.map((registration) => registration.eventRequestId)).toEqual([night]);
+    expect(JSON.stringify(registrations)).not.toContain(`Lim Wei Jie ${RUN}`);
+    expect(JSON.stringify(registrations)).not.toContain(otherAttendee);
+  });
+
+  it('TC-180-11 a withdrawn registration is listed as Withdrawn; an attendee with none gets an empty list', async () => {
+    const attendee = await createUser('attendee-11');
+    const night = await createEvent('Client Appreciation Night', { date: '2026-11-22' });
+    const briefing = await createEvent('Product Launch Briefing', { date: '2026-11-23' });
+    await register(night, attendee);
+    await register(briefing, attendee);
+    // Withdrawing is SCRUM-184's; nothing in the app sets it yet, so the status
+    // is set here, as that story's withdrawal will write it.
+    await admin
+      .from('event_registration')
+      .update({ status: 'withdrawn' })
+      .eq('event_request_id', briefing)
+      .eq('attendee_id', attendee);
+
+    const statuses = (await listMyRegistrations(attendee)).map((registration) => registration.status);
+
+    expect(statuses).toEqual(['registered', 'withdrawn']);
+    expect(await listMyRegistrations(await createUser('attendee3-11'))).toEqual([]);
   });
 });

@@ -3,8 +3,9 @@ import { beforeEach, describe, expect, it, vi } from 'vitest';
 /**
  * SCRUM-180 Browse open events and see my registrations (Jira, authoritative).
  * The service's own decisions, with the data layer replaced by spies: which
- * events Open events lists (AC1, AC2). The same reads against the database run
- * in tests/integration/browse-events.test.ts.
+ * events Open events lists (AC1, AC2) and how My registrations lists the
+ * attendee's registrations (AC4). The same reads against the database run in
+ * tests/integration/browse-events.test.ts.
  *
  * Test case IDs are from SCRUM-180-test-cases.xlsx (TC-180-nn). "Today" is
  * 30/10/2026, Singapore time, unless a test says otherwise.
@@ -12,13 +13,14 @@ import { beforeEach, describe, expect, it, vi } from 'vitest';
 
 vi.mock('@/lib/supabase/eventRegistrations', () => ({
   fetchOpenEvents: vi.fn(),
+  fetchMyRegistrations: vi.fn(),
   fetchRegistrationEvent: vi.fn(),
   fetchRegisteredRegistration: vi.fn(),
   createRegistrationRow: vi.fn(),
 }));
 
-import { fetchOpenEvents } from '@/lib/supabase/eventRegistrations';
-import { listOpenEvents } from '@/domain/event-registration/service';
+import { fetchMyRegistrations, fetchOpenEvents } from '@/lib/supabase/eventRegistrations';
+import { listMyRegistrations, listOpenEvents } from '@/domain/event-registration/service';
 
 const NIGHT_ID = '11111111-1111-4111-8111-111111111111';
 const BALLROOM = { name: 'Marina Bay Ballroom', address: '10 Bayfront Avenue, Singapore 018956' };
@@ -41,6 +43,27 @@ function eventRow(overrides: Record<string, unknown> = {}) {
 function databaseHas(...rows: ReturnType<typeof eventRow>[]) {
   vi.mocked(fetchOpenEvents).mockResolvedValue({ data: rows, error: null } as never);
 }
+
+const ATTENDEE = 'aaaaaaaa-aaaa-4aaa-8aaa-aaaaaaaaaaaa';
+const BRIEFING_ID = '22222222-2222-4222-8222-222222222222';
+
+/** A registration row as fetchMyRegistrations returns it, with its event. */
+function registrationRow(id: string, status: string, event: ReturnType<typeof eventRow>) {
+  return { id, reference: `REG-2026-000${id}`, status, event_request: event };
+}
+
+function attendeeHas(...rows: ReturnType<typeof registrationRow>[]) {
+  vi.mocked(fetchMyRegistrations).mockResolvedValue({ data: rows, error: null } as never);
+}
+
+const BRIEFING = eventRow({
+  id: BRIEFING_ID,
+  name: 'Product Launch Briefing',
+  proposed_date: '2026-11-15',
+  start_time: '10:00:00',
+  end_time: '12:00:00',
+  venue_booking: [{ status: 'confirmed', venues: { name: 'Bugis Seminar Room', address: null } }],
+});
 
 beforeEach(() => {
   vi.clearAllMocks();
@@ -101,5 +124,64 @@ describe('AC2: an event whose period has not opened or has closed is not listed'
     databaseHas(eventRow({ registration_start_date: null, registration_end_date: null }));
 
     expect(await listOpenEvents(new Date('2026-10-30T10:00:00+08:00'))).toEqual([]);
+  });
+});
+
+describe('AC4: my registrations are listed with the event and my status', () => {
+  it('TC-180-09 lists each with the event name, date, times, venue and status Registered', async () => {
+    attendeeHas(registrationRow('1', 'registered', eventRow()), registrationRow('2', 'registered', BRIEFING));
+
+    const registrations = await listMyRegistrations(ATTENDEE);
+
+    expect(fetchMyRegistrations).toHaveBeenCalledWith(ATTENDEE);
+    // Same date: the earlier name first.
+    expect(registrations).toEqual([
+      {
+        registrationId: '1',
+        reference: 'REG-2026-0001',
+        status: 'registered',
+        eventRequestId: NIGHT_ID,
+        eventName: 'Client Appreciation Night',
+        eventDate: '2026-11-15',
+        times: { start: '18:00', end: '22:00' },
+        venues: [BALLROOM],
+      },
+      {
+        registrationId: '2',
+        reference: 'REG-2026-0002',
+        status: 'registered',
+        eventRequestId: BRIEFING_ID,
+        eventName: 'Product Launch Briefing',
+        eventDate: '2026-11-15',
+        times: { start: '10:00', end: '12:00' },
+        venues: [{ name: 'Bugis Seminar Room', address: null }],
+      },
+    ]);
+  });
+
+  it('TC-180-11 each shows its own status: Registered and Withdrawn', async () => {
+    attendeeHas(registrationRow('1', 'registered', eventRow()), registrationRow('2', 'withdrawn', BRIEFING));
+
+    const statuses = (await listMyRegistrations(ATTENDEE)).map((registration) => registration.status);
+
+    expect(statuses).toEqual(['registered', 'withdrawn']);
+  });
+
+  it('TC-180-11 an attendee with no registrations gets an empty list', async () => {
+    attendeeHas();
+
+    expect(await listMyRegistrations(ATTENDEE)).toEqual([]);
+  });
+
+  it('lists the soonest event first, and an event with no date yet last', async () => {
+    attendeeHas(
+      registrationRow('1', 'registered', eventRow({ id: 'undated', proposed_date: null })),
+      registrationRow('2', 'registered', eventRow({ id: 'later', proposed_date: '2026-12-01' })),
+      registrationRow('3', 'registered', eventRow({ id: 'sooner', proposed_date: '2026-11-15' })),
+    );
+
+    const order = (await listMyRegistrations(ATTENDEE)).map((registration) => registration.eventRequestId);
+
+    expect(order).toEqual(['sooner', 'later', 'undated']);
   });
 });

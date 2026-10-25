@@ -3,6 +3,7 @@ import {
   RegistrationInputSchema,
   RegistrationStatusSchema,
   type EventVenue,
+  type MyRegistration,
   type OpenEvent,
   type Registration,
   type RegistrationPageView,
@@ -22,6 +23,7 @@ import { todayInSingapore } from '@/domain/shared/dates';
 import { CapacityExceededError, ConflictError, NotFoundError, ValidationError } from '@/domain/shared/errors';
 import {
   createRegistrationRow,
+  fetchMyRegistrations,
   fetchOpenEvents,
   fetchRegisteredRegistration,
   fetchRegistrationEvent,
@@ -148,6 +150,42 @@ export async function listOpenEvents(now: Date = new Date()): Promise<OpenEvent[
       isOpenForRegistration({ startDate: row.registration_start_date, endDate: row.registration_end_date }, today),
     )
     .map(toOpenEvent);
+}
+
+type MyRegistrationRow = {
+  id: string;
+  reference: string;
+  status: string;
+  event_request: EventRow;
+};
+
+/**
+ * SCRUM-180 AC4 — the signed-in attendee's registrations, each with its
+ * event's name, date, times and venue and the registration's status, soonest
+ * event first. `attendeeId` is whoever is signed in, from the page, never from
+ * a request, so only their own registrations are read.
+ */
+export async function listMyRegistrations(attendeeId: string): Promise<MyRegistration[]> {
+  const { data, error } = await fetchMyRegistrations(attendeeId);
+  if (error) throw new ValidationError('Your registrations could not be read.', error.message);
+  return ((data ?? []) as unknown as MyRegistrationRow[])
+    .map((row) => ({
+      ...toOpenEvent(row.event_request),
+      registrationId: row.id,
+      reference: row.reference,
+      status: RegistrationStatusSchema.parse(row.status),
+    }))
+    .sort(bySoonestEvent);
+}
+
+/** Soonest event first; an event with no date yet last; then by name. */
+function bySoonestEvent(a: OpenEvent, b: OpenEvent): number {
+  if (a.eventDate !== b.eventDate) {
+    if (!a.eventDate) return 1;
+    if (!b.eventDate) return -1;
+    return a.eventDate < b.eventDate ? -1 : 1;
+  }
+  return a.eventName.localeCompare(b.eventName);
 }
 
 /**

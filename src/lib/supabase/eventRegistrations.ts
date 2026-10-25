@@ -56,6 +56,19 @@ export async function fetchOpenEvents(today: string) {
     .order('name', { ascending: true });
 }
 
+/**
+ * SCRUM-180 AC4: every registration the attendee has made, whatever its
+ * status, each with its event's attendee columns. Filtered by attendee_id, so
+ * nobody else's registration (or name, or email) is read.
+ */
+export async function fetchMyRegistrations(attendeeId: string) {
+  return db()
+    .from('event_registration')
+    .select(`id, reference, status, event_request (${ATTENDEE_EVENT_COLUMNS})`)
+    .eq('attendee_id', attendeeId)
+    .order('registered_at', { ascending: false });
+}
+
 /** AC5: the attendee's Registered registration for this event, or null. */
 export async function fetchRegisteredRegistration(eventRequestId: string, attendeeId: string) {
   return db()

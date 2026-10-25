@@ -102,3 +102,15 @@ export interface OpenEvent {
   times: ClockRange | null;
   venues: EventVenue[];
 }
+
+/**
+ * SCRUM-180 AC4 — one of the attendee's own registrations, as My
+ * registrations lists it: the event's name, date, start and end times and
+ * venue, and the registration's status. The event's details are read when the
+ * list is, so a reschedule shows (AC5).
+ */
+export interface MyRegistration extends OpenEvent {
+  registrationId: string;
+  reference: string;
+  status: RegistrationStatus;
+}
