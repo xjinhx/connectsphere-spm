@@ -38,6 +38,9 @@ export const NOTIFICATION_TYPES = [
   // SCRUM-102 AC6 (moved from SCRUM-198 AC4, CL-09): the organiser, told their
   // event is confirmed.
   'event_confirmed',
+  // SCRUM-187 AC1: the assigned coordinator, told the organiser raised a
+  // change request on their event.
+  'change_requested',
 ] as const;
 export const NotificationTypeSchema = z.enum(NOTIFICATION_TYPES);
 export type NotificationType = z.infer<typeof NotificationTypeSchema>;

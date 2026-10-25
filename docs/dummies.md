@@ -707,3 +707,32 @@ switch them the next time they edit those files.
   column. Release through it in `scripts/seed-b1.mjs` and TC-173-09, remove
   the markers, and re-run TC-173-09.
 - **Status:** Active.
+
+### D-22 — A change request's decision is set by hand
+
+- **Kind:** Stand-in code (a shared table created early, with nothing yet
+  writing its decision columns)
+- **Added by:** SCRUM-187 — branch `change-request-raise`
+- **Waiting on:** SCRUM-190 (Approve a change request and apply it), SCRUM-191
+  (Reject a change request with a reason)
+- **Where:**
+  - `supabase/migrations/20261024090000_change_request.sql` — `change_request`'s
+    `decided_by`, `decided_at`, `decision_reason` columns
+  - `src/domain/change-request/service.ts` — `raiseChangeRequest()` never
+    writes them; `listChangeRequests()` reads them back as-is
+    (`DUMMY(SCRUM-190) D-22`, `DUMMY(SCRUM-191) D-22`)
+  - `tests/integration/change-request.test.ts` — `seedDecision()`
+    (`DUMMY(SCRUM-190) D-22`, `DUMMY(SCRUM-191) D-22`)
+- **What is real and what is faked:** raising a request (AC1) and listing it
+  (AC6) are both real, against a real database. Only the decision itself is
+  faked: nothing in the app approves or rejects a change request yet, so the
+  integration test's `seedDecision()` sets `status`/`decided_at`/
+  `decision_reason` directly in Postgres to prove AC6 reads a decided request
+  correctly once one exists. AC7 ("the event shows the new values") is out of
+  scope for this story entirely — it is SCRUM-190's own write, not read back
+  here.
+- **To replace:** SCRUM-190/191 write these three columns from their own
+  approve/reject actions (already shaped the way their ACs describe them: one
+  decision, one reason, one timestamp). Re-run TC-187-11 against a request
+  decided through the app, then remove the markers.
+- **Status:** Active.
