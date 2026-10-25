@@ -48,9 +48,14 @@ function eventWithPeriod(start: string | null, end: string | null) {
     data: {
       id: EVENT_ID,
       name: 'Client Appreciation Night',
+      description: null,
       proposed_date: '2026-11-15',
+      start_time: null,
+      end_time: null,
       registration_start_date: start,
       registration_end_date: end,
+      // SCRUM-180 AC3 reads the venues too; none are needed here.
+      venue_booking: [],
     },
     error: null,
   } as never);

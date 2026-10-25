@@ -17,36 +17,39 @@ export const REGISTRATION_COLUMNS =
   'id, reference, event_request_id, full_name, email, contact_number, status, registered_at';
 
 /**
- * What the Attendee's page needs from the event: its name and date and the
- * registration period. Nothing else, so no internal planning field can reach
- * an attendee (SCRUM-72 AC1). maybeSingle: an unknown id is null, not an error.
- */
-export async function fetchRegistrationEvent(eventRequestId: string) {
-  return db()
-    .from('event_request')
-    .select('id, name, proposed_date, registration_start_date, registration_end_date')
-    .eq('id', eventRequestId)
-    .maybeSingle();
-}
-
-/**
  * SCRUM-180: each of the event's bookings with its venue's name and address.
  * The service keeps the confirmed ones (bookedVenues).
  */
 const BOOKED_VENUES = 'venue_booking (status, venues (name, address))';
 
 /**
+ * SCRUM-180 AC3: what an attendee may see of one event, and nothing else: the
+ * name, description, date, start and end times, the venues' names and
+ * addresses, and the registration period. No client organisation, internal
+ * comment, booking status shown, equipment, staff or other attendees, so none
+ * can reach an attendee (SCRUM-72 AC1). Shared by the list and the page.
+ */
+export const ATTENDEE_EVENT_COLUMNS =
+  `id, name, description, proposed_date, start_time, end_time, registration_start_date, registration_end_date, ${BOOKED_VENUES}`;
+
+/**
+ * What the Attendee's page needs from the event (SCRUM-181, and SCRUM-180
+ * AC3). maybeSingle: an unknown id is null, not an error.
+ */
+export async function fetchRegistrationEvent(eventRequestId: string) {
+  return db().from('event_request').select(ATTENDEE_EVENT_COLUMNS).eq('id', eventRequestId).maybeSingle();
+}
+
+/**
  * SCRUM-180 AC1, AC2: the events whose registration period includes `today`
- * (a Singapore date; both ends inclusive), soonest first. Only the columns the
- * list shows, plus the period, so nothing internal reaches an attendee
- * (SCRUM-72 AC1). An event with no period never matches.
+ * (a Singapore date; both ends inclusive), soonest first. The same attendee
+ * columns as the page, so nothing internal reaches an attendee (SCRUM-72
+ * AC1). An event with no period never matches.
  */
 export async function fetchOpenEvents(today: string) {
   return db()
     .from('event_request')
-    .select(
-      `id, name, proposed_date, start_time, end_time, registration_start_date, registration_end_date, ${BOOKED_VENUES}`,
-    )
+    .select(ATTENDEE_EVENT_COLUMNS)
     .lte('registration_start_date', today)
     .gte('registration_end_date', today)
     .order('proposed_date', { ascending: true })

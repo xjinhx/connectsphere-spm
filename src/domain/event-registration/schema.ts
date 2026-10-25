@@ -62,12 +62,16 @@ export interface Registration {
 
 /**
  * What the Attendee's event page needs. Only what an attendee may see: no
- * internal planning fields (SCRUM-72 AC1).
+ * internal planning fields (SCRUM-72 AC1). SCRUM-180 AC3 adds the
+ * description, times and venues; `venues` carries each one's address.
  */
 export interface RegistrationPageView {
   eventRequestId: string;
   eventName: string;
+  description: string | null;
   eventDate: ISODate | null;
+  times: ClockRange | null;
+  venues: EventVenue[];
   period: RegistrationPeriod;
   /** Why registering is refused today (AC2, AC3), or null when it is open. */
   periodRefusal: string | null;

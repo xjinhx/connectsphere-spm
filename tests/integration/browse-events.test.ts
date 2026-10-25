@@ -1,6 +1,6 @@
 import { afterAll, beforeAll, describe, expect, it } from 'vitest';
 import { createAdminClient } from '@/lib/supabase/admin';
-import { listOpenEvents } from '@/domain/event-registration/service';
+import { getRegistrationPage, listOpenEvents } from '@/domain/event-registration/service';
 import { createVenue } from '@/domain/venues/service';
 import { TEST_CLIENT_ORGANISATION_ID, ensureTestClientOrganisation } from './fixtures/clientOrganisation';
 
@@ -8,7 +8,11 @@ import { TEST_CLIENT_ORGANISATION_ID, ensureTestClientOrganisation } from './fix
  * SCRUM-180 Browse open events and see my registrations (Jira, authoritative):
  *   AC1 an event whose registration period is open is listed with its name,
  *       date, start and end times and venue;
- *   AC2 an event whose period has not opened or has closed is not listed.
+ *   AC2 an event whose period has not opened or has closed is not listed;
+ *   AC3 an event opened from the list shows only its name, description, date,
+ *       start and end times, venue name and address and registration period,
+ *       not client, internal, booking, equipment, staff or other attendees'
+ *       details.
  *
  * Runs against the local Supabase stack. The clock is fixed by passing `now`.
  * Other tests' events may also be open on the fixed date, so each test looks
@@ -22,12 +26,27 @@ const NOW = new Date('2026-10-30T10:00:00+08:00');
 const BALLROOM_ADDRESS = '10 Bayfront Avenue, Singapore 018956';
 
 let organiserId: string;
+let attendeeId: string;
 let locationId: string;
 let ballroomId: string;
 let seminarRoomId: string;
 let trainingRoomId: string;
 const eventIds: string[] = [];
 const venueIds: string[] = [];
+const userIds: string[] = [];
+
+/** A new account, with `fullName` on its profile when given. */
+async function createUser(label: string, fullName?: string): Promise<string> {
+  const { data, error } = await admin.auth.admin.createUser({
+    email: `${label}+browse${RUN}@connectsphere.example.com`,
+    password: 'Password123!',
+    email_confirm: true,
+  });
+  if (error || !data.user) throw new Error(`could not create test ${label}: ${error?.message ?? 'no user'}`);
+  userIds.push(data.user.id);
+  if (fullName) await admin.from('profiles').update({ full_name: fullName }).eq('id', data.user.id);
+  return data.user.id;
+}
 
 async function createTestVenue(name: string, address: string | null): Promise<string> {
   const venue = await createVenue({ name: `${name} ${RUN}`, locationId, maxCapacity: 200, operatingSlots: ['am', 'pm', 'night'] });
@@ -107,13 +126,8 @@ async function listedIds(now: Date = NOW): Promise<string[]> {
 
 beforeAll(async () => {
   await ensureTestClientOrganisation(admin);
-  const { data: user, error: userError } = await admin.auth.admin.createUser({
-    email: `organiser+browse${RUN}@connectsphere.example.com`,
-    password: 'Password123!',
-    email_confirm: true,
-  });
-  if (userError || !user.user) throw new Error(`could not create test organiser: ${userError?.message}`);
-  organiserId = user.user.id;
+  organiserId = await createUser('organiser');
+  attendeeId = await createUser('attendee', 'Tan Mei Ling');
 
   const { data: location, error } = await admin.from('locations').insert({ name: `Browse Location ${RUN}` }).select('id').single();
   if (error || !location) throw new Error(`could not create test location: ${error?.message}`);
@@ -129,7 +143,7 @@ afterAll(async () => {
   for (const id of eventIds) await admin.from('event_request').delete().eq('id', id);
   for (const id of venueIds) await admin.from('venues').delete().eq('id', id);
   if (locationId) await admin.from('locations').delete().eq('id', locationId);
-  if (organiserId) await admin.auth.admin.deleteUser(organiserId);
+  for (const id of userIds) await admin.auth.admin.deleteUser(id);
 });
 
 describe('AC1: an event whose registration period is open is listed', () => {
@@ -193,5 +207,94 @@ describe('AC2: an event whose period has not opened or has closed is not listed'
     const noPeriod = await createEvent('Partner Networking Lunch', { start: null, end: null });
 
     expect(await listedIds()).not.toContain(noPeriod);
+  });
+});
+
+describe('AC3: the event page shows only what an attendee may see', () => {
+  it('TC-180-06 shows the name, description, date, times, venue name and address, and registration period', async () => {
+    const eventId = await createEvent('Client Appreciation Night');
+    await admin.from('event_request').update({ description: 'An evening to thank our clients.' }).eq('id', eventId);
+
+    const view = await getRegistrationPage(eventId, attendeeId, NOW);
+
+    expect(view).toMatchObject({
+      eventName: `Client Appreciation Night ${RUN}`,
+      description: 'An evening to thank our clients.',
+      times: { start: '18:00', end: '22:00' },
+      venues: [{ name: `Marina Bay Ballroom ${RUN}`, address: BALLROOM_ADDRESS }],
+      period: { startDate: '2026-10-27', endDate: '2026-11-04' },
+    });
+    expect(view.eventDate).toMatch(/^2026-12-\d{2}$/);
+  });
+
+  it("TC-180-07 reads no client, internal comment, booking status, equipment, staff or other attendee's details", async () => {
+    const eventId = await createEvent('Client Appreciation Night');
+    const { data: client } = await admin
+      .from('client_organisations')
+      .select('name')
+      .eq('id', TEST_CLIENT_ORGANISATION_ID)
+      .single();
+    const coordinator = await createUser('coordinator', `Coordinator A ${RUN}`);
+    // Submitted, then assigned, as the app would; then the internal notes.
+    for (const patch of [
+      { status: 'submitted' as const, submitted_at: new Date().toISOString() },
+      { coordinator_id: coordinator, assigned_by: coordinator },
+      {
+        clarification_note: `Check catering budget ${RUN}`,
+        clarification_requested_by: coordinator,
+        clarification_requested_at: new Date().toISOString(),
+        technical_support_notes: `Wireless microphone ${RUN}`,
+        equipment_required: true,
+      },
+    ]) {
+      const { error } = await admin.from('event_request').update(patch).eq('id', eventId);
+      if (error) throw new Error(`could not prepare test event: ${error.message}`);
+    }
+    const otherAttendee = await createUser('attendee2', `Lim Wei Jie ${RUN}`);
+    await admin.from('event_registration').insert({
+      event_request_id: eventId,
+      attendee_id: otherAttendee,
+      full_name: `Lim Wei Jie ${RUN}`,
+      email: `attendee2+${RUN}@example.com`,
+      contact_number: '+65 9000 0000',
+    });
+
+    const view = await getRegistrationPage(eventId, attendeeId, NOW);
+    const shown = JSON.stringify(view);
+
+    // Only the AC3 fields, plus SCRUM-181's registration state.
+    expect(Object.keys(view).sort()).toEqual(
+      ['description', 'eventDate', 'eventName', 'eventRequestId', 'period', 'periodRefusal', 'registration', 'times', 'venues'],
+    );
+    expect(view.venues).toEqual([{ name: `Marina Bay Ballroom ${RUN}`, address: BALLROOM_ADDRESS }]);
+    for (const hidden of [
+      client!.name,
+      `Check catering budget ${RUN}`,
+      `Wireless microphone ${RUN}`,
+      `Coordinator A ${RUN}`,
+      `Lim Wei Jie ${RUN}`,
+      `attendee2+${RUN}@example.com`,
+      'confirmed',
+    ]) {
+      expect(shown).not.toContain(hidden);
+    }
+    expect(view.registration).toBeNull();
+  });
+
+  it("TC-180-08 the page shows both confirmed venues with their addresses, not a released booking's venue", async () => {
+    const eventId = await createEvent('Product Launch Briefing', {
+      bookings: [
+        { venueId: ballroomId, status: 'confirmed' },
+        { venueId: seminarRoomId, status: 'confirmed' },
+        { venueId: trainingRoomId, status: 'released' },
+      ],
+    });
+
+    const view = await getRegistrationPage(eventId, attendeeId, NOW);
+
+    expect(view.venues).toEqual([
+      { name: `Bugis Seminar Room ${RUN}`, address: '200 Victoria Street, Singapore 188021' },
+      { name: `Marina Bay Ballroom ${RUN}`, address: BALLROOM_ADDRESS },
+    ]);
   });
 });

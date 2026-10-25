@@ -34,12 +34,17 @@ import {
  * "Today" is always the Singapore date (AC4).
  */
 
+/** The event as ATTENDEE_EVENT_COLUMNS reads it, with the venues of its bookings. */
 type EventRow = {
   id: string;
   name: string;
+  description: string | null;
   proposed_date: string | null;
+  start_time: string | null;
+  end_time: string | null;
   registration_start_date: string | null;
   registration_end_date: string | null;
+  venue_booking: { status: string; venues: EventVenue | null }[];
 };
 
 type RegistrationRow = {
@@ -75,7 +80,7 @@ async function readEvent(eventRequestId: string): Promise<{ event: EventRow; per
   if (!EventRequestIdSchema.safeParse(eventRequestId).success) throw new NotFoundError('Event');
   const { data, error } = await fetchRegistrationEvent(eventRequestId);
   if (error) throw new ValidationError('The event could not be read.', error.message);
-  const event = data as EventRow | null;
+  const event = data as unknown as EventRow | null;
   if (!event || !event.registration_start_date || !event.registration_end_date) throw new NotFoundError('Event');
   return {
     event,
@@ -96,7 +101,8 @@ function alreadyRegistered(registration: Registration | null): ConflictError {
 /**
  * The Attendee's page for one event: its name and date, the registration
  * period, whether it is open today (AC2, AC3, AC4), and the viewer's own
- * registration if they have one (AC5).
+ * registration if they have one (AC5). SCRUM-180 AC3: also the description,
+ * the start and end times, and each venue's name and address.
  */
 export async function getRegistrationPage(
   eventRequestId: string,
@@ -107,29 +113,17 @@ export async function getRegistrationPage(
   return {
     eventRequestId: event.id,
     eventName: event.name,
+    description: event.description,
     eventDate: event.proposed_date,
+    times: eventTimes(event.start_time, event.end_time),
+    venues: bookedVenues(event.venue_booking),
     period,
     periodRefusal: registrationPeriodRefusal(period, todayInSingapore(now)),
     registration: await readRegistration(eventRequestId, attendeeId),
   };
 }
 
-/** SCRUM-180: an event row with its times and the venues of its bookings. */
-type ListedEventRow = {
-  id: string;
-  name: string;
-  proposed_date: string | null;
-  start_time: string | null;
-  end_time: string | null;
-  venue_booking: { status: string; venues: EventVenue | null }[];
-};
-
-type OpenEventRow = ListedEventRow & {
-  registration_start_date: string | null;
-  registration_end_date: string | null;
-};
-
-function toOpenEvent(row: ListedEventRow): OpenEvent {
+function toOpenEvent(row: EventRow): OpenEvent {
   return {
     eventRequestId: row.id,
     eventName: row.name,
@@ -149,7 +143,7 @@ export async function listOpenEvents(now: Date = new Date()): Promise<OpenEvent[
   const today = todayInSingapore(now);
   const { data, error } = await fetchOpenEvents(today);
   if (error) throw new ValidationError('The events open for registration could not be read.', error.message);
-  return ((data ?? []) as unknown as OpenEventRow[])
+  return ((data ?? []) as unknown as EventRow[])
     .filter((row) =>
       isOpenForRegistration({ startDate: row.registration_start_date, endDate: row.registration_end_date }, today),
     )
