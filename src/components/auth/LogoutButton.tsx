@@ -20,6 +20,11 @@ export function LogoutButton() {
     // the default role. Done before signing out, while the request is still
     // authenticated; a failure here must not stop the logout.
     await fetch('/api/me/working-as', { method: 'DELETE' }).catch(() => undefined);
+    // SCRUM-264 bug fix: also clear the idle-session marker (csp_last_activity).
+    // It is httpOnly, so signOut() below cannot touch it - left behind, its
+    // stale timestamp gets checked against the next login's brand-new session
+    // and wrongly rejects the first login attempt as idle.
+    await fetch('/api/me/session', { method: 'DELETE' }).catch(() => undefined);
     const supabase = createSupabaseBrowserClient();
     await supabase.auth.signOut();
     router.push('/login');
