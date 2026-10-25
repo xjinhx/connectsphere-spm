@@ -372,6 +372,8 @@ export type Database = {
           clarification_requested_at: string | null
           clarification_requested_by: string | null
           client_organisation_id: string | null
+          completed_at: string | null
+          completed_by: string | null
           coordinator_id: string | null
           created_at: string
           decided_at: string | null
@@ -410,6 +412,8 @@ export type Database = {
           clarification_requested_at?: string | null
           clarification_requested_by?: string | null
           client_organisation_id?: string | null
+          completed_at?: string | null
+          completed_by?: string | null
           coordinator_id?: string | null
           created_at?: string
           decided_at?: string | null
@@ -448,6 +452,8 @@ export type Database = {
           clarification_requested_at?: string | null
           clarification_requested_by?: string | null
           client_organisation_id?: string | null
+          completed_at?: string | null
+          completed_by?: string | null
           coordinator_id?: string | null
           created_at?: string
           decided_at?: string | null
@@ -1492,6 +1498,11 @@ export type Database = {
     }
     Functions: {
       clock_minutes: { Args: { p_time: string }; Returns: number }
+      complete_event: {
+        Args: { p_completed_by: string; p_event_request_id: string }
+        Returns: string
+      }
+      complete_past_events: { Args: { p_today?: string }; Returns: number }
       create_venue: {
         Args: {
           p_accessibility_feature_ids: string[]
@@ -1540,6 +1551,7 @@ export type Database = {
           window_start: string
         }[]
       }
+      event_end_date: { Args: { p_event_request_id: string }; Returns: string }
       event_has_places_remaining: {
         Args: { p_event_request_id: string }
         Returns: boolean
