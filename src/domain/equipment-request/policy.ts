@@ -2,7 +2,7 @@ import { isCurrentCoordinator } from '@/domain/assignment/policy';
 import type { EventRequestStatus } from '@/domain/event-request/schema';
 import { isActionPermitted } from '@/domain/identity/permissions';
 import type { Role } from '@/domain/identity/roles';
-import type { EquipmentRequestStatus } from './schema';
+import type { EquipmentRequestStatus, NotReadyReason, Suitability, SuitabilityVerdict } from './schema';
 
 /**
  * Equipment request rules (SCRUM-160 Record the equipment an event needs).
@@ -250,4 +250,122 @@ export function notifiesCoordinator(status: EquipmentRequestStatus): boolean {
 /** AC4: the notification the assigned coordinator receives, naming the event and the reason. */
 export function unableToFulfilMessage(event: { reference: string; name: string }, reason: string): string {
   return `Technical Support cannot fulfil the equipment request for ${event.reference} (${event.name}): ${reason}`;
+}
+
+// ---------------------------------------------------------------------------
+// SCRUM-171 — Assess whether requested equipment is suitable for the event
+// ---------------------------------------------------------------------------
+
+/** AC1: "record why" - required when an item is not suitable (TC-171-02, TC-171-04). */
+export const NOT_SUITABLE_REASON_MESSAGE = 'Give the reason this item is not suitable.';
+
+/** An item id that is not on this request (sent by hand, or an item removed meanwhile). */
+export const UNKNOWN_SUITABILITY_LINE_MESSAGE = 'One of the items marked is not on this request.';
+
+export type SuitabilityProblem = { field: 'reason' | 'verdicts'; message: string; lineIds: string[] };
+
+/**
+ * What stops a review from being saved, or null when nothing does. Checked
+ * before anything is written, so a refusal leaves every item as it was.
+ *
+ * AC1: not suitable needs a reason (TC-171-02); a reason of only spaces is no
+ * reason (TC-171-04, already null after the schema). Suitable may have one or
+ * not (TC-171-03), and an item may be left unmarked (AC4, TC-171-14).
+ * `requestLineIds` are the ids of the request's items.
+ */
+export function suitabilityProblem(
+  verdicts: readonly SuitabilityVerdict[],
+  requestLineIds: readonly string[],
+): SuitabilityProblem | null {
+  const unknown = verdicts.filter((v) => !requestLineIds.includes(v.lineId)).map((v) => v.lineId);
+  if (unknown.length > 0) return { field: 'verdicts', message: UNKNOWN_SUITABILITY_LINE_MESSAGE, lineIds: unknown };
+  const missing = verdicts.filter((v) => v.suitability === 'not_suitable' && v.reason === null).map((v) => v.lineId);
+  if (missing.length > 0) return { field: 'reason', message: NOT_SUITABLE_REASON_MESSAGE, lineIds: missing };
+  return null;
+}
+
+/**
+ * What is stored for a verdict: the reason with a verdict, nothing for an
+ * unmarked item, so clearing a mark clears its reason too.
+ */
+export function suitabilityToStore(verdict: SuitabilityVerdict): {
+  lineId: string;
+  suitability: Suitability | null;
+  reason: string | null;
+} {
+  return {
+    lineId: verdict.lineId,
+    suitability: verdict.suitability,
+    reason: verdict.suitability === null ? null : verdict.reason,
+  };
+}
+
+/**
+ * AC2: "when I save the review, then it appears on the request as an unmet
+ * requirement with my reason". The items marked not suitable, in the
+ * request's order. Read from the verdicts as stored, so marking an item
+ * suitable again takes it off (TC-171-08).
+ */
+export function unmetRequirements<T extends { suitability: Suitability | null }>(lines: readonly T[]): T[] {
+  return lines.filter((line) => line.suitability === 'not_suitable');
+}
+
+/** One item as AC4 reads it: its verdict, and what SCRUM-167's check found short. */
+export type ReviewedLine = {
+  lineId: string;
+  equipmentName: string;
+  suitability: Suitability | null;
+};
+
+/** SCRUM-167 AC4: one checked line - how many are still short for the window. */
+export type CheckedAvailability = { lineId: string; shortfall: number };
+
+/**
+ * AC4: "Given every requested item is marked suitable and is available for the
+ * commitment window, when I complete the review, then the request is marked
+ * ready to reserve."
+ *
+ * Returns why it is not ready - empty when it is. Each item must be:
+ * - marked, and marked suitable (TC-171-11, TC-171-14);
+ * - available for the window: SCRUM-167's checkEquipmentAvailability shows no
+ *   shortfall (TC-171-12, TC-171-13, TC-171-17). Its figure already takes off
+ *   units out of service and other events' reservations, so this never
+ *   compares against the catalogue quantity itself.
+ *
+ * `availability` is null when SCRUM-167 refused the check (no approved venue
+ * booking, so no window): nothing can be available for a window the event
+ * does not have. A request with no items has nothing to reserve, so it is not
+ * ready either.
+ */
+export function notReadyReasons(
+  lines: readonly ReviewedLine[],
+  availability: readonly CheckedAvailability[] | null,
+  noWindowMessage: string,
+): NotReadyReason[] {
+  if (lines.length === 0) return [{ kind: 'no_items', message: 'No equipment has been requested.' }];
+  const reasons: NotReadyReason[] = [];
+  for (const line of lines) {
+    if (line.suitability === null) {
+      reasons.push({ kind: 'unmarked', message: `${line.equipmentName} has not been marked.` });
+    } else if (line.suitability === 'not_suitable') {
+      reasons.push({ kind: 'not_suitable', message: `${line.equipmentName} is not suitable.` });
+    }
+  }
+  if (availability === null) {
+    reasons.push({ kind: 'no_window', message: noWindowMessage });
+    return reasons;
+  }
+  for (const line of lines) {
+    const checked = availability.find((entry) => entry.lineId === line.lineId);
+    if (!checked) {
+      // Added after the check ran: not known to be available, so not ready.
+      reasons.push({ kind: 'short', message: `${line.equipmentName} has not been checked for the commitment window.` });
+      continue;
+    }
+    const shortfall = checked.shortfall;
+    if (shortfall > 0) {
+      reasons.push({ kind: 'short', message: `${line.equipmentName} is short by ${shortfall} for the commitment window.` });
+    }
+  }
+  return reasons;
 }
