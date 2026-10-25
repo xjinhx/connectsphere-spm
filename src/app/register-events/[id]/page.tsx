@@ -1,3 +1,4 @@
+import { EventFullNotice } from '@/components/event-registration/EventFullNotice';
 import { RegistrationConfirmation } from '@/components/event-registration/RegistrationConfirmation';
 import { RegistrationForm } from '@/components/event-registration/RegistrationForm';
 import { getRegistrationPage } from '@/domain/event-registration/service';
@@ -15,7 +16,8 @@ export const dynamic = 'force-dynamic';
  *
  * AC1: the form, while the period is open. AC2, AC3: outside it, the start or
  * end date instead of the form. AC5: someone already registered sees their
- * registration instead of the form.
+ * registration instead of the form. SCRUM-182 AC1: a full event is shown as
+ * full instead of the form.
  *
  * Reached by its address for now: listing the events open for registration is
  * another story's, and the Attendee nav is SCRUM-255's (D-20).
@@ -52,6 +54,8 @@ export default async function AttendeeEventRegistrationPage({ params }: { params
         <p role="status" className="mt-6 rounded-lg border border-[var(--border)] bg-[var(--surface)] p-4 text-sm">
           {view.periodRefusal}
         </p>
+      ) : view.full ? (
+        <EventFullNotice />
       ) : canRegister ? (
         <RegistrationForm eventRequestId={view.eventRequestId} eventName={view.eventName} />
       ) : (

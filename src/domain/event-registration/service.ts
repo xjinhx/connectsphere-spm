@@ -10,12 +10,14 @@ import {
   ALREADY_REGISTERED,
   NO_PLACES_REMAINING,
   endedMessage,
+  isEventFull,
   notStartedMessage,
   registrationPeriodRefusal,
 } from './policy';
 import { todayInSingapore } from '@/domain/shared/dates';
 import { CapacityExceededError, ConflictError, NotFoundError, ValidationError } from '@/domain/shared/errors';
 import {
+  countRegisteredRegistrations,
   createRegistrationRow,
   fetchRegisteredRegistration,
   fetchRegistrationEvent,
@@ -34,6 +36,7 @@ type EventRow = {
   proposed_date: string | null;
   registration_start_date: string | null;
   registration_end_date: string | null;
+  registration_capacity: number | null;
 };
 
 type RegistrationRow = {
@@ -83,14 +86,21 @@ async function readRegistration(eventRequestId: string, attendeeId: string): Pro
   return data ? toRegistration(data as RegistrationRow) : null;
 }
 
+/** SCRUM-182 AC1: whether the event's capacity is reached (or not set). */
+async function readFull(event: EventRow): Promise<boolean> {
+  const { count, error } = await countRegisteredRegistrations(event.id);
+  if (error) throw new ValidationError('The places remaining could not be read.', error.message);
+  return isEventFull(event.registration_capacity, count ?? 0);
+}
+
 function alreadyRegistered(registration: Registration | null): ConflictError {
   return new ConflictError(ALREADY_REGISTERED, { registration });
 }
 
 /**
  * The Attendee's page for one event: its name and date, the registration
- * period, whether it is open today (AC2, AC3, AC4), and the viewer's own
- * registration if they have one (AC5).
+ * period, whether it is open today (AC2, AC3, AC4), whether it is full
+ * (SCRUM-182 AC1), and the viewer's own registration if they have one (AC5).
  */
 export async function getRegistrationPage(
   eventRequestId: string,
@@ -104,6 +114,7 @@ export async function getRegistrationPage(
     eventDate: event.proposed_date,
     period,
     periodRefusal: registrationPeriodRefusal(period, todayInSingapore(now)),
+    full: await readFull(event),
     registration: await readRegistration(eventRequestId, attendeeId),
   };
 }
@@ -116,12 +127,14 @@ export async function getRegistrationPage(
  * Checked in this order:
  *   - AC5 first: someone already registered is shown their registration, even
  *     once the period has closed, rather than told it is closed;
- *   - then the period (AC2, AC3, AC4), before the fields, so a form that could
- *     never be accepted is not picked apart field by field;
+ *   - then the period (AC2, AC3, AC4) and whether the event is full
+ *     (SCRUM-182 AC1), before the fields, so a form that could never be
+ *     accepted is not picked apart field by field;
  *   - then the fields (AC1).
  * The database function checks the period, the duplicate and places remaining
  * again with the event row locked, so two registrations sent at the same
- * moment still make only one (TC-181-15).
+ * moment still make only one (TC-181-15), and two attendees going for the last
+ * place get one place between them (SCRUM-182 AC2).
  *
  * No limit on how many events one attendee joins (AC6): nothing here looks at
  * the attendee's other registrations.
@@ -134,7 +147,7 @@ export async function registerForEvent(
   input: unknown,
   now: Date = new Date(),
 ): Promise<Registration> {
-  const { period } = await readEvent(eventRequestId);
+  const { event, period } = await readEvent(eventRequestId);
 
   const existing = await readRegistration(eventRequestId, attendeeId);
   if (existing) throw alreadyRegistered(existing);
@@ -142,6 +155,8 @@ export async function registerForEvent(
   const today = todayInSingapore(now);
   const refusal = registrationPeriodRefusal(period, today);
   if (refusal) throw new ValidationError(refusal, period);
+
+  if (await readFull(event)) throw new CapacityExceededError(NO_PLACES_REMAINING);
 
   const parsed = RegistrationInputSchema.safeParse(input);
   if (!parsed.success) {
@@ -165,6 +180,7 @@ export async function registerForEvent(
     case 'ended':
       throw new ValidationError(endedMessage(period), period);
     case 'full':
+      // SCRUM-182 AC2: another request took the last place after the read above.
       throw new CapacityExceededError(NO_PLACES_REMAINING);
     default:
       // 'not_found' or 'not_open': the event or its period went after the read above.

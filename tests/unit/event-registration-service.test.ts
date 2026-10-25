@@ -12,18 +12,20 @@ import { beforeEach, describe, expect, it, vi } from 'vitest';
  */
 
 vi.mock('@/lib/supabase/eventRegistrations', () => ({
+  countRegisteredRegistrations: vi.fn(),
   fetchRegistrationEvent: vi.fn(),
   fetchRegisteredRegistration: vi.fn(),
   createRegistrationRow: vi.fn(),
 }));
 
 import {
+  countRegisteredRegistrations,
   createRegistrationRow,
   fetchRegisteredRegistration,
   fetchRegistrationEvent,
 } from '@/lib/supabase/eventRegistrations';
 import { getRegistrationPage, registerForEvent } from '@/domain/event-registration/service';
-import { ALREADY_REGISTERED } from '@/domain/event-registration/policy';
+import { ALREADY_REGISTERED, NO_PLACES_REMAINING } from '@/domain/event-registration/policy';
 import { CapacityExceededError, ConflictError, NotFoundError, ValidationError } from '@/domain/shared/errors';
 
 const EVENT_ID = '11111111-1111-4111-8111-111111111111';
@@ -43,7 +45,7 @@ const ROW = {
   registered_at: '2026-10-30T02:00:00+00:00',
 };
 
-function eventWithPeriod(start: string | null, end: string | null) {
+function eventWithPeriod(start: string | null, end: string | null, capacity: number | null = 20) {
   vi.mocked(fetchRegistrationEvent).mockResolvedValue({
     data: {
       id: EVENT_ID,
@@ -51,9 +53,15 @@ function eventWithPeriod(start: string | null, end: string | null) {
       proposed_date: '2026-11-15',
       registration_start_date: start,
       registration_end_date: end,
+      registration_capacity: capacity,
     },
     error: null,
   } as never);
+}
+
+/** SCRUM-182: how many places the event's Registered registrations take. */
+function placesTaken(count: number) {
+  vi.mocked(countRegisteredRegistrations).mockResolvedValue({ count, error: null } as never);
 }
 
 /** The attendee's Registered row: none before the insert, then `after` once it has run. */
@@ -80,6 +88,7 @@ async function refusal(promise: Promise<unknown>) {
 beforeEach(() => {
   vi.clearAllMocks();
   eventWithPeriod('2026-10-27', '2026-11-04');
+  placesTaken(10);
   registrations(null, ROW);
   databaseSays('registered');
 });
@@ -120,7 +129,7 @@ describe('AC1: registering with the period open and places remaining', () => {
     expect(createRegistrationRow).not.toHaveBeenCalled();
   });
 
-  it('refuses when the database finds no places remaining (SCRUM-182 decides when; D-23 never says so yet)', async () => {
+  it('refuses when the database finds no places remaining (SCRUM-182; its cases are below)', async () => {
     databaseSays('full');
     await expect(registerForEvent(EVENT_ID, ATTENDEE, VALID, NOW)).rejects.toThrow(CapacityExceededError);
   });
@@ -276,5 +285,67 @@ describe("the attendee's event page", () => {
     const view = await getRegistrationPage(EVENT_ID, ATTENDEE, NOW);
     expect(view.registration).toMatchObject({ reference: 'REG-2026-0001' });
     expect(view).toMatchObject({ eventName: 'Client Appreciation Night', eventDate: '2026-11-15' });
+  });
+});
+
+/**
+ * SCRUM-182 Refuse registration once the event is full (Jira, authoritative).
+ * Test case IDs are from SCRUM-182-test-cases.xlsx (TC-182-nn). That the
+ * database counts the same way, and holds under two requests at once, runs in
+ * tests/integration/refuse-full-registration.test.ts.
+ */
+describe('SCRUM-182 AC1: a full event refuses registration and is shown as full', () => {
+  it('TC-182-01 at 20 of 20: refused as full, and nothing is written', async () => {
+    placesTaken(20);
+
+    const error = await refusal(registerForEvent(EVENT_ID, ATTENDEE, VALID, NOW));
+
+    expect(error).toBeInstanceOf(CapacityExceededError);
+    expect((error as Error).message).toBe(NO_PLACES_REMAINING);
+    expect(createRegistrationRow).not.toHaveBeenCalled();
+    expect((await getRegistrationPage(EVENT_ID, ATTENDEE, NOW)).full).toBe(true);
+  });
+
+  it('TC-182-02 no capacity set: refused the same way, and the page shows it as full', async () => {
+    eventWithPeriod('2026-10-27', '2026-11-04', null);
+    placesTaken(0);
+
+    await expect(registerForEvent(EVENT_ID, ATTENDEE, VALID, NOW)).rejects.toThrow(NO_PLACES_REMAINING);
+    expect(createRegistrationRow).not.toHaveBeenCalled();
+    expect((await getRegistrationPage(EVENT_ID, ATTENDEE, NOW)).full).toBe(true);
+  });
+
+  it('TC-182-03 at 19 of 20 the last place can be taken, and the page is not full', async () => {
+    placesTaken(19);
+
+    await registerForEvent(EVENT_ID, ATTENDEE, VALID, NOW);
+
+    expect(createRegistrationRow).toHaveBeenCalledTimes(1);
+    registrations(null);
+    expect((await getRegistrationPage(EVENT_ID, ATTENDEE, NOW)).full).toBe(false);
+  });
+
+  it("TC-182-04 counts only this event's registrations", async () => {
+    await registerForEvent(EVENT_ID, ATTENDEE, VALID, NOW);
+    expect(countRegisteredRegistrations).toHaveBeenCalledWith(EVENT_ID);
+  });
+
+  it('a full event is refused before the fields are checked, as a closed period is', async () => {
+    placesTaken(20);
+    await expect(registerForEvent(EVENT_ID, ATTENDEE, { fullName: '', email: '', contactNumber: '' }, NOW)).rejects.toThrow(
+      CapacityExceededError,
+    );
+  });
+
+  it('a closed period is said before full: the end date is what the attendee needs (SCRUM-181 AC3)', async () => {
+    eventWithPeriod('2026-10-20', '2026-10-28');
+    placesTaken(20);
+    await expect(registerForEvent(EVENT_ID, ATTENDEE, VALID, NOW)).rejects.toThrow('Registration closed on 28/10/2026.');
+  });
+
+  it('someone already registered on a full event is shown their registration, not told it is full (SCRUM-181 AC5)', async () => {
+    placesTaken(20);
+    registrations(ROW);
+    await expect(registerForEvent(EVENT_ID, ATTENDEE, VALID, NOW)).rejects.toThrow(ALREADY_REGISTERED);
   });
 });

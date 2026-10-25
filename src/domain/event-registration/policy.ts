@@ -47,5 +47,21 @@ export function registrationPeriodRefusal(period: RegistrationPeriod, today: ISO
 /** AC5: the second registration is refused; the existing one is shown alongside. */
 export const ALREADY_REGISTERED = 'You are already registered for this event.';
 
-/** Refusing a full event is SCRUM-182's; register_for_event can already say so. */
+/** SCRUM-182 AC1, AC2: refused as full. */
 export const NO_PLACES_REMAINING = 'There are no places remaining for this event.';
+
+/**
+ * SCRUM-182 AC1, AC3: whether the event is full. Only Registered
+ * registrations count, so a withdrawal gives its place back (AC3).
+ *
+ * No capacity set is full: there is nothing to count against, so no place is
+ * given (PO, 25/10/2026, TC-182-02). A capacity below the number registered is
+ * full too, until enough withdraw to bring the count below it (TC-182-10).
+ *
+ * Restated in SQL by event_has_places_remaining
+ * (20261025184920_event_registration_capacity.sql), which register_for_event
+ * asks with the event row locked; change one, change the other.
+ */
+export function isEventFull(capacity: number | null, registeredCount: number): boolean {
+  return capacity === null || registeredCount >= capacity;
+}
