@@ -20,6 +20,8 @@ import { listEventVenueBookings } from '@/domain/venue-booking/service';
 import { listVenues } from '@/domain/venues/service';
 import { EssentialArrangementsPanel } from '@/components/event-request/EssentialArrangementsPanel';
 import { getEssentialArrangements } from '@/domain/essential-arrangements/service';
+import { EventInformationPanel } from '@/components/event-request/EventInformationPanel';
+import { getEventInformation } from '@/domain/event-information/service';
 import { ConfirmEventButton } from '@/components/event-request/ConfirmEventButton';
 import { canBeConfirmed } from '@/domain/event-status/policy';
 import {
@@ -175,6 +177,11 @@ export default async function ReviewEventRequestPage({
   // SCRUM-100 AC1-AC3, read for the same reason after getReviewDetail.
   const essentialArrangements = await getEssentialArrangements(request.id, actor.userId);
 
+  // SCRUM-110 AC1/AC5, read for the same reason after getReviewDetail. It also
+  // refuses anyone who is neither the assigned coordinator nor the Lead,
+  // because it carries the internal notes.
+  const eventInformation = await getEventInformation(request.id, actor);
+
   // SCRUM-135 AC3: the venues already checked, shown again without running
   // them. Only the event's own coordinator has any; anyone else sees none.
   let suitabilityChecks: SuitabilityCheck[] = [];
@@ -247,7 +254,8 @@ export default async function ReviewEventRequestPage({
 
       <dl className="mt-6 rounded-lg border border-[var(--border)] bg-[var(--surface)] px-4">
         <Row label="Purpose" value={request.purpose ?? 'Not provided'} />
-        <Row label="Description" value={request.description ?? 'Not provided'} />
+        {/* Description moved to the Event information section below
+            (SCRUM-110), where the coordinator can edit it. */}
         <Row
           label="Proposed date"
           value={request.proposedDate ? formatSingaporeDate(request.proposedDate) : 'Not provided'}
@@ -277,6 +285,11 @@ export default async function ReviewEventRequestPage({
           <Row label="Submitted" value={formatSingaporeDateTime(request.submittedAt)} />
         ) : null}
       </dl>
+
+      {/* SCRUM-110 AC1/AC5 — description, internal notes and client contact.
+          The edit action only for the assigned coordinator of an event that is
+          not Completed or Cancelled; saving flags no arrangement. */}
+      <EventInformationPanel requestId={request.id} view={eventInformation} />
 
       {/* SCRUM-92 AC1 — "given I am reviewing a submitted request, when I
           approve it". This page is what the card means by reviewing it.

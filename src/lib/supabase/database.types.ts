@@ -371,6 +371,9 @@ export type Database = {
           clarification_note: string | null
           clarification_requested_at: string | null
           clarification_requested_by: string | null
+          client_contact_email: string | null
+          client_contact_name: string | null
+          client_contact_phone: string | null
           client_organisation_id: string | null
           coordinator_id: string | null
           created_at: string
@@ -382,6 +385,7 @@ export type Database = {
           equipment_required: boolean | null
           expected_attendance: number | null
           id: string
+          internal_notes: string | null
           name: string
           organiser_id: string
           preferred_location_id: string | null
@@ -409,6 +413,9 @@ export type Database = {
           clarification_note?: string | null
           clarification_requested_at?: string | null
           clarification_requested_by?: string | null
+          client_contact_email?: string | null
+          client_contact_name?: string | null
+          client_contact_phone?: string | null
           client_organisation_id?: string | null
           coordinator_id?: string | null
           created_at?: string
@@ -420,6 +427,7 @@ export type Database = {
           equipment_required?: boolean | null
           expected_attendance?: number | null
           id?: string
+          internal_notes?: string | null
           name: string
           organiser_id: string
           preferred_location_id?: string | null
@@ -447,6 +455,9 @@ export type Database = {
           clarification_note?: string | null
           clarification_requested_at?: string | null
           clarification_requested_by?: string | null
+          client_contact_email?: string | null
+          client_contact_name?: string | null
+          client_contact_phone?: string | null
           client_organisation_id?: string | null
           coordinator_id?: string | null
           created_at?: string
@@ -458,6 +469,7 @@ export type Database = {
           equipment_required?: boolean | null
           expected_attendance?: number | null
           id?: string
+          internal_notes?: string | null
           name?: string
           organiser_id?: string
           preferred_location_id?: string | null
