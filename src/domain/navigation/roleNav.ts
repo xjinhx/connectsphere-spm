@@ -20,8 +20,12 @@ export const ROLE_NAV: Record<Role, readonly NavItem[]> = {
   operations_manager: [{ href: '/assignment-queue', label: 'Assignment queue' }],
   // DUMMY(SCRUM-253) D-20: Venue Staff nav is the landing page only.
   venue_staff: [{ href: '/booking-queue', label: 'Booking requests' }],
-  // DUMMY(SCRUM-254) D-20: Technical Support Staff nav is the landing page only.
-  technical_support: [{ href: '/equipment-queue', label: 'Equipment requests' }],
+  // SCRUM-254 AC2: Equipment requests, Equipment catalogue, Venues, in that order.
+  technical_support: [
+    { href: '/equipment-queue', label: 'Equipment requests' },
+    { href: '/equipment', label: 'Equipment catalogue' },
+    { href: '/venues', label: 'Venues' },
+  ],
   // DUMMY(SCRUM-255) D-20: Attendee nav is the landing page only.
   attendee: [{ href: '/register-events', label: 'Open events' }],
   // DUMMY(SCRUM-256) D-20: Safety Officer nav is the landing page only.

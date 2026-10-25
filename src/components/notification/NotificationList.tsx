@@ -14,6 +14,9 @@ const TYPE_LABELS: Record<string, string> = {
   venue_booking_update: 'Venue booking',
   request_submitted: 'Needs a coordinator',
   coordinator_unassigned: 'Coordinator removed',
+  event_confirmed: 'Event confirmed',
+  // SCRUM-166 AC4.
+  equipment_unable_to_fulfil: 'Equipment unable to fulfil',
 };
 
 /**

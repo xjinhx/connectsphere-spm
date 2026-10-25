@@ -2,7 +2,14 @@ import { ValidationError } from '@/domain/shared/errors';
 import { isActionPermitted } from '@/domain/identity/permissions';
 import type { Role } from '@/domain/identity/roles';
 import { toMinutes, type ClockRange, type ClockTime } from '@/domain/shared/times';
-import { CALENDAR_PERIOD_KINDS, type CalendarDay, type CalendarPeriod, type VenueLayoutInput } from './schema';
+import {
+  CALENDAR_PERIOD_KINDS,
+  type CalendarDay,
+  type CalendarPeriod,
+  type RoomLayout,
+  type VenueLayoutInput,
+  type VenueSearchFilters,
+} from './schema';
 
 /**
  * Venue Catalogue business rules. Pure functions: no Supabase, no Next.js.
@@ -280,4 +287,67 @@ export function canManageVenues(roles: Role[]): boolean {
  */
 export function canViewVenueCatalogue(roles: Role[]): boolean {
   return isActionPermitted(roles, 'venue_catalogue_view');
+}
+
+// -----------------------------------------------------------------------------
+// SCRUM-130 Filter by capacity, layout, accessibility, facilities and location
+// -----------------------------------------------------------------------------
+
+/** What the filters look at on a venue. */
+export type FilterableVenue = {
+  maxCapacity: number;
+  locationId: string;
+  layouts: readonly { layout: RoomLayout; capacity: number }[];
+  facilityIds: readonly string[];
+  accessibilityFeatureIds: readonly string[];
+};
+
+/** Whether any filter is set: an empty result then gets the filter message (TC-130-26, TC-130-27). */
+export function hasVenueSearchFilters(filters: VenueSearchFilters): boolean {
+  return (
+    filters.minCapacity !== undefined ||
+    filters.layout !== undefined ||
+    filters.locationId !== undefined ||
+    filters.facilityIds.length > 0 ||
+    filters.accessibilityFeatureIds.length > 0
+  );
+}
+
+/** The capacity the venue records for `layout`, or null when it does not support it. */
+export function layoutCapacity(venue: Pick<FilterableVenue, 'layouts'>, layout: RoomLayout): number | null {
+  return venue.layouts.find((entry) => entry.layout === layout)?.capacity ?? null;
+}
+
+/**
+ * Whether the venue matches every filter set (they combine with AND). A
+ * filter left unset does not narrow anything.
+ *
+ * AC1 "Given I set a minimum capacity of 100 and select no layout, when I
+ *     search, then only venues whose maximum capacity is 100 or more are
+ *     returned." 100 is in, 99 is out (TC-130-02, 03).
+ * AC2 "... and select the Theatre layout ... only venues whose recorded
+ *     Theatre capacity is 100 or more". With a layout, its capacity is what
+ *     counts, never the maximum: a venue that does not record the layout has
+ *     no capacity for it and is out (TC-130-07).
+ * AC3 "Given I select a required layout ... only venues recording support for
+ *     that layout".
+ * AC4 "Given I select several required facilities ... only venues providing
+ *     all of the selected facilities" - all, not any (TC-130-13).
+ * AC5 "... I select one of them [a location] ... only venues at that location".
+ * AC6 "Given I leave location unset ... venues at all locations".
+ * AC7 "Given I select one or more required accessibility features ... only
+ *     venues recording all of the selected features" - all, not any (TC-130-19).
+ */
+export function matchesVenueSearchFilters(venue: FilterableVenue, filters: VenueSearchFilters): boolean {
+  if (filters.layout !== undefined) {
+    const capacity = layoutCapacity(venue, filters.layout);
+    if (capacity === null) return false; // AC3
+    if (filters.minCapacity !== undefined && capacity < filters.minCapacity) return false; // AC2
+  } else if (filters.minCapacity !== undefined && venue.maxCapacity < filters.minCapacity) {
+    return false; // AC1
+  }
+  if (!filters.facilityIds.every((id) => venue.facilityIds.includes(id))) return false; // AC4
+  if (filters.locationId !== undefined && venue.locationId !== filters.locationId) return false; // AC5, AC6
+  if (!filters.accessibilityFeatureIds.every((id) => venue.accessibilityFeatureIds.includes(id))) return false; // AC7
+  return true;
 }

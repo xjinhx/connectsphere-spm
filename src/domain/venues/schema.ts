@@ -331,6 +331,70 @@ export const VenueSearchQuerySchema = z
   .and(ClockRangeSchema);
 export type VenueSearchQuery = z.infer<typeof VenueSearchQuerySchema>;
 
+// -----------------------------------------------------------------------------
+// SCRUM-130 Filter by capacity, layout, accessibility, facilities and location
+// -----------------------------------------------------------------------------
+
+/**
+ * The filters narrow SCRUM-239's search; the date and the start and end time
+ * stay required (VenueSearchQuerySchema). Every filter is optional, and every
+ * filter set must hold (they combine with AND). They arrive as query string
+ * text, so a blank value means the filter is not set.
+ */
+export const MIN_CAPACITY_MESSAGE = 'Minimum capacity must be a whole number greater than 0.';
+export const CHOOSE_LAYOUT_MESSAGE = 'Choose a layout from the list.';
+
+/** With filters set and nothing found (TC-130-26); without any, SCRUM-239's message stays (TC-130-27). */
+export const NO_VENUE_MATCHES_FILTERS_MESSAGE = 'No venue matches your filters for that period';
+
+/** Query string text: '' (an empty field) is "not set". */
+const blankToUndefined = (value: unknown) => (value === '' || value === null ? undefined : value);
+
+/** A repeated query parameter arrives as one string or several: always a list. */
+const toList = (value: unknown) => {
+  const blank = blankToUndefined(value);
+  if (blank === undefined) return [];
+  return (Array.isArray(blank) ? blank : [blank]).filter((item) => item !== '');
+};
+
+/**
+ * AC1, AC2: the same rule as a venue's capacity (MaxCapacitySchema): a whole
+ * number greater than 0. Text that is a number is read as one; anything else
+ * ("abc") is refused with the same message (TC-130-05: 0, -5, abc, 10.5).
+ */
+const MinCapacitySchema = z.preprocess(
+  (value) => {
+    const blank = blankToUndefined(value);
+    if (typeof blank !== 'string') return blank;
+    const text = blank.trim();
+    if (text === '') return undefined;
+    return /^-?\d+(\.\d+)?$/.test(text) ? Number(text) : text;
+  },
+  z
+    .number({ invalid_type_error: MIN_CAPACITY_MESSAGE })
+    .int(MIN_CAPACITY_MESSAGE)
+    .positive(MIN_CAPACITY_MESSAGE)
+    .max(CAPACITY_COLUMN_MAX, 'Minimum capacity is too large.')
+    .optional(),
+);
+
+export const VenueSearchFiltersSchema = z.object({
+  /** AC1 (no layout): the venue's maximum capacity; AC2 (with a layout): that layout's capacity. */
+  minCapacity: MinCapacitySchema,
+  /** AC3: venues recording support for this layout. */
+  layout: z.preprocess(
+    blankToUndefined,
+    z.enum(ROOM_LAYOUTS, { errorMap: () => ({ message: CHOOSE_LAYOUT_MESSAGE }) }).optional(),
+  ),
+  /** AC5: one location from the maintained list; AC6: unset means every location. */
+  locationId: z.preprocess(blankToUndefined, z.string().uuid('Location must be chosen from the list.').optional()),
+  /** AC4: venues providing all of these facilities. */
+  facilityIds: z.preprocess(toList, IdListSchema('facility')),
+  /** AC7: venues recording all of these accessibility features. */
+  accessibilityFeatureIds: z.preprocess(toList, IdListSchema('accessibility feature')),
+});
+export type VenueSearchFilters = z.infer<typeof VenueSearchFiltersSchema>;
+
 /**
  * SCRUM-123: the longest range one calendar view shows. The card sets no
  * limit; 31 days (a month) is the team's choice (6 Oct 2026), so a single
@@ -399,12 +463,19 @@ export const VenueSummarySchema = z.object({
 });
 export type VenueSummary = z.infer<typeof VenueSummarySchema>;
 
-/** SCRUM-239 AC2: the venues free for the whole searched period, echoed with what was searched. */
+/**
+ * SCRUM-239 AC2: the venues free for the whole searched period, echoed with what was searched.
+ *
+ * SCRUM-130: only those matching every filter set. `filtered` says whether any
+ * filter was set, so the page knows which message an empty result gets, and
+ * `layoutCapacity` is the chosen layout's capacity (null without a layout).
+ */
 export const VenueSearchResultSchema = z.object({
   date: z.string(),
   start: z.string(),
   end: z.string(),
-  venues: z.array(VenueSummarySchema),
+  filtered: z.boolean(),
+  venues: z.array(VenueSummarySchema.extend({ layoutCapacity: z.number().int().nullable() })),
 });
 export type VenueSearchResult = z.infer<typeof VenueSearchResultSchema>;
 
