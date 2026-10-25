@@ -729,7 +729,9 @@ switch them the next time they edit those files.
   and end dates)
 - **Where:** `scripts/seed-event-registration-test-data.mjs` — the header
   comment (`DUMMY(SCRUM-185) D-22`), and the `registration_start_date` /
-  `registration_end_date` it writes for each event
+  `registration_end_date` it writes for each event. Also
+  `scripts/seed-scrum180.mjs` (SCRUM-180, branch `browse-open-events`), the
+  same way, for the events Open events lists or leaves out (TC-180-01 to 05)
 - **What is real and what is faked:** the period is real. The columns
   `event_request.registration_start_date` and `registration_end_date` (dates,
   both inclusive, added by SCRUM-181's migration
@@ -742,7 +744,9 @@ switch them the next time they edit those files.
 - **To replace:** SCRUM-185 AC5's form saves to the same two columns (both
   together; the table refuses one without the other, or an end before the
   start). Set the periods through the form for TC-181-05 to TC-181-12 instead
-  of the seed, remove the marker, and re-run those test cases.
+  of the seed, remove the marker, and re-run those test cases. Then the same
+  for SCRUM-180's TC-180-01 to TC-180-05, which read the same two columns
+  (Open events lists an event while today is inside its period).
 - **Status:** Active.
 
 ### D-23 — Places always remain
