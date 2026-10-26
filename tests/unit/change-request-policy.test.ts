@@ -6,24 +6,18 @@ import { RaiseChangeRequestInputSchema } from '@/domain/change-request/schema';
  * SCRUM-187 — Request a change and track its outcome.
  *
  * The rules on their own, with no database. AC text is from the Jira card.
- * Status scope is deliberately narrow (submitted, confirmed only) pending PO
- * confirmation on the AC1 status-scope question (Slack, 24 Oct 2026) — see
- * canRaiseChangeRequest's comment in policy.ts.
+ * Status scope per CL-61 (PO clarification, 24 Oct 2026): offered from
+ * Submitted until the event is finished — see canRaiseChangeRequest's
+ * comment in policy.ts.
  */
 
-describe('canRaiseChangeRequest (AC1 TC-187-01/02, AC2 TC-187-05, AC5 TC-187-08/09)', () => {
-  it.each(['submitted', 'confirmed'] as const)('allows a %s event', (status) => {
+describe('canRaiseChangeRequest (AC1 TC-187-01/02/15, AC2 TC-187-05, AC5 TC-187-08/09)', () => {
+  it.each(['submitted', 'approved', 'planning', 'confirmed', 'preparation'] as const)('allows a %s event', (status) => {
     expect(canRaiseChangeRequest(status)).toBe(true);
   });
 
-  it.each(['draft', 'cancelled', 'completed'] as const)('refuses a %s event', (status) => {
-    expect(canRaiseChangeRequest(status)).toBe(false);
-  });
-
-  // Not yet confirmed either way by the PO — left refused until answered,
-  // the safe reading whichever way the question resolves.
-  it.each(['approved', 'clarification_requested', 'planning', 'preparation'] as const)(
-    'refuses a %s event, pending PO confirmation of the status scope',
+  it.each(['draft', 'clarification_requested', 'rejected', 'cancelled', 'completed'] as const)(
+    'refuses a %s event',
     (status) => {
       expect(canRaiseChangeRequest(status)).toBe(false);
     },
@@ -89,9 +83,20 @@ describe('RaiseChangeRequestInputSchema (AC1 TC-187-01/03/04)', () => {
     expect(parsed.success).toBe(false);
   });
 
-  it('refuses a field outside the selectable set', () => {
+  // TC-187-16 (AC1) — 'name' is part of the full event-request field set per CL-61.
+  it('accepts name, the full event-request field set per CL-61', () => {
     const parsed = RaiseChangeRequestInputSchema.safeParse({
       fields: [{ field: 'name', proposedValue: 'New name' }],
+      reason: 'Rebranding',
+    });
+    expect(parsed.success).toBe(true);
+  });
+
+  // TC-187-17 (AC1, Negative) — status is an event-status-management concern
+  // (SCRUM-101/103), not a field on the event request form, so still refused.
+  it('refuses a field outside the selectable set', () => {
+    const parsed = RaiseChangeRequestInputSchema.safeParse({
+      fields: [{ field: 'status', proposedValue: 'cancelled' }],
       reason: 'Rebranding',
     });
     expect(parsed.success).toBe(false);

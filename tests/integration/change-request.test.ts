@@ -15,12 +15,10 @@ import { ensureTestClientOrganisation } from './fixtures/clientOrganisation';
  * getCurrentActor is not used here (raiseChangeRequest/listChangeRequests take
  * the actor id/roles directly, unlike the route), so no mock is needed.
  *
- * Not covered here, pending PO confirmation (Slack, 24/10/2026) — see
- * policy.ts:
- *   - AC1's status scope beyond Submitted/Confirmed (Approved, Clarification
- *     Requested, Planning, Preparation).
- *   - AC1's field scope beyond the SCRUM-111/190 "significant" subset (name,
- *     purpose, description, registrationRequired).
+ * Status scope (Submitted through Preparation) and field scope (the full
+ * event-request field set) both per CL-61, the PO's 24 Oct 2026
+ * clarification — see policy.ts and schema.ts.
+ *
  * AC7 ("the event shows the new values") is not this service's concern: it
  * is the event's own stored fields, read through the existing event-request
  * reads, once SCRUM-190 applies an approval. Nothing here writes to them.
@@ -74,6 +72,10 @@ async function createEvent(status: string, ownerId = organiserId, coordinator: s
       expected_attendance: 150,
       status,
       submitted_at: status === 'draft' ? null : new Date().toISOString(),
+      // event_request_approved_has_decision: 'approved' always carries one.
+      decision: status === 'approved' ? 'approved' : null,
+      decided_by: status === 'approved' ? coordinator ?? ownerId : null,
+      decided_at: status === 'approved' ? new Date().toISOString() : null,
       coordinator_id: coordinator,
       assigned_by: coordinator ? ownerId : null,
       assigned_at: coordinator ? new Date().toISOString() : null,
@@ -193,6 +195,51 @@ describe('raiseChangeRequest', () => {
     );
 
     expect(outcome.status).toBe('pending');
+  });
+
+  // TC-187-15 (AC1) — CL-61 widens the status scope to Approved, Planning and
+  // Preparation too (everything from Submitted to the event finishing).
+  it.each(['approved', 'planning', 'preparation'] as const)(
+    'accepts a change request on a(n) %s event too (CL-61)',
+    async (status) => {
+      const id = await createEvent(status);
+
+      const outcome = await raiseChangeRequest(
+        id,
+        { fields: [{ field: 'expectedAttendance', proposedValue: 180 }], reason: 'Extra guests confirmed' },
+        organiserId,
+      );
+
+      expect(outcome.status).toBe('pending');
+    },
+  );
+
+  // TC-187-16 (AC1) — the full event-request field set per CL-61, not only
+  // the SCRUM-111/190 "significant" subset: a plain text field (name) and a
+  // boolean one (registrationRequired).
+  it('accepts name and registrationRequired, the full event-request field set (CL-61)', async () => {
+    const id = await createEvent('submitted');
+
+    const outcome = await raiseChangeRequest(
+      id,
+      {
+        fields: [
+          { field: 'name', proposedValue: 'Annual Tech Summit 2.0' },
+          { field: 'registrationRequired', proposedValue: true },
+        ],
+        reason: 'Rebranding and opening registration',
+      },
+      organiserId,
+    );
+
+    expect(outcome.fields.map((f) => f.field).sort()).toEqual(['name', 'registrationRequired']);
+    expect(outcome.fields.find((f) => f.field === 'name')).toMatchObject({
+      currentValue: 'Annual Tech Summit',
+      proposedValue: 'Annual Tech Summit 2.0',
+    });
+
+    const fieldRows = await readFieldRows(outcome.id);
+    expect(fieldRows).toHaveLength(2);
   });
 
   // TC-187-03 (AC1) — several fields, one reason, no extra field recorded.
