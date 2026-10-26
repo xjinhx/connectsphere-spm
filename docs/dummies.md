@@ -743,7 +743,13 @@ switch them the next time they edit those files.
   together; the table refuses one without the other, or an end before the
   start). Set the periods through the form for TC-181-05 to TC-181-12 instead
   of the seed, remove the marker, and re-run those test cases.
-- **Status:** Active.
+- **Status:** Replaced by SCRUM-185 AC5 (branch `scrum-185-registration-list`,
+  27 Oct 2026). The assigned coordinator of a Confirmed event sets the start
+  date, end date and capacity on `/events/<id>/registrations`, which saves to
+  the same columns. The seed script still sets periods as test data, without
+  the marker. TC-181-05 to TC-181-13 and `tests/integration/register-for-event.test.ts`
+  re-run and pass; `tests/integration/registration-list.test.ts` TC-185-01
+  checks 181's attendee page reads the period the form saved.
 
 ### D-23 — Places always remain
 

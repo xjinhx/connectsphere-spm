@@ -27,6 +27,7 @@ import { EventSchedulePanel } from '@/components/event-request/EventSchedulePane
 import { getEventSchedule } from '@/domain/significant-change/service';
 import { ConfirmEventButton } from '@/components/event-request/ConfirmEventButton';
 import { canBeConfirmed } from '@/domain/event-status/policy';
+import { acceptsRegistrationSettings } from '@/domain/registration-list/policy';
 import {
   describeAccessibility,
   describeEquipment,
@@ -411,6 +412,25 @@ export default async function ReviewEventRequestPage({
             className="mt-3 inline-block rounded-md bg-[var(--brand)] px-4 py-2 text-sm font-medium text-white hover:bg-[var(--brand-dark)]"
           >
             Equipment request
+          </Link>
+        </section>
+      ) : null}
+
+      {/* SCRUM-185 AC5 — the registration start date, end date and capacity,
+          set on the event's registration page. Offered while the event is
+          Confirmed (acceptsRegistrationSettings), so the link never leads to
+          a form the API would refuse. */}
+      {acceptsRegistrationSettings(request.status) ? (
+        <section className="mt-6 rounded-lg border border-[var(--border)] bg-[var(--surface)] p-4">
+          <h2 className="text-sm font-semibold">Registration</h2>
+          <p className="mt-1 text-sm text-[var(--text-muted)]">
+            Set when attendees can register and how many places the event has.
+          </p>
+          <Link
+            href={`/events/${request.id}/registrations`}
+            className="mt-3 inline-block rounded-md bg-[var(--brand)] px-4 py-2 text-sm font-medium text-white hover:bg-[var(--brand-dark)]"
+          >
+            Registration
           </Link>
         </section>
       ) : null}

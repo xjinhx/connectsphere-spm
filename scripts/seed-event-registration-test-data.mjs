@@ -8,8 +8,9 @@
 // It prints each event's page address (/register-events/<id>): listing the
 // events open for registration is another story's, so open them by address.
 //
-// DUMMY(SCRUM-185) D-22: the registration period is set here, not by the
-// coordinator's form (SCRUM-185 AC5).
+// The registration period is set here as test data, relative to today. In the
+// app the event's assigned coordinator sets it on the event's registration
+// page (SCRUM-185 AC5), which replaced dummy D-22.
 //
 // Safe to run again: it deletes and recreates only the events it made (matched
 // by their description), which also clears their registrations, so it doubles
