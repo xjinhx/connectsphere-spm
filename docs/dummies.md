@@ -858,7 +858,13 @@ switch them the next time they edit those files.
 - **To replace:** SCRUM-190/191 write these three columns from their own
   approve/reject actions (already shaped the way their ACs describe them: one
   decision, one reason, one timestamp). Re-run TC-187-11 against a request
-  decided through the app, then remove the markers.
+  decided through the app, then remove the markers. Stamp `decided_at` the
+  same "one clock" way `event_request.decided_at`/`submitted_at`/`assigned_at`
+  already are (a DB trigger reading `now()`, not a caller-supplied value -
+  see `set_decided_at`/`set_assigned_at`/`set_submitted_at` in the
+  event_request migrations), so a decision can never be backdated before its
+  own request. `change_request` has no such trigger yet since nothing writes
+  `decided_at` yet; add one alongside SCRUM-190/191's migration.
 - **Status:** Active.
 
 *Originally numbered D-22; renumbered to D-26 during the 2026-10-28 rebase
