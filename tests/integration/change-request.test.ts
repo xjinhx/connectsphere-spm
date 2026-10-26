@@ -1,4 +1,4 @@
-import { describe, it, expect, beforeAll, afterAll, vi } from 'vitest';
+import { describe, it, expect, beforeAll, afterAll } from 'vitest';
 import { createAdminClient } from '@/lib/supabase/admin';
 import { ensureTestClientOrganisation } from './fixtures/clientOrganisation';
 

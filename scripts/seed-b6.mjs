@@ -84,7 +84,7 @@ const clientOrganisationId = clientOrganisation.id;
 // --- Accounts ---------------------------------------------------------------
 const organiser = await ensureUser('organiser@example.com', ['event_organiser'], 'Organiser', clientOrganisationId);
 // TC-187-07 (AC4): same client organisation, not responsible for any S187 event.
-const colleague = await ensureUser('colleague@example.com', ['event_organiser'], 'Colleague', clientOrganisationId);
+await ensureUser('colleague@example.com', ['event_organiser'], 'Colleague', clientOrganisationId);
 const coordinator = await ensureUser('coordinator@example.com', ['coordinator'], 'Coordinator A');
 
 // --- Start clean --------------------------------------------------------------
