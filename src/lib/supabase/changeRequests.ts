@@ -63,3 +63,30 @@ export async function listChangeRequestsForEvent(eventRequestId: string) {
 export async function listChangeRequestFields(changeRequestIds: string[]) {
   return createAdminClient().from('change_request_field').select(FIELD_COLUMNS).in('change_request_id', changeRequestIds);
 }
+
+// ---------------------------------------------------------------------------
+// SCRUM-191 — Reject a change request with a reason
+// ---------------------------------------------------------------------------
+
+/** Read one change request by id, to check it is Pending before deciding it. */
+export async function fetchChangeRequestById(id: string) {
+  return createAdminClient().from('change_request').select(CHANGE_REQUEST_COLUMNS).eq('id', id).maybeSingle();
+}
+
+/**
+ * AC1 — sets status='rejected' and stores the decision reason. decided_at is
+ * stamped by the database (change_request_set_decided_at trigger), the same
+ * "one clock" pattern as event_request's set_decided_at, so it is never
+ * caller-supplied. `.eq('status', 'pending')` makes the Pending check race-safe:
+ * if the CR was decided between the read in rejectChangeRequest() and this
+ * write, the update matches no row and `data` comes back null.
+ */
+export async function rejectChangeRequestRow(id: string, values: { decided_by: string; decision_reason: string }) {
+  return createAdminClient()
+    .from('change_request')
+    .update({ status: 'rejected', decided_by: values.decided_by, decision_reason: values.decision_reason })
+    .eq('id', id)
+    .eq('status', 'pending')
+    .select(CHANGE_REQUEST_COLUMNS)
+    .maybeSingle();
+}

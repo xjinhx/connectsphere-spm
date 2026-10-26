@@ -1,8 +1,10 @@
 import {
+  fetchChangeRequestById,
   insertChangeRequest,
   insertChangeRequestFields,
   listChangeRequestFields,
   listChangeRequestsForEvent,
+  rejectChangeRequestRow,
   type ChangeRequestFieldRow,
   type ChangeRequestRow,
 } from '@/lib/supabase/changeRequests';
@@ -16,10 +18,16 @@ import {
   ChangeRequestIdSchema,
   EventRequestIdSchema,
   RaiseChangeRequestInputSchema,
+  RejectChangeRequestInputSchema,
   type ChangeRequestStatus,
   type SelectableChangeRequestField,
 } from './schema';
-import { canRaiseChangeRequest, canRaiseChangeRequestFor } from './policy';
+import {
+  canDecideChangeRequestFor,
+  canRaiseChangeRequest,
+  canRaiseChangeRequestFor,
+  isPendingChangeRequest,
+} from './policy';
 
 /**
  * SCRUM-187 — Request a change and track its outcome.
@@ -106,8 +114,9 @@ function toSummary(row: ChangeRequestRow, fieldRows: ChangeRequestFieldRow[]): C
         proposedValue: field.proposed_value,
       })),
     createdAt: row.created_at,
-    // DUMMY(SCRUM-190) D-24, DUMMY(SCRUM-191) D-24: read back as-is, never
-    // written by this story. See docs/dummies.md.
+    // DUMMY(SCRUM-190) D-24: read back as-is until that story's own write
+    // lands. SCRUM-191's reject path now writes these (rejectChangeRequest,
+    // this file); see docs/dummies.md D-24.
     decidedAt: row.decided_at,
     decisionReason: row.decision_reason,
   };
@@ -128,8 +137,9 @@ function toSummary(row: ChangeRequestRow, fieldRows: ChangeRequestFieldRow[]): C
  *
  * decided_by/decided_at/decision_reason are never written here - they
  * belong to the approve/reject stories.
- * DUMMY(SCRUM-190) D-24: decided_by/decided_at/decision_reason
- * DUMMY(SCRUM-191) D-24: decided_by/decided_at/decision_reason
+ * DUMMY(SCRUM-190) D-24: decided_by/decided_at/decision_reason (still
+ * unwritten until that story lands; SCRUM-191's reject path now writes them,
+ * see rejectChangeRequest below).
  * See docs/dummies.md.
  */
 export async function raiseChangeRequest(
@@ -259,6 +269,108 @@ export async function listChangeRequests(
   const fields = (fieldRows ?? []) as unknown as ChangeRequestFieldRow[];
 
   return requests.map((row) => toSummary(row, fields));
+}
+
+/**
+ * SCRUM-191 — Reject a change request with a reason.
+ *
+ * AC1 — "Given a pending change request, when I reject it with a reason,
+ * then its status becomes Rejected and the reason is stored."
+ * AC2 — rejecting never touches the event's own fields: unlike
+ * raiseChangeRequest/toSummary, nothing here writes to event_request, so
+ * opening the event afterwards shows none of the requested values applied.
+ * AC3 — the organiser who raised it is notified, with the reason included.
+ * AC4 — a blank/whitespace-only reason is refused by
+ * RejectChangeRequestInputSchema before anything is read, and the message is
+ * surfaced through handleApiError the same way as every other validation
+ * failure.
+ *
+ * Who may reject: the event's currently assigned coordinator only
+ * (canDecideChangeRequestFor, reusing isCurrentCoordinator), same "not yours"
+ * pattern as requireCurrentCoordinator (domain/assignment/service.ts) and
+ * every other coordinator-only action in this codebase.
+ *
+ * DUMMY(SCRUM-191) D-24: replaced here — this function now writes
+ * decided_by/decision_reason/status; decided_at is stamped by the database
+ * (change_request_set_decided_at trigger, see the migration added with this
+ * PR). See docs/dummies.md. SCRUM-190's own write (approve) is a separate,
+ * still-open dummy until that story lands.
+ */
+export async function rejectChangeRequest(
+  eventRequestId: string,
+  changeRequestId: string,
+  coordinatorId: string,
+  input: unknown,
+): Promise<ChangeRequestSummary> {
+  const parsedEventId = EventRequestIdSchema.safeParse(eventRequestId);
+  if (!parsedEventId.success) throw new NotFoundError('Event request');
+
+  const parsedCrId = ChangeRequestIdSchema.safeParse(changeRequestId);
+  if (!parsedCrId.success) throw new NotFoundError('Change request');
+
+  // AC4 — validated before anything is read, so an organiser can never be
+  // told "not assigned to you" for a request that would have been refused on
+  // the reason alone anyway.
+  const parsedInput = RejectChangeRequestInputSchema.safeParse(input);
+  if (!parsedInput.success) {
+    throw new ValidationError('A reason is required to reject a change request.', parsedInput.error.flatten());
+  }
+  const { reason } = parsedInput.data;
+
+  const event = await readRequest(parsedEventId.data);
+
+  // Refused before the change request itself is revealed, same reasoning as
+  // every other "not yours" check in this codebase (requireCurrentCoordinator).
+  if (!canDecideChangeRequestFor({ coordinatorId: event.coordinator_id }, coordinatorId)) {
+    throw new ForbiddenError('This event is not assigned to you.');
+  }
+
+  const { data: crData, error: crError } = await fetchChangeRequestById(parsedCrId.data);
+  if (crError) {
+    throw new ValidationError('The change request could not be read.', crError.message);
+  }
+  if (!crData) throw new NotFoundError('Change request');
+  const cr = crData as unknown as ChangeRequestRow;
+
+  if (cr.event_request_id !== parsedEventId.data) {
+    throw new NotFoundError('Change request');
+  }
+
+  if (!isPendingChangeRequest(cr.status)) {
+    throw new ConflictError('This change request has already been decided.');
+  }
+
+  const { data: updated, error: updateError } = await rejectChangeRequestRow(parsedCrId.data, {
+    decided_by: coordinatorId,
+    decision_reason: reason,
+  });
+  if (updateError) {
+    throw new ValidationError('The change request could not be rejected.', updateError.message);
+  }
+  if (!updated) {
+    // Raced: decided by someone else (or itself, twice) between the read
+    // above and this write. Same reasoning as the Pending check itself.
+    throw new ConflictError('This change request has already been decided.');
+  }
+  const rejectedRow = updated as unknown as ChangeRequestRow;
+
+  // AC3 — "the Event Organiser who raised the CR is notified with the
+  // recorded reason." Best-effort, same pattern as every other notification
+  // in this codebase: the rejection has already been saved, so a
+  // notification failure here must never undo it.
+  await notifyBestEffort({
+    recipientId: cr.organiser_id,
+    type: 'change_request_rejected',
+    eventRequestId: parsedEventId.data,
+    message: `Your change request for "${event.name}" was rejected: ${reason}`,
+  });
+
+  const { data: fieldRows, error: fieldsError } = await listChangeRequestFields([rejectedRow.id]);
+  if (fieldsError) {
+    throw new ValidationError('The changed fields could not be read.', fieldsError.message);
+  }
+
+  return toSummary(rejectedRow, (fieldRows ?? []) as unknown as ChangeRequestFieldRow[]);
 }
 
 export { ChangeRequestIdSchema };

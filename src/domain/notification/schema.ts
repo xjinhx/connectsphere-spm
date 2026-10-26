@@ -44,6 +44,10 @@ export const NOTIFICATION_TYPES = [
   // SCRUM-187 AC1: the assigned coordinator, told the organiser raised a
   // change request on their event.
   'change_requested',
+  // SCRUM-191 AC3: the organiser, told their change request was rejected
+  // and why. Deliberately its own type, not a reuse of 'request_rejected'
+  // (which means the event request itself was rejected, SCRUM-93).
+  'change_request_rejected',
 ] as const;
 export const NotificationTypeSchema = z.enum(NOTIFICATION_TYPES);
 export type NotificationType = z.infer<typeof NotificationTypeSchema>;

@@ -17,6 +17,8 @@ const TYPE_LABELS: Record<string, string> = {
   event_confirmed: 'Event confirmed',
   // SCRUM-166 AC4.
   equipment_unable_to_fulfil: 'Equipment unable to fulfil',
+  // SCRUM-191 AC3.
+  change_request_rejected: 'Change request rejected',
 };
 
 /**
