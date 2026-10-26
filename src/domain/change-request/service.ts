@@ -10,6 +10,7 @@ import { fetchEventRequestById, type EventRequestRow } from '@/lib/supabase/even
 import { canViewRequest } from '@/domain/event-request/policy';
 import { notifyBestEffort } from '@/domain/notification/service';
 import { ConflictError, ForbiddenError, NotFoundError, ValidationError } from '@/domain/shared/errors';
+import { fromDatabaseTime } from '@/domain/shared/times';
 import {
   ChangeRequestIdSchema,
   EventRequestIdSchema,
@@ -54,8 +55,11 @@ async function readRequest(id: string): Promise<EventRequestRow> {
 /** EVENT_REQUEST_CORE_FIELDS: how each selectable field reads off an event-request row. */
 const CURRENT_VALUE_READERS: Record<SelectableChangeRequestField, (event: EventRequestRow) => unknown> = {
   proposedDate: (event) => event.proposed_date,
-  startTime: (event) => event.start_time,
-  endTime: (event) => event.end_time,
+  // Postgres `time` reads back as `HH:MM:SS`; the proposed value comes from an
+  // <input type="time"> as `HH:MM` (ClockTime, src/domain/shared/times.ts).
+  // Normalised here so the two are displayed on the same footing.
+  startTime: (event) => (event.start_time ? fromDatabaseTime(event.start_time) : event.start_time),
+  endTime: (event) => (event.end_time ? fromDatabaseTime(event.end_time) : event.end_time),
   expectedAttendance: (event) => event.expected_attendance,
   roomLayout: (event) => event.room_layout,
   accessibilityRequired: (event) => event.accessibility_required,
