@@ -88,3 +88,16 @@ export type RaiseChangeRequestInput = z.infer<typeof RaiseChangeRequestInputSche
 
 export const EventRequestIdSchema = z.string().uuid();
 export const ChangeRequestIdSchema = z.string().uuid();
+
+/**
+ * SCRUM-191 AC4 — "attempting to reject without a reason is blocked, and the
+ * coordinator is told a reason is required." Mirrors RaiseChangeRequestInputSchema's
+ * reason validation above: blank and whitespace-only both fail the same way.
+ */
+export const RejectChangeRequestInputSchema = z.object({
+  reason: z
+    .string({ required_error: 'A reason is required.' })
+    .trim()
+    .min(1, 'A reason is required.'),
+});
+export type RejectChangeRequestInput = z.infer<typeof RejectChangeRequestInputSchema>;

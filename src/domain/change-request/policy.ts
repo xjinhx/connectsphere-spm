@@ -1,4 +1,6 @@
 import type { EventRequestStatus } from '@/domain/event-request/schema';
+import { isCurrentCoordinator } from '@/domain/assignment/policy';
+import type { ChangeRequestStatus } from './schema';
 
 /**
  * SCRUM-187 AC1/AC2/AC5 — which statuses offer the change-request action.
@@ -32,4 +34,33 @@ export function canRaiseChangeRequestFor(
   actorUserId: string,
 ): boolean {
   return request.organiserId === actorUserId;
+}
+
+// ---------------------------------------------------------------------------
+// SCRUM-191 — Reject a change request with a reason
+// SCRUM-190 — Approve a change request and apply it (shares the two helpers
+// below: both stories gate on "is this CR Pending" and "is this coordinator
+// assigned", so composing them here rather than each writing its own keeps
+// the two decisions consistent).
+// ---------------------------------------------------------------------------
+
+/**
+ * AC1 — only a Pending change request can be decided. An already-decided one
+ * (approved or rejected) is final, same reasoning as an event request's own
+ * terminal statuses (canRaiseChangeRequest above).
+ */
+export function isPendingChangeRequest(status: ChangeRequestStatus): boolean {
+  return status === 'pending';
+}
+
+/**
+ * Who may decide a change request: the event's currently assigned
+ * coordinator, and nobody else — reuses isCurrentCoordinator
+ * (domain/assignment/policy.ts) rather than restating the rule.
+ */
+export function canDecideChangeRequestFor(
+  event: { coordinatorId: string | null },
+  actorUserId: string,
+): boolean {
+  return isCurrentCoordinator(event.coordinatorId, actorUserId);
 }
