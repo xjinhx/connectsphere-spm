@@ -694,8 +694,14 @@ switch them the next time they edit those files.
   SCRUM-254 (branch `tech-support-nav`): Equipment requests, Equipment
   catalogue, Venues; marker removed. The SCRUM-164 tabs (`TechnicalSupportNav`)
   were removed in the same change, since the nav bar now does their job on
-  every page (PO, 22 Oct 2026). **Other roles:** still active, waiting on
-  SCRUM-250 to 253, 255 and 256.
+  every page (PO, 22 Oct 2026). **Venue Staff:** replaced by SCRUM-253 (branch
+  `scrum-253-venue-staff-nav`): Booking requests, Venues; marker removed. The
+  underlying pages (`/booking-queue`, `/venue-booking-requests/[id]`,
+  `/venues`, `/venues/[id]`, its `edit` and `calendar` pages) already existed
+  from earlier sprints with their own Add venue/Edit venue/View calendar links
+  and back links; this story only added the nav entries and the booking
+  request's back link. **Other roles:** still active, waiting on SCRUM-250,
+  251, 252, 255 and 256.
 
 ### D-21 — An equipment reservation is released by hand
 
