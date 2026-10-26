@@ -169,3 +169,85 @@ export function daysUntilEvent(eventDate: string | null, today: string): number 
   const DAY_MS = 24 * 60 * 60 * 1000;
   return Math.round((Date.parse(`${eventDate}T00:00:00Z`) - Date.parse(`${today}T00:00:00Z`)) / DAY_MS);
 }
+
+// ---------------------------------------------------------------------------
+// SCRUM-166 — Update the status of an equipment request
+// ---------------------------------------------------------------------------
+
+/**
+ * AC3: "Given some requested items are available and others are not, when I
+ * set the status to partially fulfilled, then I cannot save until every
+ * unavailable item is identified." Technical Support Staff decide which items
+ * are unavailable, so the rule the app can hold them to is that at least one
+ * is marked (TC-166-11: none is refused; TC-166-12: one of two saves).
+ */
+export const IDENTIFY_UNAVAILABLE_MESSAGE =
+  'Mark every item that is unavailable before saving the request as partially fulfilled.';
+
+/** AC4: "when I save, then a reason is mandatory" (TC-166-14, TC-166-15). */
+export const REASON_REQUIRED_MESSAGE = 'Give the reason the request cannot be fulfilled.';
+
+/** A line id that is not on this request (sent by hand, or a line removed meanwhile). */
+export const UNKNOWN_LINE_MESSAGE = 'One of the items marked unavailable is not on this request.';
+
+export type StatusUpdateProblem = { field: 'unavailableLineIds' | 'reason'; message: string };
+
+/**
+ * What stops a status update from being saved, or null when nothing does.
+ * Checked before anything is written, so a refusal leaves the request as it
+ * was.
+ *
+ * `requestLineIds` are the ids of the request's lines. Marked lines are only
+ * looked at for partially fulfilled, and the reason only for unable to fulfil:
+ * for every other status they are not kept (statusUpdateToStore).
+ */
+export function statusUpdateProblem(
+  update: { status: EquipmentRequestStatus; unavailableLineIds: readonly string[]; reason: string | null },
+  requestLineIds: readonly string[],
+): StatusUpdateProblem | null {
+  if (update.status === 'partially_fulfilled') {
+    if (update.unavailableLineIds.length === 0) {
+      return { field: 'unavailableLineIds', message: IDENTIFY_UNAVAILABLE_MESSAGE };
+    }
+    if (update.unavailableLineIds.some((id) => !requestLineIds.includes(id))) {
+      return { field: 'unavailableLineIds', message: UNKNOWN_LINE_MESSAGE };
+    }
+  }
+  if (update.status === 'unable_to_fulfil' && (update.reason === null || update.reason.trim() === '')) {
+    return { field: 'reason', message: REASON_REQUIRED_MESSAGE };
+  }
+  return null;
+}
+
+/**
+ * What is stored for an update: marked lines only for partially fulfilled
+ * (AC3; SCRUM-164's queue counts them only then), the reason only for unable
+ * to fulfil (AC4). Each save replaces the last, so a later status never shows
+ * an earlier one's items or reason. set_equipment_request_status applies the
+ * same rule in the database.
+ */
+export function statusUpdateToStore(update: {
+  status: EquipmentRequestStatus;
+  unavailableLineIds: readonly string[];
+  reason: string | null;
+}): { status: EquipmentRequestStatus; unavailableLineIds: string[]; reason: string | null } {
+  return {
+    status: update.status,
+    unavailableLineIds: update.status === 'partially_fulfilled' ? [...new Set(update.unavailableLineIds)] : [],
+    reason: update.status === 'unable_to_fulfil' ? update.reason : null,
+  };
+}
+
+/**
+ * AC4: "the coordinator is notified" - when the request is set to unable to
+ * fulfil. The card names no notification for the other statuses; the
+ * coordinator sees those on the request (AC2).
+ */
+export function notifiesCoordinator(status: EquipmentRequestStatus): boolean {
+  return status === 'unable_to_fulfil';
+}
+
+/** AC4: the notification the assigned coordinator receives, naming the event and the reason. */
+export function unableToFulfilMessage(event: { reference: string; name: string }, reason: string): string {
+  return `Technical Support cannot fulfil the equipment request for ${event.reference} (${event.name}): ${reason}`;
+}

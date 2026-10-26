@@ -1,7 +1,14 @@
 import { describe, it, expect } from 'vitest';
 import { isProposedDateSubmittable } from '@/domain/event-request/policy';
-import { eventRequestBasicDetailsSchema } from '@/domain/event-request/schema';
 import {
+  eventRequestBasicDetailsSchema,
+  eventRequestDraftSchema,
+  eventRequestSaveSchema,
+} from '@/domain/event-request/schema';
+import {
+  hasLongYear,
+  isISODate,
+  LATEST_DATE,
   formatSingaporeDate,
   formatSingaporeDateTime,
   isPastDate,
@@ -101,5 +108,109 @@ describe('SCRUM-76 — Create an event request with basic details', () => {
       expect(isPastDate('2026-11-14', '2026-11-15')).toBe(true);
       expect(isPastDate('2026-11-15', '2026-11-15')).toBe(false);
     });
+  });
+});
+
+/**
+ * TC-76-10 to TC-76-12 — the proposed date's year. The schema used
+ * z.coerce.date(), which accepts a five-digit year such as 20266; the service
+ * then wrote "+020266-12-10" and Postgres refused it with a raw error. The
+ * date is now checked with the shared isISODate, like every other date field.
+ */
+describe('SCRUM-76 — the proposed date must be a real four-digit-year date', () => {
+  const CHOOSE_A_VALID_DATE = 'Choose a valid date.';
+  const saveWith = (proposedDate: unknown) => eventRequestSaveSchema.safeParse({ ...basicDetails, proposedDate });
+  const draftWith = (proposedDate: unknown) =>
+    eventRequestDraftSchema.safeParse({ name: basicDetails.name, proposedDate });
+
+  // TC-76-10 (Happy path)
+  it('accepts a four-digit-year date and keeps the day as typed', () => {
+    const saved = saveWith('2026-12-10');
+    expect(saved.success && saved.data.proposedDate.toISOString().slice(0, 10)).toBe('2026-12-10');
+    const drafted = draftWith('2026-12-10');
+    expect(drafted.success && drafted.data.proposedDate?.toISOString().slice(0, 10)).toBe('2026-12-10');
+  });
+
+  // TC-76-11 (Negative)
+  it('refuses a five-digit year on the proposed date field, on save and on draft', () => {
+    for (const result of [saveWith('20266-12-10'), draftWith('20266-12-10')]) {
+      expect(result.success).toBe(false);
+      if (!result.success) {
+        expect(result.error.flatten().fieldErrors.proposedDate).toEqual([CHOOSE_A_VALID_DATE]);
+      }
+    }
+  });
+
+  // TC-76-12 (Boundary)
+  it('accepts the last date with a four-digit year and refuses the first with five digits', () => {
+    expect(saveWith('9999-12-31').success).toBe(true);
+    const result = saveWith('10000-01-01');
+    expect(result.success).toBe(false);
+    if (!result.success) {
+      expect(result.error.flatten().fieldErrors.proposedDate).toEqual([CHOOSE_A_VALID_DATE]);
+    }
+  });
+
+  it.each([
+    ['a date that does not exist', '2026-02-30'],
+    ['a six-digit year', '202666-12-10'],
+    ['a signed year', '+020266-12-10'],
+    ['a two-digit year', '26-12-10'],
+    ['a date with a time', '2026-12-10T08:00:00Z'],
+    ['text', 'next Tuesday'],
+  ])('refuses %s', (_label, value) => {
+    expect(saveWith(value).success).toBe(false);
+    expect(draftWith(value).success).toBe(false);
+  });
+
+  it.each([
+    ['a number', 20266],
+    ['a Date object', new Date('2026-12-10T00:00:00Z')],
+    ['null', null],
+  ])('refuses %s on save, with the same message', (_label, value) => {
+    const result = saveWith(value);
+    expect(result.success).toBe(false);
+    if (!result.success) {
+      expect(result.error.flatten().fieldErrors.proposedDate).toEqual([CHOOSE_A_VALID_DATE]);
+    }
+  });
+
+  it('still lets a draft leave the date blank', () => {
+    expect(draftWith('').success).toBe(true);
+    expect(draftWith(undefined).success).toBe(true);
+  });
+
+  it('still names a missing date on save', () => {
+    const { proposedDate: _omitted, ...withoutDate } = basicDetails;
+    const result = eventRequestSaveSchema.safeParse(withoutDate);
+    expect(result.success).toBe(false);
+    if (!result.success) {
+      expect(result.error.flatten().fieldErrors.proposedDate).toEqual([CHOOSE_A_VALID_DATE]);
+    }
+  });
+});
+
+/**
+ * The form keeps the Proposed date to a four-digit year (a browser date input
+ * takes up to six); hasLongYear() is how it tells, and LATEST_DATE is its max.
+ */
+describe('SCRUM-76 — the form keeps the proposed date to a four-digit year', () => {
+  it('sees a year of five or six digits as too long', () => {
+    expect(hasLongYear('20266-12-10')).toBe(true);
+    expect(hasLongYear('202666-12-10')).toBe(true);
+    expect(hasLongYear('10000-01-01')).toBe(true);
+  });
+
+  it('lets a four-digit year, and an empty or part-typed value, through', () => {
+    expect(hasLongYear('2026-12-10')).toBe(false);
+    expect(hasLongYear('9999-12-31')).toBe(false);
+    expect(hasLongYear('0006-02-20')).toBe(false);
+    expect(hasLongYear('')).toBe(false);
+  });
+
+  it('has a latest date that is itself the last valid date', () => {
+    expect(LATEST_DATE).toBe('9999-12-31');
+    expect(isISODate(LATEST_DATE)).toBe(true);
+    expect(hasLongYear(LATEST_DATE)).toBe(false);
   });
 });

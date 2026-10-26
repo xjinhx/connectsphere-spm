@@ -25,6 +25,9 @@ import {
   isAffectedByCapacity,
   isCapacityCut,
   isWithinOpeningHours,
+  hasVenueSearchFilters,
+  layoutCapacity,
+  matchesVenueSearchFilters,
   type SetupTurnaround,
 } from './policy';
 import {
@@ -38,10 +41,12 @@ import {
   VenueDetailSchema,
   VenueFormOptionsSchema,
   VenueIdSchema,
+  VenueSearchFiltersSchema,
   VenueSearchQuerySchema,
   VenueSearchResultSchema,
   VenueSummarySchema,
   type AffectedBooking,
+  type RoomLayout,
   type AffectedBookingsDetails,
   type SetupTurnaroundAffectedBooking,
   type SetupTurnaroundClashBooking,
@@ -131,18 +136,38 @@ export async function listVenues(includeRetired = false): Promise<VenueSummary[]
  * simpler than a second, catalogue-wide copy of the overlap rule.
  */
 export async function searchVenues(input: unknown): Promise<VenueSearchResult> {
-  const parsed = VenueSearchQuerySchema.safeParse(input);
-  if (!parsed.success) {
-    throw new ValidationError('The search could not be run.', parsed.error.flatten());
+  // SCRUM-239: the date and times stay required. SCRUM-130: the filters, all
+  // optional. Both are checked together, so one refusal names every field.
+  const query = VenueSearchQuerySchema.safeParse(input);
+  const filtersParsed = VenueSearchFiltersSchema.safeParse(input);
+  if (!query.success || !filtersParsed.success) {
+    const fieldErrors = {
+      ...(query.success ? {} : query.error.flatten().fieldErrors),
+      ...(filtersParsed.success ? {} : filtersParsed.error.flatten().fieldErrors),
+    };
+    const formErrors = query.success ? [] : query.error.flatten().formErrors;
+    throw new ValidationError('The search could not be run.', { formErrors, fieldErrors });
   }
-  const { date, start, end } = parsed.data;
+  const { date, start, end } = query.data;
+  const filters = filtersParsed.data;
+
+  // SCRUM-130 AC5, AC4, AC7: a location, facility or feature not on the
+  // maintained lists is refused, not searched for (TC-130-15, TC-130-21).
+  if (filters.locationId !== undefined) await assertLocationExists(filters.locationId);
+  await assertFacilitiesExist(filters.facilityIds);
+  await assertAccessibilityFeaturesExist(filters.accessibilityFeatureIds);
 
   const venues = await fetchSearchableVenues();
   if (venues.error || !venues.data) {
     throw new ValidationError('Could not load the venue catalogue.', venues.error?.message);
   }
 
-  const open = venues.data.filter((venue) =>
+  // SCRUM-130: the filters first - they need nothing more than the venue row -
+  // then SCRUM-239's opening hours and commitments for the venues left.
+  const matching = (venues.data as unknown as SearchableVenueRow[]).filter((venue) =>
+    matchesVenueSearchFilters(toFilterableVenue(venue), filters),
+  );
+  const open = matching.filter((venue) =>
     isWithinOpeningHours(
       { start, end },
       { opensAt: fromDatabaseTime(venue.opens_at), closesAt: fromDatabaseTime(venue.closes_at) },
@@ -162,14 +187,43 @@ export async function searchVenues(input: unknown): Promise<VenueSearchResult> {
     date,
     start,
     end,
+    filtered: hasVenueSearchFilters(filters),
     venues: free.map((row) => ({
       id: row.id,
       name: row.name,
       location: requireLocation(row.locations, row.name),
       maxCapacity: row.max_capacity,
       isRetired: row.is_retired,
+      layoutCapacity: filters.layout ? layoutCapacity(toFilterableVenue(row), filters.layout) : null,
     })),
   });
+}
+
+/** A row from fetchSearchableVenues. The SCRUM-130 lists may be missing from an older caller's stub. */
+type SearchableVenueRow = {
+  id: string;
+  name: string;
+  max_capacity: number;
+  is_retired: boolean;
+  opens_at: string;
+  closes_at: string;
+  setup_minutes?: number | null;
+  turnaround_minutes?: number | null;
+  locations: { id: string; name: string } | null;
+  venue_layouts?: { layout: RoomLayout; capacity: number }[] | null;
+  venue_facilities?: { facility_id: string }[] | null;
+  venue_accessibility_features?: { accessibility_feature_id: string }[] | null;
+};
+
+/** SCRUM-130: what the filters look at on a venue row. */
+function toFilterableVenue(row: SearchableVenueRow) {
+  return {
+    maxCapacity: row.max_capacity,
+    locationId: row.locations?.id ?? '',
+    layouts: row.venue_layouts ?? [],
+    facilityIds: (row.venue_facilities ?? []).map((entry) => entry.facility_id),
+    accessibilityFeatureIds: (row.venue_accessibility_features ?? []).map((entry) => entry.accessibility_feature_id),
+  };
 }
 
 export async function getVenue(venueId: string): Promise<VenueDetail> {

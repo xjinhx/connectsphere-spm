@@ -13,8 +13,9 @@
 // (Bugis), Marina Bay Ballroom (Marina Bay), Jurong East Training Room (Jurong
 // East).
 //
-// Statuses and unavailable lines are set by hand - DUMMY(SCRUM-166) D-19:
-// nothing in the app sets them until SCRUM-166. A reserved line is a row in
+// Statuses and unavailable lines are fixture data, written straight to the
+// table so every run starts from the same queue (Technical Support Staff set
+// them in the app since SCRUM-166, which replaced D-19). A reserved line is a row in
 // equipment_reservation - DUMMY(SCRUM-167) D-18.
 //
 // The default step is safe to run again: every SCRUM-164 event (their requests,
@@ -172,7 +173,7 @@ async function createEvent(spec) {
           equipment_id: line.equipmentId,
           quantity: line.quantity,
           created_by: coordinator,
-          // DUMMY(SCRUM-166) D-19: marked unavailable by hand.
+          // Fixture data (SCRUM-166 sets this in the app).
           unavailable: line.unavailable ?? false,
         })
         .select('id')
@@ -183,7 +184,7 @@ async function createEvent(spec) {
       check(`reserve ${name}`, await supabase.from('equipment_reservation').insert({ line_id: saved.id }));
     }
   }
-  // DUMMY(SCRUM-166) D-19: status set by hand.
+  // Fixture data (SCRUM-166 sets this in the app).
   check(
     `status ${name}`,
     await supabase.from('equipment_request').update({ status: spec.status }).eq('event_request_id', event.id),
@@ -208,7 +209,7 @@ async function reserveEvtCLine(equipmentId) {
   );
   // DUMMY(SCRUM-167) D-18: reserved by hand.
   check('reserve', await supabase.from('equipment_reservation').upsert({ line_id: line.id }, { onConflict: 'line_id' }));
-  // DUMMY(SCRUM-166) D-19: no longer unavailable, set by hand.
+  // Fixture data (SCRUM-166 sets this in the app): no longer unavailable.
   check('unavailable', await supabase.from('equipment_request_line').update({ unavailable: false }).eq('id', line.id));
   return event.id;
 }
@@ -256,7 +257,7 @@ if (step === 'reserve-mic') {
 if (step === 'reserve-lectern') {
   // TC-164-09 step 2. Nothing is left unavailable, so EVT-C is fulfilled.
   const eventId = await reserveEvtCLine(LECTERN);
-  // DUMMY(SCRUM-166) D-19: status set by hand.
+  // Fixture data (SCRUM-166 sets this in the app).
   check(
     'status EVT-C',
     await supabase.from('equipment_request').update({ status: 'fulfilled' }).eq('event_request_id', eventId),

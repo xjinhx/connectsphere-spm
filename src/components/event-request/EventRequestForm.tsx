@@ -2,6 +2,7 @@
 
 import { useState } from 'react';
 import { useRouter } from 'next/navigation';
+import { hasLongYear, LATEST_DATE } from '@/domain/shared/dates';
 import { END_OF_DAY, END_TIME_OPTIONS, START_TIME_OPTIONS } from '@/domain/shared/times';
 import { ROOM_LAYOUTS, ROOM_LAYOUT_LABELS, type RoomLayout } from '@/domain/venues/schema';
 import type { VenueRequirementOptions } from '@/domain/event-request/service';
@@ -348,7 +349,12 @@ export function EventRequestForm({
           className={fieldClass}
           value={proposedDate}
           min={today}
-          onChange={(event) => setProposedDate(event.target.value)}
+          max={LATEST_DATE}
+          // A date input takes a five- or six-digit year by default; keep the
+          // field at four digits. The server refuses a longer year as well.
+          onChange={(event) => {
+            if (!hasLongYear(event.target.value)) setProposedDate(event.target.value);
+          }}
           aria-describedby="proposedDate-hint"
         />
         <p id="proposedDate-hint" className="mt-1 text-xs text-[var(--text-muted)]">

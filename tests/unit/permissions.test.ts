@@ -21,8 +21,10 @@ describe('getPermittedActions', () => {
     expect(actions).toEqual(['event_request_creation']);
   });
 
-  it('returns no actions for a role granted none', () => {
-    expect(getPermittedActions(['attendee'])).toEqual([]);
+  // SCRUM-181 gave the attendee its first action, so the attendee is now
+  // checked against its matrix entry like any other role.
+  it('returns exactly the matrix entry for the attendee', () => {
+    expect(getPermittedActions(['attendee'])).toEqual(['event_registration']);
   });
 
   it('unions actions across multiple roles on one account, without duplicates', () => {

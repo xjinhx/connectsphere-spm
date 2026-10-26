@@ -2,7 +2,7 @@ import { afterAll, beforeAll, describe, expect, it, vi } from 'vitest';
 import { createAdminClient } from '@/lib/supabase/admin';
 import { createEquipmentItem } from '@/domain/equipment/service';
 import type { EquipmentQueueEntry, EquipmentRequestStatus } from '@/domain/equipment-request/schema';
-import { listEquipmentQueue } from '@/domain/equipment-request/service';
+import { listEquipmentQueue, updateEquipmentRequestStatus } from '@/domain/equipment-request/service';
 import type { Role } from '@/domain/identity/roles';
 import { ensureTestClientOrganisation, TEST_CLIENT_ORGANISATION_ID } from './fixtures/clientOrganisation';
 
@@ -32,10 +32,9 @@ import { ensureTestClientOrganisation, TEST_CLIENT_ORGANISATION_ID } from './fix
  *        listed, because Technical Support Staff are not scoped to particular
  *        equipment types or locations."
  *
- * Setting a status and marking an item unavailable is SCRUM-166, not built. They
- * are set here by hand in the table (dummy D-19), as testers do; the queue
- * reads them for real, so these tests count. Re-run them once SCRUM-166 sets
- * them through the app.
+ * Statuses and unavailable items are set through SCRUM-166's
+ * updateEquipmentRequestStatus, as Technical Support Staff set them (D-19,
+ * replaced: they were set by hand in the table until SCRUM-166).
  *
  * The database is shared with other tests and manual data, so every check looks
  * only at this run's events.
@@ -117,20 +116,25 @@ async function createRequest(
   return eventId;
 }
 
-/** DUMMY(SCRUM-166) D-19: sets a request's status the way testers do, by hand. */
-async function setStatus(eventId: string, status: EquipmentRequestStatus): Promise<void> {
-  const { error } = await admin.from('equipment_request').update({ status }).eq('event_request_id', eventId);
-  if (error) throw new Error(`could not set test status: ${error.message}`);
-}
-
-/** DUMMY(SCRUM-166) D-19: marks an event's line for `equipmentId` unavailable (or not), by hand. */
-async function setUnavailable(eventId: string, equipmentId: string, unavailable: boolean): Promise<void> {
-  const { error } = await admin
+/**
+ * Sets a request's status through SCRUM-166, as Technical Support Staff do:
+ * for partially fulfilled, the event's lines for `unavailable` (catalogue item
+ * ids) are the ones marked unavailable; unable to fulfil is given a reason.
+ */
+async function setStatus(eventId: string, status: EquipmentRequestStatus, unavailable: string[] = []): Promise<void> {
+  const { data, error } = await admin
     .from('equipment_request_line')
-    .update({ unavailable })
-    .eq('event_request_id', eventId)
-    .eq('equipment_id', equipmentId);
-  if (error) throw new Error(`could not mark test line: ${error.message}`);
+    .select('id, equipment_id')
+    .eq('event_request_id', eventId);
+  if (error || !data) throw new Error(`could not read test lines: ${error?.message ?? 'no lines'}`);
+  const unavailableLineIds = (data as { id: string; equipment_id: string }[])
+    .filter((line) => unavailable.includes(line.equipment_id))
+    .map((line) => line.id);
+  await updateEquipmentRequestStatus(
+    eventId,
+    { userId: technicalSupportId, roles: ['technical_support'] },
+    { status, unavailableLineIds, reason: status === 'unable_to_fulfil' ? 'Test: none available' : null },
+  );
 }
 
 /** The queue, narrowed to this run's events. */
@@ -171,9 +175,7 @@ beforeAll(async () => {
   evtD = await createRequest('EVT-D', '2026-10-30', [{ equipmentId: projector, quantity: 3 }]);
   evtE = await createRequest('EVT-E', '2026-11-02', [{ equipmentId: wirelessMic, quantity: 1 }]);
 
-  await setStatus(evtC, 'partially_fulfilled');
-  await setUnavailable(evtC, wirelessMic, true);
-  await setUnavailable(evtC, lectern, true);
+  await setStatus(evtC, 'partially_fulfilled', [wirelessMic, lectern]);
   await setStatus(evtD, 'fulfilled');
   await setStatus(evtE, 'unable_to_fulfil');
 });
@@ -246,11 +248,9 @@ describe('SCRUM-164 AC3: resolved requests are not outstanding', () => {
       { equipmentId: projector, quantity: 1 },
       { equipmentId: lectern, quantity: 1 },
     ]);
-    await setStatus(evtJ, 'partially_fulfilled');
-    await setUnavailable(evtJ, lectern, true);
+    await setStatus(evtJ, 'partially_fulfilled', [lectern]);
     expect((await queue()).find((e) => e.eventRequestId === evtJ)?.unavailableCount).toBe(1);
 
-    await setUnavailable(evtJ, lectern, false);
     await setStatus(evtJ, 'fulfilled');
 
     expect((await queue()).map((e) => e.eventRequestId)).not.toContain(evtJ);
@@ -270,12 +270,10 @@ describe('SCRUM-164 AC4: partially fulfilled stays listed with its unavailable c
       { equipmentId: wirelessMic, quantity: 2 },
       { equipmentId: lectern, quantity: 1 },
     ]);
-    await setStatus(evtK, 'partially_fulfilled');
-    await setUnavailable(evtK, wirelessMic, true);
-    await setUnavailable(evtK, lectern, true);
+    await setStatus(evtK, 'partially_fulfilled', [wirelessMic, lectern]);
     expect((await queue()).find((e) => e.eventRequestId === evtK)?.unavailableCount).toBe(2);
 
-    await setUnavailable(evtK, wirelessMic, false);
+    await setStatus(evtK, 'partially_fulfilled', [lectern]);
 
     expect((await queue()).find((e) => e.eventRequestId === evtK)).toMatchObject({
       status: 'partially_fulfilled',

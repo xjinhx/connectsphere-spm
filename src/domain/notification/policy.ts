@@ -46,14 +46,24 @@ export function canAccessNotification(recipientId: string, actorId: string): boo
  * same failure mode SCRUM-241 exists to fix - so it routes to their own
  * /my-events instead (SCRUM-97), which needs no event id and shows every
  * event still actually assigned to them.
+ *
+ * SCRUM-166 adds 'equipment_unable_to_fulfil', sent to the event's assigned
+ * coordinator. It routes to the event's equipment request, where the
+ * coordinator sees the status, who set it, when and the reason (SCRUM-166
+ * AC2, AC4) - a page open to them (canViewEquipmentRequest), unlike the
+ * organiser's /events/<id>.
  */
 const COORDINATOR_FACING_TYPES = new Set<string>(['coordinator_assigned', 'venue_booking_update']);
 const LEAD_FACING_TYPES = new Set<string>(['request_submitted']);
 const OWN_EVENTS_LIST_TYPES = new Set<string>(['coordinator_unassigned']);
+const EQUIPMENT_REQUEST_TYPES = new Set<string>(['equipment_unable_to_fulfil']);
 
 export function notificationHref(notification: { type: string; eventRequestId: string }): string {
   if (LEAD_FACING_TYPES.has(notification.type)) {
     return `/assignment-queue/${notification.eventRequestId}`;
+  }
+  if (EQUIPMENT_REQUEST_TYPES.has(notification.type)) {
+    return `/events/${notification.eventRequestId}/equipment`;
   }
   if (OWN_EVENTS_LIST_TYPES.has(notification.type)) {
     return '/my-events';

@@ -1,10 +1,11 @@
-// Seeds the manual run of SCRUM-167, SCRUM-173 and SCRUM-175 (TC-167-01 to
-// TC-167-10, TC-173-01 to TC-173-09, TC-175-01 to TC-175-03) from the B1 test
-// case sheet, "B1 Seed and Run Order". Needs 20261022004756_equipment_commitment_window and
-// 20261022011508_reserve_equipment applied (`npm run db:reset` after pulling
-// them) and `npm run seed:users`.
+// Seeds the manual run of SCRUM-167, SCRUM-173, SCRUM-175 and SCRUM-170
+// (TC-167-01 to TC-167-10, TC-173-01 to TC-173-09, TC-175-01 to TC-175-03,
+// TC-170-01 to TC-170-11) from the B1 test case sheet, "B1 Seed and Run Order".
+// Needs 20261022004756_equipment_commitment_window,
+// 20261022011508_reserve_equipment and 20261024084449_equipment_out_of_service
+// applied (`npm run db:reset` after pulling them) and `npm run seed:users`.
 //
-//   node scripts/seed-b1.mjs        Every SCRUM-167/173/175 event, item and hold (resets them all)
+//   node scripts/seed-b1.mjs        Every SCRUM-167/173/175/170 event, item and hold (resets them all)
 //
 // Dates are the sheet's: F = 10/11/26, S4-E1's first booked day. Every event is
 // Approved, assigned to coordinator@example.com (S4-PM: coordinator2@example.com),
@@ -13,7 +14,8 @@
 // Technical Support would in the app. Each case has its own item, so cases do
 // not affect each other; run this again before re-running one that writes.
 //
-// SCRUM-170's rows on the sheet are not seeded yet.
+// SCRUM-170's rows seed its items, the units already out of service, and the
+// events that check them.
 //
 // Safe to run again: every "B1 " event (its lines, reservations and bookings go
 // with it), venue and EQ- item it made is deleted first.
@@ -79,6 +81,7 @@ check('clear B1 venues', await supabase.from('venues').delete().like('name', `${
 check('clear B1 items', await supabase.from('equipment').delete().like('name', 'EQ-167-%'));
 check('clear B1 items', await supabase.from('equipment').delete().like('name', 'EQ-173-%'));
 check('clear B1 items', await supabase.from('equipment').delete().like('name', 'EQ-175-%'));
+check('clear B1 items', await supabase.from('equipment').delete().like('name', 'EQ-170-%'));
 
 const existingLocation = await supabase.from('locations').select('id').eq('name', LOCATION).maybeSingle();
 check('location', existingLocation);
@@ -93,6 +96,8 @@ const ITEMS = {
   'EQ-173-01': 10, 'EQ-173-02': 10, 'EQ-173-03': 10, 'EQ-173-04': 1, 'EQ-173-05': 10,
   'EQ-173-06A': 10, 'EQ-173-06B': 10, 'EQ-173-07A': 10, 'EQ-173-07B': 4, 'EQ-173-08': 10, 'EQ-173-09': 10,
   'EQ-175-01': 10, 'EQ-175-02': 10, 'EQ-175-03': 10,
+  'EQ-170-01': 10, 'EQ-170-02': 10, 'EQ-170-03': 10, 'EQ-170-04': 10, 'EQ-170-05': 10, 'EQ-170-06': 10,
+  'EQ-170-07': 10, 'EQ-170-08': 10, 'EQ-170-09A': 10, 'EQ-170-09B': 10, 'EQ-170-09C': 10, 'EQ-170-10': 10,
 };
 const item = {};
 for (const [name, quantity] of Object.entries(ITEMS)) {
@@ -105,6 +110,20 @@ for (const [name, quantity] of Object.entries(ITEMS)) {
       .single(),
   );
   item[name] = saved.id;
+}
+
+// SCRUM-170: units already out of service at seed (TC-170-04, 05, 08), and items
+// whose own status is not Available (TC-170-09, set as in SCRUM-240's catalogue).
+const SEEDED_STATE = {
+  'EQ-170-04': { units_damaged: 2 },
+  'EQ-170-05': { units_under_maintenance: 2 },
+  'EQ-170-08': { units_damaged: 8 },
+  'EQ-170-09A': { operational_status: 'damaged' },
+  'EQ-170-09B': { operational_status: 'unavailable' },
+  'EQ-170-09C': { operational_status: 'under_maintenance' },
+};
+for (const [name, state] of Object.entries(SEEDED_STATE)) {
+  check(`state ${name}`, await supabase.from('equipment').update(state).eq('id', item[name]));
 }
 
 // --- Events -----------------------------------------------------------------
@@ -315,7 +334,17 @@ created.push(await hold('H-175-01', dates('2026-11-08', '2026-11-09'), 'EQ-175-0
 created.push(await hold('H-175-02', dates('2026-11-10', '2026-11-12'), 'EQ-175-02', 5));
 created.push(await hold('H-175-03', dates('2026-11-10', '2026-11-12'), 'EQ-175-03', 10));
 
-console.log('\nSCRUM-167/173/175 events (open each at the link, as tech-support@example.com unless the case says otherwise):');
+// SCRUM-170.
+for (const name of ['EQ-170-01', 'EQ-170-02', 'EQ-170-03', 'EQ-170-04', 'EQ-170-07', 'EQ-170-09A', 'EQ-170-09B', 'EQ-170-09C', 'EQ-170-10']) {
+  await request(e1, name, 2);
+}
+await request(am, 'EQ-170-01', 2); // TC-170-01: a second window
+const far = await createEvent('S4-FAR', { booked: dates('2027-06-01', '2027-06-02') });
+await request(far, 'EQ-170-05', 2); // TC-170-05: a far future window
+created.push(far);
+created.push(await hold('H-170-10', dates('2026-11-10', '2026-11-12'), 'EQ-170-10', 6)); // TC-170-10
+
+console.log('\nSCRUM-167/173/175/170 events (open each at the link, as tech-support@example.com unless the case says otherwise):');
 for (const event of created) {
   console.log(`  ${event.reference}  ${event.key.padEnd(10)} http://localhost:3000/events/${event.id}/equipment`);
 }

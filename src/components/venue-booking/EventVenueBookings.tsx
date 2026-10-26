@@ -1,4 +1,4 @@
-import { formatSingaporeDate } from '@/domain/shared/dates';
+import { formatSingaporeDate, formatSingaporeDateTime } from '@/domain/shared/dates';
 import type { EventVenueBooking, VenueBookingStatus } from '@/domain/venue-booking/schema';
 import { ReleaseVenueBookingForm } from './ReleaseVenueBookingForm';
 
@@ -15,6 +15,9 @@ const STATUS_LABELS: Record<VenueBookingStatus, string> = {
  *
  * SCRUM-229 AC4: a booking released by an approved replacement shows as
  * Replaced, with its reason ("Replaced by ...").
+ *
+ * SCRUM-111 AC6: a booking flagged by a significant change shows Review
+ * required, with the change that caused it and when.
  */
 export function EventVenueBookings({ bookings }: { bookings: EventVenueBooking[] }) {
   if (bookings.length === 0) return null;
@@ -38,6 +41,12 @@ export function EventVenueBookings({ bookings }: { bookings: EventVenueBooking[]
                 {booking.replaced ? 'Replaced' : STATUS_LABELS[booking.status]}
               </span>
             </div>
+            {booking.reviewRequired ? (
+              <p className="mt-1 text-[var(--warning)]">
+                <span className="font-medium">Review required:</span> {booking.reviewRequiredCause}
+                {booking.reviewRequiredAt ? ` (${formatSingaporeDateTime(booking.reviewRequiredAt)})` : ''}
+              </p>
+            ) : null}
             {booking.releaseReason ? (
               <p className="mt-1 text-[var(--text-muted)]">Reason: {booking.releaseReason}</p>
             ) : null}

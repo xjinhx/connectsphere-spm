@@ -84,6 +84,11 @@ export const EquipmentReservationSchema = z.object({
   window: DateWindowSchema,
   status: ReservationStatusSchema,
   reservedAt: z.string(),
+  // SCRUM-111 AC7: set by a significant change to the event's date or times,
+  // cleared when its coordinator re-confirms it (AC9).
+  reviewRequired: z.boolean(),
+  reviewRequiredAt: z.string().nullable(),
+  reviewRequiredCause: z.string().nullable(),
 });
 export type EquipmentReservation = z.infer<typeof EquipmentReservationSchema>;
 
