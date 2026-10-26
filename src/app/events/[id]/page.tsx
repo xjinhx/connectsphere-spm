@@ -285,7 +285,7 @@ export default async function EventRequestPage({
           with what was asked, its status, the decision date and any reason
           given. AC7 is not shown separately: once a request is approved and
           applied, the event's own fields above already show the new values
-          (see docs/dummies.md D-22 for what applies it, and when). */}
+          (see docs/dummies.md D-24 for what applies it, and when). */}
       {changeRequests.length > 0 ? (
         <section className="mt-6">
           <h2 className="text-sm font-semibold">Change requests</h2>
