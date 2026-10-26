@@ -467,4 +467,8 @@ export interface EventVenueBooking {
   canRelease: boolean;
   /** SCRUM-229 AC4: released because its replacement request was approved (CONTEXT.md: Replaced booking). */
   replaced: boolean;
+  /** SCRUM-111 AC6: set by a significant change to the event, cleared by re-confirming (AC9). */
+  reviewRequired: boolean;
+  reviewRequiredAt: string | null;
+  reviewRequiredCause: string | null;
 }
