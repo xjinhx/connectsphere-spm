@@ -61,6 +61,19 @@ export const ACTIONS = [
   // event's safety arrangements"; a seventh role (Change Log CL-27). Covers opening the list and the check page as
   // well as deciding, because AC2's details are only shown to decide with.
   'safety_check',
+  // SCRUM-110 — "As an Event Coordinator, I want to update descriptive event
+  // information without triggering a review of arrangements". The narrower
+  // rule (this event's assigned coordinator, AC1) needs the event, so it is in
+  // the service, the same split as essential_arrangements_record.
+  'event_information_edit',
+  // SCRUM-111 — change the date, times, attendance or venue requirements and
+  // re-confirm the arrangements that change flags. Only the event's assigned
+  // coordinator, checked in the service like event_information_edit.
+  'event_schedule_change',
+  // SCRUM-181 — "As an Attendee, I want to register for an event and provide
+  // the information required". Attendees sign in with the Attendee role, and
+  // AC5 matches a registration to that signed-in account (PO, 23/10/2026).
+  'event_registration',
   // SCRUM-102 — "As an Event Coordinator, I want the system to stop me
   // confirming an event while something essential is still outstanding". The
   // narrower rule, the event's assigned coordinator only, is in the service.
@@ -95,13 +108,18 @@ export const ROLE_PERMISSIONS: Record<Role, readonly Action[]> = {
     'essential_arrangements_record',
     // SCRUM-160: record the equipment their event needs.
     'equipment_request',
+    // SCRUM-110 AC1: only the event's assigned coordinator, so no other role.
+    'event_information_edit',
+    // SCRUM-111 AC1, AC9: only the event's assigned coordinator.
+    'event_schedule_change',
     // SCRUM-102: confirm their event once its essential arrangements are complete.
     'event_confirmation',
   ],
   operations_manager: ['venue_catalogue_view', 'coordinator_assignment', 'account_role_management'],
   venue_staff: ['venue_administration', 'venue_catalogue_view'],
   technical_support: ['venue_catalogue_view', 'equipment_administration'],
-  attendee: [],
+  // SCRUM-181: register for an event.
+  attendee: ['event_registration'],
   safety_officer: ['safety_check'],
 };
 

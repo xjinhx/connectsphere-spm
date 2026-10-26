@@ -21,6 +21,17 @@ export function isISODate(value: string): boolean {
   return !Number.isNaN(parsed.getTime()) && parsed.toISOString().slice(0, 10) === value;
 }
 
+/**
+ * The latest date a form accepts. A browser date input lets a person type up
+ * to six digits of year (20266), and the schema refuses anything past this.
+ */
+export const LATEST_DATE: ISODate = '9999-12-31';
+
+/** True when a date input's value has a year of more than four digits, e.g. "20266-10-10". */
+export function hasLongYear(value: string): boolean {
+  return /^\d{5,}-/.test(value);
+}
+
 export function todayInSingapore(now: Date = new Date()): ISODate {
   const parts = new Intl.DateTimeFormat('en-CA', {
     timeZone: SINGAPORE_TIME_ZONE,
@@ -86,7 +97,10 @@ export function formatSingaporeDate(date: ISODate): string {
   }).format(instant);
 }
 
-/** e.g. "10/11/2026": DD/MM/YYYY, the format agreed at Sprint 4 Planning. */
+/**
+ * e.g. "10/11/2026": DD/MM/YYYY, the format agreed at Sprint 4 Planning.
+ * Rearranges the calendar date as it is; no time zone involved.
+ */
 export function formatDayMonthYear(date: ISODate): string {
   const [year, month, day] = date.split('-');
   return `${day}/${month}/${year}`;

@@ -152,6 +152,11 @@ export async function updateEquipmentItem(equipmentId: string, input: unknown): 
     ...(operationalStatus !== undefined ? { operational_status: operationalStatus } : {}),
   });
   if (error) {
+    // SCRUM-170 AC4: units out of service never add up to more than the item
+    // has, so a quantity below them is refused on the quantity field.
+    if (isCheckViolation(error) && error.message.includes('equipment_out_of_service_within_quantity')) {
+      throw fieldError('quantity', 'Quantity cannot be below the units recorded out of service.');
+    }
     if (isCheckViolation(error)) throw fieldError('quantity', 'Quantity must be a whole number of at least zero.');
     throw new ValidationError('The change could not be saved.', error.message);
   }

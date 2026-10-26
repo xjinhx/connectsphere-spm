@@ -718,3 +718,113 @@ switch them the next time they edit those files.
   column. Release through it in `scripts/seed-b1.mjs` and TC-173-09, remove
   the markers, and re-run TC-173-09.
 - **Status:** Active.
+
+### D-22 — An event's registration period is set by the seed script
+
+- **Kind:** In-sprint stand-in (setting the period is SCRUM-185 AC5, in
+  Sprint 4 but owned by Dylan)
+- **Added by:** SCRUM-181 AC2, AC3, AC4 (TC-181-05 to TC-181-13) — branch
+  `event-register`
+- **Waiting on:** SCRUM-185 AC5 (the coordinator sets the registration start
+  and end dates)
+- **Where:** `scripts/seed-event-registration-test-data.mjs` — the header
+  comment (`DUMMY(SCRUM-185) D-22`), and the `registration_start_date` /
+  `registration_end_date` it writes for each event
+- **What is real and what is faked:** the period is real. The columns
+  `event_request.registration_start_date` and `registration_end_date` (dates,
+  both inclusive, added by SCRUM-181's migration
+  `20261024130843_event_registration.sql`) are what SCRUM-181 reads, in the
+  service and again in `register_for_event`, to refuse registering before the
+  start date (AC2) or after the end date (AC3). Only the setting is faked:
+  nothing in the app writes the columns yet, so the seed script sets them,
+  relative to today, for each test case. An event with no period takes no
+  registrations and is not found on the Attendee's page.
+- **To replace:** SCRUM-185 AC5's form saves to the same two columns (both
+  together; the table refuses one without the other, or an end before the
+  start). Set the periods through the form for TC-181-05 to TC-181-12 instead
+  of the seed, remove the marker, and re-run those test cases.
+- **Status:** Active.
+
+### D-23 — Places always remain
+
+- **Kind:** In-sprint stand-in (refusing a full event is SCRUM-182, in
+  Sprint 4)
+- **Added by:** SCRUM-181 AC1 ("places remain", TC-181-02) — branch
+  `event-register`
+- **Waiting on:** SCRUM-182 AC1 (a full event refuses registration) and AC2
+  (two people taking the last place at the same moment)
+- **Where:** ~~`supabase/migrations/20261024130843_event_registration.sql` —~~
+  ~~`event_has_places_remaining` (`DUMMY(SCRUM-182) D-23`)~~ — marker removed;
+  the comment there now points at SCRUM-182's migration
+- **What is real and what is faked:** registering is real and goes through one
+  database function, `register_for_event`, which locks the event row, checks
+  the period and the duplicate, then asks `event_has_places_remaining` and
+  returns `'full'` if it says no (the service turns that into a 409
+  `CAPACITY_EXCEEDED`). Only the answer is faked: the function always returns
+  true. `event_request.registration_capacity` exists (null until set; what it
+  is set to is SCRUM-185 AC6's rule) but nothing counts against it yet.
+- **To replace:** ~~SCRUM-182 replaces the body of `event_has_places_remaining`
+  in a new migration with a count of the event's Registered rows against
+  `registration_capacity`. `register_for_event` already calls it with the
+  event row locked, so two registrations for the last place are counted one
+  after the other. Remove the marker and re-run TC-181-02 (the last place can
+  still be taken) and `tests/integration/register-for-event.test.ts`.~~ Done
+  (SCRUM-182, branch `refuse-register`):
+  `20261025184920_event_registration_capacity.sql` counts the Registered rows
+  against `registration_capacity`; no capacity set counts as full (PO,
+  25/10/2026). Because of that, every event in
+  `scripts/seed-event-registration-test-data.mjs` and
+  `register-for-event.test.ts` now has a capacity. TC-181-02 and
+  `register-for-event.test.ts` re-run and passed on 25/10/2026.
+- **Status:** Replaced (SCRUM-182, branch `refuse-register`).
+
+### D-24 — An event's registration capacity is set by the seed script
+
+- **Kind:** In-sprint stand-in (entering the capacity is SCRUM-185 AC5, in
+  Sprint 4 but owned by Dylan; CL-59)
+- **Added by:** SCRUM-182 AC1, AC2, AC3 (TC-182-01 to TC-182-12) — branch
+  `refuse-register`
+- **Waiting on:** SCRUM-185 AC5 (the coordinator enters the capacity with the
+  registration dates). AC6 only refuses a capacity above the largest of the
+  event's venue capacities; it does not fill it in (PO, 25/10/2026).
+- **Where:** `scripts/seed-scrum182.mjs` — the header comment
+  (`DUMMY(SCRUM-185) D-24`) and the `registration_capacity` it writes per
+  event; `scripts/seed-event-registration-test-data.mjs` — the
+  `registration_capacity: 20` it now writes for SCRUM-181's events
+  (`DUMMY(SCRUM-185) D-24`)
+- **What is real and what is faked:** the count is real.
+  `event_has_places_remaining` and `isEventFull` compare the event's
+  Registered rows with `event_request.registration_capacity` (integer, null
+  until set, at least 1). Only the setting is faked: nothing in the app writes
+  the column yet, so the seed sets it. An event with no capacity is refused as
+  full, so until SCRUM-185 AC5 is on main, only seeded events take
+  registrations. Replacing a venue does not change the stored capacity; only
+  the coordinator's save does (PO, 25/10/2026).
+- **To replace:** SCRUM-185 AC5's form saves `registration_capacity` with the
+  two registration dates. Set the capacities through the form for
+  TC-182-01 to TC-182-12 instead of the seed (TC-182-10 still needs the
+  capacity lowered after three have registered), remove both markers, and
+  re-run those cases.
+- **Status:** Active.
+
+### D-25 — A registration is withdrawn by hand
+
+- **Kind:** In-sprint stand-in (withdrawing is SCRUM-184, in Sprint 4)
+- **Added by:** SCRUM-182 AC3 (TC-182-09 to TC-182-12) — branch
+  `refuse-register`
+- **Waiting on:** SCRUM-184 (the attendee withdraws their registration)
+- **Where:** `scripts/seed-scrum182.mjs` — the `--withdraw`,
+  `--withdraw-over`, `--withdraw-attendee` and `--withdraw-waiting` flags
+  (`DUMMY(SCRUM-184) D-25`); `tests/integration/refuse-full-registration.test.ts`
+  — `withdraw()` (`DUMMY(SCRUM-184) D-25`)
+- **What is real and what is faked:** what SCRUM-182 tests is real: only
+  Registered rows count against the capacity, so a withdrawn registration
+  gives its place back as soon as its status changes, with no waiting list.
+  Only the withdrawing is faked: the flags and the test helper set
+  `event_registration.status` to `withdrawn`, the value SCRUM-184 will write
+  (SCRUM-181's migration already allows it).
+- **To replace:** once SCRUM-184 is on main, withdraw through its page or
+  function in TC-182-09 to TC-182-12 instead of the flags, have `withdraw()`
+  in the integration test call SCRUM-184's function, remove the marker and
+  re-run those cases.
+- **Status:** Active.

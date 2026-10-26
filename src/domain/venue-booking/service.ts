@@ -827,6 +827,10 @@ type EventVenueBookingRow = {
   end_time: string;
   status: string;
   release_reason: string | null;
+  // SCRUM-111 AC6.
+  review_required: boolean;
+  review_required_at: string | null;
+  review_required_cause: string | null;
   venue: { name: string } | null;
   event_request: { coordinator_id: string | null } | null;
   replacements: { venue_booking_request_line: { status: string }[] }[];
@@ -862,6 +866,10 @@ export async function listEventVenueBookings(eventRequestId: string, actorId: st
         status,
         row.replacements.flatMap((request) => request.venue_booking_request_line.map((line) => line.status)),
       ),
+      // SCRUM-111 AC6: the review-required flag, when it was set and why.
+      reviewRequired: row.review_required,
+      reviewRequiredAt: row.review_required_at,
+      reviewRequiredCause: row.review_required_cause,
     };
   });
 }

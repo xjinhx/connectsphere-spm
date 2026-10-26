@@ -17,11 +17,17 @@ export async function fetchConfirmedBookingDates(eventRequestId: string) {
   return db().from('venue_booking').select('date').eq('event_request_id', eventRequestId).eq('status', 'confirmed');
 }
 
-/** 167 AC4: the event's request lines, in the order they were added, with each item's name and quantity. */
+/**
+ * 167 AC4: the event's request lines, in the order they were added, with each
+ * item's name and quantity, and (SCRUM-170) its own status and the units out of
+ * service.
+ */
 export async function fetchLinesWithItems(eventRequestId: string) {
   return db()
     .from('equipment_request_line')
-    .select('id, equipment_id, quantity, equipment ( name, quantity )')
+    .select(
+      'id, equipment_id, quantity, equipment ( name, quantity, operational_status, units_unavailable, units_damaged, units_under_maintenance )',
+    )
     .eq('event_request_id', eventRequestId)
     .order('created_at')
     .order('id');
@@ -31,7 +37,7 @@ export async function fetchLinesWithItems(eventRequestId: string) {
 export async function fetchEventReservations(eventRequestId: string) {
   return db()
     .from('equipment_reservation')
-    .select('id, line_id, equipment_id, quantity, window_start, window_end, status, created_at, equipment ( name )')
+    .select('id, line_id, equipment_id, quantity, window_start, window_end, status, created_at, review_required, review_required_at, review_required_cause, equipment ( name )')
     .eq('event_request_id', eventRequestId)
     .order('created_at')
     .order('id');
@@ -70,7 +76,7 @@ export async function reserveEquipmentLine(lineId: string, quantity: number, res
 export async function fetchReservation(reservationId: string) {
   return db()
     .from('equipment_reservation')
-    .select('id, line_id, equipment_id, quantity, window_start, window_end, status, created_at, equipment ( name )')
+    .select('id, line_id, equipment_id, quantity, window_start, window_end, status, created_at, review_required, review_required_at, review_required_cause, equipment ( name )')
     .eq('id', reservationId)
     .single();
 }
