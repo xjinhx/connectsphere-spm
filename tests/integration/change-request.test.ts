@@ -116,8 +116,9 @@ async function readNotifications(recipientId: string, eventRequestId: string) {
   return data;
 }
 
-// DUMMY(SCRUM-190) D-24, DUMMY(SCRUM-191) D-24: stands in for SCRUM-190/191's
-// own write. See docs/dummies.md.
+// DUMMY(SCRUM-190) D-24: stands in for SCRUM-190's own (approve) write. The
+// reject half is Replaced — see tests/integration/reject-change-request.test.ts
+// and docs/dummies.md D-24.
 async function seedDecision(changeRequestId: string, status: 'approved' | 'rejected', reason: string) {
   const { error } = await supabase
     .from('change_request')

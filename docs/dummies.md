@@ -775,32 +775,44 @@ switch them the next time they edit those files.
 - **Kind:** Stand-in code (a shared table created early, with nothing yet
   writing its decision columns)
 - **Added by:** SCRUM-187 — branch `change-request-raise`
-- **Waiting on:** SCRUM-190 (Approve a change request and apply it), SCRUM-191
-  (Reject a change request with a reason)
+- **Waiting on:** SCRUM-190 (Approve a change request and apply it) — the
+  reject half was replaced by SCRUM-191, below.
 - **Where:**
   - `supabase/migrations/20261024090000_change_request.sql` — `change_request`'s
     `decided_by`, `decided_at`, `decision_reason` columns
   - `src/domain/change-request/service.ts` — `raiseChangeRequest()` never
-    writes them; `listChangeRequests()` reads them back as-is
-    (`DUMMY(SCRUM-190) D-24`, `DUMMY(SCRUM-191) D-24`)
-  - `tests/integration/change-request.test.ts` — `seedDecision()`
-    (`DUMMY(SCRUM-190) D-24`, `DUMMY(SCRUM-191) D-24`)
-- **What is real and what is faked:** raising a request (AC1) and listing it
-  (AC6) are both real, against a real database. Only the decision itself is
-  faked: nothing in the app approves or rejects a change request yet, so the
-  integration test's `seedDecision()` sets `status`/`decided_at`/
-  `decision_reason` directly in Postgres to prove AC6 reads a decided request
-  correctly once one exists. AC7 ("the event shows the new values") is out of
-  scope for this story entirely — it is SCRUM-190's own write, not read back
-  here.
-- **To replace:** SCRUM-190/191 write these three columns from their own
-  approve/reject actions (already shaped the way their ACs describe them: one
-  decision, one reason, one timestamp). Re-run TC-187-11 against a request
-  decided through the app, then remove the markers. Stamp `decided_at` the
-  same "one clock" way `event_request.decided_at`/`submitted_at`/`assigned_at`
-  already are (a DB trigger reading `now()`, not a caller-supplied value -
-  see `set_decided_at`/`set_assigned_at`/`set_submitted_at` in the
-  event_request migrations), so a decision can never be backdated before its
-  own request. `change_request` has no such trigger yet since nothing writes
-  `decided_at` yet; add one alongside SCRUM-190/191's migration.
-- **Status:** Active.
+    writes them; `listChangeRequests()`'s `toSummary()` reads them back as-is
+    (`DUMMY(SCRUM-190) D-24` — the approve half; the reject half is Replaced,
+    see below)
+  - `tests/integration/change-request.test.ts` — `seedDecision()` (still
+    stands in for SCRUM-190's approve path; `DUMMY(SCRUM-190) D-24`)
+- **What is real and what is faked:** raising a request (AC1), listing it
+  (AC6) and rejecting it (SCRUM-191) are all real, against a real database.
+  Only the approve path is still faked: nothing in the app approves a change
+  request yet, so the integration test's `seedDecision()` sets `status`
+  (`'approved'`)/`decided_at`/`decision_reason` directly in Postgres to prove
+  AC6 reads a decided request correctly once one exists. AC7 ("the event
+  shows the new values") is out of scope for SCRUM-187/191 entirely — it is
+  SCRUM-190's own write, not read back here.
+- **To replace (approve half, still open):** SCRUM-190 writes these three
+  columns from its own approve action (already shaped the way its ACs
+  describe it — see `rejectChangeRequest`, `src/domain/change-request/service.ts`,
+  for the shape SCRUM-191 used: one decision, one reason, one timestamp, via
+  `decided_by`/`decision_reason` written by the service and `decided_at`
+  stamped by the `change_request_set_decided_at` trigger,
+  `supabase/migrations/20261027093000_change_request_reject.sql` — that
+  trigger already fires on `status = 'approved'` too, so SCRUM-190 does not
+  need its own). Re-run TC-187-11 against a request decided through the app,
+  then remove the remaining `DUMMY(SCRUM-190) D-24` markers.
+- **Replaced (reject half):** SCRUM-191 (branch
+  `scrum-191-reject-change-request`) — `rejectChangeRequest()`,
+  `src/domain/change-request/service.ts`, now writes `status='rejected'`,
+  `decided_by` and `decision_reason` for real, through
+  `rejectChangeRequestRow()` (`src/lib/supabase/changeRequests.ts`);
+  `decided_at` is stamped by the `change_request_set_decided_at` trigger
+  added in the same PR, not supplied by the caller. Covered by
+  `tests/integration/reject-change-request.test.ts` (TC-191-01 through
+  TC-191-05) against a real database — re-run those if this area changes
+  again.
+- **Status:** Active (approve half, SCRUM-190); reject half Replaced by
+  SCRUM-191.
