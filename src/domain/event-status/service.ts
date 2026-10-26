@@ -20,9 +20,14 @@ import type { Role } from '@/domain/identity/roles';
 import { isCurrentCoordinator } from '@/domain/assignment/policy';
 import { listAffectedBookings } from '@/domain/availability/service';
 import { listEventReservations } from '@/domain/equipment-reservation/service';
-import { confirmationRefusal, outstandingEssentialArrangements } from '@/domain/essential-arrangements/policy';
+import {
+  confirmationRefusal,
+  outstandingEssentialArrangements,
+  outstandingReviewArrangements,
+} from '@/domain/essential-arrangements/policy';
 import { getEssentialArrangements } from '@/domain/essential-arrangements/service';
 import { notifyBestEffort } from '@/domain/notification/service';
+import { listEventArrangements } from '@/domain/significant-change/service';
 import { fromDatabaseTime } from '@/domain/shared/times';
 import { VenueBookingRequestLineStatusEnum } from '@/domain/venue-booking/schema';
 import { listEventVenueBookings } from '@/domain/venue-booking/service';
@@ -214,12 +219,13 @@ export async function confirmEvent(eventRequestId: string, actor: Actor): Promis
   }
   if (!canBeConfirmed(event.status)) throw new ConflictError(confirmationStatusRefusal(event.status));
 
-  const [essential, venueLines, venueBookings, affectedBookings, equipment] = await Promise.all([
+  const [essential, venueLines, venueBookings, affectedBookings, equipment, arrangements] = await Promise.all([
     getEssentialArrangements(event.id, actor.userId),
     readVenueLines(event.id),
     listEventVenueBookings(event.id, actor.userId),
     listAffectedBookings(event.id),
     listEventReservations(event.id, actor),
+    listEventArrangements(event.id),
   ]);
   const outstanding = outstandingEssentialArrangements({
     needs: essential.needs,
@@ -228,6 +234,14 @@ export async function confirmEvent(eventRequestId: string, actor: Actor): Promis
     affectedBookings,
     equipment,
   });
+  // SCRUM-190 AC2/AC3: a flagged-for-review arrangement (SCRUM-111) blocks
+  // re-confirmation only while it is also marked essential.
+  outstanding.push(
+    ...outstandingReviewArrangements(essential.needs, {
+      bookings: arrangements.bookings.filter((item) => item.reviewRequired).map((item) => item.label),
+      reservations: arrangements.reservations.filter((item) => item.reviewRequired).map((item) => item.label),
+    }),
+  );
   if (outstanding.length > 0) throw new ConflictError(confirmationRefusal(outstanding), { outstanding });
 
   await changeEventStatus(event.id, 'confirmed');
