@@ -135,6 +135,10 @@ export function ChangeRequestForm({ requestId }: { requestId: string }) {
                   ) : (
                     <input
                       type={def.kind === 'date' ? 'date' : def.kind === 'time' ? 'time' : def.kind === 'number' ? 'number' : 'text'}
+                      // SCRUM-258: 31 Dec 9999 is the latest valid date, so the
+                      // picker stops there instead of letting a stray keystroke
+                      // roll the year segment past 4 digits.
+                      max={def.kind === 'date' ? '9999-12-31' : undefined}
                       value={values[def.field] ?? ''}
                       onChange={(event) => setValues((v) => ({ ...v, [def.field]: event.target.value }))}
                       className="mt-1 w-full rounded-md border border-[var(--border)] bg-white px-2 py-1 text-sm"

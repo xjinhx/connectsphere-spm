@@ -177,9 +177,18 @@ describe('raiseChangeRequest', () => {
   it('accepts a change request on a Confirmed event the same way', async () => {
     const id = await createEvent('confirmed');
 
+    // Both ends of the pair, same as the sheet's test data (startTime/endTime) -
+    // proposing just a start later than the event's current unchanged end
+    // (12:00) would be an invalid range (see timeRangeIssues below).
     const outcome = await raiseChangeRequest(
       id,
-      { fields: [{ field: 'startTime', proposedValue: '14:00' }], reason: 'Programme running longer' },
+      {
+        fields: [
+          { field: 'startTime', proposedValue: '14:00' },
+          { field: 'endTime', proposedValue: '16:00' },
+        ],
+        reason: 'Programme running longer',
+      },
       organiserId,
     );
 
@@ -217,6 +226,46 @@ describe('raiseChangeRequest', () => {
 
     await expect(
       raiseChangeRequest(id, { fields: [{ field: 'expectedAttendance', proposedValue: 180 }], reason: '' }, organiserId),
+    ).rejects.toMatchObject({ code: 'VALIDATION_ERROR' });
+
+    expect(await readChangeRequestRows(id)).toHaveLength(0);
+  });
+
+  // Bug found manually testing TC-187-03 (28/10/2026): nothing checked that a
+  // proposed start/end pair stays chronological, so Submitted had an end
+  // before its start. Same rule as the event request's own save
+  // (timeRangeIssues, domain/event-request/schema.ts).
+  it('refuses a proposed end time before a proposed start time, and writes nothing', async () => {
+    const id = await createEvent('submitted');
+
+    await expect(
+      raiseChangeRequest(
+        id,
+        {
+          fields: [
+            { field: 'startTime', proposedValue: '21:00' },
+            { field: 'endTime', proposedValue: '19:00' },
+          ],
+          reason: 'Testing wrong timing',
+        },
+        organiserId,
+      ),
+    ).rejects.toMatchObject({ code: 'VALIDATION_ERROR' });
+
+    expect(await readChangeRequestRows(id)).toHaveLength(0);
+  });
+
+  // Same bug, the one-sided case: only startTime selected, but it lands after
+  // the event's current (unchanged) end time.
+  it('refuses a proposed start time that is after the event\'s current end time', async () => {
+    const id = await createEvent('submitted'); // start_time 10:00, end_time 12:00 (createEvent fixture)
+
+    await expect(
+      raiseChangeRequest(
+        id,
+        { fields: [{ field: 'startTime', proposedValue: '14:00' }], reason: 'Only changing the start' },
+        organiserId,
+      ),
     ).rejects.toMatchObject({ code: 'VALIDATION_ERROR' });
 
     expect(await readChangeRequestRows(id)).toHaveLength(0);

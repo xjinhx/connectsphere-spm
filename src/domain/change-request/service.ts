@@ -8,6 +8,7 @@ import {
 } from '@/lib/supabase/changeRequests';
 import { fetchEventRequestById, type EventRequestRow } from '@/lib/supabase/eventRequests';
 import { canViewRequest } from '@/domain/event-request/policy';
+import { timeRangeIssues } from '@/domain/event-request/schema';
 import { notifyBestEffort } from '@/domain/notification/service';
 import { ConflictError, ForbiddenError, NotFoundError, ValidationError } from '@/domain/shared/errors';
 import { fromDatabaseTime } from '@/domain/shared/times';
@@ -76,6 +77,18 @@ const CURRENT_VALUE_READERS: Record<SelectableChangeRequestField, (event: EventR
   technicalSupportNotes: (event) => event.technical_support_notes,
 };
 
+/** The proposed value for `field` if it was selected, else the event's current one (both ClockTime strings, or undefined if neither is set). */
+function asClockTimeOrCurrent(
+  proposedByField: Map<SelectableChangeRequestField, unknown>,
+  field: 'startTime' | 'endTime',
+  event: EventRequestRow,
+): string | undefined {
+  const proposed = proposedByField.get(field);
+  if (typeof proposed === 'string') return proposed;
+  const current = CURRENT_VALUE_READERS[field](event);
+  return typeof current === 'string' ? current : undefined;
+}
+
 function toSummary(row: ChangeRequestRow, fieldRows: ChangeRequestFieldRow[]): ChangeRequestSummary {
   return {
     id: row.id,
@@ -139,6 +152,22 @@ export async function raiseChangeRequest(
 
   if (!canRaiseChangeRequest(event.status)) {
     throw new ConflictError('A change request cannot be raised on this event in its current status.');
+  }
+
+  // Bug found manually testing TC-187-03: selecting only one of startTime/
+  // endTime (or both, inverted) could propose an end before a start, since
+  // nothing checked the pair. Same rule as the event request's own save
+  // (timeRangeIssues, domain/event-request/schema.ts) - a field left
+  // unselected keeps its current value for the comparison, since that is
+  // what the event would actually end up with if this request is approved.
+  const proposedByField = new Map(fields.map(({ field, proposedValue }) => [field, proposedValue]));
+  if (proposedByField.has('startTime') || proposedByField.has('endTime')) {
+    const effectiveStart = asClockTimeOrCurrent(proposedByField, 'startTime', event);
+    const effectiveEnd = asClockTimeOrCurrent(proposedByField, 'endTime', event);
+    const issues = timeRangeIssues(effectiveStart, effectiveEnd);
+    if (issues.length > 0) {
+      throw new ValidationError(issues[0]?.message ?? 'The end time must be after the start time.', issues);
+    }
   }
 
   const { data: created, error: createError } = await insertChangeRequest({
