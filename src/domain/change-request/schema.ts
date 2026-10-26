@@ -99,3 +99,17 @@ export type RaiseChangeRequestInput = z.infer<typeof RaiseChangeRequestInputSche
 
 export const EventRequestIdSchema = z.string().uuid();
 export const ChangeRequestIdSchema = z.string().uuid();
+
+/**
+ * SCRUM-190 — the shape `equipmentItems` must have to be applied to the
+ * event: validated defensively, since `proposed_value` was stored as
+ * `z.unknown()` at raise time (SCRUM-187).
+ */
+export const ChangeRequestEquipmentItemSchema = z.object({
+  item: z.string().trim().min(1),
+  quantity: z.number().int().positive(),
+});
+export type ChangeRequestEquipmentItem = z.infer<typeof ChangeRequestEquipmentItemSchema>;
+
+/** `accessibilityFeatureIds` must likewise be an array of ids once applied. */
+export const ChangeRequestAccessibilityFeatureIdsSchema = z.array(z.string().uuid());
