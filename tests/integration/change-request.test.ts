@@ -136,8 +136,9 @@ async function readNotifications(recipientId: string, eventRequestId: string) {
   return data;
 }
 
-// DUMMY(SCRUM-190) D-26, DUMMY(SCRUM-191) D-26: stands in for SCRUM-190/191's
-// own write. See docs/dummies.md.
+// DUMMY(SCRUM-191) D-26: stands in for SCRUM-191's own write (SCRUM-190's
+// approved-path write is now real — tests/integration/approve-change-request.test.ts).
+// See docs/dummies.md.
 async function seedDecision(changeRequestId: string, status: 'approved' | 'rejected', reason: string) {
   const { error } = await supabase
     .from('change_request')
@@ -427,7 +428,8 @@ describe('listChangeRequests', () => {
     expect(list[0]?.fields).toEqual([{ field: 'expectedAttendance', currentValue: 150, proposedValue: 180 }]);
   });
 
-  // TC-187-11 (AC6) — a decided request (seeded directly, DUMMY(SCRUM-190)/(SCRUM-191)).
+  // TC-187-11 (AC6) — a decided request (seeded directly here, DUMMY(SCRUM-191);
+  // re-run against a real approval in tests/integration/approve-change-request.test.ts).
   it('lists a decided request with its status, decision date and reason', async () => {
     const id = await createEvent('submitted');
     const outcome = await raiseChangeRequest(
