@@ -3,14 +3,17 @@ import { z } from 'zod';
 /**
  * SCRUM-187 — Request a change and track its outcome.
  *
- * Field scope deliberately narrow for now: the subset in scope whichever way
- * the PO answers the AC1 field-scope question (Slack, 24 Oct 2026) - date,
- * times, expected attendance, venue requirements, equipment requirements.
- * Widening to the full event-request field set (name, purpose, description,
- * registrationRequired) is a follow-up once that's confirmed; see the
- * migration note in 20261024090000_change_request.sql.
+ * Field scope: PO clarification, 24 Oct 2026 (CL-61) - any field the
+ * organiser fills in on the event request form can be selected, the full
+ * event-request field set. Accessibility features and equipment items are
+ * one field each, proposed as a whole new list (not one field per item).
+ * Which changes flag arrangements for review is SCRUM-190 AC2/SCRUM-111, not
+ * this story.
  */
 export const SELECTABLE_CHANGE_REQUEST_FIELDS = [
+  'name',
+  'purpose',
+  'description',
   'proposedDate',
   'startTime',
   'endTime',
@@ -23,12 +26,16 @@ export const SELECTABLE_CHANGE_REQUEST_FIELDS = [
   'equipmentRequired',
   'equipmentItems',
   'technicalSupportNotes',
+  'registrationRequired',
 ] as const;
 export const SelectableChangeRequestFieldSchema = z.enum(SELECTABLE_CHANGE_REQUEST_FIELDS);
 export type SelectableChangeRequestField = z.infer<typeof SelectableChangeRequestFieldSchema>;
 
 /** AC6's "what was asked" and the raise form both name fields the same way. */
 export const CHANGE_REQUEST_FIELD_LABELS: Record<SelectableChangeRequestField, string> = {
+  name: 'Event name',
+  purpose: 'Purpose',
+  description: 'Description',
   proposedDate: 'Proposed date',
   startTime: 'Start time',
   endTime: 'End time',
@@ -41,6 +48,7 @@ export const CHANGE_REQUEST_FIELD_LABELS: Record<SelectableChangeRequestField, s
   equipmentRequired: 'Equipment required',
   equipmentItems: 'Equipment items',
   technicalSupportNotes: 'Technical support notes',
+  registrationRequired: 'Registration required',
 };
 
 export const ChangeRequestStatusSchema = z.enum(['pending', 'approved', 'rejected']);

@@ -55,6 +55,9 @@ async function readRequest(id: string): Promise<EventRequestRow> {
 
 /** EVENT_REQUEST_CORE_FIELDS: how each selectable field reads off an event-request row. */
 const CURRENT_VALUE_READERS: Record<SelectableChangeRequestField, (event: EventRequestRow) => unknown> = {
+  name: (event) => event.name,
+  purpose: (event) => event.purpose,
+  description: (event) => event.description,
   proposedDate: (event) => event.proposed_date,
   // Postgres `time` reads back as `HH:MM:SS`; the proposed value comes from an
   // <input type="time"> as `HH:MM` (ClockTime, src/domain/shared/times.ts).
@@ -75,6 +78,7 @@ const CURRENT_VALUE_READERS: Record<SelectableChangeRequestField, (event: EventR
   equipmentRequired: (event) => event.equipment_required,
   equipmentItems: (event) => event.event_request_equipment,
   technicalSupportNotes: (event) => event.technical_support_notes,
+  registrationRequired: (event) => event.registration_required,
 };
 
 /** The proposed value for `field` if it was selected, else the event's current one (both ClockTime strings, or undefined if neither is set). */

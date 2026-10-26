@@ -9,9 +9,8 @@ import { CHANGE_REQUEST_FIELD_LABELS, type SelectableChangeRequestField } from '
  * value and giving a reason."
  *
  * Only the fields SELECTABLE_CHANGE_REQUEST_FIELDS actually allows are
- * offered, so the form can never submit a field the API would reject - see
- * that schema's comment for why the set is narrow for now (pending PO
- * confirmation of AC1's field scope).
+ * offered, so the form can never submit a field the API would reject - the
+ * full event-request field set, per CL-61 (24 Oct 2026).
  *
  * accessibilityFeatureIds and equipmentItems are left out of this form: both
  * need a catalogue picker (accessibility features, equipment lines) this
@@ -20,9 +19,12 @@ import { CHANGE_REQUEST_FIELD_LABELS, type SelectableChangeRequestField } from '
  * inputs here once a picker exists, rather than faking one with free text.
  */
 
-type FieldKind = 'date' | 'time' | 'number' | 'text' | 'boolean';
+type FieldKind = 'date' | 'time' | 'number' | 'text' | 'longText' | 'boolean';
 
 const FIELD_DEFS: { field: SelectableChangeRequestField; kind: FieldKind }[] = [
+  { field: 'name', kind: 'text' },
+  { field: 'purpose', kind: 'longText' },
+  { field: 'description', kind: 'longText' },
   { field: 'proposedDate', kind: 'date' },
   { field: 'startTime', kind: 'time' },
   { field: 'endTime', kind: 'time' },
@@ -33,6 +35,7 @@ const FIELD_DEFS: { field: SelectableChangeRequestField; kind: FieldKind }[] = [
   { field: 'preferredLocationId', kind: 'text' },
   { field: 'equipmentRequired', kind: 'boolean' },
   { field: 'technicalSupportNotes', kind: 'text' },
+  { field: 'registrationRequired', kind: 'boolean' },
 ];
 
 function parseValue(kind: FieldKind, raw: string): unknown {
@@ -132,6 +135,14 @@ export function ChangeRequestForm({ requestId }: { requestId: string }) {
                       <option value="true">Yes</option>
                       <option value="false">No</option>
                     </select>
+                  ) : def.kind === 'longText' ? (
+                    <textarea
+                      rows={3}
+                      value={values[def.field] ?? ''}
+                      onChange={(event) => setValues((v) => ({ ...v, [def.field]: event.target.value }))}
+                      className="mt-1 w-full rounded-md border border-[var(--border)] bg-white px-2 py-1 text-sm"
+                      placeholder="Proposed value"
+                    />
                   ) : (
                     <input
                       type={def.kind === 'date' ? 'date' : def.kind === 'time' ? 'time' : def.kind === 'number' ? 'number' : 'text'}
