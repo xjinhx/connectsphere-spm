@@ -102,7 +102,7 @@ function toSummary(row: ChangeRequestRow, fieldRows: ChangeRequestFieldRow[]): C
         proposedValue: field.proposed_value,
       })),
     createdAt: row.created_at,
-    // DUMMY(SCRUM-190) D-22, DUMMY(SCRUM-191) D-22: read back as-is, never
+    // DUMMY(SCRUM-190) D-24, DUMMY(SCRUM-191) D-24: read back as-is, never
     // written by this story. See docs/dummies.md.
     decidedAt: row.decided_at,
     decisionReason: row.decision_reason,
@@ -124,8 +124,8 @@ function toSummary(row: ChangeRequestRow, fieldRows: ChangeRequestFieldRow[]): C
  *
  * decided_by/decided_at/decision_reason are never written here - they
  * belong to the approve/reject stories.
- * DUMMY(SCRUM-190) D-22: decided_by/decided_at/decision_reason
- * DUMMY(SCRUM-191) D-22: decided_by/decided_at/decision_reason
+ * DUMMY(SCRUM-190) D-24: decided_by/decided_at/decision_reason
+ * DUMMY(SCRUM-191) D-24: decided_by/decided_at/decision_reason
  * See docs/dummies.md.
  */
 export async function raiseChangeRequest(

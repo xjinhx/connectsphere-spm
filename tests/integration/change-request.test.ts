@@ -114,7 +114,7 @@ async function readNotifications(recipientId: string, eventRequestId: string) {
   return data;
 }
 
-// DUMMY(SCRUM-190) D-22, DUMMY(SCRUM-191) D-22: stands in for SCRUM-190/191's
+// DUMMY(SCRUM-190) D-24, DUMMY(SCRUM-191) D-24: stands in for SCRUM-190/191's
 // own write. See docs/dummies.md.
 async function seedDecision(changeRequestId: string, status: 'approved' | 'rejected', reason: string) {
   const { error } = await supabase
