@@ -66,6 +66,10 @@ export const ACTIONS = [
   // rule (this event's assigned coordinator, AC1) needs the event, so it is in
   // the service, the same split as essential_arrangements_record.
   'event_information_edit',
+  // SCRUM-111 — change the date, times, attendance or venue requirements and
+  // re-confirm the arrangements that change flags. Only the event's assigned
+  // coordinator, checked in the service like event_information_edit.
+  'event_schedule_change',
   // SCRUM-181 — "As an Attendee, I want to register for an event and provide
   // the information required". Attendees sign in with the Attendee role, and
   // AC5 matches a registration to that signed-in account (PO, 23/10/2026).
@@ -106,6 +110,8 @@ export const ROLE_PERMISSIONS: Record<Role, readonly Action[]> = {
     'equipment_request',
     // SCRUM-110 AC1: only the event's assigned coordinator, so no other role.
     'event_information_edit',
+    // SCRUM-111 AC1, AC9: only the event's assigned coordinator.
+    'event_schedule_change',
     // SCRUM-102: confirm their event once its essential arrangements are complete.
     'event_confirmation',
   ],

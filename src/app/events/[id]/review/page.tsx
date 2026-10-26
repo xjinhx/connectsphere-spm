@@ -22,6 +22,9 @@ import { EssentialArrangementsPanel } from '@/components/event-request/Essential
 import { getEssentialArrangements } from '@/domain/essential-arrangements/service';
 import { EventInformationPanel } from '@/components/event-request/EventInformationPanel';
 import { getEventInformation } from '@/domain/event-information/service';
+import { ArrangementReviewPanel } from '@/components/event-request/ArrangementReviewPanel';
+import { EventSchedulePanel } from '@/components/event-request/EventSchedulePanel';
+import { getEventSchedule } from '@/domain/significant-change/service';
 import { ConfirmEventButton } from '@/components/event-request/ConfirmEventButton';
 import { canBeConfirmed } from '@/domain/event-status/policy';
 import {
@@ -181,6 +184,8 @@ export default async function ReviewEventRequestPage({
   // refuses anyone who is neither the assigned coordinator nor the Lead,
   // because it carries the internal notes.
   const eventInformation = await getEventInformation(request.id, actor);
+  // SCRUM-111, read for the same reason and refusing the same people.
+  const eventSchedule = await getEventSchedule(request.id, actor);
 
   // SCRUM-135 AC3: the venues already checked, shown again without running
   // them. Only the event's own coordinator has any; anyone else sees none.
@@ -217,6 +222,10 @@ export default async function ReviewEventRequestPage({
         bookings={affectedBookings}
         replacement={{ eventId: request.id, bookingIds: replaceableBookingIds, venues, eventRequirements }}
       />
+
+      {/* SCRUM-111 AC8, AC9 — arrangements a significant change marked for
+          review, each re-confirmed here. Near the top for the same reason. */}
+      <ArrangementReviewPanel requestId={request.id} view={eventSchedule} />
 
       {/* US-7.2 AC1/AC3 — a clarification already raised on this request.
           Status-aware wording, same reasoning as the Organiser's own page
@@ -290,6 +299,11 @@ export default async function ReviewEventRequestPage({
           The edit action only for the assigned coordinator of an event that is
           not Completed or Cancelled; saving flags no arrangement. */}
       <EventInformationPanel requestId={request.id} view={eventInformation} />
+
+      {/* SCRUM-111 AC1-AC5 — change the date, times, attendance or venue
+          requirements. Lists the arrangements the change affects and asks for
+          the acknowledgement before saving; only for the assigned coordinator. */}
+      <EventSchedulePanel requestId={request.id} view={eventSchedule} />
 
       {/* SCRUM-92 AC1 — "given I am reviewing a submitted request, when I
           approve it". This page is what the card means by reviewing it.
