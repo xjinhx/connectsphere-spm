@@ -50,6 +50,15 @@ export async function insertChangeRequestFields(
   return createAdminClient().from('change_request_field').insert(rows).select(FIELD_COLUMNS);
 }
 
+/** SCRUM-188 AC1 — one change request by id, to open from its notification or the event page. */
+export async function fetchChangeRequestById(id: string) {
+  return createAdminClient()
+    .from('change_request')
+    .select(CHANGE_REQUEST_COLUMNS)
+    .eq('id', id)
+    .maybeSingle();
+}
+
 /** AC6 — every change request raised against an event, newest first. */
 export async function listChangeRequestsForEvent(eventRequestId: string) {
   return createAdminClient()
