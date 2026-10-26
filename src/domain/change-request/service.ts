@@ -1,4 +1,6 @@
 import {
+  approveChangeRequestRow,
+  fetchChangeRequestById,
   insertChangeRequest,
   insertChangeRequestFields,
   listChangeRequestFields,
@@ -9,17 +11,29 @@ import {
 import { fetchEventRequestById, type EventRequestRow } from '@/lib/supabase/eventRequests';
 import { canViewRequest } from '@/domain/event-request/policy';
 import { timeRangeIssues } from '@/domain/event-request/schema';
+import type { ScheduleValues } from '@/domain/significant-change/schema';
+import { RoomLayoutSchema, type RoomLayout } from '@/domain/venues/schema';
 import { notifyBestEffort } from '@/domain/notification/service';
 import { ConflictError, ForbiddenError, NotFoundError, ValidationError } from '@/domain/shared/errors';
 import { fromDatabaseTime } from '@/domain/shared/times';
 import {
+  ChangeRequestAccessibilityFeatureIdsSchema,
+  ChangeRequestEquipmentItemSchema,
   ChangeRequestIdSchema,
   EventRequestIdSchema,
   RaiseChangeRequestInputSchema,
+  type ChangeRequestEquipmentItem,
   type ChangeRequestStatus,
   type SelectableChangeRequestField,
 } from './schema';
-import { canRaiseChangeRequest, canRaiseChangeRequestFor } from './policy';
+import {
+  canDecideChangeRequestFor,
+  canRaiseChangeRequest,
+  canRaiseChangeRequestFor,
+  changeRequestArrangementCauses,
+  changeRequestIsSignificant,
+  type ChangeRequestExtras,
+} from './policy';
 
 /**
  * SCRUM-187 — Request a change and track its outcome.
@@ -106,8 +120,9 @@ function toSummary(row: ChangeRequestRow, fieldRows: ChangeRequestFieldRow[]): C
         proposedValue: field.proposed_value,
       })),
     createdAt: row.created_at,
-    // DUMMY(SCRUM-190) D-26, DUMMY(SCRUM-191) D-26: read back as-is, never
-    // written by this story. See docs/dummies.md.
+    // Read back as-is. Written for real by approveChangeRequest below for an
+    // approved decision; DUMMY(SCRUM-191) D-26 remains Active for a rejected
+    // one until that story writes it. See docs/dummies.md.
     decidedAt: row.decided_at,
     decisionReason: row.decision_reason,
   };
@@ -127,9 +142,8 @@ function toSummary(row: ChangeRequestRow, fieldRows: ChangeRequestFieldRow[]): C
  * AC5 — Cancelled/Completed events are refused, same path as AC2.
  *
  * decided_by/decided_at/decision_reason are never written here - they
- * belong to the approve/reject stories.
- * DUMMY(SCRUM-190) D-26: decided_by/decided_at/decision_reason
- * DUMMY(SCRUM-191) D-26: decided_by/decided_at/decision_reason
+ * belong to the approve/reject stories (approveChangeRequest below, for the
+ * approved path; DUMMY(SCRUM-191) D-26 remains Active for the rejected one).
  * See docs/dummies.md.
  */
 export async function raiseChangeRequest(
@@ -259,6 +273,273 @@ export async function listChangeRequests(
   const fields = (fieldRows ?? []) as unknown as ChangeRequestFieldRow[];
 
   return requests.map((row) => toSummary(row, fields));
+}
+
+// -----------------------------------------------------------------------------
+// SCRUM-190 — Approve a change request and apply it
+// -----------------------------------------------------------------------------
+
+function requireString(value: unknown, message: string): string {
+  if (typeof value !== 'string') throw new ValidationError(message);
+  return value;
+}
+
+function requireStringOrNull(value: unknown, message: string): string | null {
+  if (value === null || value === undefined) return null;
+  if (typeof value === 'string') return value;
+  throw new ValidationError(message);
+}
+
+function requireNumberOrNull(value: unknown, message: string): number | null {
+  if (value === null || value === undefined) return null;
+  if (typeof value === 'number') return value;
+  throw new ValidationError(message);
+}
+
+function requireBooleanOrNull(value: unknown, message: string): boolean | null {
+  if (value === null || value === undefined) return null;
+  if (typeof value === 'boolean') return value;
+  throw new ValidationError(message);
+}
+
+function requireRoomLayoutOrNull(value: unknown, message: string): RoomLayout | null {
+  if (value === null || value === undefined) return null;
+  const parsed = RoomLayoutSchema.safeParse(value);
+  if (!parsed.success) throw new ValidationError(message);
+  return parsed.data;
+}
+
+function parseAccessibilityFeatureIds(value: unknown): string[] {
+  const parsed = ChangeRequestAccessibilityFeatureIdsSchema.safeParse(value ?? []);
+  if (!parsed.success) {
+    throw new ValidationError('The proposed accessibility features are not valid.', parsed.error.flatten());
+  }
+  return parsed.data;
+}
+
+function parseEquipmentItems(value: unknown): ChangeRequestEquipmentItem[] {
+  const parsed = ChangeRequestEquipmentItemSchema.array().safeParse(value ?? []);
+  if (!parsed.success) {
+    throw new ValidationError('The proposed equipment items are not valid.', parsed.error.flatten());
+  }
+  return parsed.data;
+}
+
+/** Every selected field's proposed value, by field. */
+function proposedValueMap(
+  fields: readonly ChangeRequestFieldChange[],
+): Map<SelectableChangeRequestField, unknown> {
+  return new Map(fields.map((entry) => [entry.field, entry.proposedValue]));
+}
+
+/** The value `field` would end up with if this request is approved: proposed if selected, else what the event already has. */
+function effectiveValue(
+  field: SelectableChangeRequestField,
+  proposed: Map<SelectableChangeRequestField, unknown>,
+  event: EventRequestRow,
+): unknown {
+  return proposed.has(field) ? proposed.get(field) : CURRENT_VALUE_READERS[field](event);
+}
+
+async function readChangeRequest(id: string): Promise<{ row: ChangeRequestRow; fields: ChangeRequestFieldRow[] }> {
+  const { data, error } = await fetchChangeRequestById(id);
+  if (error) throw new ValidationError('The change request could not be read.', error.message);
+  if (!data) throw new NotFoundError('Change request');
+  const row = data as unknown as ChangeRequestRow;
+
+  const { data: fieldRows, error: fieldsError } = await listChangeRequestFields([row.id]);
+  if (fieldsError) throw new ValidationError('The changed fields could not be read.', fieldsError.message);
+
+  return { row, fields: (fieldRows ?? []) as unknown as ChangeRequestFieldRow[] };
+}
+
+/**
+ * AC1 — "Given a pending change request, when the assigned coordinator
+ * approves it, then the event is updated with the requested values and the
+ * request's status becomes Approved."
+ *
+ * AC2/AC3 — if the approved change is significant (changeRequestIsSignificant,
+ * policy.ts) and the event was Confirmed, it returns to Planning; it cannot be
+ * re-confirmed until every arrangement that is both essential and flagged for
+ * review has been re-confirmed (essential-arrangements/policy.ts's
+ * outstandingReviewArrangements, read by event-status/service.ts's
+ * confirmEvent — not duplicated here). An affected arrangement that is not
+ * essential never blocks, however flagged.
+ *
+ * AC4 — every venue booking / equipment reservation the change affects
+ * (changeRequestArrangementCauses, reusing SCRUM-111's changeCauses as-is) is
+ * flagged for review, and the staff who actioned it (decided_by/reserved_by)
+ * is notified, through the existing in-app mechanism (SCRUM-193/198).
+ *
+ * AC5 — registered attendees are not notified by this story. Attendees are
+ * never signed-in accounts (src/domain/event-registration/schema.ts's
+ * Registration has no userId — a full name, an email and a contact number,
+ * nothing else), so there is no recipient the in-app mechanism can reach, and
+ * SCRUM-194 (email) is out of Release 1 (CLAUDE.md). Faking a recipient would
+ * make the test assert nothing true ("Dependencies on other people's
+ * stories", CLAUDE.md: "stop only when a dummy would make the test
+ * meaningless"). See docs/dummies.md D-26.
+ *
+ * AC6 — the organiser who raised it is notified it was approved.
+ *
+ * Replaces DUMMY(SCRUM-190) D-24 for the approved path: decided_by/
+ * decided_at are now written for real here. SCRUM-191's half of D-24 (the
+ * rejected path) stays Active until that story writes it.
+ */
+export async function approveChangeRequest(
+  eventRequestId: string,
+  changeRequestId: string,
+  actorId: string,
+): Promise<ChangeRequestSummary> {
+  const parsedEventId = EventRequestIdSchema.safeParse(eventRequestId);
+  if (!parsedEventId.success) throw new NotFoundError('Event request');
+  const parsedCrId = ChangeRequestIdSchema.safeParse(changeRequestId);
+  if (!parsedCrId.success) throw new NotFoundError('Change request');
+
+  const { row: cr, fields } = await readChangeRequest(parsedCrId.data);
+  if (cr.event_request_id !== parsedEventId.data) throw new NotFoundError('Change request');
+
+  const event = await readRequest(parsedEventId.data);
+
+  if (!canDecideChangeRequestFor({ coordinatorId: event.coordinator_id }, actorId)) {
+    throw new ForbiddenError('This event is not assigned to you.');
+  }
+  if (cr.status !== 'pending') {
+    throw new ConflictError('This change request has already been decided.');
+  }
+
+  const proposed = proposedValueMap(fields.map((f) => ({ field: f.field as SelectableChangeRequestField, currentValue: f.current_value, proposedValue: f.proposed_value })));
+
+  const scheduleBefore: ScheduleValues = {
+    proposedDate: requireStringOrNull(CURRENT_VALUE_READERS.proposedDate(event), 'The event date is not valid.'),
+    startTime: requireStringOrNull(CURRENT_VALUE_READERS.startTime(event), 'The event start time is not valid.'),
+    endTime: requireStringOrNull(CURRENT_VALUE_READERS.endTime(event), 'The event end time is not valid.'),
+    expectedAttendance: requireNumberOrNull(CURRENT_VALUE_READERS.expectedAttendance(event), 'The expected attendance is not valid.'),
+    roomLayout: requireRoomLayoutOrNull(CURRENT_VALUE_READERS.roomLayout(event), 'The room layout is not valid.'),
+    accessibilityRequired: requireBooleanOrNull(CURRENT_VALUE_READERS.accessibilityRequired(event), 'The accessibility answer is not valid.'),
+    accessibilityNotes: requireStringOrNull(CURRENT_VALUE_READERS.accessibilityNotes(event), 'The accessibility notes are not valid.'),
+  };
+  const scheduleAfter: ScheduleValues = {
+    proposedDate: requireStringOrNull(effectiveValue('proposedDate', proposed, event), 'The proposed date is not valid.'),
+    startTime: requireStringOrNull(effectiveValue('startTime', proposed, event), 'The proposed start time is not valid.'),
+    endTime: requireStringOrNull(effectiveValue('endTime', proposed, event), 'The proposed end time is not valid.'),
+    expectedAttendance: requireNumberOrNull(
+      effectiveValue('expectedAttendance', proposed, event),
+      'The proposed expected attendance is not valid.',
+    ),
+    roomLayout: requireRoomLayoutOrNull(effectiveValue('roomLayout', proposed, event), 'The proposed room layout is not valid.'),
+    accessibilityRequired: requireBooleanOrNull(
+      effectiveValue('accessibilityRequired', proposed, event),
+      'The proposed accessibility answer is not valid.',
+    ),
+    accessibilityNotes: requireStringOrNull(
+      effectiveValue('accessibilityNotes', proposed, event),
+      'The proposed accessibility notes are not valid.',
+    ),
+  };
+
+  const extrasBefore: ChangeRequestExtras = {
+    preferredLocationId: requireStringOrNull(CURRENT_VALUE_READERS.preferredLocationId(event), 'The preferred location is not valid.'),
+    accessibilityFeatureIds: parseAccessibilityFeatureIds(CURRENT_VALUE_READERS.accessibilityFeatureIds(event)),
+    equipmentRequired: requireBooleanOrNull(CURRENT_VALUE_READERS.equipmentRequired(event), 'The equipment answer is not valid.'),
+    equipmentItems: parseEquipmentItems(CURRENT_VALUE_READERS.equipmentItems(event)),
+    technicalSupportNotes: requireStringOrNull(CURRENT_VALUE_READERS.technicalSupportNotes(event), 'The technical support notes are not valid.'),
+  };
+  const extrasAfter: ChangeRequestExtras = {
+    preferredLocationId: requireStringOrNull(
+      effectiveValue('preferredLocationId', proposed, event),
+      'The proposed preferred location is not valid.',
+    ),
+    accessibilityFeatureIds: parseAccessibilityFeatureIds(effectiveValue('accessibilityFeatureIds', proposed, event)),
+    equipmentRequired: requireBooleanOrNull(
+      effectiveValue('equipmentRequired', proposed, event),
+      'The proposed equipment answer is not valid.',
+    ),
+    equipmentItems: parseEquipmentItems(effectiveValue('equipmentItems', proposed, event)),
+    technicalSupportNotes: requireStringOrNull(
+      effectiveValue('technicalSupportNotes', proposed, event),
+      'The proposed technical support notes are not valid.',
+    ),
+  };
+
+  const significant = changeRequestIsSignificant({ ...scheduleBefore, ...extrasBefore }, { ...scheduleAfter, ...extrasAfter });
+  const causes = changeRequestArrangementCauses(scheduleBefore, scheduleAfter);
+
+  const { data, error } = await approveChangeRequestRow({
+    changeRequestId: parsedCrId.data,
+    coordinatorId: actorId,
+    name: requireString(effectiveValue('name', proposed, event), 'The event name is required.'),
+    purpose: requireStringOrNull(effectiveValue('purpose', proposed, event), 'The proposed purpose is not valid.'),
+    description: requireStringOrNull(effectiveValue('description', proposed, event), 'The proposed description is not valid.'),
+    proposedDate: scheduleAfter.proposedDate,
+    startTime: scheduleAfter.startTime,
+    endTime: scheduleAfter.endTime,
+    expectedAttendance: scheduleAfter.expectedAttendance,
+    roomLayout: scheduleAfter.roomLayout,
+    accessibilityRequired: scheduleAfter.accessibilityRequired,
+    accessibilityNotes: scheduleAfter.accessibilityNotes,
+    accessibilityFeatureIds: extrasAfter.accessibilityFeatureIds as string[],
+    preferredLocationId: extrasAfter.preferredLocationId,
+    equipmentRequired: extrasAfter.equipmentRequired,
+    equipmentItems: extrasAfter.equipmentItems as ChangeRequestEquipmentItem[],
+    technicalSupportNotes: extrasAfter.technicalSupportNotes,
+    registrationRequired: requireBooleanOrNull(
+      effectiveValue('registrationRequired', proposed, event),
+      'The proposed registration answer is not valid.',
+    ),
+    bookingCause: causes.booking,
+    reservationCause: causes.reservation,
+    dropToPlanning: significant,
+  });
+  if (error || !data) {
+    throw new ValidationError('The change request could not be approved.', error?.message);
+  }
+
+  const result = data as {
+    outcome: string;
+    bookings?: string[];
+    reservations?: string[];
+    venueStaffIds?: string[];
+    equipmentStaffIds?: string[];
+  };
+  switch (result.outcome) {
+    case 'not_found':
+      throw new NotFoundError('Change request');
+    case 'not_pending':
+      throw new ConflictError('This change request has already been decided.');
+    case 'event_not_found':
+      throw new NotFoundError('Event request');
+    case 'not_assigned':
+      throw new ForbiddenError('This event is not assigned to you.');
+    case 'approved':
+      break;
+    default:
+      throw new ValidationError('The change request could not be approved.', result);
+  }
+
+  // AC6 — best effort, same pattern as every other notification in this
+  // codebase: the decision has already been saved, so a failure here must
+  // never undo it.
+  await notifyBestEffort({
+    recipientId: event.organiser_id,
+    type: 'change_request_approved',
+    eventRequestId: event.id,
+    message: `Your change request for "${event.name}" was approved.`,
+  });
+
+  // AC4 — the staff who actioned each affected arrangement.
+  const staffToNotify = new Set([...(result.venueStaffIds ?? []), ...(result.equipmentStaffIds ?? [])]);
+  for (const staffId of staffToNotify) {
+    await notifyBestEffort({
+      recipientId: staffId,
+      type: 'arrangement_needs_review',
+      eventRequestId: event.id,
+      message: `An approved change to "${event.name}" means an arrangement you actioned now needs review.`,
+    });
+  }
+
+  const { row: decided, fields: decidedFields } = await readChangeRequest(parsedCrId.data);
+  return toSummary(decided, decidedFields);
 }
 
 export { ChangeRequestIdSchema };
