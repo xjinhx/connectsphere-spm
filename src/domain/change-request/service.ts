@@ -295,15 +295,6 @@ export async function getChangeRequestDetail(
   return { ...toSummary(row, fields), eventRequestId: row.event_request_id };
 }
 
-/**
- * AC6 — "Given I have raised change requests, when I open my event, then
- * each is listed with what was asked, its status, the decision date and any
- * reason given."
- *
- * Who may read: the same rule as the event page itself (canViewRequest) -
- * the owning organiser, or a colleague in the same client organisation once
- * the request has left Draft (SCRUM-204 AC3).
- */
 /** Shared by listChangeRequests and listChangeRequestsForCoordinator, once each has decided the caller may see this event's change requests at all. */
 async function readSummariesForEvent(eventRequestId: string): Promise<ChangeRequestSummary[]> {
   const { data: requestRows, error: requestsError } = await listChangeRequestsForEvent(eventRequestId);
@@ -322,6 +313,15 @@ async function readSummariesForEvent(eventRequestId: string): Promise<ChangeRequ
   return requests.map((row) => toSummary(row, fields));
 }
 
+/**
+ * AC6 — "Given I have raised change requests, when I open my event, then
+ * each is listed with what was asked, its status, the decision date and any
+ * reason given."
+ *
+ * Who may read: the same rule as the event page itself (canViewRequest) -
+ * the owning organiser, or a colleague in the same client organisation once
+ * the request has left Draft (SCRUM-204 AC3).
+ */
 export async function listChangeRequests(
   eventRequestId: string,
   actor: { userId: string; clientOrganisationId: string | null },

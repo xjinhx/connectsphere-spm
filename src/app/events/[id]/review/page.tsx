@@ -45,6 +45,7 @@ import {
   type ClarificationExchange,
 } from '@/domain/clarification/service';
 import { getReviewDetail, type ReviewDetail } from '@/domain/review/service';
+import { getVenueRequirementOptions } from '@/domain/event-request/service';
 import { canBeApproved, canBeRejected, canRequestClarification } from '@/domain/review/policy';
 import { ChangeRequestList } from '@/components/change-request/ChangeRequestList';
 import { listChangeRequestsForCoordinator } from '@/domain/change-request/service';
@@ -163,10 +164,14 @@ export default async function ReviewEventRequestPage({
   // ChangeRequestList the organiser's own /events/<id> page uses, so opening
   // it here or from the 'change_requested' notification shows the current
   // vs. proposed value for each field and the reason, not a second view.
-  const changeRequests = await listChangeRequestsForCoordinator(request.id, {
-    userId: actor.userId,
-    roles: actor.roles,
-  });
+  const [changeRequests, { accessibilityFeatures }] = await Promise.all([
+    listChangeRequestsForCoordinator(request.id, { userId: actor.userId, roles: actor.roles }),
+    // SCRUM-274: the accessibility features list, to show a request's features by name.
+    getVenueRequirementOptions(),
+  ]);
+  const valueNames = {
+    accessibilityFeatures: new Map(accessibilityFeatures.map((feature) => [feature.id, feature.name])),
+  };
 
   // SCRUM-142 AC1/AC2 — a venue can only be requested once the event is
   // Approved or in Planning. Fetched only when
@@ -342,7 +347,7 @@ export default async function ReviewEventRequestPage({
           each field, along with the organiser's reason." The
           'change_requested' notification routes here (notificationHref,
           domain/notification/policy.ts), same list as below. */}
-      <ChangeRequestList changeRequests={changeRequests} />
+      <ChangeRequestList changeRequests={changeRequests} valueNames={valueNames} />
 
       {/* SCRUM-110 AC1/AC5 — description, internal notes and client contact.
           The edit action only for the assigned coordinator of an event that is

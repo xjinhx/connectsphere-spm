@@ -1,3 +1,4 @@
+import { formatChangeRequestValue, type ChangeRequestValueNames } from '@/domain/change-request/policy';
 import { CHANGE_REQUEST_FIELD_LABELS, CHANGE_REQUEST_STATUS_LABELS } from '@/domain/change-request/schema';
 import type { ChangeRequestSummary } from '@/domain/change-request/service';
 import { formatSingaporeDateTime } from '@/domain/shared/dates';
@@ -15,7 +16,14 @@ import { formatSingaporeDateTime } from '@/domain/shared/dates';
  * listChangeRequestsForCoordinator) decides what list it is handed; this
  * component only renders what it is given.
  */
-export function ChangeRequestList({ changeRequests }: { changeRequests: ChangeRequestSummary[] }) {
+export function ChangeRequestList({
+  changeRequests,
+  valueNames,
+}: {
+  changeRequests: ChangeRequestSummary[];
+  /** SCRUM-274: names for the list fields (accessibility features), so they read by name, not id. */
+  valueNames?: ChangeRequestValueNames;
+}) {
   if (changeRequests.length === 0) return null;
 
   return (
@@ -38,7 +46,8 @@ export function ChangeRequestList({ changeRequests }: { changeRequests: ChangeRe
               {cr.fields.map((field) => (
                 <li key={field.field}>
                   <span className="font-medium">{CHANGE_REQUEST_FIELD_LABELS[field.field]}:</span>{' '}
-                  {String(field.currentValue ?? '—')} → {String(field.proposedValue ?? '—')}
+                  {formatChangeRequestValue(field.field, field.currentValue, valueNames)} →{' '}
+                  {formatChangeRequestValue(field.field, field.proposedValue, valueNames)}
                 </li>
               ))}
             </ul>
