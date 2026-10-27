@@ -237,6 +237,9 @@ async function seed() {
     start_time: startTime,
     end_time: endTime,
     expected_attendance: 20,
+    // SCRUM-182 refuses an event with no capacity as full; give each room for
+    // the run so the event pages offer the form rather than "full".
+    registration_capacity: 50,
     registration_required: true,
     registration_start_date: start === null ? null : singaporeDate(start),
     registration_end_date: end === null ? null : singaporeDate(end),
