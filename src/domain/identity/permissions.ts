@@ -84,6 +84,10 @@ export const ACTIONS = [
   // SCRUM-185 AC5 — set an event's registration start date, end date and
   // capacity. Only the event's assigned coordinator, checked in the service.
   'registration_settings_edit',
+  // SCRUM-185 AC2 — export an event's registration list. Only the Event
+  // Organiser responsible for the event (AC3: not a colleague), checked in the
+  // service.
+  'registration_list_export',
 ] as const;
 
 export type Action = (typeof ACTIONS)[number];
@@ -93,7 +97,8 @@ export function isAction(value: unknown): value is Action {
 }
 
 export const ROLE_PERMISSIONS: Record<Role, readonly Action[]> = {
-  event_organiser: ['event_request_creation'],
+  // SCRUM-185 AC2: export the registration list of their own event.
+  event_organiser: ['event_request_creation', 'registration_list_export'],
   // SCRUM-204 — the story's persona is the Event Coordinator (matches
   // client-organisation/policy.ts's canManageClientOrganisations, which
   // already gives Coordinators sole ownership of the organisations

@@ -1,17 +1,29 @@
 import {
   RegistrationSettingsInputSchema,
+  type RegistrationListEntry,
+  type RegistrationListView,
   type RegistrationSettingsInput,
   type RegistrationSettingsView,
 } from './schema';
 import {
+  EXPORT_NOT_ALLOWED_MESSAGE,
+  NO_ACCESS_MESSAGE,
   NO_CONFIRMED_VENUE_MESSAGE,
   NOT_ASSIGNED_MESSAGE,
   acceptsRegistrationSettings,
   canEditRegistrationSettings,
+  canExportRegistrationList,
   capacityOverVenueMessage,
+  exportFileName,
   largestVenueCapacity,
   notConfirmedNotice,
+  placesRemaining,
+  registeredCount,
+  registrationListCsv,
+  registrationListViewer,
 } from './policy';
+import { RegistrationStatusSchema } from '@/domain/event-registration/schema';
+import type { EventRequestStatus } from '@/domain/event-request/schema';
 import { EventRequestIdSchema } from '@/domain/event-status/schema';
 import { isCurrentCoordinator } from '@/domain/assignment/policy';
 import { hasRole } from '@/domain/identity/policy';
@@ -19,6 +31,8 @@ import type { Role } from '@/domain/identity/roles';
 import { ConflictError, ForbiddenError, NotFoundError, ValidationError } from '@/domain/shared/errors';
 import {
   fetchConfirmedVenueCapacities,
+  fetchEventRegistrations,
+  fetchRegistrationListEvent,
   fetchRegistrationSettingsRow,
   updateRegistrationSettingsRow,
   type RegistrationSettingsRow,
@@ -139,4 +153,110 @@ export async function updateRegistrationSettings(
     endDate: row.registration_end_date ?? values.endDate,
     capacity: row.registration_capacity ?? values.capacity,
   };
+}
+
+// ---------------------------------------------------------------------------
+// AC1-AC4 — the registration list
+// ---------------------------------------------------------------------------
+
+type ListEventRow = {
+  id: string;
+  name: string;
+  reference: string;
+  status: EventRequestStatus;
+  coordinator_id: string | null;
+  organiser_id: string;
+  client_organisation_id: string | null;
+  registration_capacity: number | null;
+};
+
+type RegistrationRow = {
+  id: string;
+  reference: string;
+  event_request_id: string;
+  full_name: string;
+  email: string;
+  contact_number: string;
+  status: string;
+  registered_at: string;
+};
+
+type ListActor = { userId: string; roles: Role[]; clientOrganisation: { id: string } | null };
+
+/**
+ * The event and who the actor is to it. AC4: anyone the list isn't for is
+ * refused before anything about the registrations is read.
+ */
+async function readListEvent(eventRequestId: string, actor: ListActor) {
+  if (!EventRequestIdSchema.safeParse(eventRequestId).success) throw new NotFoundError('Event request');
+  const { data, error } = await fetchRegistrationListEvent(eventRequestId);
+  if (error) throw new ValidationError('The event could not be read.', error.message);
+  if (!data) throw new NotFoundError('Event request');
+  const event = data as unknown as ListEventRow;
+  const viewer = registrationListViewer(
+    {
+      status: event.status,
+      coordinatorId: event.coordinator_id,
+      organiserId: event.organiser_id,
+      clientOrganisationId: event.client_organisation_id,
+    },
+    { userId: actor.userId, roles: actor.roles, clientOrganisationId: actor.clientOrganisation?.id ?? null },
+  );
+  if (!viewer) throw new ForbiddenError(NO_ACCESS_MESSAGE);
+  return { event, viewer };
+}
+
+async function readRegistrations(eventRequestId: string): Promise<RegistrationListEntry[]> {
+  const { data, error } = await fetchEventRegistrations(eventRequestId);
+  if (error) throw new ValidationError('The registrations could not be read.', error.message);
+  return ((data ?? []) as unknown as RegistrationRow[]).map((row) => ({
+    id: row.id,
+    reference: row.reference,
+    eventRequestId: row.event_request_id,
+    fullName: row.full_name,
+    email: row.email,
+    contactNumber: row.contact_number,
+    status: RegistrationStatusSchema.parse(row.status),
+    registeredAt: row.registered_at,
+  }));
+}
+
+/**
+ * AC1-AC4: the registration page's list. Every registration with its date and
+ * status, the number registered (Registered rows only), the capacity and the
+ * places remaining. AC2/AC3 decide whether Export is offered; AC4 refuses
+ * anyone else with ForbiddenError.
+ *
+ * `actor` is whoever is signed in, from the session, never from the request.
+ */
+export async function getRegistrationList(eventRequestId: string, actor: ListActor): Promise<RegistrationListView> {
+  const { event, viewer } = await readListEvent(eventRequestId, actor);
+  const registrations = await readRegistrations(event.id);
+  const registered = registeredCount(registrations);
+  return {
+    eventRequestId: event.id,
+    eventName: event.name,
+    eventReference: event.reference,
+    eventStatus: event.status,
+    viewer,
+    registrations,
+    registered,
+    capacity: event.registration_capacity,
+    placesRemaining: placesRemaining(event.registration_capacity, registered),
+    canExport: canExportRegistrationList(viewer),
+  };
+}
+
+/**
+ * AC2: the attendee information as a CSV file, for the organiser responsible
+ * for the event. AC3: a colleague in the same organisation is refused, even
+ * though they may view the list; AC4: anyone else is refused as for the list.
+ */
+export async function exportRegistrationList(
+  eventRequestId: string,
+  actor: ListActor,
+): Promise<{ fileName: string; csv: string }> {
+  const { event, viewer } = await readListEvent(eventRequestId, actor);
+  if (!canExportRegistrationList(viewer)) throw new ForbiddenError(EXPORT_NOT_ALLOWED_MESSAGE);
+  return { fileName: exportFileName(event.reference), csv: registrationListCsv(await readRegistrations(event.id)) };
 }

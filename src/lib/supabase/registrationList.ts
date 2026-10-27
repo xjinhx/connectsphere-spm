@@ -1,4 +1,5 @@
 import { createAdminClient } from './admin';
+import { REGISTRATION_COLUMNS } from './eventRegistrations';
 import type { EventRequestStatus } from '@/domain/event-request/schema';
 
 /**
@@ -61,4 +62,23 @@ export async function updateRegistrationSettingsRow(
     .eq('status', 'confirmed')
     .select(COLUMNS)
     .maybeSingle();
+}
+
+/** AC1-AC4: what deciding access and heading the list needs from the event. */
+export async function fetchRegistrationListEvent(eventRequestId: string) {
+  return db()
+    .from('event_request')
+    .select('id, name, reference, status, coordinator_id, organiser_id, client_organisation_id, registration_capacity')
+    .eq('id', eventRequestId)
+    .maybeSingle();
+}
+
+/** AC1: every registration for the event, oldest first (SCRUM-181's columns). */
+export async function fetchEventRegistrations(eventRequestId: string) {
+  return db()
+    .from('event_registration')
+    .select(REGISTRATION_COLUMNS)
+    .eq('event_request_id', eventRequestId)
+    .order('registered_at', { ascending: true })
+    .order('reference', { ascending: true });
 }

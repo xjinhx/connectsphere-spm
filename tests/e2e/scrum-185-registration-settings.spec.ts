@@ -3,10 +3,13 @@ import { signIn } from './support/accounts';
 import { admin, clientOrganisationId, daysFromToday, RUN, userId } from './support/data';
 
 /**
- * SCRUM-185 AC5, AC6: the assigned coordinator sets a Confirmed event's
- * registration start date, end date and capacity on its registration page, and
- * a refused save names the field. Test case IDs match the SCRUM-185 tab of the
- * Sprint 4 sheet.
+ * SCRUM-185, through the real pages. AC5, AC6: the assigned coordinator sets a
+ * Confirmed event's registration start date, end date and capacity on its
+ * registration page, and a refused save names the field. AC1, AC2: the
+ * coordinator sees the list and counts; the responsible organiser opens it from
+ * their request page and exports it. AC3, AC4 (colleague, other organisation)
+ * are in tests/integration/registration-list-view.test.ts. Test case IDs match
+ * the SCRUM-185 tab of the Sprint 4 sheet.
  *
  * Starting data: a Confirmed event assigned to coordinator@example.com, with a
  * confirmed booking at a 300-capacity venue.
@@ -120,4 +123,46 @@ test('SCRUM-185 AC5 AC6 TC-185-01, TC-185-04, TC-185-05: the coordinator sets re
   await expect(page.getByTestId('registration-startDate')).toHaveText(shown(START));
   await expect(page.getByTestId('registration-endDate')).toHaveText(shown(END));
   await expect(page.getByTestId('registration-capacity')).toHaveText('250');
+});
+
+test('SCRUM-185 AC1 AC2 TC-185-07, TC-185-10: the coordinator sees the list and counts; the organiser exports it', async ({ page }) => {
+  // Registration open today with capacity 250, and attendee@ registered
+  // through SCRUM-181's own function.
+  const today = daysFromToday(0);
+  await admin()
+    .from('event_request')
+    .update({ registration_start_date: today, registration_end_date: daysFromToday(14), registration_capacity: 250 })
+    .eq('id', eventId);
+  const { data: outcome } = await admin().rpc('register_for_event', {
+    p_event_request_id: eventId,
+    p_attendee_id: await userId('attendee@example.com'),
+    p_full_name: 'Attendee One',
+    p_email: 'attendee@example.com',
+    p_contact_number: '+65 9123 4567',
+    p_today: today,
+  });
+  expect(outcome).toBe('registered');
+
+  // AC1: the assigned coordinator.
+  await signIn(page, 'coordinator');
+  await page.goto(`/events/${eventId}/registrations`);
+  await expect(page.getByTestId('count-registered')).toHaveText('1');
+  await expect(page.getByTestId('count-capacity')).toHaveText('250');
+  await expect(page.getByTestId('count-remaining')).toHaveText('249');
+  const row = page.getByRole('row', { name: /Attendee One/ });
+  await expect(row).toContainText(shown(today));
+  await expect(row).toContainText('Registered');
+  await expect(page.getByRole('link', { name: 'Export' })).toHaveCount(0);
+
+  // AC2: the responsible organiser reaches it from their request page and exports it.
+  await signIn(page, 'organiser');
+  await page.goto(`/events/${eventId}`);
+  await page.getByRole('link', { name: 'Registration list' }).click();
+  await expect(page).toHaveURL(new RegExp(`/events/${eventId}/registrations$`));
+  await expect(page.getByRole('row', { name: /Attendee One/ })).toBeVisible();
+  const [download] = await Promise.all([page.waitForEvent('download'), page.getByRole('link', { name: 'Export' }).click()]);
+  expect(download.suggestedFilename()).toMatch(/^registrations-EVT-\d{4}-\d{4}\.csv$/);
+  const csv = await (await download.createReadStream()).toArray().then((chunks) => Buffer.concat(chunks).toString('utf8'));
+  expect(csv).toContain('Attendee One,attendee@example.com');
+  expect(csv).toContain(`${shown(today)},Registered`);
 });

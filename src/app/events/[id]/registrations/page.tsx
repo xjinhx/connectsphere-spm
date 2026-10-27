@@ -1,21 +1,29 @@
 import Link from 'next/link';
 import { notFound } from 'next/navigation';
+import { EventRequestStatusBadge } from '@/components/event-request/EventRequestStatusBadge';
+import { RegistrationList } from '@/components/registration-list/RegistrationList';
 import { RegistrationSettingsPanel } from '@/components/registration-list/RegistrationSettingsPanel';
-import type { RegistrationSettingsView } from '@/domain/registration-list/schema';
-import { getRegistrationSettings } from '@/domain/registration-list/service';
+import { NO_ACCESS_MESSAGE } from '@/domain/registration-list/policy';
+import type { RegistrationListView, RegistrationSettingsView } from '@/domain/registration-list/schema';
+import { getRegistrationList, getRegistrationSettings } from '@/domain/registration-list/service';
 import { ForbiddenError, NotFoundError } from '@/domain/shared/errors';
 import { getCurrentActor } from '@/lib/auth/currentActor';
 
 /**
  * SCRUM-185 — the event's registration page.
  *
- * AC5, AC6: the registration start date, end date and capacity, which the
- * assigned coordinator sets here once the event is Confirmed.
+ * AC1: the assigned coordinator sees every registration with its date and
+ *      status, and the number registered, the capacity and places remaining.
+ * AC2: the Event Organiser responsible for the event sees the same and can
+ *      export it.
+ * AC3: an organiser in the same client organisation sees it, with no Export.
+ * AC4: anyone else is denied, and nothing about the registrations is shown.
+ * AC5, AC6: below the list, the assigned coordinator sets the registration
+ *      start date, end date and capacity once the event is Confirmed. The
+ *      Lead sees the values read-only; organisers see the capacity in the
+ *      counts only.
  *
- * The registered attendees and places remaining (AC1) and the organiser's view
- * and export (AC2-AC4) join this page next.
- *
- * Force-dynamic, so after a save the values are read back from the stored row.
+ * Force-dynamic, so after a save the values are read back from the stored rows.
  */
 
 export const dynamic = 'force-dynamic';
@@ -24,34 +32,45 @@ export default async function EventRegistrationsPage({ params }: { params: Promi
   const { id } = await params;
   const actor = await getCurrentActor();
 
-  let settings: RegistrationSettingsView;
+  let list: RegistrationListView;
   try {
-    settings = await getRegistrationSettings(id, actor);
+    list = await getRegistrationList(id, actor);
   } catch (error) {
     if (error instanceof NotFoundError) notFound();
     if (error instanceof ForbiddenError) {
       return (
         <main className="mx-auto max-w-2xl p-8">
-          <h1 className="text-2xl font-semibold">Registration</h1>
-          <p className="mt-4 text-[var(--text-muted)]">
-            Only the event&apos;s assigned coordinator can view its registration.
-          </p>
+          <h1 className="text-2xl font-semibold">Registration list</h1>
+          <p className="mt-4 text-[var(--text-muted)]">{NO_ACCESS_MESSAGE}</p>
         </main>
       );
     }
     throw error;
   }
 
+  // AC5: the settings belong to the coordinator's side of the page.
+  const staff = list.viewer === 'coordinator' || list.viewer === 'lead';
+  const settings: RegistrationSettingsView | null = staff ? await getRegistrationSettings(id, actor) : null;
+
+  // Back to the event page the viewer came from: the coordinator's review page,
+  // or the organiser's request page.
+  const backHref = staff ? `/events/${id}/review` : `/events/${id}`;
+
   return (
-    <main className="mx-auto max-w-2xl px-4 py-8">
-      <Link href={`/events/${id}/review`} className="text-sm text-[var(--brand)] hover:underline">
-        ← {settings.eventName}
+    <main className="mx-auto max-w-3xl px-4 py-8">
+      <Link href={backHref} className="text-sm text-[var(--brand)] hover:underline">
+        ← {list.eventName}
       </Link>
 
-      <h1 className="mt-4 text-xl font-semibold">Registration: {settings.eventName}</h1>
-      <p className="mt-1 font-mono text-sm text-[var(--text-muted)]">{settings.eventReference}</p>
+      <div className="mt-4 flex flex-wrap items-center gap-3">
+        <h1 className="text-xl font-semibold">Registration: {list.eventName}</h1>
+        <EventRequestStatusBadge status={list.eventStatus} />
+      </div>
+      <p className="mt-1 font-mono text-sm text-[var(--text-muted)]">{list.eventReference}</p>
 
-      <RegistrationSettingsPanel view={settings} />
+      <RegistrationList view={list} />
+
+      {settings ? <RegistrationSettingsPanel view={settings} /> : null}
     </main>
   );
 }

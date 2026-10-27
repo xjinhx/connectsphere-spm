@@ -29,7 +29,7 @@ import { ConfirmEventButton } from '@/components/event-request/ConfirmEventButto
 import { CompleteEventButton } from '@/components/event-request/CompleteEventButton';
 import { canBeCompleted, canBeConfirmed, hasEnded } from '@/domain/event-status/policy';
 import { getEventCompletion } from '@/domain/event-status/service';
-import { acceptsRegistrationSettings } from '@/domain/registration-list/policy';
+import { acceptsRegistrationSettings, hasRegistrationList } from '@/domain/registration-list/policy';
 import {
   describeAccessibility,
   describeEquipment,
@@ -436,15 +436,17 @@ export default async function ReviewEventRequestPage({
         </section>
       ) : null}
 
-      {/* SCRUM-185 AC5 — the registration start date, end date and capacity,
-          set on the event's registration page. Offered while the event is
-          Confirmed (acceptsRegistrationSettings), so the link never leads to
-          a form the API would refuse. */}
-      {acceptsRegistrationSettings(request.status) ? (
+      {/* SCRUM-185 — the event's registration page: the list and counts
+          (AC1), and the start date, end date and capacity (AC5), set while the
+          event is Confirmed. Offered from Confirmed on (hasRegistrationList),
+          when registration can be open, and kept afterwards for the list. */}
+      {hasRegistrationList(request.status) ? (
         <section className="mt-6 rounded-lg border border-[var(--border)] bg-[var(--surface)] p-4">
           <h2 className="text-sm font-semibold">Registration</h2>
           <p className="mt-1 text-sm text-[var(--text-muted)]">
-            Set when attendees can register and how many places the event has.
+            {acceptsRegistrationSettings(request.status)
+              ? 'Set when attendees can register and how many places the event has, and see who has registered.'
+              : 'See who has registered and how many places remain.'}
           </p>
           <Link
             href={`/events/${request.id}/registrations`}

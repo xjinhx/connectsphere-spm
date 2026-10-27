@@ -1,5 +1,7 @@
 import { z } from 'zod';
 import { hasLongYear, isISODate, LATEST_DATE, type ISODate } from '@/domain/shared/dates';
+import type { Registration } from '@/domain/event-registration/schema';
+import type { EventRequestStatus } from '@/domain/event-request/schema';
 
 /**
  * SCRUM-185 — View the registration list for an event.
@@ -88,4 +90,32 @@ export interface RegistrationSettingsView {
   canEdit: boolean;
   /** Why there is no form, or null. */
   readOnlyReason: string | null;
+}
+
+// ---------------------------------------------------------------------------
+// AC1-AC4 — the registration list
+// ---------------------------------------------------------------------------
+
+/** Who is looking at the list (registrationListViewer). */
+export type RegistrationListViewer = 'coordinator' | 'lead' | 'organiser' | 'colleague';
+
+/** One registration as the list shows it: SCRUM-181's record, shared rather than redeclared. */
+export type RegistrationListEntry = Registration;
+
+/** AC1-AC3: what the registration page shows. */
+export interface RegistrationListView {
+  eventRequestId: string;
+  eventName: string;
+  eventReference: string;
+  eventStatus: EventRequestStatus;
+  viewer: RegistrationListViewer;
+  /** Every registration for the event, oldest first, each with its status (AC1). */
+  registrations: RegistrationListEntry[];
+  /** AC1: Registered rows only. */
+  registered: number;
+  capacity: number | null;
+  /** AC1: never below zero; null while no capacity is set. */
+  placesRemaining: number | null;
+  /** AC2: the responsible organiser only; AC3: never a colleague. */
+  canExport: boolean;
 }
