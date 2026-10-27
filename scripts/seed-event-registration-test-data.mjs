@@ -117,6 +117,10 @@ const rows = EVENTS.map(([name, start, end, , extra]) => ({
   registration_required: true,
   registration_start_date: singaporeDate(start),
   registration_end_date: singaporeDate(end),
+  // Since SCRUM-182 an event with no capacity is refused as full, so every
+  // event here has one. DUMMY(SCRUM-185) D-24: set here, not by the
+  // coordinator's form (SCRUM-185 AC5).
+  registration_capacity: 20,
   submitted_at: now,
   decision: 'approved',
   decided_by: coordinator,

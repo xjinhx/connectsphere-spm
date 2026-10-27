@@ -1,4 +1,6 @@
 import { EVENT_REQUEST_STATUS_LABELS, type EventRequestStatus } from '@/domain/event-request/schema';
+import { addDays } from '@/domain/equipment-reservation/policy';
+import { isPastDate, type ISODate } from '@/domain/shared/dates';
 
 /**
  * SCRUM-101 — Move an event through its statuses as work is done.
@@ -133,3 +135,41 @@ export function canBeConfirmed(status: EventRequestStatus): boolean {
 export function confirmationStatusRefusal(status: EventRequestStatus): string {
   return `Only an event in Planning can be confirmed. This event is ${EVENT_REQUEST_STATUS_LABELS[status]}.`;
 }
+
+/**
+ * SCRUM-104 — Mark an event as completed.
+ *
+ * The same rules as complete_event and complete_past_events
+ * (20261027060115_event_completion.sql), restated here for the page and the
+ * service because the database cannot import them: change one, change the
+ * other. The end date is the last day of the event's confirmed venue bookings,
+ * or its proposed date when it has none (event_end_date in that file).
+ */
+
+/**
+ * AC5: only an event in Preparation, the one status reached through an approved
+ * safety check (SCRUM-234), so any other status has not passed it (CL-60).
+ * Narrower than ALLOWED_TRANSITIONS, which still lists confirmed -> completed.
+ */
+export function canBeCompleted(status: EventRequestStatus): boolean {
+  return status === 'preparation';
+}
+
+/** AC1, AC4: the end date has passed when it is before today (Singapore). */
+export function hasEnded(endDate: ISODate | null, today: ISODate): boolean {
+  return endDate !== null && isPastDate(endDate, today);
+}
+
+/** AC2, AC3: how long after its end date the completion check completes an event. */
+export const COMPLETION_CHECK_DAYS = 7;
+
+/** AC2, AC3: a Preparation event 7 or more days past its end date; never one 6 days past. */
+export function isDueForCompletionCheck(status: EventRequestStatus, endDate: ISODate | null, today: ISODate): boolean {
+  return canBeCompleted(status) && endDate !== null && endDate <= addDays(today, -COMPLETION_CHECK_DAYS);
+}
+
+export function completionStatusRefusal(status: EventRequestStatus): string {
+  return `Only an event in Preparation can be marked completed: it must pass the Operational Safety Check first. This event is ${EVENT_REQUEST_STATUS_LABELS[status]}.`;
+}
+
+export const NOT_ENDED_YET = "This event can't be marked completed until its end date has passed.";

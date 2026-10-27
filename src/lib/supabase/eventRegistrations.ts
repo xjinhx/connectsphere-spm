@@ -17,16 +17,26 @@ export const REGISTRATION_COLUMNS =
   'id, reference, event_request_id, full_name, email, contact_number, status, registered_at';
 
 /**
- * What the Attendee's page needs from the event: its name and date and the
- * registration period. Nothing else, so no internal planning field can reach
- * an attendee (SCRUM-72 AC1). maybeSingle: an unknown id is null, not an error.
+ * What the Attendee's page needs from the event: its name and date, the
+ * registration period and its capacity (SCRUM-182). Nothing else, so no
+ * internal planning field can reach an attendee (SCRUM-72 AC1). maybeSingle:
+ * an unknown id is null, not an error.
  */
 export async function fetchRegistrationEvent(eventRequestId: string) {
   return db()
     .from('event_request')
-    .select('id, name, proposed_date, registration_start_date, registration_end_date')
+    .select('id, name, proposed_date, registration_start_date, registration_end_date, registration_capacity')
     .eq('id', eventRequestId)
     .maybeSingle();
+}
+
+/** SCRUM-182 AC1: how many places the event's Registered registrations take. */
+export async function countRegisteredRegistrations(eventRequestId: string) {
+  return db()
+    .from('event_registration')
+    .select('id', { count: 'exact', head: true })
+    .eq('event_request_id', eventRequestId)
+    .eq('status', 'registered');
 }
 
 /** AC5: the attendee's Registered registration for this event, or null. */
