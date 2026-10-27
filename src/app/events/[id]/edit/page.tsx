@@ -34,8 +34,9 @@ export default async function EditEventRequestPage({
 
   return (
     <main className="mx-auto max-w-2xl px-4 py-8">
-      <Link href={`/events/${draft.id}`} className="text-sm text-[var(--brand)] hover:underline">
-        ← Back to the request
+      {/* SCRUM-250 AC3 — the edit page also links back to Event requests. */}
+      <Link href="/events" className="text-sm text-[var(--brand)] hover:underline">
+        ← Event requests
       </Link>
 
       <h1 className="mt-4 text-xl font-semibold">Continue editing</h1>

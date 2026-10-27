@@ -126,8 +126,9 @@ export default async function EventRequestPage({
 
   return (
     <main className="mx-auto max-w-2xl px-4 py-8">
+      {/* SCRUM-250 AC3 — back to the list, named as in the nav. */}
       <Link href="/events" className="text-sm text-[var(--brand)] hover:underline">
-        ← My event requests
+        ← Event requests
       </Link>
 
       <div className="mt-4 flex flex-wrap items-center gap-3">
