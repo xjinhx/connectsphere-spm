@@ -9,8 +9,9 @@
 // again: it deletes and recreates only the events it made (matched by their
 // description), which also clears their registrations.
 //
-// DUMMY(SCRUM-185) D-24: each event's registration capacity is set here, not
-// by the coordinator's form (SCRUM-185 AC5, CL-59).
+// Each event's registration capacity is set here as test data. In the app the
+// assigned coordinator sets it on the event's registration page (SCRUM-185
+// AC5, CL-59), which replaced dummy D-24.
 //
 // DUMMY(SCRUM-184) D-25: withdrawing is done by these flags, not by the
 // attendee (SCRUM-184). Each sets one Registered registration to Withdrawn on

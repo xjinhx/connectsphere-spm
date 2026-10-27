@@ -814,7 +814,13 @@ switch them the next time they edit those files.
   TC-182-01 to TC-182-12 instead of the seed (TC-182-10 still needs the
   capacity lowered after three have registered), remove both markers, and
   re-run those cases.
-- **Status:** Active.
+- **Status:** Replaced by SCRUM-185 AC5 (branch `scrum-185-registration-list`,
+  28 Oct 2026). The assigned coordinator of a Confirmed event enters the
+  capacity with the two dates on `/events/<id>/registrations`; AC6 refuses one
+  above the largest of the event's venue capacities. A capacity can be lowered
+  later through the same form (TC-182-10's step). Both seed scripts still set
+  capacities as test data, without the marker. `tests/integration/refuse-full-registration.test.ts`
+  (TC-182-01 to 12) re-run and pass.
 
 ### D-25 — A registration is withdrawn by hand
 
