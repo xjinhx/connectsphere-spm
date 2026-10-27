@@ -25,12 +25,13 @@ const BOOKED_VENUES = 'venue_booking (status, venues (name, address))';
 /**
  * SCRUM-180 AC3: what an attendee may see of one event, and nothing else: the
  * name, description, date, start and end times, the venues' names and
- * addresses, and the registration period. No client organisation, internal
- * comment, booking status shown, equipment, staff or other attendees, so none
- * can reach an attendee (SCRUM-72 AC1). Shared by the list and the page.
+ * addresses, the registration period and its capacity (SCRUM-182). No client
+ * organisation, internal comment, booking status shown, equipment, staff or
+ * other attendees, so none can reach an attendee (SCRUM-72 AC1). Shared by the
+ * list and the page.
  */
 export const ATTENDEE_EVENT_COLUMNS =
-  `id, name, description, proposed_date, start_time, end_time, registration_start_date, registration_end_date, ${BOOKED_VENUES}`;
+  `id, name, description, proposed_date, start_time, end_time, registration_start_date, registration_end_date, registration_capacity, ${BOOKED_VENUES}`;
 
 /**
  * What the Attendee's page needs from the event (SCRUM-181, and SCRUM-180
@@ -68,6 +69,15 @@ export async function fetchMyRegistrations(attendeeId: string) {
     .select(`id, reference, status, event_request (${ATTENDEE_EVENT_COLUMNS}, status)`)
     .eq('attendee_id', attendeeId)
     .order('registered_at', { ascending: false });
+}
+
+/** SCRUM-182 AC1: how many places the event's Registered registrations take. */
+export async function countRegisteredRegistrations(eventRequestId: string) {
+  return db()
+    .from('event_registration')
+    .select('id', { count: 'exact', head: true })
+    .eq('event_request_id', eventRequestId)
+    .eq('status', 'registered');
 }
 
 /** AC5: the attendee's Registered registration for this event, or null. */

@@ -88,6 +88,7 @@ const NIGHT_PAGE: RegistrationPageView = {
   venues: NIGHT.venues,
   period: { startDate: '2026-10-27', endDate: '2026-11-04' },
   periodRefusal: 'Registration opens on 27/10/2026.',
+  full: false,
   registration: null,
 };
 

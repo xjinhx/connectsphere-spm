@@ -109,11 +109,11 @@ alter table event_registration enable row level security;
 -- -----------------------------------------------------------------------------
 -- 3. Whether places remain
 -- -----------------------------------------------------------------------------
--- DUMMY(SCRUM-182) D-23: always true. Refusing a full event is SCRUM-182 AC1;
--- it replaces this body with a count of the event's Registered rows against
--- registration_capacity. register_for_event calls it with the event row
--- already locked, so two people taking the last place at the same moment
--- (SCRUM-182 AC2) are counted one after the other.
+-- D-23 (Replaced): always true here. SCRUM-182 replaces this body with a count
+-- of the event's Registered rows against registration_capacity, in
+-- 20261025184920_event_registration_capacity.sql. register_for_event calls it
+-- with the event row already locked, so two people taking the last place at
+-- the same moment (SCRUM-182 AC2) are counted one after the other.
 create or replace function event_has_places_remaining(p_event_request_id uuid)
 returns boolean
 language sql

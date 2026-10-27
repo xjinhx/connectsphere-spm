@@ -75,6 +75,8 @@ export interface RegistrationPageView {
   period: RegistrationPeriod;
   /** Why registering is refused today (AC2, AC3), or null when it is open. */
   periodRefusal: string | null;
+  /** SCRUM-182 AC1: the capacity is reached (or not set), so the event is shown as full. */
+  full: boolean;
   /** The viewer's Registered registration for this event, if any (AC5). */
   registration: Registration | null;
 }
