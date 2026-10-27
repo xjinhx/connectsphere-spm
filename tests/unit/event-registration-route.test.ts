@@ -20,8 +20,8 @@ vi.mock('@/domain/event-registration/service', () => ({
 
 import { getCurrentActor } from '@/lib/auth/currentActor';
 import { registerForEvent } from '@/domain/event-registration/service';
-import { ALREADY_REGISTERED } from '@/domain/event-registration/policy';
-import { ConflictError, UnauthenticatedError, ValidationError } from '@/domain/shared/errors';
+import { ALREADY_REGISTERED, NO_PLACES_REMAINING } from '@/domain/event-registration/policy';
+import { CapacityExceededError, ConflictError, UnauthenticatedError, ValidationError } from '@/domain/shared/errors';
 import type { Role } from '@/domain/identity/roles';
 import { POST } from '@/app/api/events/[id]/registrations/route';
 
@@ -119,5 +119,17 @@ describe('refusals reach the browser', () => {
       message: ALREADY_REGISTERED,
       details: { registration: { reference: 'REG-2026-0001' } },
     });
+  });
+});
+
+describe('SCRUM-182 a full event', () => {
+  it('TC-182-01 refused as full: 409 CAPACITY_EXCEEDED with the message, so the page cannot be bypassed', async () => {
+    signInAs('attendee');
+    vi.mocked(registerForEvent).mockRejectedValue(new CapacityExceededError(NO_PLACES_REMAINING));
+
+    const response = await post(VALID);
+
+    expect(response.status).toBe(409);
+    expect(await response.json()).toMatchObject({ error: 'CAPACITY_EXCEEDED', message: NO_PLACES_REMAINING });
   });
 });

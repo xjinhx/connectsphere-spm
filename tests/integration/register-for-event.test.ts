@@ -46,7 +46,11 @@ async function createAttendee(): Promise<string> {
   return id;
 }
 
-/** An event whose registration period runs from `start` to `end` (YYYY-MM-DD). */
+/**
+ * An event whose registration period runs from `start` to `end` (YYYY-MM-DD).
+ * Capacity 20 unless a test sets its own: since SCRUM-182 an event with no
+ * capacity is refused as full (TC-182-02), and these tests are about the rest.
+ */
 async function createEvent(
   start: string | null,
   end: string | null,
@@ -61,6 +65,7 @@ async function createEvent(
       proposed_date: '2026-11-15',
       registration_start_date: start,
       registration_end_date: end,
+      registration_capacity: 20,
       ...extra,
     })
     .select('id')

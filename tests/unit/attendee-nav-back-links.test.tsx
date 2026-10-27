@@ -36,6 +36,7 @@ const OPEN: RegistrationPageView = {
   period: { startDate: '2026-10-21', endDate: '2026-10-29' },
   periodRefusal: null,
   registration: null,
+  full: false,
 };
 
 beforeEach(() => {

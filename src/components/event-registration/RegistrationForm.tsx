@@ -2,6 +2,7 @@
 
 import { useState } from 'react';
 import type { Registration, RegistrationInput } from '@/domain/event-registration/schema';
+import { EventFullNotice } from './EventFullNotice';
 import { RegistrationConfirmation } from './RegistrationConfirmation';
 
 /**
@@ -11,7 +12,9 @@ import { RegistrationConfirmation } from './RegistrationConfirmation';
  * confirmation replaces the form. A missing or invalid field is shown beside
  * it. AC2, AC3: a period that closed or has not opened since the page loaded
  * is refused by the API with the date, shown here. AC5: already registered
- * shows the existing registration instead.
+ * shows the existing registration instead. SCRUM-182 AC1, AC2: refused as
+ * full (someone took the last place since the page loaded) shows the event as
+ * full instead.
  *
  * The API decides all of it; this only shows what it says.
  */
@@ -25,6 +28,7 @@ const FIELDS: { name: Field; label: string; type: string; autoComplete: string }
 ];
 
 type ApiError = {
+  error?: string;
   message?: string;
   details?: { fieldErrors?: Partial<Record<Field, string[]>>; registration?: Registration };
 };
@@ -36,6 +40,7 @@ export function RegistrationForm({ eventRequestId, eventName }: { eventRequestId
   const [submitting, setSubmitting] = useState(false);
   const [registered, setRegistered] = useState<Registration | null>(null);
   const [existing, setExisting] = useState<Registration | null>(null);
+  const [full, setFull] = useState(false);
 
   async function onSubmit(event: React.FormEvent) {
     event.preventDefault();
@@ -57,6 +62,10 @@ export function RegistrationForm({ eventRequestId, eventName }: { eventRequestId
       }
       if (response.status === 409 && payload?.details?.registration) {
         setExisting(payload.details.registration);
+        return;
+      }
+      if (response.status === 409 && payload?.error === 'CAPACITY_EXCEEDED') {
+        setFull(true);
         return;
       }
       setFieldErrors(payload?.details?.fieldErrors ?? {});
@@ -87,6 +96,7 @@ export function RegistrationForm({ eventRequestId, eventName }: { eventRequestId
       />
     );
   }
+  if (full) return <EventFullNotice />;
 
   return (
     <form onSubmit={onSubmit} noValidate className="mt-6 space-y-4 rounded-lg border border-[var(--border)] bg-[var(--surface)] p-4">
