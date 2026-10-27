@@ -12,7 +12,7 @@ test('SCRUM-250 AC2 TC-250-06: at 390 px the organiser nav folds into the menu, 
   await signIn(page, 'organiser');
   await expect(page).toHaveURL(/\/events$/);
 
-  await page.getByRole('button', { name: 'Menu' }).click();
+  await page.getByRole('button', { name: 'Menu', exact: true }).click();
   const menu = page.locator('#app-nav-menu');
   await expect(menu.getByRole('link')).toHaveText(['Event requests', 'New event request']);
   await expect(menu.getByRole('link', { name: 'Event requests' })).toHaveAttribute('aria-current', 'page');
