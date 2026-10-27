@@ -1,3 +1,4 @@
+import Link from 'next/link';
 import { EventFullNotice } from '@/components/event-registration/EventFullNotice';
 import { RegistrationConfirmation } from '@/components/event-registration/RegistrationConfirmation';
 import { RegistrationForm } from '@/components/event-registration/RegistrationForm';
@@ -12,8 +13,8 @@ export const dynamic = 'force-dynamic';
  * SCRUM-181 — the Attendee's page for one event, where they register.
  *
  * Replaces the SCRUM-72 placeholder. It still shows nothing from the event's
- * internal planning (SCRUM-72 AC1): only the name, the date and the
- * registration period, which is all getRegistrationPage reads.
+ * internal planning (SCRUM-72 AC1): only what SCRUM-180 AC3 lists below,
+ * which is all getRegistrationPage reads.
  *
  * AC1: the form, while the period is open. AC2, AC3: outside it, the start or
  * end date instead of the form. AC5: someone already registered sees their
@@ -23,6 +24,10 @@ export const dynamic = 'force-dynamic';
  * SCRUM-180 AC3: opened from Open events, it shows only the event name,
  * description, date, start and end times, venue name and address, and the
  * registration period. Nothing else is read for it (ATTENDEE_EVENT_COLUMNS).
+ *
+ * SCRUM-255 AC3: a back link to Open events, above everything that changes
+ * with the registration state, so every state shows it. A plain link, not
+ * history back, so it leads to Open events whatever page came before.
  */
 export default async function AttendeeEventRegistrationPage({ params }: { params: Promise<{ id: string }> }) {
   const { id } = await params;
@@ -32,7 +37,10 @@ export default async function AttendeeEventRegistrationPage({ params }: { params
 
   return (
     <main className="mx-auto flex min-h-screen max-w-xl flex-col p-8">
-      <h1 className="text-2xl font-semibold">{view.eventName}</h1>
+      <Link href="/register-events" className="self-start text-sm text-[var(--brand)] underline">
+        Back to Open events
+      </Link>
+      <h1 className="mt-3 text-2xl font-semibold">{view.eventName}</h1>
       {view.description ? <p className="mt-2 whitespace-pre-line text-sm">{view.description}</p> : null}
       <dl className="mt-4 grid grid-cols-[max-content_1fr] gap-x-4 gap-y-1 text-sm">
         {view.eventDate ? (
