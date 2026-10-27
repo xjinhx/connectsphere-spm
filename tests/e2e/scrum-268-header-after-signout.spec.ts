@@ -9,7 +9,15 @@ import { ACCOUNTS, signIn, TEST_PASSWORD } from './support/accounts';
  */
 
 async function logOut(page: Page, email: string): Promise<void> {
-  await page.getByRole('button', { name: `Account menu for ${email}` }).click();
+  // Login is now a full page load, so the header may not be hydrated yet when
+  // the page appears: a click that early does nothing. Click until it opens.
+  const accountMenu = page.getByRole('button', { name: `Account menu for ${email}` });
+  await expect(async () => {
+    if ((await accountMenu.getAttribute('aria-expanded')) !== 'true') {
+      await accountMenu.click();
+    }
+    await expect(accountMenu).toHaveAttribute('aria-expanded', 'true', { timeout: 1000 });
+  }).toPass({ timeout: 20_000 });
   await page.getByRole('button', { name: 'Log out' }).click();
   await expect(page).toHaveURL(/\/login$/);
 }
