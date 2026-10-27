@@ -105,6 +105,8 @@ async function createEvent(name: string, options: EventOptions = {}): Promise<st
       end_time: '22:00',
       registration_start_date: start,
       registration_end_date: end,
+      // SCRUM-182: no capacity counts as full, so registering needs one.
+      registration_capacity: 50,
     })
     .select('id')
     .single();
@@ -278,9 +280,10 @@ describe('AC3: the event page shows only what an attendee may see', () => {
     const view = await getRegistrationPage(eventId, attendeeId, NOW);
     const shown = JSON.stringify(view);
 
-    // Only the AC3 fields, plus SCRUM-181's registration state.
+    // Only the AC3 fields, plus SCRUM-181's registration state and SCRUM-182's
+    // full flag (the capacity itself is not shown).
     expect(Object.keys(view).sort()).toEqual(
-      ['description', 'eventDate', 'eventName', 'eventRequestId', 'period', 'periodRefusal', 'registration', 'times', 'venues'],
+      ['description', 'eventDate', 'eventName', 'eventRequestId', 'full', 'period', 'periodRefusal', 'registration', 'times', 'venues'],
     );
     expect(view.venues).toEqual([{ name: `Marina Bay Ballroom ${RUN}`, address: BALLROOM_ADDRESS }]);
     for (const hidden of [
