@@ -78,6 +78,9 @@ export const ACTIONS = [
   // confirming an event while something essential is still outstanding". The
   // narrower rule, the event's assigned coordinator only, is in the service.
   'event_confirmation',
+  // SCRUM-104 — "Mark an event as completed". The event's assigned coordinator
+  // only, checked in the service.
+  'event_completion',
 ] as const;
 
 export type Action = (typeof ACTIONS)[number];
@@ -114,6 +117,8 @@ export const ROLE_PERMISSIONS: Record<Role, readonly Action[]> = {
     'event_schedule_change',
     // SCRUM-102: confirm their event once its essential arrangements are complete.
     'event_confirmation',
+    // SCRUM-104: mark their event completed once it has happened.
+    'event_completion',
   ],
   operations_manager: ['venue_catalogue_view', 'coordinator_assignment', 'account_role_management'],
   venue_staff: ['venue_administration', 'venue_catalogue_view'],
