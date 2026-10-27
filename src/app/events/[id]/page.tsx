@@ -20,6 +20,11 @@ import { NO_COMMITMENTS } from '@/domain/review/policy';
 import { getApprovalView, getClarificationView, getRejectionView } from '@/domain/review/service';
 import { formatSingaporeDate, formatSingaporeDateTime } from '@/domain/shared/dates';
 import { getCurrentActor } from '@/lib/auth/currentActor';
+import {
+  REQUEST_CHANGES_THROUGH_COORDINATOR,
+  finishedEventNotice,
+  isFinishedEvent,
+} from '@/domain/event-information/policy';
 
 export const dynamic = 'force-dynamic';
 
@@ -320,10 +325,16 @@ export default async function EventRequestPage({
             This request has been rejected and cannot be edited or resubmitted. Raise a new
             request instead.
           </p>
-        ) : (
+        ) : isFinishedEvent(request.status) ? (
+          // SCRUM-110 AC5 — a Completed or Cancelled event stays viewable as history.
           <p className="rounded-md border border-[var(--border)] bg-[var(--surface)] px-3 py-2 text-sm text-[var(--text-muted)]">
-            This request has been submitted and is now read-only. It can be changed again only
-            if a coordinator returns it with a clarification request.
+            {finishedEventNotice(request.status)}
+          </p>
+        ) : (
+          // SCRUM-110 AC2 — no edit action for the responsible organiser once
+          // the event is submitted; changes go through the coordinator.
+          <p className="rounded-md border border-[var(--border)] bg-[var(--surface)] px-3 py-2 text-sm text-[var(--text-muted)]">
+            {REQUEST_CHANGES_THROUGH_COORDINATOR}
           </p>
         )}
       </section>
