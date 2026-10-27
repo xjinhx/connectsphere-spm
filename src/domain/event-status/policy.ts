@@ -140,7 +140,7 @@ export function confirmationStatusRefusal(status: EventRequestStatus): string {
  * SCRUM-104 — Mark an event as completed.
  *
  * The same rules as complete_event and complete_past_events
- * (20261025084357_event_completion.sql), restated here for the page and the
+ * (20261027060115_event_completion.sql), restated here for the page and the
  * service because the database cannot import them: change one, change the
  * other. The end date is the last day of the event's confirmed venue bookings,
  * or its proposed date when it has none (event_end_date in that file).

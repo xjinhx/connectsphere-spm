@@ -1,7 +1,7 @@
 // Seeds the manual run of basket B3 from Marcus's Sprint 4 test case sheets.
 // So far SCRUM-102 (TC-102-01 to TC-102-17) and SCRUM-104 (TC-104-01 to
 // TC-104-14); SCRUM-105, 177 and 256 add their events here as they are built.
-// Needs 20261025084357_event_completion applied (`npm run db:reset` after
+// Needs 20261027060115_event_completion applied (`npm run db:reset` after
 // pulling it) and `npm run seed:users`.
 //
 //   node scripts/seed-b3.mjs                    Every B3 event and item (resets them all)

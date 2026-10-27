@@ -5,7 +5,7 @@ import type { Database } from './database.types';
 /**
  * Event completion queries (SCRUM-104 Mark an event as completed).
  *
- * The rules live in 20261025084357_event_completion.sql: these call its
+ * The rules live in 20261027060115_event_completion.sql: these call its
  * functions, and src/domain/event-status/service.ts decides when. Each returns
  * the raw Supabase result, through the service-role client, as the other files
  * here do.
