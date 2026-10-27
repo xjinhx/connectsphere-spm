@@ -43,8 +43,10 @@ describe('SCRUM-250 AC2: the nav shows Event requests, then New event request', 
     // A request and its edit page sit under Event requests (AC3).
     expect(currentNavHref('/events/abc', items)).toBe('/events');
     expect(currentNavHref('/events/abc/edit', items)).toBe('/events');
-    // Not under either item: nothing is highlighted.
+    // Not under either item: nothing is highlighted. A shared prefix alone
+    // doesn't count (asked for by SCRUM-249's owner).
     expect(currentNavHref('/notifications', items)).toBeNull();
+    expect(currentNavHref('/events-archive', items)).toBeNull();
   });
 
   it('TC-250-07 (regression, SCRUM-249 AC4): roles whose items do not nest are unchanged', () => {
