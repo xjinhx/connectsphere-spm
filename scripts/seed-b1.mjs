@@ -2,8 +2,9 @@
 // (TC-167-01 to TC-167-10, TC-173-01 to TC-173-09, TC-175-01 to TC-175-03,
 // TC-170-01 to TC-170-11) from the B1 test case sheet, "B1 Seed and Run Order".
 // Needs 20261022004756_equipment_commitment_window,
-// 20261022011508_reserve_equipment and 20261024084449_equipment_out_of_service
-// applied (`npm run db:reset` after pulling them) and `npm run seed:users`.
+// 20261022011508_reserve_equipment, 20261024084449_equipment_out_of_service and
+// 20261027065523_release_equipment_reservation applied (`npm run db:reset`
+// after pulling them) and `npm run seed:users`.
 //
 //   node scripts/seed-b1.mjs        Every SCRUM-167/173/175/170 event, item and hold (resets them all)
 //
@@ -240,15 +241,19 @@ async function reserve(event, lineId, quantity) {
   if (data?.outcome !== 'reserved') throw new Error(`reserve for ${event.name}: ${JSON.stringify(data)}`);
 }
 
-/**
- * DUMMY(SCRUM-177) D-21: releases the line's reservation by hand. Releasing is
- * SCRUM-177's; TC-173-09 only needs a Released one to list.
- */
-async function releaseByHand(event, lineId) {
-  check(
-    `release for ${event.name}`,
-    await supabase.from('equipment_reservation').update({ status: 'released' }).eq('line_id', lineId),
+/** Releases the line's reservation through release_equipment_reservation, as Technical Support would in the app (SCRUM-177). */
+async function release(event, lineId) {
+  const reservation = await single(
+    `reservation for ${event.name}`,
+    supabase.from('equipment_reservation').select('id').eq('line_id', lineId).single(),
   );
+  const { data, error } = await supabase.rpc('release_equipment_reservation', {
+    p_reservation_id: reservation.id,
+    p_reason: 'Client no longer needs it (B1 seed)',
+    p_released_by: techSupport,
+  });
+  if (error) throw new Error(`release for ${event.name}: ${error.message}`);
+  if (data !== true) throw new Error(`release for ${event.name}: not released`);
 }
 
 /** Another event holding `quantity` of the item: requested and reserved. */
@@ -279,7 +284,7 @@ await reserve(e1, await request(e1, 'EQ-173-07A', 4), 4); // TC-173-07
 await reserve(e1, await request(e1, 'EQ-173-07B', 6), 4); // TC-173-07: only 4 exist
 const released = await request(e1, 'EQ-173-09', 3); // TC-173-09: reserved, then released
 await reserve(e1, released, 3);
-await releaseByHand(e1, released);
+await release(e1, released);
 await request(e1, 'EQ-175-01', 6); // TC-175-01: 5 available
 await request(e1, 'EQ-175-02', 5); // TC-175-02: exactly 5 available
 await request(e1, 'EQ-175-03', 2); // TC-175-03: none available
