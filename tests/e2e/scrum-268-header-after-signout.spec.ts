@@ -29,10 +29,15 @@ async function expectNoHeader(page: Page): Promise<void> {
 }
 
 async function logInFromLoginPage(page: Page, email: string): Promise<void> {
-  await page.getByLabel('Email', { exact: true }).fill(email);
-  await page.getByLabel('Password', { exact: true }).fill(TEST_PASSWORD);
-  await page.getByRole('button', { name: 'Log in' }).click();
-  await expect(page).not.toHaveURL(/\/login/);
+  // Log out is a full page load, so the login form may not be hydrated yet: a
+  // click that early submits the bare form and reloads /login. Try again then.
+  await page.waitForLoadState('load');
+  await expect(async () => {
+    await page.getByLabel('Email', { exact: true }).fill(email);
+    await page.getByLabel('Password', { exact: true }).fill(TEST_PASSWORD);
+    await page.getByRole('button', { name: 'Log in' }).click();
+    await expect(page).not.toHaveURL(/\/login/, { timeout: 5000 });
+  }).toPass({ timeout: 30_000 });
 }
 
 test('TC-268-01: after Log out, the login page shows no header', async ({ page }) => {
