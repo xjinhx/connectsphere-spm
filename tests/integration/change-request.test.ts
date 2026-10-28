@@ -278,6 +278,26 @@ describe('raiseChangeRequest', () => {
     expect(await readChangeRequestRows(id)).toHaveLength(0);
   });
 
+  // Bug found in review of PR #143 (28/10/2026): the form sends null for an
+  // empty text, number, date or time field, and proposedValue: z.unknown()
+  // passed it through. The change_request row was then created before the
+  // field insert failed on the DB's proposed_value not null constraint,
+  // leaving a Pending request with nothing asked. Refused before anything
+  // is written (RaiseChangeRequestInputSchema), same as TC-187-04.
+  it('refuses a missing proposed value, and writes nothing', async () => {
+    const id = await createEvent('submitted');
+
+    await expect(
+      raiseChangeRequest(
+        id,
+        { fields: [{ field: 'description', proposedValue: null }], reason: 'Clearing the description' },
+        organiserId,
+      ),
+    ).rejects.toMatchObject({ code: 'VALIDATION_ERROR' });
+
+    expect(await readChangeRequestRows(id)).toHaveLength(0);
+  });
+
   // Bug found manually testing TC-187-03 (28/10/2026): nothing checked that a
   // proposed start/end pair stays chronological, so Submitted had an end
   // before its start. Same rule as the event request's own save

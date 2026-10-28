@@ -69,10 +69,21 @@ export const CHANGE_REQUEST_STATUS_LABELS: Record<ChangeRequestStatus, string> =
 export const RaiseChangeRequestInputSchema = z.object({
   fields: z
     .array(
-      z.object({
-        field: SelectableChangeRequestFieldSchema,
-        proposedValue: z.unknown(),
-      }),
+      z
+        .object({
+          field: SelectableChangeRequestFieldSchema,
+          proposedValue: z.unknown(),
+        })
+        // Review feedback, PR #143: the form sends null for an empty text,
+        // number, date or time field, and proposedValue: z.unknown() passed
+        // it through. The change_request row was then created before the
+        // field insert failed on proposed_value not null, leaving a Pending
+        // request with nothing asked. Refused here, before anything is
+        // written, so a retry cannot leave a second orphan either.
+        .refine((entry) => entry.proposedValue !== null && entry.proposedValue !== undefined, {
+          message: 'Give the new value for each selected field.',
+          path: ['proposedValue'],
+        }),
     )
     .min(1, 'Select at least one field to change.')
     .refine(
