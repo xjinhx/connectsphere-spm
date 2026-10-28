@@ -52,15 +52,26 @@ export const ALREADY_REGISTERED = 'You are already registered for this event.';
 export const NO_PLACES_REMAINING = 'There are no places remaining for this event.';
 
 /**
+ * SCRUM-180 AC1 — an event in one of these statuses is not going ahead, so it
+ * is not open for registration whatever its period says (PO, 28/10/2026: read
+ * "registration period is open" as also needing the event to be going ahead).
+ * Both statuses are final. Restated in fetchOpenEvents' query.
+ */
+export const FINAL_EVENT_STATUSES: readonly string[] = ['cancelled', 'completed'];
+
+/**
  * SCRUM-180 AC1, AC2 — whether the event belongs on Open events today. The
- * same rule the event page uses to offer the form (periodRefusalReason), so
- * the list never shows an event whose page then refuses. No period set means
- * registration has not opened.
+ * same period rule the event page uses to offer the form (periodRefusalReason),
+ * so the list never shows an event whose page then refuses. No period set
+ * means registration has not opened; a Cancelled or Completed event is not
+ * open at all.
  */
 export function isOpenForRegistration(
   period: { startDate: ISODate | null; endDate: ISODate | null },
+  eventStatus: string,
   today: ISODate,
 ): boolean {
+  if (FINAL_EVENT_STATUSES.includes(eventStatus)) return false;
   if (!period.startDate || !period.endDate) return false;
   return periodRefusalReason({ startDate: period.startDate, endDate: period.endDate }, today) === null;
 }

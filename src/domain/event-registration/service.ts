@@ -150,17 +150,22 @@ function toOpenEvent(row: EventRow): OpenEvent {
 
 /**
  * SCRUM-180 AC1, AC2 — the events open for registration today (Singapore
- * date), soonest first. The query already filters by the period; the same
- * rule is applied again here so the list and the event page's form agree on
- * every boundary, whatever the query does.
+ * date), soonest first, leaving out a Cancelled or Completed event. The query
+ * already filters by the period and the status; the same rule is applied again
+ * here so the list and the event page's form agree on every boundary, whatever
+ * the query does.
  */
 export async function listOpenEvents(now: Date = new Date()): Promise<OpenEvent[]> {
   const today = todayInSingapore(now);
   const { data, error } = await fetchOpenEvents(today);
   if (error) throw new ValidationError('The events open for registration could not be read.', error.message);
-  return ((data ?? []) as unknown as EventRow[])
+  return ((data ?? []) as unknown as (EventRow & { status: string })[])
     .filter((row) =>
-      isOpenForRegistration({ startDate: row.registration_start_date, endDate: row.registration_end_date }, today),
+      isOpenForRegistration(
+        { startDate: row.registration_start_date, endDate: row.registration_end_date },
+        row.status,
+        today,
+      ),
     )
     .map(toOpenEvent);
 }

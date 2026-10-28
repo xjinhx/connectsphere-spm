@@ -45,14 +45,17 @@ export async function fetchRegistrationEvent(eventRequestId: string) {
  * SCRUM-180 AC1, AC2: the events whose registration period includes `today`
  * (a Singapore date; both ends inclusive), soonest first. The same attendee
  * columns as the page, so nothing internal reaches an attendee (SCRUM-72
- * AC1). An event with no period never matches.
+ * AC1). An event with no period never matches. The status is read only to
+ * leave out a Cancelled or Completed event (FINAL_EVENT_STATUSES in
+ * src/domain/event-registration/policy.ts; change one, change the other).
  */
 export async function fetchOpenEvents(today: string) {
   return db()
     .from('event_request')
-    .select(ATTENDEE_EVENT_COLUMNS)
+    .select(`${ATTENDEE_EVENT_COLUMNS}, status`)
     .lte('registration_start_date', today)
     .gte('registration_end_date', today)
+    .not('status', 'in', '(cancelled,completed)')
     .order('proposed_date', { ascending: true })
     .order('name', { ascending: true });
 }

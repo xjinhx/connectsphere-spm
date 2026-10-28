@@ -129,6 +129,23 @@ describe('AC2: an event whose period has not opened or has closed is not listed'
   });
 });
 
+// AC1 as read by the PO (28/10/2026): the period is open only while the event
+// is still going ahead. The query leaves these out too; here the data layer
+// hands them back, to show the service's own check does as well.
+describe('AC1: a Cancelled or Completed event is not open for registration', () => {
+  it('TC-180-16 with the period open, only the event still going ahead is listed', async () => {
+    databaseHas(
+      eventRow({ id: 'going-ahead', status: 'confirmed' }),
+      eventRow({ id: 'cancelled', status: 'cancelled' }),
+      eventRow({ id: 'completed', status: 'completed' }),
+    );
+
+    const events = await listOpenEvents(new Date('2026-10-30T10:00:00+08:00'));
+
+    expect(events.map((event) => event.eventRequestId)).toEqual(['going-ahead']);
+  });
+});
+
 describe('AC4: my registrations are listed with the event and my status', () => {
   it('TC-180-09 lists each with the event name, date, times, venue and status Registered', async () => {
     attendeeHas(registrationRow('1', 'registered', eventRow()), registrationRow('2', 'registered', BRIEFING));

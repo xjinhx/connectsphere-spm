@@ -206,6 +206,26 @@ describe('AC1: an event whose registration period is open is listed', () => {
       `Marina Bay Ballroom ${RUN}`,
     ]);
   });
+
+  it('TC-180-16 a Cancelled or Completed event is not listed, even with its period open (PO, 28/10/2026)', async () => {
+    const goingAhead = await createEvent('Client Appreciation Night');
+    const cancelled = await createEvent('Year-End Gala');
+    const completed = await createEvent('Annual Dinner');
+    // Cancelling is SCRUM-102 / 177's and completing SCRUM-104's; this writes the status each sets.
+    for (const [id, status] of [[cancelled, 'cancelled'], [completed, 'completed']] as const) {
+      const { error } = await admin
+        .from('event_request')
+        .update({ status, submitted_at: new Date().toISOString() })
+        .eq('id', id);
+      if (error) throw new Error(`could not set test event to ${status}: ${error.message}`);
+    }
+
+    const listed = await listedIds();
+
+    expect(listed).toContain(goingAhead);
+    expect(listed).not.toContain(cancelled);
+    expect(listed).not.toContain(completed);
+  });
 });
 
 describe('AC2: an event whose period has not opened or has closed is not listed', () => {
