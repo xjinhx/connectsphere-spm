@@ -52,6 +52,82 @@ export type Database = {
         }
         Relationships: []
       }
+      change_request: {
+        Row: {
+          created_at: string
+          decided_at: string | null
+          decided_by: string | null
+          decision_reason: string | null
+          event_request_id: string
+          id: string
+          organiser_id: string
+          reason: string
+          status: string
+        }
+        Insert: {
+          created_at?: string
+          decided_at?: string | null
+          decided_by?: string | null
+          decision_reason?: string | null
+          event_request_id: string
+          id?: string
+          organiser_id: string
+          reason: string
+          status?: string
+        }
+        Update: {
+          created_at?: string
+          decided_at?: string | null
+          decided_by?: string | null
+          decision_reason?: string | null
+          event_request_id?: string
+          id?: string
+          organiser_id?: string
+          reason?: string
+          status?: string
+        }
+        Relationships: [
+          {
+            foreignKeyName: "change_request_event_request_id_fkey"
+            columns: ["event_request_id"]
+            isOneToOne: false
+            referencedRelation: "event_request"
+            referencedColumns: ["id"]
+          },
+        ]
+      }
+      change_request_field: {
+        Row: {
+          change_request_id: string
+          current_value: Json | null
+          field: string
+          id: string
+          proposed_value: Json
+        }
+        Insert: {
+          change_request_id: string
+          current_value?: Json | null
+          field: string
+          id?: string
+          proposed_value: Json
+        }
+        Update: {
+          change_request_id?: string
+          current_value?: Json | null
+          field?: string
+          id?: string
+          proposed_value?: Json
+        }
+        Relationships: [
+          {
+            foreignKeyName: "change_request_field_change_request_id_fkey"
+            columns: ["change_request_id"]
+            isOneToOne: false
+            referencedRelation: "change_request"
+            referencedColumns: ["id"]
+          },
+        ]
+      }
       client_organisations: {
         Row: {
           contact_email: string | null
