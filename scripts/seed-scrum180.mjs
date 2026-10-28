@@ -220,11 +220,13 @@ async function seed() {
       5,
       30,
       ['19:00', '23:00'],
-      'TC-180-14 (cancelled)',
+      'TC-180-14, 16 (cancelled)',
       {
         description: 'The year-end celebration.',
       },
     ],
+    // TC-180-16: registration still open, but the event is Completed (set below).
+    ['Annual Dinner (completed)', -3, 5, 2, ['19:00', '22:00'], 'TC-180-16 (completed)', {}],
   ];
 
   const now = new Date().toISOString();
@@ -323,6 +325,15 @@ async function seed() {
   check(
     'cancel gala',
     await supabase.from('event_request').update({ status: 'cancelled' }).eq('id', idOf('Year-End Gala')),
+  );
+  // TC-180-16: completing is SCRUM-104's; this sets the status it writes. Both
+  // events have their registration period open, and neither is on Open events.
+  check(
+    'complete dinner',
+    await supabase
+      .from('event_request')
+      .update({ status: 'completed', completed_at: now })
+      .eq('id', idOf('Annual Dinner (completed)')),
   );
 
   // --- Summary ----------------------------------------------------------------
