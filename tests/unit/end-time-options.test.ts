@@ -44,8 +44,15 @@ describe('endTimesAfter (SCRUM-266 Exp 1)', () => {
     expect(endTimesAfter('')).toEqual(END_TIME_OPTIONS);
   });
 
-  it('offers nothing after 23:45, the last start, but 24:00', () => {
+  it('TC-266-09: after 23:45, the last start, End offers only 24:00; after 23:30, 23:45 and 24:00', () => {
     expect(endTimesAfter('23:45')).toEqual(['24:00']);
+    expect(endTimesAfter('23:30')).toEqual(['23:45', '24:00']);
+  });
+
+  it('TC-266-08: after 09:00, End runs 09:15 to 24:00 (60); after 12:30, 12:45 to 24:00 (46)', () => {
+    expect(endTimesAfter('09:00')).toHaveLength(60);
+    expect(endTimesAfter('12:30')).toHaveLength(46);
+    expect(endTimesAfter('12:30')[0]).toBe('12:45');
   });
 });
 
@@ -59,6 +66,10 @@ describe('endTimesAfter on a narrowed list (SCRUM-266 Exp 3, MarkPeriodUnavailab
 
   it('TC-266-05: after 17:00, End runs 17:15 to 22:00 (20 options)', () => {
     expect(endTimesAfter('17:00', withinHours('08:00', '22:00'))).toHaveLength(20);
+  });
+
+  it('TC-266-10: after 21:45, the last start before 22:00 closing, End offers only 22:00', () => {
+    expect(endTimesAfter('21:45', withinHours('08:00', '22:00'))).toEqual(['22:00']);
   });
 });
 
@@ -78,6 +89,14 @@ describe('keepEndAfterStart (SCRUM-266 Exp 2)', () => {
   it('keeps an End still after the new Start', () => {
     expect(keepEndAfterStart('09:00', '12:00')).toBe('12:00');
     expect(keepEndAfterStart('23:45', '24:00')).toBe('24:00');
+  });
+
+  it('TC-266-09: moving Start back from 23:45 to 23:30 keeps an End of 24:00', () => {
+    expect(keepEndAfterStart('23:30', '24:00')).toBe('24:00');
+  });
+
+  it('TC-266-11: a search address with End 14:00 before Start 14:30 opens with End cleared', () => {
+    expect(keepEndAfterStart('14:30', '14:00')).toBe('');
   });
 
   it('leaves End alone while either time is not chosen', () => {

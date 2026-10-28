@@ -13,7 +13,9 @@ import { START_TIME_OPTIONS, endTimesAfter, keepEndAfterStart } from '@/domain/s
  */
 export function SearchTimeFields({ start: initialStart, end: initialEnd }: { start: string; end: string }) {
   const [start, setStart] = useState(initialStart);
-  const [end, setEnd] = useState(initialEnd);
+  // An address whose end is not after its start (refused by the server) opens
+  // with the end cleared, so the form never holds that range.
+  const [end, setEnd] = useState(() => keepEndAfterStart(initialStart, initialEnd));
 
   return (
     <div className="mb-4 flex flex-wrap gap-4">
