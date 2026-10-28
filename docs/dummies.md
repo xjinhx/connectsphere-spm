@@ -840,7 +840,7 @@ switch them the next time they edit those files.
 - **Waiting on:** SCRUM-190 (Approve a change request and apply it), SCRUM-191
   (Reject a change request with a reason)
 - **Where:**
-  - `supabase/migrations/20261024090000_change_request.sql` — `change_request`'s
+  - `supabase/migrations/20261028090000_change_request.sql` — `change_request`'s
     `decided_by`, `decided_at`, `decision_reason` columns
   - `src/domain/change-request/service.ts` — `raiseChangeRequest()` never
     writes them; `listChangeRequests()` reads them back as-is

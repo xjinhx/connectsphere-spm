@@ -3,7 +3,7 @@
 -- =============================================================================
 -- PO clarification, 24 Oct 2026 (CL-61): any field the organiser fills in on
 -- the event request form can be selected, not only the SCRUM-111/190
--- "significant" subset 20261024090000_change_request.sql started with. Adds
+-- "significant" subset 20261028090000_change_request.sql started with. Adds
 -- the remaining event-request core fields: name, purpose, description,
 -- registrationRequired.
 -- =============================================================================

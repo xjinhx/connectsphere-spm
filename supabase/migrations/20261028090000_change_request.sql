@@ -66,21 +66,9 @@ create table change_request_field (
 );
 
 -- AC1's notification to the assigned coordinator, through the existing
--- in-app mechanism (SCRUM-193/198). Widened the same way
--- 20261018194905_notifications_assignment_types.sql did.
-alter table notifications
-  drop constraint notifications_type_known;
-
-alter table notifications
-  add constraint notifications_type_known check (type in (
-    'clarification_requested',
-    'request_approved',
-    'request_rejected',
-    'coordinator_assigned',
-    'coordinator_named',
-    'venue_booking_update',
-    'request_submitted',
-    'coordinator_unassigned',
-    'event_confirmed',
-    'change_requested'
-  ));
+-- in-app mechanism (SCRUM-193/198), type 'change_requested'. Widening
+-- notifications_type_known for it is 20261028090100_notifications_change_
+-- requested.sql, which runs after this migration and after every other
+-- story's own widening already on main - rebuilding the constraint here
+-- would drop whichever of those already exist on a database this runs
+-- against.

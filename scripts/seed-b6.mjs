@@ -1,6 +1,6 @@
 // Seeds the manual run of SCRUM-187 (basket B6) from the Sprint 4 test case
 // sheet (SCRUM-187 tab, "Seed (planned, scripts/seed-b6.mjs)" note).
-// Needs 20261024090000_change_request applied (`npm run db:reset` after
+// Needs 20261028090000_change_request applied (`npm run db:reset` after
 // pulling it) and `npm run seed:users`.
 //
 //   node scripts/seed-b6.mjs        Every S187 event (resets them all)
