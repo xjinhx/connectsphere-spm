@@ -41,6 +41,9 @@ export const NOTIFICATION_TYPES = [
   // SCRUM-166 AC4: the event's assigned coordinator, told Technical Support
   // cannot fulfil its equipment request, with the reason.
   'equipment_unable_to_fulfil',
+  // SCRUM-187 AC1: the assigned coordinator, told the organiser raised a
+  // change request on their event.
+  'change_requested',
 ] as const;
 export const NotificationTypeSchema = z.enum(NOTIFICATION_TYPES);
 export type NotificationType = z.infer<typeof NotificationTypeSchema>;
