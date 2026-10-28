@@ -36,6 +36,13 @@ if (!supabaseUrl || !serviceRoleKey) {
   );
 }
 
+// Creates accounts with a known password through the service-role key, so it
+// refuses to run against anything but the local stack (same guard as
+// scripts/seed-scrum255.mjs).
+if (!['127.0.0.1', 'localhost'].includes(new URL(supabaseUrl).hostname)) {
+  throw new Error(`NEXT_PUBLIC_SUPABASE_URL (${supabaseUrl}) is not a local Supabase instance; refusing to run.`);
+}
+
 const supabase = createClient(supabaseUrl, serviceRoleKey);
 const TEST_PASSWORD = 'TestPass123!';
 const SEEDED_BY = 'Seeded by scripts/seed-scrum182.mjs';

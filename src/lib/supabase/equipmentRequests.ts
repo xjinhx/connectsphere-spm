@@ -15,18 +15,24 @@ function db() {
   return createAdminClient();
 }
 
-/** A line with the catalogue item it names, so the request can show the item's name. */
+/**
+ * A line with the catalogue item it names, so the request can show the item's
+ * name, and Technical Support Staff's suitability verdict on it (SCRUM-171).
+ */
 const LINE_SELECT =
-  'id, event_request_id, equipment_id, quantity, unavailable, created_at, equipment ( name, category )';
+  'id, event_request_id, equipment_id, quantity, unavailable, suitability, suitability_reason, created_at, equipment ( name, category )';
 
 /**
  * The event's request, or null when no line has been added yet. With its
- * status, who set it, when and the reason it cannot be fulfilled (SCRUM-166).
+ * status, who set it, when and the reason it cannot be fulfilled (SCRUM-166),
+ * and its last completed suitability review (SCRUM-171 AC4).
  */
 export async function fetchEquipmentRequest(eventRequestId: string) {
   return db()
     .from('equipment_request')
-    .select('event_request_id, technical_requirements, status, status_set_by, status_set_at, unable_reason')
+    .select(
+      'event_request_id, technical_requirements, status, status_set_by, status_set_at, unable_reason, ready_to_reserve, review_completed_by, review_completed_at',
+    )
     .eq('event_request_id', eventRequestId)
     .maybeSingle();
 }
@@ -173,4 +179,46 @@ export async function setEquipmentRequestStatus(update: {
     p_reason: update.reason as string,
     p_set_by: update.setBy,
   });
+}
+
+/**
+ * SCRUM-171 AC1: saves the verdicts of a review together, recording who and
+ * when on each item whose verdict changed (save_equipment_suitability).
+ * Returns {outcome: 'saved'}, {outcome: 'not_found'} or
+ * {outcome: 'unknown_line'}.
+ */
+export async function saveSuitabilityVerdicts(save: {
+  eventRequestId: string;
+  verdicts: readonly { lineId: string; suitability: string | null; reason: string | null }[];
+  setBy: string;
+}) {
+  return db().rpc('save_equipment_suitability', {
+    p_event_request_id: save.eventRequestId,
+    p_verdicts: save.verdicts.map((verdict) => ({ ...verdict })),
+    p_set_by: save.setBy,
+  });
+}
+
+/**
+ * SCRUM-171 AC4: records a completed review - whether it left the request
+ * ready to reserve, who completed it and when. Returns the saved row, or null
+ * when the event has no request.
+ */
+export async function setReviewCompleted(review: {
+  eventRequestId: string;
+  readyToReserve: boolean;
+  completedBy: string;
+}) {
+  const now = new Date().toISOString();
+  return db()
+    .from('equipment_request')
+    .update({
+      ready_to_reserve: review.readyToReserve,
+      review_completed_by: review.completedBy,
+      review_completed_at: now,
+      updated_at: now,
+    })
+    .eq('event_request_id', review.eventRequestId)
+    .select('event_request_id')
+    .maybeSingle();
 }

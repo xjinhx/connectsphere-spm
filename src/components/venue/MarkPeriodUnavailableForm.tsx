@@ -2,6 +2,7 @@
 
 import { useState } from 'react';
 import { useRouter } from 'next/navigation';
+import { LATEST_DATE } from '@/domain/shared/dates';
 import { END_TIME_OPTIONS, START_TIME_OPTIONS, toMinutes } from '@/domain/shared/times';
 
 /**
@@ -88,6 +89,7 @@ export function MarkPeriodUnavailableForm({
         <input
           id="unavailable-date"
           type="date"
+          max={LATEST_DATE}
           value={date}
           onChange={(event) => setDate(event.target.value)}
           className={selectClass}
