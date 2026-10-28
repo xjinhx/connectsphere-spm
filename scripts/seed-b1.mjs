@@ -3,7 +3,7 @@
 // TC-170-01 to TC-170-12) from the B1 test case sheet, "B1 Seed and Run Order".
 // Needs 20261022004756_equipment_commitment_window,
 // 20261022011508_reserve_equipment, 20261024084449_equipment_out_of_service and
-// 20261027065523_release_equipment_reservation applied (`npm run db:reset`
+// 20261028094938_release_equipment_reservation applied (`npm run db:reset`
 // after pulling them) and `npm run seed:users`.
 //
 //   node scripts/seed-b1.mjs        Every SCRUM-167/173/175/170 event, item and hold (resets them all)

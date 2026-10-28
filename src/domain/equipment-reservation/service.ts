@@ -361,7 +361,7 @@ export async function listEventReservations(eventRequestId: string, actor: Actor
  * SCRUM-177 AC1: releases one of the event's reservations, with a reason. It
  * becomes Released and its units are available again for its window, because
  * everything that counts units as committed reads Reserved ones only (migration
- * 20261027065523). The event's other reservations are not touched.
+ * 20261028094938). The event's other reservations are not touched.
  *
  * Technical Support Staff only (equipment_administration), checked by the
  * route. A reservation that is not the event's is not found; one already

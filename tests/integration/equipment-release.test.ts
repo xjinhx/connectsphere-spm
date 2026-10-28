@@ -25,7 +25,7 @@ import { ensureTestClientOrganisation, TEST_CLIENT_ORGANISATION_ID } from './fix
 
 /**
  * SCRUM-177 Release a reservation, against the local Supabase stack with
- * 20261027065523_release_equipment_reservation applied. Test case IDs are from
+ * 20261028094938_release_equipment_reservation applied. Test case IDs are from
  * Marcus's Sprint 4 sheet (SCRUM-177 tab).
  *
  * AC1: "Given a reservation exists, when I release it and give a reason, then
