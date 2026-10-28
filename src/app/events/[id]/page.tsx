@@ -1,5 +1,6 @@
 import Link from 'next/link';
 import CoordinatorPanel from '@/components/assignment/CoordinatorPanel';
+import { ChangeRequestForm } from '@/components/change-request/ChangeRequestForm';
 import { ClarificationResponseForm } from '@/components/event-request/ClarificationResponseForm';
 import { EventRequestStatusBadge } from '@/components/event-request/EventRequestStatusBadge';
 import { SubmitEventRequestButton } from '@/components/event-request/SubmitEventRequestButton';
@@ -16,6 +17,9 @@ import {
 } from '@/domain/event-request/policy';
 import { EVENT_REQUEST_STATUS_DEFINITIONS } from '@/domain/event-request/schema';
 import { getEventRequest } from '@/domain/event-request/service';
+import { canRaiseChangeRequest, canRaiseChangeRequestFor } from '@/domain/change-request/policy';
+import { CHANGE_REQUEST_FIELD_LABELS, CHANGE_REQUEST_STATUS_LABELS } from '@/domain/change-request/schema';
+import { listChangeRequests } from '@/domain/change-request/service';
 import { NO_COMMITMENTS } from '@/domain/review/policy';
 import { getApprovalView, getClarificationView, getRejectionView } from '@/domain/review/service';
 import { formatSingaporeDate, formatSingaporeDateTime } from '@/domain/shared/dates';
@@ -123,6 +127,20 @@ export default async function EventRequestPage({
     isOwner ? getApprovalView(id, actor) : Promise.resolve(emptyApproval),
     isOwner ? getRejectionView(id, actor) : Promise.resolve(emptyRejection),
   ]);
+
+  // SCRUM-187 AC6 — every change request raised against this event, for
+  // whoever canViewRequest already let onto this page (owner or a colleague
+  // in the same client organisation, SCRUM-204 AC3).
+  const changeRequests = await listChangeRequests(id, {
+    userId: actor.userId,
+    clientOrganisationId: actor.clientOrganisation?.id ?? null,
+  });
+  // SCRUM-187 AC1/AC2/AC4/AC5 — only the responsible organiser, and only on
+  // a status that currently allows it (canRaiseChangeRequest; the status
+  // scope is deliberately narrow pending PO confirmation - see policy.ts).
+  const canRaiseChange =
+    canRaiseChangeRequestFor({ organiserId: request.organiserId }, actor.userId) &&
+    canRaiseChangeRequest(request.status);
 
   return (
     <main className="mx-auto max-w-2xl px-4 py-8">
@@ -262,6 +280,56 @@ export default async function EventRequestPage({
           <Row label="Submitted" value={formatSingaporeDateTime(request.submittedAt)} />
         ) : null}
       </dl>
+
+      {/* SCRUM-187 AC6 — each change request raised against this event,
+          with what was asked, its status, the decision date and any reason
+          given. AC7 is not shown separately: once a request is approved and
+          applied, the event's own fields above already show the new values
+          (see docs/dummies.md D-24 for what applies it, and when). */}
+      {changeRequests.length > 0 ? (
+        <section className="mt-6">
+          <h2 className="text-sm font-semibold">Change requests</h2>
+          <ul className="mt-2 space-y-3">
+            {changeRequests.map((cr) => (
+              <li
+                key={cr.id}
+                className="rounded-lg border border-[var(--border)] bg-[var(--surface)] p-3 text-sm"
+              >
+                <div className="flex flex-wrap items-center justify-between gap-2">
+                  <span className="font-medium">{CHANGE_REQUEST_STATUS_LABELS[cr.status]}</span>
+                  <span className="text-xs text-[var(--text-muted)]">
+                    Raised {formatSingaporeDateTime(cr.createdAt)}
+                  </span>
+                </div>
+                <ul className="mt-2 space-y-1">
+                  {cr.fields.map((field) => (
+                    <li key={field.field}>
+                      <span className="font-medium">{CHANGE_REQUEST_FIELD_LABELS[field.field]}:</span>{' '}
+                      {String(field.currentValue ?? '—')} → {String(field.proposedValue ?? '—')}
+                    </li>
+                  ))}
+                </ul>
+                <p className="mt-2 whitespace-pre-wrap">{cr.reason}</p>
+                {cr.decidedAt ? (
+                  <p className="mt-1 text-xs text-[var(--text-muted)]">
+                    Decided {formatSingaporeDateTime(cr.decidedAt)}
+                    {cr.decisionReason ? ` — ${cr.decisionReason}` : ''}
+                  </p>
+                ) : null}
+              </li>
+            ))}
+          </ul>
+        </section>
+      ) : null}
+
+      {/* SCRUM-187 AC1/AC2/AC4/AC5 — offered only to the responsible
+          organiser, and only while the event is in a status that currently
+          allows it. */}
+      {canRaiseChange ? (
+        <section className="mt-6">
+          <ChangeRequestForm requestId={request.id} />
+        </section>
+      ) : null}
 
       {/* SCRUM-98: who the organiser's coordinator is (panel owned by SCRUM-96/98).
           SCRUM-204 AC3 — canViewCoordinatorDetails (SCRUM-96/98's own rule,

@@ -6,6 +6,7 @@ import { useEffect, useState } from 'react';
 import type { Role } from '@/domain/identity/roles';
 import type { AccountDisplay, NavItem } from '@/domain/navigation/schema';
 import { isNavItemCurrent } from '@/domain/navigation/policy';
+import { isSignedOutPage } from '@/domain/session/policy';
 import { NotificationBell } from '@/components/notification/NotificationBell';
 import { AccountMenu } from './AccountMenu';
 import { WorkingAsMenu } from './WorkingAsMenu';
@@ -37,6 +38,14 @@ export function AppHeader({ homeHref, navItems, account, roles, workingRole }: A
   useEffect(() => {
     setMenuOpen(false);
   }, [pathname]);
+
+  // SCRUM-268: the root layout survives client-side navigation, so after a
+  // sign-out (Log out, or the idle redirect) it can still hold the last
+  // account's header when /login opens. Never show it there. After the hooks,
+  // so they run in the same order on every render.
+  if (isSignedOutPage(pathname)) {
+    return null;
+  }
 
   const links = (layout: 'row' | 'column') =>
     navItems.map((item) => {

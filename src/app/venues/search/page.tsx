@@ -8,7 +8,7 @@ import {
   type VenueSearchResult,
 } from '@/domain/venues/schema';
 import { ValidationError } from '@/domain/shared/errors';
-import { formatSingaporeDate } from '@/domain/shared/dates';
+import { formatSingaporeDate, LATEST_DATE } from '@/domain/shared/dates';
 import { getCurrentActor } from '@/lib/auth/currentActor';
 import NoVenueAccess from '@/components/venue/NoVenueAccess';
 import { SearchTimeFields } from '@/components/venue/SearchTimeFields';
@@ -114,6 +114,7 @@ export default async function VenueSearchPage({ searchParams }: { searchParams: 
             name="date"
             type="date"
             required
+            max={LATEST_DATE}
             defaultValue={params.date ?? ''}
             className="rounded border border-[var(--border)] px-3 py-2 text-sm"
           />

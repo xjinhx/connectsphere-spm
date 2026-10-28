@@ -1,7 +1,6 @@
 'use client';
 
 import { useState } from 'react';
-import { useRouter } from 'next/navigation';
 import { createSupabaseBrowserClient } from '@/lib/supabase/client';
 
 /**
@@ -11,7 +10,6 @@ import { createSupabaseBrowserClient } from '@/lib/supabase/client';
  * - this button only needs to trigger that and navigate there directly.
  */
 export function LogoutButton() {
-  const router = useRouter();
   const [isLoggingOut, setIsLoggingOut] = useState(false);
 
   async function handleLogout() {
@@ -22,8 +20,9 @@ export function LogoutButton() {
     await fetch('/api/me/working-as', { method: 'DELETE' }).catch(() => undefined);
     const supabase = createSupabaseBrowserClient();
     await supabase.auth.signOut();
-    router.push('/login');
-    router.refresh();
+    // SCRUM-268: a full page load, not router.push, so the root layout is
+    // rendered again for nobody and the last account's header is dropped.
+    window.location.assign('/login');
   }
 
   return (

@@ -4,6 +4,7 @@ import { useMemo, useState } from 'react';
 import { useRouter } from 'next/navigation';
 import { affectedArrangements, needsAcknowledgement } from '@/domain/significant-change/policy';
 import type { EventScheduleView, ScheduleValues } from '@/domain/significant-change/schema';
+import { LATEST_DATE } from '@/domain/shared/dates';
 import { START_TIME_OPTIONS, endTimesAfter, keepEndAfterStart } from '@/domain/shared/times';
 import { ROOM_LAYOUTS, ROOM_LAYOUT_LABELS, type RoomLayout } from '@/domain/venues/schema';
 
@@ -216,7 +217,7 @@ export function EventSchedulePanel({ requestId, view }: { requestId: string; vie
       ) : (
         <form onSubmit={onSubmit} className="mt-3 space-y-3" noValidate>
           <div className="grid gap-3 sm:grid-cols-2">
-            {input('proposedDate', 'Date', <input type="date" {...common('proposedDate')} onChange={(e) => update('proposedDate', e.target.value)} />)}
+            {input('proposedDate', 'Date', <input type="date" max={LATEST_DATE} {...common('proposedDate')} onChange={(e) => update('proposedDate', e.target.value)} />)}
             {input(
               'expectedAttendance',
               'Expected attendance',
