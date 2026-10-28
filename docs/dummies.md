@@ -694,8 +694,11 @@ switch them the next time they edit those files.
   SCRUM-254 (branch `tech-support-nav`): Equipment requests, Equipment
   catalogue, Venues; marker removed. The SCRUM-164 tabs (`TechnicalSupportNav`)
   were removed in the same change, since the nav bar now does their job on
-  every page (PO, 22 Oct 2026). **Other roles:** still active, waiting on
-  SCRUM-250 to 253, 255 and 256.
+  every page (PO, 22 Oct 2026). **Attendee:** replaced by SCRUM-255 (branch
+  `attendee-navigation`): AC2 lists only Open events, which was already the
+  stand-in item, so the entry is unchanged and its marker removed; TC-249-15
+  to 17 and 25 to 27 re-run for the Attendee as TC-255-04. **Other roles:**
+  still active, waiting on SCRUM-250 to 253 and 256.
 
 ### D-21 — An equipment reservation is released by hand
 
@@ -828,3 +831,44 @@ switch them the next time they edit those files.
   in the integration test call SCRUM-184's function, remove the marker and
   re-run those cases.
 - **Status:** Active.
+
+### D-26 — A change request's decision is set by hand
+
+- **Kind:** Stand-in code (a shared table created early, with nothing yet
+  writing its decision columns)
+- **Added by:** SCRUM-187 — branch `change-request-raise`
+- **Waiting on:** SCRUM-190 (Approve a change request and apply it), SCRUM-191
+  (Reject a change request with a reason)
+- **Where:**
+  - `supabase/migrations/20261028090000_change_request.sql` — `change_request`'s
+    `decided_by`, `decided_at`, `decision_reason` columns
+  - `src/domain/change-request/service.ts` — `raiseChangeRequest()` never
+    writes them; `listChangeRequests()` reads them back as-is
+    (`DUMMY(SCRUM-190) D-26`, `DUMMY(SCRUM-191) D-26`)
+  - `tests/integration/change-request.test.ts` — `seedDecision()`
+    (`DUMMY(SCRUM-190) D-26`, `DUMMY(SCRUM-191) D-26`)
+- **What is real and what is faked:** raising a request (AC1) and listing it
+  (AC6) are both real, against a real database. Only the decision itself is
+  faked: nothing in the app approves or rejects a change request yet, so the
+  integration test's `seedDecision()` sets `status`/`decided_at`/
+  `decision_reason` directly in Postgres to prove AC6 reads a decided request
+  correctly once one exists. AC7 ("the event shows the new values") is out of
+  scope for this story entirely — it is SCRUM-190's own write, not read back
+  here.
+- **To replace:** SCRUM-190/191 write these three columns from their own
+  approve/reject actions (already shaped the way their ACs describe them: one
+  decision, one reason, one timestamp). Re-run TC-187-11 against a request
+  decided through the app, and TC-187-12 against an event whose approved
+  change was actually applied by SCRUM-190, then remove the markers. Stamp
+  `decided_at` the
+  same "one clock" way `event_request.decided_at`/`submitted_at`/`assigned_at`
+  already are (a DB trigger reading `now()`, not a caller-supplied value -
+  see `set_decided_at`/`set_assigned_at`/`set_submitted_at` in the
+  event_request migrations), so a decision can never be backdated before its
+  own request. `change_request` has no such trigger yet since nothing writes
+  `decided_at` yet; add one alongside SCRUM-190/191's migration.
+- **Status:** Active.
+
+*Originally numbered D-22; renumbered to D-26 during the 2026-10-28 rebase
+onto `main`, since SCRUM-181/182/184 had taken D-22 through D-25 on `main` in
+the meantime.*

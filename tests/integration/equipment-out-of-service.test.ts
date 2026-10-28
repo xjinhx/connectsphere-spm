@@ -302,3 +302,30 @@ describe('SCRUM-170 AC6: never below zero, reservations unchanged', () => {
     await expect(reserveEquipment(e1, line, technicalSupport.userId, { quantity: 8 })).resolves.toMatchObject({ quantity: 8 });
   });
 });
+
+describe('SCRUM-170 AC1 with SCRUM-167 AC5 and SCRUM-175 AC1: out-of-service units and holds together', () => {
+  it('TC-170-12: 2 Damaged and holds of 3 and 1 meeting on the busiest day leave 4, and reserving 6 offers the 4, short by 2', async () => {
+    const item = await addItem('EQ-170-12');
+    await recordOutOfService(item, counts(0, 2, 0));
+    // H-170-12A's window is F to F+2 and H-170-12B's F+1 to F+3, so both hold
+    // units on F+1 and F+2 of S4-E1's window: 3 + 1 on its busiest day.
+    const holdA = await createEvent('H-170-12A', [d(1), d(2)]);
+    await reserveEquipment(holdA, await request(holdA, item, 3), technicalSupport.userId, { quantity: 3 });
+    const holdB = await createEvent('H-170-12B', [d(2), d(3)]);
+    await reserveEquipment(holdB, await request(holdB, item, 1), technicalSupport.userId, { quantity: 1 });
+    const e1 = await createEvent('S4-E1 170-12', E1_DATES);
+    const line = await request(e1, item, 6);
+
+    // 8 in service less 4 on the busiest day: the units are taken off once each.
+    const { lines } = await checkEquipmentAvailability(e1, technicalSupport);
+    expect(lines.find((l) => l.equipmentId === item)).toMatchObject({ requested: 6, available: 4, shortfall: 2 });
+
+    await expect(reserveEquipment(e1, line, technicalSupport.userId, { quantity: 6 })).rejects.toMatchObject({
+      code: 'UNAVAILABLE',
+      message: "Only 4 available for the event's window.",
+      details: { available: 4, offer: { quantity: 4, shortfall: 2 } },
+    });
+    const { data } = await admin.from('equipment_reservation').select('id').eq('event_request_id', e1);
+    expect(data).toEqual([]);
+  });
+});

@@ -1,10 +1,7 @@
 import { createServerClient } from '@supabase/ssr';
 import { NextResponse, type NextRequest } from 'next/server';
 import { publicEnv } from '@/lib/env';
-import { isSessionIdleExpired, LAST_ACTIVITY_COOKIE } from '@/domain/session/policy';
-
-/** Only the login page itself is reachable without a session. */
-const PUBLIC_PATHS = new Set(['/login']);
+import { isSessionIdleExpired, isSignedOutPage, LAST_ACTIVITY_COOKIE } from '@/domain/session/policy';
 
 function rejectUnauthenticated(request: NextRequest) {
   if (request.nextUrl.pathname.startsWith('/api')) {
@@ -42,7 +39,7 @@ export async function middleware(request: NextRequest) {
   } = await supabase.auth.getUser();
 
   if (!user) {
-    if (PUBLIC_PATHS.has(request.nextUrl.pathname)) {
+    if (isSignedOutPage(request.nextUrl.pathname)) {
       return response;
     }
     return rejectUnauthenticated(request);
