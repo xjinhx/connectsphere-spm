@@ -4,7 +4,7 @@ import { useMemo, useState } from 'react';
 import { useRouter } from 'next/navigation';
 import { affectedArrangements, needsAcknowledgement } from '@/domain/significant-change/policy';
 import type { EventScheduleView, ScheduleValues } from '@/domain/significant-change/schema';
-import { END_TIME_OPTIONS, START_TIME_OPTIONS } from '@/domain/shared/times';
+import { START_TIME_OPTIONS, endTimesAfter, keepEndAfterStart } from '@/domain/shared/times';
 import { ROOM_LAYOUTS, ROOM_LAYOUT_LABELS, type RoomLayout } from '@/domain/venues/schema';
 
 /**
@@ -16,6 +16,9 @@ import { ROOM_LAYOUTS, ROOM_LAYOUT_LABELS, type RoomLayout } from '@/domain/venu
  * disabled until the coordinator ticks that they will be marked for review.
  * AC3: a change that affects nothing asks for nothing. The API repeats the
  * check, so a booking approved while the form is open is still caught.
+ *
+ * SCRUM-266: the end time offers only times after the start, and is cleared
+ * when the start moves to or past it.
  *
  * Rendered only for the event's assigned coordinator while it can change
  * (view.canEdit); the values themselves are in the details list above.
@@ -80,7 +83,11 @@ export function EventSchedulePanel({ requestId, view }: { requestId: string; vie
   if (!view.canEdit) return null;
 
   function update(field: Field, value: string) {
-    setForm({ ...form, [field]: value });
+    setForm(
+      field === 'startTime'
+        ? { ...form, startTime: value, endTime: keepEndAfterStart(value, form.endTime) }
+        : { ...form, [field]: value },
+    );
     // A different change affects different arrangements: tick again for it.
     setAcknowledged(false);
     setSavedMessage(null);
@@ -232,7 +239,7 @@ export function EventSchedulePanel({ requestId, view }: { requestId: string; vie
               'End time',
               <select {...common('endTime')} onChange={(e) => update('endTime', e.target.value)}>
                 <option value="">Choose…</option>
-                {END_TIME_OPTIONS.map((time) => (
+                {endTimesAfter(form.startTime).map((time) => (
                   <option key={time} value={time}>
                     {time}
                   </option>
