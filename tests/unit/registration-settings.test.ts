@@ -4,6 +4,7 @@ import {
   canEditRegistrationSettings,
   capacityOverVenueMessage,
   largestVenueCapacity,
+  notConfirmedNotice,
 } from '@/domain/registration-list/policy';
 import {
   CAPACITY_MESSAGE,
@@ -39,6 +40,17 @@ describe('SCRUM-185 AC5: who may set registration, and when', () => {
       expect(acceptsRegistrationSettings(status)).toBe(false);
       expect(canEditRegistrationSettings({ status, coordinatorId: COORDINATOR }, COORDINATOR)).toBe(false);
     }
+  });
+
+  it('SCRUM-185 AC5 TC-185-15 read-only from Preparation on (CL-65)', () => {
+    for (const status of ['preparation', 'completed', 'cancelled'] as const) {
+      expect(acceptsRegistrationSettings(status)).toBe(false);
+      expect(canEditRegistrationSettings({ status, coordinatorId: COORDINATOR }, COORDINATOR)).toBe(false);
+    }
+    expect(notConfirmedNotice('preparation')).toBe(
+      'This event is Preparation. Its registration dates and capacity are read-only from Preparation on.',
+    );
+    expect(notConfirmedNotice('planning')).toBe('This event is Planning. Registration is set once the event is Confirmed.');
   });
 
   it('SCRUM-185 AC5 TC-185-03 not a coordinator the event is not assigned to', () => {
@@ -102,7 +114,11 @@ describe('SCRUM-185 AC6: refused with a message naming the field', () => {
     expect(largestVenueCapacity([200, 300])).toBe(300);
   });
 
-  it('no confirmed venue: no limit to check against', () => {
+  it('SCRUM-185 AC6 TC-185-17 an end date after the event date is accepted (CL-66: AC6 refuses only its two cases)', () => {
+    expect(fieldErrors({ startDate: '2026-11-01', endDate: '2027-01-31', capacity: 50 })).toEqual({});
+  });
+
+  it('SCRUM-185 AC6 TC-185-16 no confirmed venue: no limit to check against', () => {
     expect(largestVenueCapacity([])).toBeNull();
   });
 

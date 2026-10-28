@@ -1,4 +1,4 @@
-// Seeds SCRUM-185's manual run (TC-185-01 to TC-185-14): the coordinator
+// Seeds SCRUM-185's manual run (TC-185-01 to TC-185-17): the coordinator
 // setting an event's registration start date, end date and capacity (AC5,
 // AC6), and the registration list (AC1-AC4). Only what those test cases need,
 // and nothing from other stories' seeds.
@@ -28,11 +28,14 @@
 //   S185 Bugis Seminar Room    capacity 200
 //
 // Events:
-//   S185 Harbour Gala     Confirmed, booked at the Ballroom (TC-185-01, 03, 04, 05)
+//   S185 Harbour Gala     Confirmed, booked at the Ballroom (TC-185-01, 03, 04, 05, 17)
 //   S185 Planning Talk    Planning, booked at the Ballroom (TC-185-02)
 //   S185 Two Hall Expo    Confirmed, booked at both venues (TC-185-06)
 //   S185 Small Workshop   Confirmed, registration open, capacity 2, attendee@ and
 //                         attendee2@ registered (TC-185-09)
+//   S185 Prep Night       Preparation, booked at the Ballroom, registration already
+//                         set (today to today + 14, capacity 250) (TC-185-15)
+//   S185 No Venue Talk    Confirmed, no venue booking (TC-185-16)
 import { config } from 'dotenv';
 import { resolve } from 'path';
 import { createClient } from '@supabase/supabase-js';
@@ -217,8 +220,19 @@ async function createEvent(name, date, status, venues) {
       }),
     );
   }
-  if (status === 'confirmed') {
+  if (status === 'confirmed' || status === 'preparation') {
     check(`confirm ${name}`, await supabase.from('event_request').update({ status: 'confirmed' }).eq('id', data.id));
+  }
+  if (status === 'preparation') {
+    // Set while Confirmed, as AC5 allows, then on to Preparation (CL-65).
+    check(
+      `register settings ${name}`,
+      await supabase
+        .from('event_request')
+        .update({ registration_start_date: daysAhead(0), registration_end_date: daysAhead(14), registration_capacity: 250 })
+        .eq('id', data.id),
+    );
+    check(`prepare ${name}`, await supabase.from('event_request').update({ status: 'preparation' }).eq('id', data.id));
   }
   return data.id;
 }
@@ -236,6 +250,8 @@ check(
 );
 await register(workshop, 'attendee@example.com', 'Attendee One');
 await register(workshop, 'attendee2@example.com', 'Attendee Two');
+await createEvent(`${PREFIX} Prep Night`, daysAhead(34), 'preparation', [ballroom]);
+await createEvent(`${PREFIX} No Venue Talk`, daysAhead(35), 'confirmed', []);
 
 const { data: events } = await supabase.from('event_request').select('id, reference, name, status').like('name', `${PREFIX} %`).order('name');
 for (const event of events) {

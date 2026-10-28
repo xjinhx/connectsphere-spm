@@ -29,8 +29,17 @@ export function canEditRegistrationSettings(
   return isCurrentCoordinator(event.coordinatorId, actorUserId) && acceptsRegistrationSettings(event.status);
 }
 
+/**
+ * Why the settings can't be saved. An event past Confirmed (or Cancelled) was
+ * Confirmed once, so "set once Confirmed" would mislead: from Preparation on
+ * they are read-only (CL-65).
+ */
 export function notConfirmedNotice(status: EventRequestStatus): string {
-  return `This event is ${EVENT_REQUEST_STATUS_LABELS[status]}. Registration is set once the event is Confirmed.`;
+  const label = EVENT_REQUEST_STATUS_LABELS[status];
+  if (status === 'preparation' || status === 'completed' || status === 'cancelled') {
+    return `This event is ${label}. Its registration dates and capacity are read-only from Preparation on.`;
+  }
+  return `This event is ${label}. Registration is set once the event is Confirmed.`;
 }
 
 /**

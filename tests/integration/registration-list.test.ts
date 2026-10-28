@@ -21,6 +21,9 @@ import { ensureTestClientOrganisation } from './fixtures/clientOrganisation';
  *       registration page;
  *   AC6 an end date before the start date, or a capacity above the largest of
  *       the event's venue capacities (CL-59), is refused naming the field.
+ * PO clarifications, 28 Oct 2026: read-only from Preparation on, and no
+ * confirmed venue booking refuses the capacity (CL-65); an end date after the
+ * event date is accepted (CL-66).
  *
  * Runs against the local Supabase stack. Test case IDs are from the Sprint 4
  * sheet's SCRUM-185 tab (TC-185-nn). Venues are booked the real way (SCRUM-142
@@ -220,6 +223,34 @@ describe('SCRUM-185 AC5: the assigned coordinator sets registration on a Confirm
     expect(view.readOnlyReason).toBe(notConfirmedNotice('planning'));
   });
 
+  it('SCRUM-185 AC5 TC-185-15 from Preparation the values are read-only: shown, and a save is refused (CL-65)', async () => {
+    const eventId = await confirmedEvent('S185 Prep Night', [300]);
+    await updateRegistrationSettings(eventId, coordinatorId, { startDate: START, endDate: END, capacity: 250 });
+    const { error } = await admin.from('event_request').update({ status: 'preparation' }).eq('id', eventId);
+    if (error) throw new Error(`could not move test event to Preparation: ${error.message}`);
+
+    await expectRefused(
+      updateRegistrationSettings(eventId, coordinatorId, { startDate: START, endDate: END, capacity: 100 }),
+      ConflictError,
+      undefined,
+      notConfirmedNotice('preparation'),
+    );
+    expect(await stored(eventId)).toEqual({
+      registration_start_date: START,
+      registration_end_date: END,
+      registration_capacity: 250,
+    });
+
+    const view = await getRegistrationSettings(eventId, { userId: coordinatorId, roles: ['coordinator'] });
+    expect(view).toMatchObject({
+      startDate: START,
+      endDate: END,
+      capacity: 250,
+      canEdit: false,
+      readOnlyReason: notConfirmedNotice('preparation'),
+    });
+  });
+
   it('SCRUM-185 AC5 TC-185-03 a coordinator not assigned to the event is refused', async () => {
     const eventId = await confirmedEvent('S185 Harbour Gala B', [300]);
     await updateRegistrationSettings(eventId, coordinatorId, { startDate: START, endDate: END, capacity: 250 });
@@ -278,7 +309,7 @@ describe('SCRUM-185 AC6: refused with a message naming the field', () => {
     );
   });
 
-  it('a Confirmed event with no confirmed venue booking is refused on capacity', async () => {
+  it('SCRUM-185 AC6 TC-185-16 a Confirmed event with no confirmed venue booking is refused on capacity (CL-65)', async () => {
     const eventId = await createPlanningEvent('S185 No Venue', daysFromToday(30));
     await confirm(eventId);
 
@@ -288,5 +319,23 @@ describe('SCRUM-185 AC6: refused with a message naming the field', () => {
       'capacity',
       NO_CONFIRMED_VENUE_MESSAGE,
     );
+    expect(await stored(eventId)).toEqual({
+      registration_start_date: null,
+      registration_end_date: null,
+      registration_capacity: null,
+    });
+  });
+
+  it('SCRUM-185 AC6 TC-185-17 an end date after the event date is saved (CL-66)', async () => {
+    const eventId = await confirmedEvent('S185 Late Close', [300]); // the event is 30 days out
+    const afterEvent = daysFromToday(45);
+
+    await updateRegistrationSettings(eventId, coordinatorId, { startDate: START, endDate: afterEvent, capacity: 100 });
+
+    expect(await stored(eventId)).toEqual({
+      registration_start_date: START,
+      registration_end_date: afterEvent,
+      registration_capacity: 100,
+    });
   });
 });
