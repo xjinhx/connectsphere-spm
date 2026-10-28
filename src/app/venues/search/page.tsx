@@ -9,7 +9,7 @@ import {
 } from '@/domain/venues/schema';
 import { END_OF_DAY, isQuarterHourEnd, isQuarterHourStart } from '@/domain/shared/times';
 import { ValidationError } from '@/domain/shared/errors';
-import { formatSingaporeDate } from '@/domain/shared/dates';
+import { formatSingaporeDate, LATEST_DATE } from '@/domain/shared/dates';
 import { getCurrentActor } from '@/lib/auth/currentActor';
 import NoVenueAccess from '@/components/venue/NoVenueAccess';
 
@@ -116,6 +116,7 @@ export default async function VenueSearchPage({ searchParams }: { searchParams: 
             name="date"
             type="date"
             required
+            max={LATEST_DATE}
             defaultValue={params.date ?? ''}
             className="rounded border border-[var(--border)] px-3 py-2 text-sm"
           />

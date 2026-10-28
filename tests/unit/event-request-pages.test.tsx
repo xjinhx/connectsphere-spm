@@ -48,6 +48,8 @@ vi.mock('@/domain/review/service', () => ({
   }),
   getRejectionView: async (id: string) => ({ id, status: 'draft', rejectionReason: null, decidedAt: null }),
 }));
+// SCRUM-187's change-request list reads the database; not part of AC3.
+vi.mock('@/domain/change-request/service', () => ({ listChangeRequests: async () => [] }));
 
 import EventRequestPage from '@/app/events/[id]/page';
 import EditEventRequestPage from '@/app/events/[id]/edit/page';

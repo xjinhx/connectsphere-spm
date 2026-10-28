@@ -2,6 +2,7 @@
 
 import { useState } from 'react';
 import { useRouter } from 'next/navigation';
+import { LATEST_DATE, LATEST_DATE_TIME } from '@/domain/shared/dates';
 import type { HoldableEvent } from '@/domain/venue-hold/schema';
 
 /** 00:00 to 24:00 in 15-minute steps: the times a hold may start or end on. */
@@ -90,7 +91,7 @@ export function HoldVenueForm({ venueId, events }: { venueId: string; events: Ho
 
       <label className="block text-sm" htmlFor="hold-date">
         Date
-        <input id="hold-date" type="date" value={date} onChange={(event) => setDate(event.target.value)} className={fieldClass} />
+        <input id="hold-date" type="date" max={LATEST_DATE} value={date} onChange={(event) => setDate(event.target.value)} className={fieldClass} />
       </label>
 
       <div className="flex flex-wrap gap-4">
@@ -123,6 +124,7 @@ export function HoldVenueForm({ venueId, events }: { venueId: string; events: Ho
         <input
           id="hold-expiry"
           type="datetime-local"
+          max={LATEST_DATE_TIME}
           value={expiresAt}
           onChange={(event) => setExpiresAt(event.target.value)}
           className={fieldClass}
