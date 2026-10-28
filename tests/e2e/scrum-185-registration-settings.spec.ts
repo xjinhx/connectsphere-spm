@@ -87,7 +87,7 @@ test.afterAll(async () => {
   if (venueId) await admin().from('venues').delete().eq('id', venueId);
 });
 
-test('SCRUM-185 AC5 AC6 TC-185-01, TC-185-04, TC-185-05: the coordinator sets registration; refusals name the field', async ({ page }) => {
+test('SCRUM-185 AC5 AC6 TC-185-08, TC-185-12, TC-185-13: the coordinator sets registration; refusals name the field', async ({ page }) => {
   await signIn(page, 'coordinator');
   await page.goto(`/events/${eventId}/review`);
   await page.getByRole('link', { name: 'Registration', exact: true }).click();
@@ -99,7 +99,7 @@ test('SCRUM-185 AC5 AC6 TC-185-01, TC-185-04, TC-185-05: the coordinator sets re
   const end = page.getByLabel('Registration end date');
   const capacity = page.getByLabel('Capacity');
 
-  // TC-185-04: an end date before the start date names the end date.
+  // TC-185-12: an end date before the start date names the end date.
   await start.fill(END);
   await end.fill(START);
   await capacity.fill('50');
@@ -107,7 +107,7 @@ test('SCRUM-185 AC5 AC6 TC-185-01, TC-185-04, TC-185-05: the coordinator sets re
   await expect(page.getByText('Registration end date must be on or after the start date.')).toBeVisible();
   await expect(end).toHaveAttribute('aria-invalid', 'true');
 
-  // TC-185-05: one more than the venue holds names capacity.
+  // TC-185-13: one more than the venue holds names capacity.
   await start.fill(START);
   await end.fill(END);
   await capacity.fill('301');
@@ -115,7 +115,7 @@ test('SCRUM-185 AC5 AC6 TC-185-01, TC-185-04, TC-185-05: the coordinator sets re
   await expect(page.getByText("Capacity must be no more than 300, the largest capacity of this event's venues.")).toBeVisible();
   await expect(capacity).toHaveAttribute('aria-invalid', 'true');
 
-  // TC-185-01: saved and shown on the registration page, after a reload too.
+  // TC-185-08: saved and shown on the registration page, after a reload too.
   await capacity.fill('250');
   await page.getByRole('button', { name: 'Save' }).click();
   await expect(page.getByText('Registration saved.')).toBeVisible();
@@ -125,7 +125,7 @@ test('SCRUM-185 AC5 AC6 TC-185-01, TC-185-04, TC-185-05: the coordinator sets re
   await expect(page.getByTestId('registration-capacity')).toHaveText('250');
 });
 
-test('SCRUM-185 AC1 AC2 TC-185-07, TC-185-10: the coordinator sees the list and counts; the organiser exports it', async ({ page }) => {
+test('SCRUM-185 AC1 AC2 TC-185-01, TC-185-04: the coordinator sees the list and counts; the organiser exports it', async ({ page }) => {
   // Registration open today with capacity 250, and attendee@ registered
   // through SCRUM-181's own function.
   const today = daysFromToday(0);

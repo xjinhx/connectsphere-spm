@@ -22,7 +22,7 @@ import { ensureTestClientOrganisation } from './fixtures/clientOrganisation';
  *   AC2 the Event Organiser responsible for the event views and exports it;
  *   AC3 an organiser in the same client organisation views it, no export;
  *   AC4 an organiser of an unrelated organisation is denied.
- * Also AC6's one-day period boundary (TC-185-14).
+ * Also AC6's one-day period boundary (TC-185-15).
  *
  * Runs against the local Supabase stack. Test case IDs are from the Sprint 4
  * sheet's SCRUM-185 tab (TC-185-nn). Attendees register through SCRUM-181's
@@ -163,7 +163,7 @@ beforeAll(async () => {
   otherOrganiserId = await createUser('organiser-other');
   for (let n = 1; n <= 3; n += 1) attendeeIds.push(await createUser(`attendee${n}`));
 
-  // TC-185-07's event: capacity 250, three registered.
+  // TC-185-01's event: capacity 250, three registered.
   galaId = await openEvent('S185 Harbour Gala', 250);
   for (let n = 1; n <= 3; n += 1) await register(galaId, n);
 });
@@ -180,7 +180,7 @@ afterAll(async () => {
 });
 
 describe('SCRUM-185 AC1: the assigned coordinator sees the list and the counts', () => {
-  it('SCRUM-185 AC1 TC-185-07 three registered: each with date and status; 3, 250, 247', async () => {
+  it('SCRUM-185 AC1 TC-185-01 three registered: each with date and status; 3, 250, 247', async () => {
     const view = await getRegistrationList(galaId, coordinator());
 
     expect(view.viewer).toBe('coordinator');
@@ -198,7 +198,7 @@ describe('SCRUM-185 AC1: the assigned coordinator sees the list and the counts',
     expect(view.canExport).toBe(false);
   });
 
-  it('SCRUM-185 AC1 TC-185-08 no registrations: an empty list, not an error; 0, 250, 250', async () => {
+  it('SCRUM-185 AC1 TC-185-02 no registrations: an empty list, not an error; 0, 250, 250', async () => {
     const eventId = await openEvent('S185 Quiet Talk', 250);
 
     const view = await getRegistrationList(eventId, coordinator());
@@ -207,7 +207,7 @@ describe('SCRUM-185 AC1: the assigned coordinator sees the list and the counts',
     expect([view.registered, view.capacity, view.placesRemaining]).toEqual([0, 250, 250]);
   });
 
-  it('SCRUM-185 AC1 TC-185-09 a full event: 2 registered of 2, no places remaining', async () => {
+  it('SCRUM-185 AC1 TC-185-03 a full event: 2 registered of 2, no places remaining', async () => {
     const eventId = await openEvent('S185 Small Workshop', 2);
     await register(eventId, 1);
     await register(eventId, 2);
@@ -230,7 +230,7 @@ describe('SCRUM-185 AC1: the assigned coordinator sees the list and the counts',
 });
 
 describe('SCRUM-185 AC2: the responsible organiser views and exports', () => {
-  it('SCRUM-185 AC2 TC-185-10 views the list with Export, and the CSV holds each attendee', async () => {
+  it('SCRUM-185 AC2 TC-185-04 views the list with Export, and the CSV holds each attendee', async () => {
     const view = await getRegistrationList(galaId, organiser());
     expect(view.viewer).toBe('organiser');
     expect(view.registered).toBe(3);
@@ -249,27 +249,27 @@ describe('SCRUM-185 AC2: the responsible organiser views and exports', () => {
 });
 
 describe('SCRUM-185 AC3: a same-organisation organiser views without export', () => {
-  it('SCRUM-185 AC3 TC-185-11 the list is shown with no Export', async () => {
+  it('SCRUM-185 AC3 TC-185-05 the list is shown with no Export', async () => {
     const view = await getRegistrationList(galaId, colleague());
     expect(view.viewer).toBe('colleague');
     expect(view.registered).toBe(3);
     expect(view.canExport).toBe(false);
   });
 
-  it('SCRUM-185 AC3 TC-185-12 exporting is refused', async () => {
+  it('SCRUM-185 AC3 TC-185-06 exporting is refused', async () => {
     await expectForbidden(exportRegistrationList(galaId, colleague()), EXPORT_NOT_ALLOWED_MESSAGE);
   });
 });
 
 describe('SCRUM-185 AC4: an unrelated organisation is denied', () => {
-  it('SCRUM-185 AC4 TC-185-13 viewing and exporting are both refused', async () => {
+  it('SCRUM-185 AC4 TC-185-07 viewing and exporting are both refused', async () => {
     await expectForbidden(getRegistrationList(galaId, otherOrganiser()), NO_ACCESS_MESSAGE);
     await expectForbidden(exportRegistrationList(galaId, otherOrganiser()), NO_ACCESS_MESSAGE);
   });
 });
 
 describe('SCRUM-185 AC6: a one-day period', () => {
-  it('SCRUM-185 AC6 TC-185-14 start date = end date is saved', async () => {
+  it('SCRUM-185 AC6 TC-185-15 start date = end date is saved', async () => {
     const eventId = await openEvent('S185 One Day', 250);
     const day = daysFromToday(13);
 

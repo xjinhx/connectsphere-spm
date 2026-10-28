@@ -13,7 +13,7 @@ import { handleApiError } from '@/lib/api/handler';
  *
  * 200 with the file; 401 with no session; 403 for any role but Event
  * Organiser, for an organiser in the same organisation who is not responsible
- * (AC3, TC-185-12), or an organiser of another organisation (AC4); 404 for an
+ * (AC3, TC-185-06), or an organiser of another organisation (AC4); 404 for an
  * unknown event.
  *
  * The permission is checked first, before anything is read.

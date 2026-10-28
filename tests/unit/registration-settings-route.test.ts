@@ -39,7 +39,7 @@ beforeEach(() => {
 });
 
 describe('SCRUM-185: PUT /api/event-requests/[id]/registration-settings', () => {
-  it('SCRUM-185 AC5 TC-185-01 passes a coordinator through, with the signed-in account as the editor', async () => {
+  it('SCRUM-185 AC5 TC-185-08 passes a coordinator through, with the signed-in account as the editor', async () => {
     signInAs('coordinator');
     const response = await put(JSON.stringify(TC_185_01_DATA));
     expect(response.status).toBe(200);

@@ -751,7 +751,7 @@ switch them the next time they edit those files.
   date, end date and capacity on `/events/<id>/registrations`, which saves to
   the same columns. The seed script still sets periods as test data, without
   the marker. TC-181-05 to TC-181-13 and `tests/integration/register-for-event.test.ts`
-  re-run and pass; `tests/integration/registration-list.test.ts` TC-185-01
+  re-run and pass; `tests/integration/registration-list.test.ts` TC-185-08
   checks 181's attendee page reads the period the form saved.
 
 ### D-23 — Places always remain

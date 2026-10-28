@@ -42,7 +42,7 @@ beforeEach(() => {
 });
 
 describe('SCRUM-185: GET /api/event-requests/[id]/registration-list/export', () => {
-  it('SCRUM-185 AC2 TC-185-10 an organiser gets the CSV as a download', async () => {
+  it('SCRUM-185 AC2 TC-185-04 an organiser gets the CSV as a download', async () => {
     signInAs('event_organiser');
     const response = await get();
     expect(response.status).toBe(200);
@@ -52,7 +52,7 @@ describe('SCRUM-185: GET /api/event-requests/[id]/registration-list/export', () 
     expect(exportRegistrationList).toHaveBeenCalledWith(EV_1, expect.objectContaining({ userId: ORGANISER }));
   });
 
-  it('SCRUM-185 AC3 TC-185-12 an organiser the service refuses gets 403 and no file', async () => {
+  it('SCRUM-185 AC3 TC-185-06 an organiser the service refuses gets 403 and no file', async () => {
     signInAs('event_organiser');
     vi.mocked(exportRegistrationList).mockRejectedValue(new ForbiddenError(EXPORT_NOT_ALLOWED_MESSAGE));
     const response = await get();

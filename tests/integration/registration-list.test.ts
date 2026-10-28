@@ -169,7 +169,7 @@ afterAll(async () => {
 });
 
 describe('SCRUM-185 AC5: the assigned coordinator sets registration on a Confirmed event', () => {
-  it('SCRUM-185 AC5 TC-185-01 saves the three and the registration page shows them', async () => {
+  it('SCRUM-185 AC5 TC-185-08 saves the three and the registration page shows them', async () => {
     const eventId = await confirmedEvent('S185 Harbour Gala', [300]);
 
     const saved = await updateRegistrationSettings(eventId, coordinatorId, {
@@ -201,7 +201,7 @@ describe('SCRUM-185 AC5: the assigned coordinator sets registration on a Confirm
     expect(page.period).toEqual({ startDate: START, endDate: END });
   });
 
-  it('SCRUM-185 AC5 TC-185-02 a Planning event is refused and nothing is saved', async () => {
+  it('SCRUM-185 AC5 TC-185-09 a Planning event is refused and nothing is saved', async () => {
     const date = daysFromToday(30);
     const eventId = await createPlanningEvent('S185 Planning Talk', date);
     await book(eventId, date, 300);
@@ -223,7 +223,7 @@ describe('SCRUM-185 AC5: the assigned coordinator sets registration on a Confirm
     expect(view.readOnlyReason).toBe(notConfirmedNotice('planning'));
   });
 
-  it('SCRUM-185 AC5 TC-185-15 from Preparation the values are read-only: shown, and a save is refused (CL-65)', async () => {
+  it('SCRUM-185 AC5 TC-185-11 from Preparation the values are read-only: shown, and a save is refused (CL-65)', async () => {
     const eventId = await confirmedEvent('S185 Prep Night', [300]);
     await updateRegistrationSettings(eventId, coordinatorId, { startDate: START, endDate: END, capacity: 250 });
     const { error } = await admin.from('event_request').update({ status: 'preparation' }).eq('id', eventId);
@@ -251,7 +251,7 @@ describe('SCRUM-185 AC5: the assigned coordinator sets registration on a Confirm
     });
   });
 
-  it('SCRUM-185 AC5 TC-185-03 a coordinator not assigned to the event is refused', async () => {
+  it('SCRUM-185 AC5 TC-185-10 a coordinator not assigned to the event is refused', async () => {
     const eventId = await confirmedEvent('S185 Harbour Gala B', [300]);
     await updateRegistrationSettings(eventId, coordinatorId, { startDate: START, endDate: END, capacity: 250 });
 
@@ -268,7 +268,7 @@ describe('SCRUM-185 AC5: the assigned coordinator sets registration on a Confirm
 });
 
 describe('SCRUM-185 AC6: refused with a message naming the field', () => {
-  it('SCRUM-185 AC6 TC-185-04 an end date before the start date is refused on the end date', async () => {
+  it('SCRUM-185 AC6 TC-185-12 an end date before the start date is refused on the end date', async () => {
     const eventId = await confirmedEvent('S185 Harbour Gala C', [300]);
 
     await expectRefused(
@@ -280,7 +280,7 @@ describe('SCRUM-185 AC6: refused with a message naming the field', () => {
     expect((await stored(eventId))?.registration_start_date).toBeNull();
   });
 
-  it('SCRUM-185 AC6 TC-185-05 capacity at the venue capacity is saved; one more is refused', async () => {
+  it('SCRUM-185 AC6 TC-185-13 capacity at the venue capacity is saved; one more is refused', async () => {
     const eventId = await confirmedEvent('S185 Harbour Gala D', [300]);
 
     await updateRegistrationSettings(eventId, coordinatorId, { startDate: START, endDate: END, capacity: 300 });
@@ -295,7 +295,7 @@ describe('SCRUM-185 AC6: refused with a message naming the field', () => {
     expect((await stored(eventId))?.registration_capacity).toBe(300);
   });
 
-  it('SCRUM-185 AC6 TC-185-06 with several venues the limit is the largest of their capacities', async () => {
+  it('SCRUM-185 AC6 TC-185-14 with several venues the limit is the largest of their capacities', async () => {
     const eventId = await confirmedEvent('S185 Two Hall Expo', [300, 200]);
 
     await updateRegistrationSettings(eventId, coordinatorId, { startDate: START, endDate: END, capacity: 300 });

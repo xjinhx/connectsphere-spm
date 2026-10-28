@@ -54,7 +54,7 @@ function entry(n: number, status: 'registered' | 'withdrawn' = 'registered', ove
 }
 
 describe('SCRUM-185 AC1-AC4: who may open the list, and as what', () => {
-  it('SCRUM-185 AC1 TC-185-07 the assigned coordinator', () => {
+  it('SCRUM-185 AC1 TC-185-01 the assigned coordinator', () => {
     expect(viewer(COORDINATOR, ['coordinator'])).toBe('coordinator');
   });
 
@@ -66,15 +66,15 @@ describe('SCRUM-185 AC1-AC4: who may open the list, and as what', () => {
     expect(viewer(OTHER_COORDINATOR, ['operations_manager'])).toBe('lead');
   });
 
-  it('SCRUM-185 AC2 TC-185-10 the responsible organiser', () => {
+  it('SCRUM-185 AC2 TC-185-04 the responsible organiser', () => {
     expect(viewer(ORGANISER, ['event_organiser'], ORG)).toBe('organiser');
   });
 
-  it('SCRUM-185 AC3 TC-185-11 an organiser in the same organisation', () => {
+  it('SCRUM-185 AC3 TC-185-05 an organiser in the same organisation', () => {
     expect(viewer(COLLEAGUE, ['event_organiser'], ORG)).toBe('colleague');
   });
 
-  it('SCRUM-185 AC4 TC-185-13 an organiser of an unrelated organisation is denied', () => {
+  it('SCRUM-185 AC4 TC-185-07 an organiser of an unrelated organisation is denied', () => {
     expect(viewer(STRANGER, ['event_organiser'], OTHER_ORG)).toBeNull();
     expect(viewer(STRANGER, ['event_organiser'], null)).toBeNull();
   });
@@ -85,11 +85,11 @@ describe('SCRUM-185 AC1-AC4: who may open the list, and as what', () => {
 });
 
 describe('SCRUM-185 AC2, AC3: only the responsible organiser exports', () => {
-  it('SCRUM-185 AC2 TC-185-10 the responsible organiser may', () => {
+  it('SCRUM-185 AC2 TC-185-04 the responsible organiser may', () => {
     expect(canExportRegistrationList('organiser')).toBe(true);
   });
 
-  it('SCRUM-185 AC3 TC-185-12 a colleague may not, nor anyone else', () => {
+  it('SCRUM-185 AC3 TC-185-06 a colleague may not, nor anyone else', () => {
     for (const who of ['colleague', 'coordinator', 'lead', null] as const) {
       expect(canExportRegistrationList(who)).toBe(false);
     }
@@ -97,15 +97,15 @@ describe('SCRUM-185 AC2, AC3: only the responsible organiser exports', () => {
 });
 
 describe('SCRUM-185 AC1: the counts', () => {
-  it('SCRUM-185 AC1 TC-185-07 capacity 250, three registered: 247 remain', () => {
+  it('SCRUM-185 AC1 TC-185-01 capacity 250, three registered: 247 remain', () => {
     expect(placesRemaining(250, 3)).toBe(247);
   });
 
-  it('SCRUM-185 AC1 TC-185-08 none registered: all 250 remain', () => {
+  it('SCRUM-185 AC1 TC-185-02 none registered: all 250 remain', () => {
     expect(placesRemaining(250, 0)).toBe(250);
   });
 
-  it('SCRUM-185 AC1 TC-185-09 a full event: none remain', () => {
+  it('SCRUM-185 AC1 TC-185-03 a full event: none remain', () => {
     expect(placesRemaining(2, 2)).toBe(0);
   });
 
@@ -129,7 +129,7 @@ describe('SCRUM-185 AC1: the registration date', () => {
 });
 
 describe('SCRUM-185 AC2: the export', () => {
-  it('SCRUM-185 AC2 TC-185-10 a header and one row per registration, with date and status', () => {
+  it('SCRUM-185 AC2 TC-185-04 a header and one row per registration, with date and status', () => {
     expect(registrationListCsv([entry(1), entry(2, 'withdrawn')])).toBe(
       [
         EXPORT_HEADERS.join(','),

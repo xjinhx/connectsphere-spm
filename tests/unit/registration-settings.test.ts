@@ -31,18 +31,18 @@ function fieldErrors(input: unknown) {
 }
 
 describe('SCRUM-185 AC5: who may set registration, and when', () => {
-  it('SCRUM-185 AC5 TC-185-01 the assigned coordinator of a Confirmed event may', () => {
+  it('SCRUM-185 AC5 TC-185-08 the assigned coordinator of a Confirmed event may', () => {
     expect(canEditRegistrationSettings({ status: 'confirmed', coordinatorId: COORDINATOR }, COORDINATOR)).toBe(true);
   });
 
-  it('SCRUM-185 AC5 TC-185-02 not before the event is Confirmed', () => {
+  it('SCRUM-185 AC5 TC-185-09 not before the event is Confirmed', () => {
     for (const status of ['submitted', 'approved', 'planning'] as const) {
       expect(acceptsRegistrationSettings(status)).toBe(false);
       expect(canEditRegistrationSettings({ status, coordinatorId: COORDINATOR }, COORDINATOR)).toBe(false);
     }
   });
 
-  it('SCRUM-185 AC5 TC-185-15 read-only from Preparation on (CL-65)', () => {
+  it('SCRUM-185 AC5 TC-185-11 read-only from Preparation on (CL-65)', () => {
     for (const status of ['preparation', 'completed', 'cancelled'] as const) {
       expect(acceptsRegistrationSettings(status)).toBe(false);
       expect(canEditRegistrationSettings({ status, coordinatorId: COORDINATOR }, COORDINATOR)).toBe(false);
@@ -53,7 +53,7 @@ describe('SCRUM-185 AC5: who may set registration, and when', () => {
     expect(notConfirmedNotice('planning')).toBe('This event is Planning. Registration is set once the event is Confirmed.');
   });
 
-  it('SCRUM-185 AC5 TC-185-03 not a coordinator the event is not assigned to', () => {
+  it('SCRUM-185 AC5 TC-185-10 not a coordinator the event is not assigned to', () => {
     expect(canEditRegistrationSettings({ status: 'confirmed', coordinatorId: COORDINATOR }, OTHER)).toBe(false);
   });
 
@@ -66,7 +66,7 @@ describe('SCRUM-185 AC5: who may set registration, and when', () => {
 });
 
 describe('SCRUM-185 AC5: the three fields', () => {
-  it('SCRUM-185 AC5 TC-185-01 accepts a start date, end date and capacity', () => {
+  it('SCRUM-185 AC5 TC-185-08 accepts a start date, end date and capacity', () => {
     expect(
       RegistrationSettingsInputSchema.parse({ startDate: '2026-11-01', endDate: '2026-11-15', capacity: '250' }),
     ).toEqual({ startDate: '2026-11-01', endDate: '2026-11-15', capacity: 250 });
@@ -99,17 +99,17 @@ describe('SCRUM-185 AC5: the three fields', () => {
 });
 
 describe('SCRUM-185 AC6: refused with a message naming the field', () => {
-  it('SCRUM-185 AC6 TC-185-04 an end date before the start date fails on the end date', () => {
+  it('SCRUM-185 AC6 TC-185-12 an end date before the start date fails on the end date', () => {
     expect(fieldErrors({ startDate: '2026-11-15', endDate: '2026-11-01', capacity: 50 })).toEqual({
       endDate: [END_BEFORE_START_MESSAGE],
     });
   });
 
-  it('SCRUM-185 AC6 TC-185-05 one venue: its capacity is the limit', () => {
+  it('SCRUM-185 AC6 TC-185-13 one venue: its capacity is the limit', () => {
     expect(largestVenueCapacity([300])).toBe(300);
   });
 
-  it('SCRUM-185 AC6 TC-185-06 several venues: the largest of their capacities (CL-59)', () => {
+  it('SCRUM-185 AC6 TC-185-14 several venues: the largest of their capacities (CL-59)', () => {
     expect(largestVenueCapacity([300, 200])).toBe(300);
     expect(largestVenueCapacity([200, 300])).toBe(300);
   });

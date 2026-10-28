@@ -16,11 +16,11 @@
 //
 // Accounts, all with password TestPass123!:
 //   organiser@             Event Organiser, Harbour Events Pte Ltd, who owns every S185 event
-//   organiser-colleague@   Event Organiser, Harbour Events Pte Ltd, owns none (TC-185-11, 12)
-//   organiser-other@       Event Organiser, Lion City Conferences (TC-185-13)
+//   organiser-colleague@   Event Organiser, Harbour Events Pte Ltd, owns none (TC-185-05, 06)
+//   organiser-other@       Event Organiser, Lion City Conferences (TC-185-07)
 //   coordinator@           Event Coordinator assigned to every S185 event
-//   coordinator-b@         Event Coordinator not assigned to any (TC-185-03)
-//   attendee@, attendee2@, attendee3@   Attendees (TC-185-07, 09)
+//   coordinator-b@         Event Coordinator not assigned to any (TC-185-10)
+//   attendee@, attendee2@, attendee3@   Attendees (TC-185-01, 03)
 //
 // Venues:
 //   S185 Marina Bay Ballroom   capacity 300
@@ -29,17 +29,17 @@
 // Events:
 //   S185 Harbour Gala     Confirmed, booked at the Ballroom, registration open
 //                         (today to today + 14, capacity 250), attendee@, attendee2@
-//                         and attendee3@ registered (TC-185-07, 10 to 13)
+//                         and attendee3@ registered (TC-185-01, 04 to 07)
 //   S185 Quiet Brunch     Confirmed, booked at the Ballroom, registration open
-//                         (capacity 250), nobody registered (TC-185-08)
+//                         (capacity 250), nobody registered (TC-185-02)
 //   S185 Garden Party     Confirmed, booked at the Ballroom, registration not set
-//                         (TC-185-01, 03, 04, 05, 14, 17)
-//   S185 Planning Talk    Planning, booked at the Ballroom (TC-185-02)
-//   S185 Two Hall Expo    Confirmed, booked at both venues (TC-185-06)
+//                         (TC-185-08, 10, 12, 13, 15, 17)
+//   S185 Planning Talk    Planning, booked at the Ballroom (TC-185-09)
+//   S185 Two Hall Expo    Confirmed, booked at both venues (TC-185-14)
 //   S185 Small Workshop   Confirmed, registration open, capacity 2, attendee@ and
-//                         attendee2@ registered (TC-185-09)
+//                         attendee2@ registered (TC-185-03)
 //   S185 Prep Night       Preparation, booked at the Ballroom, registration already
-//                         set (today to today + 14, capacity 250) (TC-185-15)
+//                         set (today to today + 14, capacity 250) (TC-185-11)
 //   S185 No Venue Talk    Confirmed, no venue booking (TC-185-16)
 import { config } from 'dotenv';
 import { resolve } from 'path';
