@@ -50,11 +50,16 @@ type SearchParams = {
 const listOf = (value: string | string[] | undefined): string[] =>
   value === undefined ? [] : Array.isArray(value) ? value : [value];
 
-/** The field messages from a failed search, e.g. "Select at least one slot." */
+/**
+ * The field messages from a failed search, e.g. "Select at least one slot.",
+ * each once. SCRUM-266: an end not after the start is reported on both time
+ * fields (ClockRangeSchema), and listed twice it also gave the list a
+ * duplicate key.
+ */
 function messagesFrom(error: ValidationError): string[] {
   const details = error.details as { fieldErrors?: Record<string, string[] | undefined> } | undefined;
   const messages = Object.values(details?.fieldErrors ?? {}).flat().filter((m): m is string => Boolean(m));
-  return messages.length > 0 ? messages : [error.message];
+  return messages.length > 0 ? [...new Set(messages)] : [error.message];
 }
 
 export default async function VenueSearchPage({ searchParams }: { searchParams: Promise<SearchParams> }) {
