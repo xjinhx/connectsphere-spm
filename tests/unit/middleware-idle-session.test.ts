@@ -44,7 +44,11 @@ function requestWithCookie(path: string, cookie?: { value: string }) {
 }
 
 describe('SCRUM-264: middleware idle check after a fresh login', () => {
-  it('TC-264-02 (regression, old behaviour): a stale leftover cookie from before logout wrongly rejects a brand-new session', async () => {
+  // TC-264-01 (review, PR #144): step 2 of the sheet's repro - if the cookie
+  // were still stale (logout had not cleared it), the *next* login's
+  // brand-new session gets wrongly rejected as idle. Step 1 (logout actually
+  // clears the cookie) is session-route.test.ts.
+  it('TC-264-01 (regression, old behaviour): a stale leftover cookie from before logout wrongly rejects a brand-new session', async () => {
     getUser.mockResolvedValue({ data: { user: FAKE_USER } });
     const staleTimestamp = new Date(Date.now() - 31 * 60 * 1000).toISOString();
 
@@ -58,12 +62,20 @@ describe('SCRUM-264: middleware idle check after a fresh login', () => {
     expect(signOut).toHaveBeenCalled();
   });
 
-  it('TC-264-01: with the cookie cleared on logout (the fix), the first request on a fresh session succeeds', async () => {
+  // TC-264-02 (review, PR #144): logging out and logging back in immediately
+  // is unaffected - with no leftover cookie, the first request on the fresh
+  // session succeeds, and a new csp_last_activity is set for it (so idle
+  // expiry still applies going forward; the fix only removes the stale
+  // leftover, not the mechanism).
+  it('TC-264-02: with the cookie cleared on logout (the fix), the first request on a fresh session succeeds and sets a fresh cookie', async () => {
     getUser.mockResolvedValue({ data: { user: FAKE_USER } });
 
     const response = await middleware(requestWithCookie('/assigned-events'));
 
     expect(response.status).toBe(200);
+    const fresh = response.cookies.get(LAST_ACTIVITY_COOKIE);
+    expect(fresh?.value).toBeTruthy();
+    expect(new Date(fresh!.value).getTime()).toBeGreaterThan(Date.now() - 5000);
   });
 
   it('TC-264-03: a genuinely idle existing session is still rejected (idle expiry is not disabled by the fix)', async () => {
@@ -76,7 +88,10 @@ describe('SCRUM-264: middleware idle check after a fresh login', () => {
     expect(response.headers.get('location')).toContain('/login');
   });
 
-  it('TC-264-04: activity inside the idle window is not rejected', async () => {
+  // Not a sheet TC: a boundary check that activity inside the idle window
+  // still succeeds, so TC-264-03's rejection is really about being idle, not
+  // about having any cookie at all.
+  it('activity inside the idle window is not rejected', async () => {
     getUser.mockResolvedValue({ data: { user: FAKE_USER } });
     const recentTimestamp = new Date(Date.now() - 5 * 60 * 1000).toISOString();
 
