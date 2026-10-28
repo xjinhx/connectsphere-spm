@@ -135,7 +135,7 @@ async function createAndApproveEvent(organiserSession, coordinatorSession, leadS
 }
 
 async function main() {
-  const organiserId = await ensureUser('organiser@example.com', 'event_organiser');
+  await ensureUser('organiser@example.com', 'event_organiser');
   const coordinatorId = await ensureUser('coordinator@example.com', 'coordinator');
   const otherCoordinatorId = await ensureUser('another-coordinator+s236@connectsphere.example.com', 'coordinator');
   await ensureUser('ops-manager@example.com', 'operations_manager');
