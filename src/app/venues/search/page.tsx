@@ -7,11 +7,11 @@ import {
   ROOM_LAYOUT_LABELS,
   type VenueSearchResult,
 } from '@/domain/venues/schema';
-import { END_OF_DAY, isQuarterHourEnd, isQuarterHourStart } from '@/domain/shared/times';
 import { ValidationError } from '@/domain/shared/errors';
 import { formatSingaporeDate } from '@/domain/shared/dates';
 import { getCurrentActor } from '@/lib/auth/currentActor';
 import NoVenueAccess from '@/components/venue/NoVenueAccess';
+import { SearchTimeFields } from '@/components/venue/SearchTimeFields';
 
 /**
  * SCRUM-239 AC2 Search venues by date and exact start and end time (replacing
@@ -49,13 +49,6 @@ type SearchParams = {
 /** A repeated query parameter (a ticked checkbox) as a list. */
 const listOf = (value: string | string[] | undefined): string[] =>
   value === undefined ? [] : Array.isArray(value) ? value : [value];
-
-/** Every quarter hour of the day, 00:00 to 24:00. The pickers offer only these (SCRUM-238 AC1). */
-const QUARTER_HOURS: string[] = Array.from({ length: 24 * 4 + 1 }, (_, i) =>
-  i === 24 * 4 ? END_OF_DAY : `${String(Math.floor(i / 4)).padStart(2, '0')}:${String((i % 4) * 15).padStart(2, '0')}`,
-);
-const START_TIMES = QUARTER_HOURS.filter(isQuarterHourStart);
-const END_TIMES = QUARTER_HOURS.filter(isQuarterHourEnd);
 
 /** The field messages from a failed search, e.g. "Select at least one slot." */
 function messagesFrom(error: ValidationError): string[] {
@@ -121,50 +114,8 @@ export default async function VenueSearchPage({ searchParams }: { searchParams: 
           />
         </div>
 
-        <div className="mb-4 flex flex-wrap gap-4">
-          <div>
-            <label htmlFor="start" className="mb-1 block text-sm font-medium">
-              Start time
-            </label>
-            <select
-              id="start"
-              name="start"
-              required
-              defaultValue={params.start ?? ''}
-              className="rounded border border-[var(--border)] px-3 py-2 text-sm"
-            >
-              <option value="" disabled>
-                Choose
-              </option>
-              {START_TIMES.map((time) => (
-                <option key={time} value={time}>
-                  {time}
-                </option>
-              ))}
-            </select>
-          </div>
-          <div>
-            <label htmlFor="end" className="mb-1 block text-sm font-medium">
-              End time
-            </label>
-            <select
-              id="end"
-              name="end"
-              required
-              defaultValue={params.end ?? ''}
-              className="rounded border border-[var(--border)] px-3 py-2 text-sm"
-            >
-              <option value="" disabled>
-                Choose
-              </option>
-              {END_TIMES.map((time) => (
-                <option key={time} value={time}>
-                  {time}
-                </option>
-              ))}
-            </select>
-          </div>
-        </div>
+        {/* SCRUM-266: the end offers only times after the start. */}
+        <SearchTimeFields start={params.start ?? ''} end={params.end ?? ''} />
 
         {/* SCRUM-130: optional filters. Left blank, each one narrows nothing. */}
         <fieldset className="mb-4 border-t border-[var(--border)] pt-4">
