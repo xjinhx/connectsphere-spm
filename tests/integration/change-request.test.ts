@@ -1,7 +1,12 @@
-import { describe, it, expect, beforeAll, afterAll } from 'vitest';
+import { describe, it, expect, beforeAll, afterAll, vi } from 'vitest';
+
+vi.mock('@/lib/auth/currentActor', () => ({ getCurrentActor: vi.fn() }));
+
+import { getCurrentActor } from '@/lib/auth/currentActor';
 import { createAdminClient } from '@/lib/supabase/admin';
 import { ensureTestClientOrganisation } from './fixtures/clientOrganisation';
 import { todayInSingapore } from '@/domain/shared/dates';
+import { getEventRequest } from '@/domain/event-request/service';
 
 /**
  * SCRUM-187 — Request a change and track its outcome.
@@ -13,8 +18,11 @@ import { todayInSingapore } from '@/domain/shared/dates';
  * A real database is the point: the one-reason-per-field write and the
  * event-visibility rule (canViewRequest) cannot be proven without Postgres.
  *
- * getCurrentActor is not used here (raiseChangeRequest/listChangeRequests take
- * the actor id/roles directly, unlike the route), so no mock is needed.
+ * getCurrentActor is not used by raiseChangeRequest/listChangeRequests (they
+ * take the actor id/roles directly, unlike the route), so no mock is needed
+ * for most of this file. The AC7 block mocks it, because that one test calls
+ * getEventRequest(id) - the event page's own read - which does take it from
+ * there.
  *
  * Status scope (Submitted through Preparation) and field scope (the full
  * event-request field set) both per CL-61, the PO's 24 Oct 2026
@@ -465,11 +473,15 @@ describe('listChangeRequests', () => {
 describe('AC7 — an approved request shows its new values on the event', () => {
   // TC-187-12 (AC7) — DUMMY(SCRUM-190) D-26: applying an approved request's
   // proposed values to the event is SCRUM-190's own write, not this story's
-  // (raiseChangeRequest never touches event_request). Stands in for it the
-  // same way the manual case does (PR description, Jira comment 10723):
-  // apply the proposed value directly in Postgres once the request is
-  // approved, then read it back through the event's own row, the same path
-  // the event page reads. Re-run once SCRUM-190 applies approvals for real.
+  // (raiseChangeRequest never touches event_request). Stands in for the
+  // write the same way the manual case does (PR description, Jira comment
+  // 10723): apply the proposed value directly in Postgres once the request
+  // is approved. The read is the real one, though: getEventRequest(id), the
+  // same function the event page itself calls, with getCurrentActor mocked
+  // as the responsible organiser (as tests/integration/edit-event-information.test.ts
+  // does) - not a raw select, which would pass even if the app's own read
+  // path were broken (review of PR #143). Re-run once SCRUM-190 applies
+  // approvals for real.
   it('shows the new value once an approved change is applied', async () => {
     const id = await createEvent('submitted');
     const outcome = await raiseChangeRequest(
@@ -484,13 +496,14 @@ describe('AC7 — an approved request shows its new values on the event', () => 
     const { error } = await supabase.from('event_request').update({ expected_attendance: 220 }).eq('id', id);
     if (error) throw new Error(`could not apply test decision: ${error.message}`);
 
-    const { data: event, error: readError } = await supabase
-      .from('event_request')
-      .select('expected_attendance')
-      .eq('id', id)
-      .single();
-    if (readError) throw new Error(`could not read test event: ${readError.message}`);
+    vi.mocked(getCurrentActor).mockResolvedValue({
+      userId: organiserId,
+      fullName: 'Test',
+      roles: ['event_organiser'],
+      clientOrganisation: { id: CLIENT_ORGANISATION_ID, name: 'Test organisation' },
+    });
+    const event = await getEventRequest(id);
 
-    expect(event?.expected_attendance).toBe(220);
+    expect(event.expectedAttendance).toBe(220);
   });
 });
