@@ -55,6 +55,9 @@ test('TC-267-08: 31/12/9999 is still accepted in the venue search Date', async (
   await page.keyboard.type('12319999');
   await expect(date).toHaveValue('9999-12-31');
 
+  // Start and End time are required too, or the browser blocks the search.
+  await page.getByLabel('Start time', { exact: true }).selectOption('09:00');
+  await page.getByLabel('End time', { exact: true }).selectOption('12:00');
   await page.getByRole('button', { name: 'Search' }).click();
   await expect(page).toHaveURL(/date=9999-12-31/);
   await expect(page.getByLabel('Date', { exact: true })).toHaveValue('9999-12-31');
