@@ -5,12 +5,11 @@
 //
 // Run: npm run db:start && npm run db:reset
 //      node scripts/seed-scrum185.mjs             (no dev server needed)
-//      node scripts/seed-scrum185.mjs --register  after TC-185-01 to 06, 08 and 14
 //
-// --register opens S185 Harbour Gala's registration today (to today + 14,
-// capacity 250) and registers attendee@, attendee2@ and attendee3@ through
-// SCRUM-181's register_for_event, for TC-185-07 and 10 to 13. It changes
-// nothing else.
+// Each event serves one group of cases, so the manual run goes AC1 to AC6 in
+// order with nothing to re-seed between: the list cases (AC1-AC4) read events
+// whose registrations are already in place, and the settings cases (AC5, AC6)
+// save on events of their own.
 //
 // Safe to run again: the accounts are updated in place, and every "S185" event
 // and venue is deleted and recreated.
@@ -28,7 +27,13 @@
 //   S185 Bugis Seminar Room    capacity 200
 //
 // Events:
-//   S185 Harbour Gala     Confirmed, booked at the Ballroom (TC-185-01, 03, 04, 05, 17)
+//   S185 Harbour Gala     Confirmed, booked at the Ballroom, registration open
+//                         (today to today + 14, capacity 250), attendee@, attendee2@
+//                         and attendee3@ registered (TC-185-07, 10 to 13)
+//   S185 Quiet Brunch     Confirmed, booked at the Ballroom, registration open
+//                         (capacity 250), nobody registered (TC-185-08)
+//   S185 Garden Party     Confirmed, booked at the Ballroom, registration not set
+//                         (TC-185-01, 03, 04, 05, 14, 17)
 //   S185 Planning Talk    Planning, booked at the Ballroom (TC-185-02)
 //   S185 Two Hall Expo    Confirmed, booked at both venues (TC-185-06)
 //   S185 Small Workshop   Confirmed, registration open, capacity 2, attendee@ and
@@ -107,7 +112,7 @@ function daysAhead(days) {
 /** Registers an attendee through SCRUM-181's own database function. */
 async function register(eventId, email, fullName) {
   const id = await userIdByEmail(email);
-  if (!id) throw new Error(`${email} not found. Run this script once without --register first.`);
+  if (!id) throw new Error(`${email} not found.`);
   const { data, error } = await supabase.rpc('register_for_event', {
     p_event_request_id: eventId,
     p_attendee_id: id,
@@ -118,23 +123,6 @@ async function register(eventId, email, fullName) {
   });
   if (error) throw new Error(`register ${email}: ${error.message}`);
   if (data !== 'registered' && data !== 'already_registered') throw new Error(`register ${email}: ${data}`);
-}
-
-if (process.argv.includes('--register')) {
-  const { data: gala, error } = await supabase.from('event_request').select('id').eq('name', `${PREFIX} Harbour Gala`).single();
-  if (error) throw new Error('S185 Harbour Gala not found. Run this script once without --register first.');
-  check(
-    'open S185 Harbour Gala',
-    await supabase
-      .from('event_request')
-      .update({ registration_start_date: daysAhead(0), registration_end_date: daysAhead(14), registration_capacity: 250 })
-      .eq('id', gala.id),
-  );
-  await register(gala.id, 'attendee@example.com', 'Attendee One');
-  await register(gala.id, 'attendee2@example.com', 'Attendee Two');
-  await register(gala.id, 'attendee3@example.com', 'Attendee Three');
-  console.log(`Registered attendee@, attendee2@, attendee3@ on S185 Harbour Gala: /events/${gala.id}/registrations`);
-  process.exit(0);
 }
 
 // --- Organisation and accounts -----------------------------------------------
@@ -237,17 +225,29 @@ async function createEvent(name, date, status, venues) {
   return data.id;
 }
 
-await createEvent(`${PREFIX} Harbour Gala`, daysAhead(30), 'confirmed', [ballroom]);
+/** Opens registration today to today + 14 at `capacity`, as the coordinator would (AC5). */
+async function openRegistration(eventId, name, capacity) {
+  check(
+    `open ${name}`,
+    await supabase
+      .from('event_request')
+      .update({ registration_start_date: daysAhead(0), registration_end_date: daysAhead(14), registration_capacity: capacity })
+      .eq('id', eventId),
+  );
+}
+
+const gala = await createEvent(`${PREFIX} Harbour Gala`, daysAhead(30), 'confirmed', [ballroom]);
+await openRegistration(gala, 'S185 Harbour Gala', 250);
+await register(gala, 'attendee@example.com', 'Attendee One');
+await register(gala, 'attendee2@example.com', 'Attendee Two');
+await register(gala, 'attendee3@example.com', 'Attendee Three');
+const brunch = await createEvent(`${PREFIX} Quiet Brunch`, daysAhead(37), 'confirmed', [ballroom]);
+await openRegistration(brunch, 'S185 Quiet Brunch', 250);
+await createEvent(`${PREFIX} Garden Party`, daysAhead(36), 'confirmed', [ballroom]);
 await createEvent(`${PREFIX} Planning Talk`, daysAhead(31), 'planning', [ballroom]);
 await createEvent(`${PREFIX} Two Hall Expo`, daysAhead(32), 'confirmed', [ballroom, seminarRoom]);
 const workshop = await createEvent(`${PREFIX} Small Workshop`, daysAhead(33), 'confirmed', [seminarRoom]);
-check(
-  'open S185 Small Workshop',
-  await supabase
-    .from('event_request')
-    .update({ registration_start_date: daysAhead(0), registration_end_date: daysAhead(14), registration_capacity: 2 })
-    .eq('id', workshop),
-);
+await openRegistration(workshop, 'S185 Small Workshop', 2);
 await register(workshop, 'attendee@example.com', 'Attendee One');
 await register(workshop, 'attendee2@example.com', 'Attendee Two');
 await createEvent(`${PREFIX} Prep Night`, daysAhead(34), 'preparation', [ballroom]);
