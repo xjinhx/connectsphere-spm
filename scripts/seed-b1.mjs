@@ -1,6 +1,6 @@
 // Seeds the manual run of SCRUM-167, SCRUM-173, SCRUM-175 and SCRUM-170
 // (TC-167-01 to TC-167-10, TC-173-01 to TC-173-09, TC-175-01 to TC-175-03,
-// TC-170-01 to TC-170-11) from the B1 test case sheet, "B1 Seed and Run Order".
+// TC-170-01 to TC-170-12) from the B1 test case sheet, "B1 Seed and Run Order".
 // Needs 20261022004756_equipment_commitment_window,
 // 20261022011508_reserve_equipment, 20261024084449_equipment_out_of_service and
 // 20261027065523_release_equipment_reservation applied (`npm run db:reset`
@@ -99,6 +99,7 @@ const ITEMS = {
   'EQ-175-01': 10, 'EQ-175-02': 10, 'EQ-175-03': 10,
   'EQ-170-01': 10, 'EQ-170-02': 10, 'EQ-170-03': 10, 'EQ-170-04': 10, 'EQ-170-05': 10, 'EQ-170-06': 10,
   'EQ-170-07': 10, 'EQ-170-08': 10, 'EQ-170-09A': 10, 'EQ-170-09B': 10, 'EQ-170-09C': 10, 'EQ-170-10': 10,
+  'EQ-170-12': 10,
 };
 const item = {};
 for (const [name, quantity] of Object.entries(ITEMS)) {
@@ -113,12 +114,13 @@ for (const [name, quantity] of Object.entries(ITEMS)) {
   item[name] = saved.id;
 }
 
-// SCRUM-170: units already out of service at seed (TC-170-04, 05, 08), and items
+// SCRUM-170: units already out of service at seed (TC-170-04, 05, 08, 12), and items
 // whose own status is not Available (TC-170-09, set as in SCRUM-240's catalogue).
 const SEEDED_STATE = {
   'EQ-170-04': { units_damaged: 2 },
   'EQ-170-05': { units_under_maintenance: 2 },
   'EQ-170-08': { units_damaged: 8 },
+  'EQ-170-12': { units_damaged: 2 },
   'EQ-170-09A': { operational_status: 'damaged' },
   'EQ-170-09B': { operational_status: 'unavailable' },
   'EQ-170-09C': { operational_status: 'under_maintenance' },
@@ -348,6 +350,11 @@ const far = await createEvent('S4-FAR', { booked: dates('2027-06-01', '2027-06-0
 await request(far, 'EQ-170-05', 2); // TC-170-05: a far future window
 created.push(far);
 created.push(await hold('H-170-10', dates('2026-11-10', '2026-11-12'), 'EQ-170-10', 6)); // TC-170-10
+// TC-170-12: 2 Damaged and two holds that meet on 11/11 and 12/11 (3 + 1), so
+// S4-E1's busiest day is 4 and 8 in service leave 4 of the 6 it asks for.
+created.push(await hold('H-170-12A', dates('2026-11-11', '2026-11-12'), 'EQ-170-12', 3));
+created.push(await hold('H-170-12B', dates('2026-11-12', '2026-11-13'), 'EQ-170-12', 1));
+await request(e1, 'EQ-170-12', 6);
 
 console.log('\nSCRUM-167/173/175/170 events (open each at the link, as tech-support@example.com unless the case says otherwise):');
 for (const event of created) {

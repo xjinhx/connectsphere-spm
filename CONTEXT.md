@@ -122,6 +122,16 @@ An arrangement (venue, equipment, technical support or registration) the coordin
 **Complete** (of an arrangement):
 Venue is complete when the event has at least one confirmed booking, no Pending booking line and no affected booking. Equipment is complete when every line is fully reserved, and is never complete when nothing is requested (SCRUM-102).
 
+### Completion
+
+**End date** (of an event):
+The last day of the event's confirmed venue bookings, or its proposed date when it has none. It has passed when it is before today in Singapore (SCRUM-104).
+_Avoid_: event date (for a multi-day event, that is its first day)
+
+**System-completed**:
+An event the daily completion check moved to Completed, 7 or more days after its end date, because nobody marked it completed. Only a Preparation event is completed this way (SCRUM-104, Change Log CL-60).
+_Avoid_: auto-closed, expired
+
 ### Safety
 
 **Safety Officer**:
