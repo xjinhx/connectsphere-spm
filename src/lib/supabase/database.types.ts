@@ -131,6 +131,9 @@ export type Database = {
         Row: {
           created_at: string
           event_request_id: string
+          ready_to_reserve: boolean
+          review_completed_at: string | null
+          review_completed_by: string | null
           status: string
           status_set_at: string | null
           status_set_by: string | null
@@ -141,6 +144,9 @@ export type Database = {
         Insert: {
           created_at?: string
           event_request_id: string
+          ready_to_reserve?: boolean
+          review_completed_at?: string | null
+          review_completed_by?: string | null
           status?: string
           status_set_at?: string | null
           status_set_by?: string | null
@@ -151,6 +157,9 @@ export type Database = {
         Update: {
           created_at?: string
           event_request_id?: string
+          ready_to_reserve?: boolean
+          review_completed_at?: string | null
+          review_completed_by?: string | null
           status?: string
           status_set_at?: string | null
           status_set_by?: string | null
@@ -176,6 +185,10 @@ export type Database = {
           event_request_id: string
           id: string
           quantity: number
+          suitability: string | null
+          suitability_reason: string | null
+          suitability_set_at: string | null
+          suitability_set_by: string | null
           unavailable: boolean
           updated_at: string
         }
@@ -186,6 +199,10 @@ export type Database = {
           event_request_id: string
           id?: string
           quantity: number
+          suitability?: string | null
+          suitability_reason?: string | null
+          suitability_set_at?: string | null
+          suitability_set_by?: string | null
           unavailable?: boolean
           updated_at?: string
         }
@@ -196,6 +213,10 @@ export type Database = {
           event_request_id?: string
           id?: string
           quantity?: number
+          suitability?: string | null
+          suitability_reason?: string | null
+          suitability_set_at?: string | null
+          suitability_set_by?: string | null
           unavailable?: boolean
           updated_at?: string
         }
@@ -1664,6 +1685,10 @@ export type Database = {
       }
       reserve_equipment: {
         Args: { p_line_id: string; p_quantity: number; p_reserved_by: string }
+        Returns: Json
+      }
+      save_equipment_suitability: {
+        Args: { p_event_request_id: string; p_set_by: string; p_verdicts: Json }
         Returns: Json
       }
       set_equipment_request_status: {
