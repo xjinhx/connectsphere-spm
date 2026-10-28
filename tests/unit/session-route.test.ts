@@ -19,4 +19,18 @@ describe('SCRUM-264: DELETE /api/me/session', () => {
     const cleared = response.cookies.get(LAST_ACTIVITY_COOKIE);
     expect(cleared?.value).toBe('');
   });
+
+  // TC-264-04 (review, PR #144): logging out twice in a row (e.g. a doubled
+  // click, or the button firing again before the first request settles)
+  // must not error - there is nothing left to clear the second time, but
+  // clearing an already-clear cookie is itself a no-op, not a failure.
+  it('TC-264-04: calling DELETE twice in a row is idempotent, both times clearing the cookie with no error', async () => {
+    const first = await DELETE();
+    const second = await DELETE();
+
+    expect(first.status).toBe(204);
+    expect(second.status).toBe(204);
+    expect(first.cookies.get(LAST_ACTIVITY_COOKIE)?.value).toBe('');
+    expect(second.cookies.get(LAST_ACTIVITY_COOKIE)?.value).toBe('');
+  });
 });
