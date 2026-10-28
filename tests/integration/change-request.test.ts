@@ -1,6 +1,7 @@
 import { describe, it, expect, beforeAll, afterAll } from 'vitest';
 import { createAdminClient } from '@/lib/supabase/admin';
 import { ensureTestClientOrganisation } from './fixtures/clientOrganisation';
+import { todayInSingapore } from '@/domain/shared/dates';
 
 /**
  * SCRUM-187 — Request a change and track its outcome.
@@ -57,7 +58,12 @@ async function createAccount(label: string, roles: string[], clientOrganisationI
   return data.user.id;
 }
 
-async function createEvent(status: string, ownerId = organiserId, coordinator: string | null = coordinatorId) {
+async function createEvent(
+  status: string,
+  ownerId = organiserId,
+  coordinator: string | null = coordinatorId,
+  proposedDate = '2027-03-15',
+) {
   const { data, error } = await supabase
     .from('event_request')
     .insert({
@@ -66,7 +72,7 @@ async function createEvent(status: string, ownerId = organiserId, coordinator: s
       name: 'Annual Tech Summit',
       purpose: 'Bring the engineering teams together for the yearly update.',
       description: 'A full day of talks, workshops and a closing reception.',
-      proposed_date: '2027-03-15',
+      proposed_date: proposedDate,
       start_time: '10:00',
       end_time: '12:00',
       expected_attendance: 150,
@@ -86,6 +92,12 @@ async function createEvent(status: string, ownerId = organiserId, coordinator: s
   const id = data.id as string;
   createdRequestIds.push(id);
   return id;
+}
+
+function tomorrowInSingapore(): string {
+  const today = new Date(`${todayInSingapore()}T00:00:00Z`);
+  today.setUTCDate(today.getUTCDate() + 1);
+  return today.toISOString().slice(0, 10);
 }
 
 async function readChangeRequestRows(eventRequestId: string) {
@@ -298,10 +310,10 @@ describe('raiseChangeRequest', () => {
     expect(await readChangeRequestRows(id)).toHaveLength(0);
   });
 
-  // Bug found manually testing TC-187-03 (28/10/2026): nothing checked that a
-  // proposed start/end pair stays chronological, so Submitted had an end
-  // before its start. Same rule as the event request's own save
-  // (timeRangeIssues, domain/event-request/schema.ts).
+  // TC-187-13 (AC1) — bug found manually testing TC-187-03 (28/10/2026):
+  // nothing checked that a proposed start/end pair stays chronological, so
+  // Submitted had an end before its start. Same rule as the event request's
+  // own save (timeRangeIssues, domain/event-request/schema.ts).
   it('refuses a proposed end time before a proposed start time, and writes nothing', async () => {
     const id = await createEvent('submitted');
 
@@ -322,8 +334,8 @@ describe('raiseChangeRequest', () => {
     expect(await readChangeRequestRows(id)).toHaveLength(0);
   });
 
-  // Same bug, the one-sided case: only startTime selected, but it lands after
-  // the event's current (unchanged) end time.
+  // TC-187-14 (AC1) — same bug, the one-sided case: only startTime selected,
+  // but it lands after the event's current (unchanged) end time.
   it('refuses a proposed start time that is after the event\'s current end time', async () => {
     const id = await createEvent('submitted'); // start_time 10:00, end_time 12:00 (createEvent fixture)
 
@@ -347,6 +359,21 @@ describe('raiseChangeRequest', () => {
     ).rejects.toMatchObject({ code: 'CONFLICT' });
 
     expect(await readChangeRequestRows(id)).toHaveLength(0);
+  });
+
+  // TC-187-06 (AC3) — no change cut-off period: an event dated tomorrow is
+  // still accepted.
+  it('accepts a change request on an event dated tomorrow', async () => {
+    const id = await createEvent('submitted', organiserId, coordinatorId, tomorrowInSingapore());
+
+    const outcome = await raiseChangeRequest(
+      id,
+      { fields: [{ field: 'expectedAttendance', proposedValue: 200 }], reason: 'Numbers confirmed late' },
+      organiserId,
+    );
+
+    expect(outcome.status).toBe('pending');
+    expect(await readChangeRequestRows(id)).toHaveLength(1);
   });
 
   // TC-187-07 (AC4) — a colleague in the same client organisation, not responsible.
@@ -432,5 +459,38 @@ describe('listChangeRequests', () => {
     const id = await createEvent('submitted');
     const list = await listChangeRequests(id, { userId: organiserId, clientOrganisationId: CLIENT_ORGANISATION_ID });
     expect(list).toEqual([]);
+  });
+});
+
+describe('AC7 — an approved request shows its new values on the event', () => {
+  // TC-187-12 (AC7) — DUMMY(SCRUM-190) D-26: applying an approved request's
+  // proposed values to the event is SCRUM-190's own write, not this story's
+  // (raiseChangeRequest never touches event_request). Stands in for it the
+  // same way the manual case does (PR description, Jira comment 10723):
+  // apply the proposed value directly in Postgres once the request is
+  // approved, then read it back through the event's own row, the same path
+  // the event page reads. Re-run once SCRUM-190 applies approvals for real.
+  it('shows the new value once an approved change is applied', async () => {
+    const id = await createEvent('submitted');
+    const outcome = await raiseChangeRequest(
+      id,
+      { fields: [{ field: 'expectedAttendance', proposedValue: 220 }], reason: 'Extra guests confirmed' },
+      organiserId,
+    );
+    await seedDecision(outcome.id, 'approved', 'Matches updated programme');
+
+    // DUMMY(SCRUM-190) D-26: applying the field to the event is SCRUM-190's
+    // own write; stood in for here.
+    const { error } = await supabase.from('event_request').update({ expected_attendance: 220 }).eq('id', id);
+    if (error) throw new Error(`could not apply test decision: ${error.message}`);
+
+    const { data: event, error: readError } = await supabase
+      .from('event_request')
+      .select('expected_attendance')
+      .eq('id', id)
+      .single();
+    if (readError) throw new Error(`could not read test event: ${readError.message}`);
+
+    expect(event?.expected_attendance).toBe(220);
   });
 });

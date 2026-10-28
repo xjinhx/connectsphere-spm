@@ -858,7 +858,9 @@ switch them the next time they edit those files.
 - **To replace:** SCRUM-190/191 write these three columns from their own
   approve/reject actions (already shaped the way their ACs describe them: one
   decision, one reason, one timestamp). Re-run TC-187-11 against a request
-  decided through the app, then remove the markers. Stamp `decided_at` the
+  decided through the app, and TC-187-12 against an event whose approved
+  change was actually applied by SCRUM-190, then remove the markers. Stamp
+  `decided_at` the
   same "one clock" way `event_request.decided_at`/`submitted_at`/`assigned_at`
   already are (a DB trigger reading `now()`, not a caller-supplied value -
   see `set_decided_at`/`set_assigned_at`/`set_submitted_at` in the
