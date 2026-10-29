@@ -86,6 +86,7 @@ describe('SCRUM-264: middleware idle check after a fresh login', () => {
 
     expect(response.status).toBe(307);
     expect(response.headers.get('location')).toContain('/login');
+    expect(signOut).toHaveBeenCalled();
   });
 
   // Not a sheet TC: a boundary check that activity inside the idle window
