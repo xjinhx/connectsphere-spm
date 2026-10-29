@@ -154,6 +154,15 @@ beforeAll(async () => {
   coordinatorId = await createAccount('Casey Coordinator', ['coordinator']);
 });
 
+/** An accessibility feature by name, created if this database does not have it yet. */
+async function ensureFeature(name: string): Promise<string> {
+  const { data: existing } = await supabase.from('accessibility_features').select('id').eq('name', name).maybeSingle();
+  if (existing) return existing.id;
+  const { data, error } = await supabase.from('accessibility_features').insert({ name }).select('id').single();
+  if (error || !data) throw new Error(`could not create accessibility feature ${name}: ${error?.message ?? 'no row'}`);
+  return data.id;
+}
+
 afterAll(async () => {
   for (const id of createdRequestIds) {
     await supabase.from('event_request').delete().eq('id', id);
@@ -266,9 +275,8 @@ describe('raiseChangeRequest', () => {
   // stored as one line: the event's current list (none) and the proposed one.
   it('TC-274-01: stores a proposed Accessibility features list', async () => {
     const id = await createEvent('submitted');
-    const { data: features, error } = await supabase.from('accessibility_features').select('id').order('name').limit(2);
-    if (error || !features || features.length < 2) throw new Error('needs two accessibility features (npm run db:reset)');
-    const featureIds = features.map((feature) => feature.id);
+    // Its own two features, so the test does not depend on seed data (CI has none).
+    const featureIds = [await ensureFeature('S274 Step-free access'), await ensureFeature('S274 Hearing loop')];
 
     const outcome = await raiseChangeRequest(
       id,
