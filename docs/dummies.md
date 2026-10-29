@@ -697,8 +697,15 @@ switch them the next time they edit those files.
   every page (PO, 22 Oct 2026). **Attendee:** replaced by SCRUM-255 (branch
   `attendee-navigation`): AC2 lists only Open events, which was already the
   stand-in item, so the entry is unchanged and its marker removed; TC-249-15
-  to 17 and 25 to 27 re-run for the Attendee as TC-255-04. **Other roles:**
-  still active, waiting on SCRUM-250 to 253 and 256.
+  to 17 and 25 to 27 re-run for the Attendee as TC-255-04. **Event
+  Organiser:** replaced by SCRUM-250 (branch `organiser-navigation`): Event
+  requests, New event request; marker removed. Because `/events/new` sits under
+  `/events`, the header now highlights only the most specific current item
+  (`currentNavHref` beside `isNavItemCurrent` in
+  `src/domain/navigation/policy.ts`, agreed with SCRUM-249's owner); roles
+  whose items don't nest are unaffected. TC-249-15 to 17 and 25 to 27 re-run
+  for the organiser as TC-250-02, 06 and 07. **Other roles:** still active,
+  waiting on SCRUM-251 to 253 and 256.
 
 ### D-21 — An equipment reservation is released by hand
 

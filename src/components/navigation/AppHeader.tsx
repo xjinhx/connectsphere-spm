@@ -5,7 +5,7 @@ import { usePathname } from 'next/navigation';
 import { useEffect, useState } from 'react';
 import type { Role } from '@/domain/identity/roles';
 import type { AccountDisplay, NavItem } from '@/domain/navigation/schema';
-import { isNavItemCurrent } from '@/domain/navigation/policy';
+import { currentNavHref } from '@/domain/navigation/policy';
 import { isSignedOutPage } from '@/domain/session/policy';
 import { NotificationBell } from '@/components/notification/NotificationBell';
 import { AccountMenu } from './AccountMenu';
@@ -47,9 +47,12 @@ export function AppHeader({ homeHref, navItems, account, roles, workingRole }: A
     return null;
   }
 
+  // One item at most is highlighted, the most specific one (see currentNavHref).
+  const currentHref = currentNavHref(pathname, navItems);
+
   const links = (layout: 'row' | 'column') =>
     navItems.map((item) => {
-      const current = isNavItemCurrent(pathname, item.href);
+      const current = item.href === currentHref;
       return (
         <Link
           key={item.href}
