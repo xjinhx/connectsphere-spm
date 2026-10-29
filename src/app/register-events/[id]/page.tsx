@@ -2,6 +2,8 @@ import Link from 'next/link';
 import { EventFullNotice } from '@/components/event-registration/EventFullNotice';
 import { RegistrationConfirmation } from '@/components/event-registration/RegistrationConfirmation';
 import { RegistrationForm } from '@/components/event-registration/RegistrationForm';
+import { FINAL_EVENT_REFUSALS } from '@/domain/event-registration/policy';
+import { FINAL_EVENT_STATUS_LABELS } from '@/domain/event-registration/schema';
 import { getRegistrationPage } from '@/domain/event-registration/service';
 import { formatDayMonthYear } from '@/domain/shared/dates';
 import { getCurrentActor } from '@/lib/auth/currentActor';
@@ -26,6 +28,11 @@ export const dynamic = 'force-dynamic';
  * SCRUM-255 AC3: a back link to Open events, above everything that changes
  * with the registration state, so every state shows it. A plain link, not
  * history back, so it leads to Open events whatever page came before.
+ *
+ * SCRUM-270: a Cancelled or Completed event says so beside its name and shows
+ * why it takes no registrations instead of the form, before any other state
+ * (PO, 28/10/2026). Someone already registered still sees their registration
+ * below it.
  */
 export default async function AttendeeEventRegistrationPage({ params }: { params: Promise<{ id: string }> }) {
   const { id } = await params;
@@ -38,7 +45,14 @@ export default async function AttendeeEventRegistrationPage({ params }: { params
       <Link href="/register-events" className="self-start text-sm text-[var(--brand)] underline">
         Back to Open events
       </Link>
-      <h1 className="mt-3 text-2xl font-semibold">{view.eventName}</h1>
+      <h1 className="mt-3 text-2xl font-semibold">
+        {view.eventName}
+        {view.finalStatus ? (
+          <span className="ml-2 inline-block rounded-full bg-red-50 px-2 py-0.5 align-middle text-xs font-medium text-red-700">
+            {FINAL_EVENT_STATUS_LABELS[view.finalStatus]}
+          </span>
+        ) : null}
+      </h1>
       <dl className="mt-4 grid grid-cols-[max-content_1fr] gap-x-4 gap-y-1 text-sm">
         {view.eventDate ? (
           <>
@@ -52,7 +66,20 @@ export default async function AttendeeEventRegistrationPage({ params }: { params
         </dd>
       </dl>
 
-      {view.registration ? (
+      {view.finalStatus ? (
+        <>
+          <p role="status" className="mt-6 rounded-lg border border-[var(--border)] bg-[var(--surface)] p-4 text-sm">
+            {FINAL_EVENT_REFUSALS[view.finalStatus]}
+          </p>
+          {view.registration ? (
+            <RegistrationConfirmation
+              registration={view.registration}
+              eventName={view.eventName}
+              heading="Your registration for this event."
+            />
+          ) : null}
+        </>
+      ) : view.registration ? (
         <RegistrationConfirmation
           registration={view.registration}
           eventName={view.eventName}

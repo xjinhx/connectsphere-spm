@@ -37,6 +37,8 @@ const OPEN: RegistrationPageView = {
   periodRefusal: null,
   registration: null,
   full: false,
+  // SCRUM-270: going ahead; the back link does not depend on it.
+  finalStatus: null,
 };
 
 beforeEach(() => {
