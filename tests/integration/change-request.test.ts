@@ -262,6 +262,62 @@ describe('raiseChangeRequest', () => {
     expect(fieldRows).toHaveLength(2);
   });
 
+  // SCRUM-274 TC-274-01 — Accessibility features, now offered by the form,
+  // stored as one line: the event's current list (none) and the proposed one.
+  it('TC-274-01: stores a proposed Accessibility features list', async () => {
+    const id = await createEvent('submitted');
+    const { data: features, error } = await supabase.from('accessibility_features').select('id').order('name').limit(2);
+    if (error || !features || features.length < 2) throw new Error('needs two accessibility features (npm run db:reset)');
+    const featureIds = features.map((feature) => feature.id);
+
+    const outcome = await raiseChangeRequest(
+      id,
+      { fields: [{ field: 'accessibilityFeatureIds', proposedValue: featureIds }], reason: 'Wheelchair and hearing-aid users attending' },
+      organiserId,
+    );
+
+    expect(outcome.fields).toHaveLength(1);
+    expect(outcome.fields[0]).toMatchObject({ field: 'accessibilityFeatureIds', currentValue: [], proposedValue: featureIds });
+    const fieldRows = await readFieldRows(outcome.id);
+    expect(fieldRows).toEqual([{ field: 'accessibilityFeatureIds', current_value: [], proposed_value: featureIds }]);
+  });
+
+  // SCRUM-274 TC-274-02 — Equipment items, now offered by the form.
+  it('TC-274-02: stores a proposed Equipment items list', async () => {
+    const id = await createEvent('submitted');
+
+    const outcome = await raiseChangeRequest(
+      id,
+      { fields: [{ field: 'equipmentItems', proposedValue: [{ item: 'Projector P-100', quantity: 2 }] }], reason: 'Second screen for the breakout room' },
+      organiserId,
+    );
+
+    expect(outcome.fields[0]).toMatchObject({
+      field: 'equipmentItems',
+      currentValue: [],
+      proposedValue: [{ item: 'Projector P-100', quantity: 2 }],
+    });
+    const fieldRows = await readFieldRows(outcome.id);
+    expect(fieldRows).toEqual([
+      { field: 'equipmentItems', current_value: [], proposed_value: [{ item: 'Projector P-100', quantity: 2 }] },
+    ]);
+  });
+
+  // SCRUM-274 — a quantity of 0 is refused before anything is written.
+  it('TC-274-02: refuses an equipment quantity of 0, and writes nothing', async () => {
+    const id = await createEvent('submitted');
+
+    await expect(
+      raiseChangeRequest(
+        id,
+        { fields: [{ field: 'equipmentItems', proposedValue: [{ item: 'Projector P-100', quantity: 0 }] }], reason: 'Second screen' },
+        organiserId,
+      ),
+    ).rejects.toMatchObject({ code: 'VALIDATION_ERROR' });
+
+    expect(await readChangeRequestRows(id)).toHaveLength(0);
+  });
+
   // TC-187-03 (AC1) — several fields, one reason, no extra field recorded.
   it('stores each selected field with its own current and proposed value under one reason', async () => {
     const id = await createEvent('submitted');
