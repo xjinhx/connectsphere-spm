@@ -1,10 +1,7 @@
 import { createServerClient } from '@supabase/ssr';
 import { NextResponse, type NextRequest } from 'next/server';
 import { publicEnv } from '@/lib/env';
-import { isSessionIdleExpired, isSignedOutPage } from '@/domain/session/policy';
-
-/** SCRUM-75 AC2: last-activity marker used to detect a 30-minute idle session. */
-const LAST_ACTIVITY_COOKIE = 'csp_last_activity';
+import { isSessionIdleExpired, isSignedOutPage, LAST_ACTIVITY_COOKIE } from '@/domain/session/policy';
 
 function rejectUnauthenticated(request: NextRequest) {
   if (request.nextUrl.pathname.startsWith('/api')) {
