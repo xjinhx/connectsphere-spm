@@ -17,7 +17,11 @@ import {
 } from '@/domain/event-request/policy';
 import { EVENT_REQUEST_STATUS_DEFINITIONS } from '@/domain/event-request/schema';
 import { getEventRequest } from '@/domain/event-request/service';
-import { canRaiseChangeRequest, canRaiseChangeRequestFor } from '@/domain/change-request/policy';
+import {
+  canRaiseChangeRequest,
+  canRaiseChangeRequestFor,
+  formatChangeRequestValue,
+} from '@/domain/change-request/policy';
 import { CHANGE_REQUEST_FIELD_LABELS, CHANGE_REQUEST_STATUS_LABELS } from '@/domain/change-request/schema';
 import { listChangeRequests } from '@/domain/change-request/service';
 import { NO_COMMITMENTS } from '@/domain/review/policy';
@@ -145,8 +149,9 @@ export default async function EventRequestPage({
 
   return (
     <main className="mx-auto max-w-2xl px-4 py-8">
+      {/* SCRUM-250 AC3 — back to the list, named as in the nav. */}
       <Link href="/events" className="text-sm text-[var(--brand)] hover:underline">
-        ← My event requests
+        ← Event requests
       </Link>
 
       <div className="mt-4 flex flex-wrap items-center gap-3">
@@ -306,7 +311,8 @@ export default async function EventRequestPage({
                   {cr.fields.map((field) => (
                     <li key={field.field}>
                       <span className="font-medium">{CHANGE_REQUEST_FIELD_LABELS[field.field]}:</span>{' '}
-                      {String(field.currentValue ?? '—')} → {String(field.proposedValue ?? '—')}
+                      {formatChangeRequestValue(field.field, field.currentValue)} →{' '}
+                      {formatChangeRequestValue(field.field, field.proposedValue)}
                     </li>
                   ))}
                 </ul>

@@ -3,15 +3,17 @@ import type { OperationalStatus } from '@/domain/equipment/schema';
 import { unitsInService } from '@/domain/equipment-out-of-service/policy';
 import { canViewEquipmentRequest } from '@/domain/equipment-request/policy';
 import type { Role } from '@/domain/identity/roles';
-import { ForbiddenError, NotFoundError, UnavailableError, ValidationError } from '@/domain/shared/errors';
+import { ConflictError, ForbiddenError, NotFoundError, UnavailableError, ValidationError } from '@/domain/shared/errors';
 import { fetchEventRequestById, type EventRequestRow } from '@/lib/supabase/eventRequests';
 import { fetchEquipmentRequestLine } from '@/lib/supabase/equipmentRequests';
 import {
   fetchConfirmedBookingDates,
+  fetchEventReservation,
   fetchEventReservations,
   fetchLinesWithItems,
   fetchOtherEventsReservations,
   fetchReservation,
+  releaseReservation,
   reserveEquipmentLine,
 } from '@/lib/supabase/equipmentReservations';
 import {
@@ -27,6 +29,7 @@ import {
   EquipmentAvailabilitySchema,
   EquipmentReservationSchema,
   EventReservationsSchema,
+  ReleaseReservationInputSchema,
   RESERVE_NEEDS_APPROVED_BOOKING_MESSAGE,
   ReserveEquipmentInputSchema,
   type DateWindow,
@@ -41,6 +44,7 @@ import {
  * SCRUM-167 Check equipment availability across the full commitment window
  * SCRUM-173 Reserve equipment for the full commitment window and view all
  *           reservations for the event
+ * SCRUM-177 Release a reservation
  *
  * Orchestration only: queries live in src/lib/supabase/equipmentReservations.ts
  * and the rules in policy.ts. The acting account is the signed-in one, passed
@@ -75,6 +79,8 @@ type ReservationRow = {
   review_required: boolean;
   review_required_at: string | null;
   review_required_cause: string | null;
+  release_reason: string | null;
+  released_at: string | null;
   equipment: { name: string } | null;
 };
 
@@ -146,6 +152,8 @@ function toReservation(row: ReservationRow): EquipmentReservation {
     reviewRequired: row.review_required,
     reviewRequiredAt: row.review_required_at,
     reviewRequiredCause: row.review_required_cause,
+    releaseReason: row.release_reason,
+    releasedAt: row.released_at,
   });
 }
 
@@ -319,7 +327,7 @@ export async function reserveEquipment(
  * SCRUM-173 AC6, AC7: the event's equipment section.
  *
  * AC6 every reservation with its item, quantity, window and status (Reserved,
- *     or Released once SCRUM-177 releases one).
+ *     or Released). SCRUM-177 AC5: a released one with its reason and date.
  * AC7 the lines still to reserve, on their own, with how many.
  *
  * Read with no approved venue booking too: nothing is reserved then, and the
@@ -343,4 +351,47 @@ export async function listEventReservations(eventRequestId: string, actor: Actor
       })),
     ),
   });
+}
+
+// -----------------------------------------------------------------------------
+// SCRUM-177: releasing
+// -----------------------------------------------------------------------------
+
+/**
+ * SCRUM-177 AC1: releases one of the event's reservations, with a reason. It
+ * becomes Released and its units are available again for its window, because
+ * everything that counts units as committed reads Reserved ones only (migration
+ * 20261028094938). The event's other reservations are not touched.
+ *
+ * Technical Support Staff only (equipment_administration), checked by the
+ * route. A reservation that is not the event's is not found; one already
+ * released is refused and keeps its first reason and date. `actorId` is
+ * whoever is signed in, from the route, never from the body.
+ */
+export async function releaseEquipmentReservation(
+  eventRequestId: string,
+  reservationId: string,
+  actorId: string,
+  input: unknown,
+): Promise<EquipmentReservation> {
+  const event = await readEvent(eventRequestId);
+  const id = z.string().uuid().safeParse(reservationId);
+  if (!id.success) throw new NotFoundError('Reservation');
+
+  const { data: existing, error: readError } = await fetchEventReservation(event.id, id.data);
+  if (readError) throw new ValidationError('The reservation could not be read.', readError.message);
+  if (!existing) throw new NotFoundError('Reservation');
+
+  const parsed = ReleaseReservationInputSchema.safeParse(input);
+  if (!parsed.success) {
+    throw new ValidationError(parsed.error.issues[0]?.message ?? 'The release is not valid.', parsed.error.flatten());
+  }
+
+  const { data: released, error } = await releaseReservation(id.data, parsed.data.reason, actorId);
+  if (error) throw new ValidationError('The reservation could not be released.', error.message);
+  if (!released) throw new ConflictError('This reservation has already been released.');
+
+  const { data: row, error: rereadError } = await fetchEventReservation(event.id, id.data);
+  if (rereadError || !row) throw new ValidationError('The reservation could not be read back.', rereadError?.message);
+  return toReservation(row as unknown as ReservationRow);
 }
