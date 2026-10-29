@@ -12,8 +12,11 @@ import type { NavItem } from './schema';
  * your own role's entry, to keep merges small.
  */
 export const ROLE_NAV: Record<Role, readonly NavItem[]> = {
-  // DUMMY(SCRUM-250) D-20: Event Organiser nav is the landing page only.
-  event_organiser: [{ href: '/events', label: 'My event requests' }],
+  // SCRUM-250 AC2: Event requests, New event request, in that order.
+  event_organiser: [
+    { href: '/events', label: 'Event requests' },
+    { href: '/events/new', label: 'New event request' },
+  ],
   // DUMMY(SCRUM-251) D-20: Event Coordinator nav is the landing page only.
   coordinator: [{ href: '/assigned-events', label: 'Assigned events' }],
   // DUMMY(SCRUM-252) D-20: Event Coordinator Lead nav is the landing page only.
