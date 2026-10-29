@@ -1,5 +1,5 @@
 import { formatDayMonthYear, type ISODate } from '@/domain/shared/dates';
-import type { RegistrationPeriod } from './schema';
+import type { FinalEventStatus, RegistrationPeriod } from './schema';
 
 /**
  * SCRUM-181 — Register for an event. Pure rules only; service.ts applies them.
@@ -49,6 +49,27 @@ export const ALREADY_REGISTERED = 'You are already registered for this event.';
 
 /** SCRUM-182 AC1, AC2: refused as full. */
 export const NO_PLACES_REMAINING = 'There are no places remaining for this event.';
+
+/**
+ * SCRUM-270 (bug against AC1) — whether the event is Cancelled or Completed.
+ * Either way it is not going ahead, so it takes no registrations whatever its
+ * period says (PO, 28/10/2026: a registration period is open only while the
+ * event is going ahead). Every other status is null: the period and places
+ * decide as before.
+ *
+ * Restated in SQL by register_for_event
+ * (20261029073301_refuse_registration_final_event.sql), which checks it again
+ * with the event row locked; change one, change the other.
+ */
+export function finalEventStatus(eventStatus: string): FinalEventStatus | null {
+  return eventStatus === 'cancelled' || eventStatus === 'completed' ? eventStatus : null;
+}
+
+/** SCRUM-270: why a Cancelled or Completed event refuses a registration. */
+export const FINAL_EVENT_REFUSALS: Record<FinalEventStatus, string> = {
+  cancelled: 'This event has been cancelled, so it is not taking registrations.',
+  completed: 'This event has already taken place, so it is not taking registrations.',
+};
 
 /**
  * SCRUM-182 AC1, AC3: whether the event is full. Only Registered

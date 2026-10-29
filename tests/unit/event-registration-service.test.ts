@@ -25,7 +25,7 @@ import {
   fetchRegistrationEvent,
 } from '@/lib/supabase/eventRegistrations';
 import { getRegistrationPage, registerForEvent } from '@/domain/event-registration/service';
-import { ALREADY_REGISTERED, NO_PLACES_REMAINING } from '@/domain/event-registration/policy';
+import { ALREADY_REGISTERED, FINAL_EVENT_REFUSALS, NO_PLACES_REMAINING } from '@/domain/event-registration/policy';
 import { CapacityExceededError, ConflictError, NotFoundError, ValidationError } from '@/domain/shared/errors';
 
 const EVENT_ID = '11111111-1111-4111-8111-111111111111';
@@ -45,11 +45,12 @@ const ROW = {
   registered_at: '2026-10-30T02:00:00+00:00',
 };
 
-function eventWithPeriod(start: string | null, end: string | null, capacity: number | null = 20) {
+function eventWithPeriod(start: string | null, end: string | null, capacity: number | null = 20, status = 'confirmed') {
   vi.mocked(fetchRegistrationEvent).mockResolvedValue({
     data: {
       id: EVENT_ID,
       name: 'Client Appreciation Night',
+      status,
       proposed_date: '2026-11-15',
       registration_start_date: start,
       registration_end_date: end,
@@ -380,5 +381,90 @@ describe('SCRUM-182 AC3: a place released by a withdrawal', () => {
     registrations(null, ROW);
     await expect(registerForEvent(EVENT_ID, ATTENDEE, VALID, NOW)).resolves.toMatchObject({ status: 'registered' });
     expect(createRegistrationRow).toHaveBeenCalledTimes(1);
+  });
+});
+
+/**
+ * SCRUM-270 — bug against AC1: a Cancelled or Completed event took
+ * registrations while its period was open. PO, 28/10/2026: a registration
+ * period is open only while the event is going ahead. Test case IDs are from
+ * SCRUM-270-test-cases.xlsx (TC-270-nn).
+ */
+describe('SCRUM-270: a Cancelled or Completed event takes no registrations', () => {
+  it('TC-270-01 the page of a Cancelled event, its period open, is marked Cancelled', async () => {
+    eventWithPeriod('2026-10-27', '2026-11-04', 20, 'cancelled');
+    registrations(null);
+
+    const view = await getRegistrationPage(EVENT_ID, ATTENDEE, NOW);
+
+    expect(view.finalStatus).toBe('cancelled');
+    expect(view.periodRefusal).toBeNull();
+    expect(view.registration).toBeNull();
+  });
+
+  it('TC-270-02 the page of a Completed event, its period open, is marked Completed', async () => {
+    eventWithPeriod('2026-10-27', '2026-11-04', 20, 'completed');
+    registrations(null);
+
+    expect((await getRegistrationPage(EVENT_ID, ATTENDEE, NOW)).finalStatus).toBe('completed');
+  });
+
+  it('TC-270-03 registering for a Cancelled event is refused with the reason, and nothing is written', async () => {
+    eventWithPeriod('2026-10-27', '2026-11-04', 20, 'cancelled');
+
+    const error = await refusal(registerForEvent(EVENT_ID, ATTENDEE, VALID, NOW));
+
+    expect(error).toBeInstanceOf(ValidationError);
+    expect((error as ValidationError).message).toBe(FINAL_EVENT_REFUSALS.cancelled);
+    expect((error as ValidationError).details).toEqual({ eventStatus: 'cancelled' });
+    expect(createRegistrationRow).not.toHaveBeenCalled();
+  });
+
+  it('TC-270-04 registering for a Completed event is refused with the reason, and nothing is written', async () => {
+    eventWithPeriod('2026-10-27', '2026-11-04', 20, 'completed');
+
+    const error = await refusal(registerForEvent(EVENT_ID, ATTENDEE, VALID, NOW));
+
+    expect((error as ValidationError).message).toBe(FINAL_EVENT_REFUSALS.completed);
+    expect(createRegistrationRow).not.toHaveBeenCalled();
+  });
+
+  it('TC-270-05 someone registered before the event was cancelled keeps seeing their registration, with the event marked Cancelled', async () => {
+    eventWithPeriod('2026-10-27', '2026-11-04', 20, 'cancelled');
+    registrations(ROW);
+
+    const view = await getRegistrationPage(EVENT_ID, ATTENDEE, NOW);
+    expect(view.finalStatus).toBe('cancelled');
+    expect(view.registration).toMatchObject({ reference: 'REG-2026-0001', status: 'registered' });
+
+    // Registering again is still the duplicate refusal (AC5 is checked first), not a second row.
+    await expect(registerForEvent(EVENT_ID, ATTENDEE, VALID, NOW)).rejects.toThrow(ConflictError);
+    expect(createRegistrationRow).not.toHaveBeenCalled();
+  });
+
+  it('TC-270-06 an event cancelled or completed after the page loaded is refused by the database function', async () => {
+    for (const status of ['cancelled', 'completed'] as const) {
+      registrations(null);
+      databaseSays(status);
+
+      const error = await refusal(registerForEvent(EVENT_ID, ATTENDEE, VALID, NOW));
+
+      expect(error).toBeInstanceOf(ValidationError);
+      expect((error as ValidationError).message).toBe(FINAL_EVENT_REFUSALS[status]);
+    }
+  });
+
+  it('TC-270-07 every other status takes registrations as before', async () => {
+    for (const status of ['approved', 'planning', 'confirmed', 'preparation']) {
+      eventWithPeriod('2026-10-27', '2026-11-04', 20, status);
+      registrations(null, ROW);
+
+      expect((await getRegistrationPage(EVENT_ID, ATTENDEE, NOW)).finalStatus, status).toBeNull();
+      registrations(null, ROW);
+      await expect(registerForEvent(EVENT_ID, ATTENDEE, VALID, NOW), status).resolves.toMatchObject({
+        status: 'registered',
+      });
+    }
+    expect(createRegistrationRow).toHaveBeenCalledTimes(4);
   });
 });

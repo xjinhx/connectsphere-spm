@@ -18,14 +18,15 @@ export const REGISTRATION_COLUMNS =
 
 /**
  * What the Attendee's page needs from the event: its name and date, the
- * registration period and its capacity (SCRUM-182). Nothing else, so no
+ * registration period and its capacity (SCRUM-182), and its status, read only
+ * to refuse a Cancelled or Completed event (SCRUM-270). Nothing else, so no
  * internal planning field can reach an attendee (SCRUM-72 AC1). maybeSingle:
  * an unknown id is null, not an error.
  */
 export async function fetchRegistrationEvent(eventRequestId: string) {
   return db()
     .from('event_request')
-    .select('id, name, proposed_date, registration_start_date, registration_end_date, registration_capacity')
+    .select('id, name, status, proposed_date, registration_start_date, registration_end_date, registration_capacity')
     .eq('id', eventRequestId)
     .maybeSingle();
 }
