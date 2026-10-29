@@ -3,6 +3,7 @@
 import { useState } from 'react';
 import { useRouter } from 'next/navigation';
 import { CHANGE_REQUEST_FIELD_LABELS, type SelectableChangeRequestField } from '@/domain/change-request/schema';
+import { refusalMessage, type ChangeRequestRefusal } from './refusalMessage';
 
 /**
  * SCRUM-187 AC1 — "selecting each field to change, entering its proposed
@@ -77,9 +78,10 @@ export function ChangeRequestForm({ requestId }: { requestId: string }) {
         headers: { 'content-type': 'application/json' },
         body: JSON.stringify({ fields, reason }),
       });
-      const payload = (await result.json().catch(() => null)) as { message?: string } | null;
+      const payload = (await result.json().catch(() => null)) as ChangeRequestRefusal;
       if (!result.ok) {
-        throw new Error(payload?.message ?? 'The change request could not be sent.');
+        // SCRUM-273: the reason on the field, not "The change request is not valid."
+        throw new Error(refusalMessage(payload));
       }
 
       setOpen(false);
