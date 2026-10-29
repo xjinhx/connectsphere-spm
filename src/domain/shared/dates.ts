@@ -27,6 +27,12 @@ export function isISODate(value: string): boolean {
  */
 export const LATEST_DATE: ISODate = '9999-12-31';
 
+/**
+ * SCRUM-267: the same limit for a datetime-local input. Without a max, the
+ * browser lets the year segment run on to 275760.
+ */
+export const LATEST_DATE_TIME = '9999-12-31T23:59';
+
 /** True when a date input's value has a year of more than four digits, e.g. "20266-10-10". */
 export function hasLongYear(value: string): boolean {
   return /^\d{5,}-/.test(value);

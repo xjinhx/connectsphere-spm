@@ -9,7 +9,7 @@ import {
   type VenueCalendar,
 } from '@/domain/venues/schema';
 import { NotFoundError, ValidationError } from '@/domain/shared/errors';
-import { formatSingaporeDate, todayInSingapore } from '@/domain/shared/dates';
+import { formatSingaporeDate, LATEST_DATE, todayInSingapore } from '@/domain/shared/dates';
 import { formatExpiry } from '@/domain/venue-hold/policy';
 import { getCurrentActor } from '@/lib/auth/currentActor';
 import NoVenueAccess from '@/components/venue/NoVenueAccess';
@@ -127,13 +127,13 @@ export default async function VenueCalendarPage({
           <label htmlFor="from" className="mb-1 block text-sm font-medium">
             From
           </label>
-          <input id="from" name="from" type="date" required defaultValue={from} className="rounded border border-[var(--border)] px-3 py-2 text-sm" />
+          <input id="from" name="from" type="date" required max={LATEST_DATE} defaultValue={from} className="rounded border border-[var(--border)] px-3 py-2 text-sm" />
         </div>
         <div>
           <label htmlFor="to" className="mb-1 block text-sm font-medium">
             To
           </label>
-          <input id="to" name="to" type="date" required defaultValue={to} className="rounded border border-[var(--border)] px-3 py-2 text-sm" />
+          <input id="to" name="to" type="date" required max={LATEST_DATE} defaultValue={to} className="rounded border border-[var(--border)] px-3 py-2 text-sm" />
         </div>
         <button
           type="submit"

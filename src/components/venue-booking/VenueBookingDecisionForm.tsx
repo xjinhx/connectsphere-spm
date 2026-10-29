@@ -2,6 +2,7 @@
 
 import { useState } from 'react';
 import { useRouter } from 'next/navigation';
+import { LATEST_DATE } from '@/domain/shared/dates';
 import { END_TIME_OPTIONS, START_TIME_OPTIONS } from '@/domain/shared/times';
 
 type Decision = 'approve' | 'reject';
@@ -157,6 +158,7 @@ export function VenueBookingDecisionForm({
                   <input
                     id={`suggest-date-${line.id}`}
                     type="date"
+                    max={LATEST_DATE}
                     value={suggestions[line.id]?.date ?? ''}
                     onChange={(event) => updateSuggestion(line.id, { date: event.target.value })}
                     className="w-full rounded-md border border-[var(--border)] bg-[var(--surface)] px-3 py-2 text-sm"
