@@ -3,12 +3,22 @@ import { EventFullNotice } from '@/components/event-registration/EventFullNotice
 import { RegistrationConfirmation } from '@/components/event-registration/RegistrationConfirmation';
 import { RegistrationForm } from '@/components/event-registration/RegistrationForm';
 import { FINAL_EVENT_REFUSALS } from '@/domain/event-registration/policy';
-import { FINAL_EVENT_STATUS_LABELS } from '@/domain/event-registration/schema';
+import { FINAL_EVENT_STATUS_LABELS, type FinalEventStatus } from '@/domain/event-registration/schema';
 import { getRegistrationPage } from '@/domain/event-registration/service';
 import { formatDayMonthYear } from '@/domain/shared/dates';
 import { getCurrentActor } from '@/lib/auth/currentActor';
 
 export const dynamic = 'force-dynamic';
+
+/**
+ * SCRUM-270: Cancelled in red, as SCRUM-180's My registrations marks it, since
+ * the attendee needs to notice the event is not happening. Completed in grey,
+ * as EventRequestStatusBadge shows it to organisers: finished, nothing wrong.
+ */
+const FINAL_STATUS_CLASS: Record<FinalEventStatus, string> = {
+  cancelled: 'bg-red-50 text-red-700',
+  completed: 'bg-slate-100 text-slate-700',
+};
 
 /**
  * SCRUM-181 — the Attendee's page for one event, where they register.
@@ -48,7 +58,9 @@ export default async function AttendeeEventRegistrationPage({ params }: { params
       <h1 className="mt-3 text-2xl font-semibold">
         {view.eventName}
         {view.finalStatus ? (
-          <span className="ml-2 inline-block rounded-full bg-red-50 px-2 py-0.5 align-middle text-xs font-medium text-red-700">
+          <span
+            className={`ml-2 inline-block rounded-full px-2 py-0.5 align-middle text-xs font-medium ${FINAL_STATUS_CLASS[view.finalStatus]}`}
+          >
             {FINAL_EVENT_STATUS_LABELS[view.finalStatus]}
           </span>
         ) : null}

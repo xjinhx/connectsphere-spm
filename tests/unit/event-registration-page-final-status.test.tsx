@@ -82,6 +82,8 @@ describe('SCRUM-270: a Cancelled or Completed event is shown as such, with no Re
     const html = await renderEventPage({ ...GALA, finalStatus: 'cancelled' });
 
     expect(html).toMatch(/Year-End Gala<span[^>]*>Cancelled<\/span>/);
+    // Red, as SCRUM-180's My registrations marks a cancelled event.
+    expect(html).toMatch(/<span[^>]*class="[^"]*text-red-700[^"]*"[^>]*>Cancelled<\/span>/);
     expect(html).toContain(FINAL_EVENT_REFUSALS.cancelled);
     expect(hasRegisterForm(html)).toBe(false);
   });
@@ -90,6 +92,9 @@ describe('SCRUM-270: a Cancelled or Completed event is shown as such, with no Re
     const html = await renderEventPage({ ...GALA, eventName: 'Annual Dinner', finalStatus: 'completed' });
 
     expect(html).toMatch(/Annual Dinner<span[^>]*>Completed<\/span>/);
+    // Grey, as organisers see Completed; not red, since nothing went wrong.
+    expect(html).toMatch(/<span[^>]*class="[^"]*text-slate-700[^"]*"[^>]*>Completed<\/span>/);
+    expect(html).not.toMatch(/<span[^>]*class="[^"]*red[^"]*"[^>]*>Completed<\/span>/);
     expect(html).toContain(FINAL_EVENT_REFUSALS.completed);
     expect(hasRegisterForm(html)).toBe(false);
   });
