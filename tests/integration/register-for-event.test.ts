@@ -1,7 +1,7 @@
 import { afterAll, beforeAll, describe, expect, it } from 'vitest';
 import { createAdminClient } from '@/lib/supabase/admin';
 import { getRegistrationPage, registerForEvent } from '@/domain/event-registration/service';
-import { ALREADY_REGISTERED } from '@/domain/event-registration/policy';
+import { ALREADY_REGISTERED, FINAL_EVENT_REFUSALS } from '@/domain/event-registration/policy';
 import { ConflictError, ValidationError } from '@/domain/shared/errors';
 import { TEST_CLIENT_ORGANISATION_ID, ensureTestClientOrganisation } from './fixtures/clientOrganisation';
 
@@ -327,5 +327,81 @@ describe('the registration period on the event', () => {
 
     expect(backwards.error?.code).toBe('23514');
     expect(halfOpen.error?.code).toBe('23514');
+  });
+});
+
+/**
+ * SCRUM-270 — bug against AC1: a Cancelled or Completed event took
+ * registrations while its period was open. PO, 28/10/2026: a registration
+ * period is open only while the event is going ahead. Test case IDs are from
+ * SCRUM-270-test-cases.xlsx (TC-270-nn).
+ */
+describe('SCRUM-270: a Cancelled or Completed event takes no registrations', () => {
+  // Cancelling is SCRUM-102 / 177's and completing SCRUM-104's; this writes the status each sets.
+  async function setStatus(eventId: string, status: 'cancelled' | 'completed') {
+    const { error } = await admin
+      .from('event_request')
+      .update({ status, submitted_at: new Date().toISOString() })
+      .eq('id', eventId);
+    if (error) throw new Error(`could not set test event to ${status}: ${error.message}`);
+  }
+
+  it('TC-270-01, 02 the page of a Cancelled or Completed event, its period open, is marked with the status', async () => {
+    for (const status of ['cancelled', 'completed'] as const) {
+      const eventId = await createEvent('2026-10-27', '2026-11-04');
+      await setStatus(eventId, status);
+
+      const view = await getRegistrationPage(eventId, await createAttendee(), NOW);
+
+      expect(view.finalStatus).toBe(status);
+      expect(view.periodRefusal).toBeNull();
+    }
+  });
+
+  it('TC-270-03, 04 registering for a Cancelled or Completed event is refused with the reason, and nothing is stored', async () => {
+    for (const status of ['cancelled', 'completed'] as const) {
+      const eventId = await createEvent('2026-10-27', '2026-11-04');
+      await setStatus(eventId, status);
+
+      const error = await registerForEvent(eventId, await createAttendee(), VALID, NOW).catch((caught: unknown) => caught);
+
+      expect(error).toBeInstanceOf(ValidationError);
+      expect((error as ValidationError).message).toBe(FINAL_EVENT_REFUSALS[status]);
+      expect(await rowsFor(eventId)).toHaveLength(0);
+    }
+  });
+
+  it('TC-270-05 someone registered before the event was cancelled still sees their registration, with the event marked Cancelled', async () => {
+    const eventId = await createEvent('2026-10-27', '2026-11-04');
+    const attendee = await createAttendee();
+    const registration = await registerForEvent(eventId, attendee, VALID, NOW);
+    await setStatus(eventId, 'cancelled');
+
+    const view = await getRegistrationPage(eventId, attendee, NOW);
+
+    expect(view.finalStatus).toBe('cancelled');
+    expect(view.registration).toMatchObject({ reference: registration.reference, status: 'registered' });
+    expect(await rowsFor(eventId)).toHaveLength(1);
+  });
+
+  it('TC-270-06 the database function refuses a Cancelled or Completed event on its own, so a request that got past the page check stores nothing', async () => {
+    for (const status of ['cancelled', 'completed'] as const) {
+      const eventId = await createEvent('2026-10-27', '2026-11-04');
+      await setStatus(eventId, status);
+
+      // Straight to the function, as when the event is cancelled between the service's read and the insert.
+      const { data, error } = await admin.rpc('register_for_event', {
+        p_event_request_id: eventId,
+        p_attendee_id: await createAttendee(),
+        p_full_name: VALID.fullName,
+        p_email: VALID.email,
+        p_contact_number: VALID.contactNumber,
+        p_today: '2026-10-30',
+      });
+
+      expect(error).toBeNull();
+      expect(data).toBe(status);
+      expect(await rowsFor(eventId)).toHaveLength(0);
+    }
   });
 });
