@@ -727,7 +727,10 @@ switch them the next time they edit those files.
 - **To replace:** SCRUM-177 releases through the app into the same status
   column. Release through it in `scripts/seed-b1.mjs` and TC-173-09, remove
   the markers, and re-run TC-173-09.
-- **Status:** Active.
+- **Status:** Replaced (SCRUM-177, branch `equipment-release`). The seed
+  releases EQ-173-09 through `release_equipment_reservation` and TC-173-09
+  through `releaseEquipmentReservation`, with a reason; markers removed;
+  TC-173-09 re-run (SCRUM-177's TC-177-10).
 
 ### D-22 — An event's registration period is set by the seed script
 

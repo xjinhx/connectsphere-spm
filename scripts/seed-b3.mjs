@@ -100,7 +100,7 @@ check(
 
 // --- Start clean ------------------------------------------------------------
 check('clear B3 events', await supabase.from('event_request').delete().like('name', `${PREFIX} %`));
-check('clear B3 items', await supabase.from('equipment').delete().like('name', 'EQ-102-%'));
+check('clear B3 items', await supabase.from('equipment').delete().or('name.like.EQ-102-%,name.like.EQ-177-%'));
 check('clear B3 unavailable periods', await supabase.from('venue_unavailable_slot').delete().eq('reason', UNAVAILABLE_REASON));
 
 // --- Venues (supabase/seed.sql) ---------------------------------------------
@@ -111,7 +111,7 @@ for (const name of ['Marina Bay Ballroom', 'Bugis Seminar Room', 'Jurong East Tr
 
 // --- Catalogue (SCRUM-240) ---------------------------------------------------
 const item = {};
-for (const [name, quantity] of Object.entries({ 'EQ-102-01': 4, 'EQ-102-02': 2 })) {
+for (const [name, quantity] of Object.entries({ 'EQ-102-01': 4, 'EQ-102-02': 2, 'EQ-177-01': 5, 'EQ-177-02': 3 })) {
   const saved = await single(
     `insert ${name}`,
     supabase
@@ -459,5 +459,28 @@ for (const event of created) {
 console.log('\nSCRUM-104 events (E104-X2 is a Draft: organiser@example.com sees it under My event requests):');
 for (const event of created104) {
   console.log(`  ${event.reference}  ${event.key.padEnd(7)} http://localhost:3000/events/${event.id}/review`);
+}
+
+// --- SCRUM-177 ---------------------------------------------------------------
+// Both booked 10/11/2026 in the afternoon, so their window is 09/11/2026 to
+// 10/11/2026 and no SCRUM-102 booking meets theirs.
+const created177 = [];
+
+// TC-177-01 to TC-177-09, TC-177-11: 4 of EQ-177-01 and 2 of EQ-177-02, both Reserved.
+const a177 = await createEvent('E177-A');
+await book(a177, 'Jurong East Training Room', '2026-11-10', AFTERNOON);
+await equipment(a177, 'EQ-177-01', 4, 4);
+await equipment(a177, 'EQ-177-02', 2, 2);
+created177.push(a177);
+
+// TC-177-02: the same window, 3 of EQ-177-01 requested and nothing reserved.
+const b177 = await createEvent('E177-B');
+await book(b177, 'Bugis Seminar Room', '2026-11-10', AFTERNOON);
+await equipment(b177, 'EQ-177-01', 3);
+created177.push(b177);
+
+console.log('\nSCRUM-177 events (equipment pages; as tech-support@example.com unless the case says otherwise):');
+for (const event of created177) {
+  console.log(`  ${event.reference}  ${event.key.padEnd(7)} http://localhost:3000/events/${event.id}/equipment`);
 }
 console.log('\nAccounts are the seed:users ones; coordinator2@example.com and venue-staff@example.com use the same password.');

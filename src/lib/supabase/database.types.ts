@@ -323,6 +323,9 @@ export type Database = {
           quantity: number
           reconfirmed_at: string | null
           reconfirmed_by: string | null
+          release_reason: string | null
+          released_at: string | null
+          released_by: string | null
           reserved_by: string | null
           review_required: boolean
           review_required_at: string | null
@@ -341,6 +344,9 @@ export type Database = {
           quantity: number
           reconfirmed_at?: string | null
           reconfirmed_by?: string | null
+          release_reason?: string | null
+          released_at?: string | null
+          released_by?: string | null
           reserved_by?: string | null
           review_required?: boolean
           review_required_at?: string | null
@@ -359,6 +365,9 @@ export type Database = {
           quantity?: number
           reconfirmed_at?: string | null
           reconfirmed_by?: string | null
+          release_reason?: string | null
+          released_at?: string | null
+          released_by?: string | null
           reserved_by?: string | null
           review_required?: boolean
           review_required_at?: string | null
@@ -1758,6 +1767,14 @@ export type Database = {
           p_today: string
         }
         Returns: string
+      }
+      release_equipment_reservation: {
+        Args: {
+          p_reason: string
+          p_released_by: string
+          p_reservation_id: string
+        }
+        Returns: boolean
       }
       reserve_equipment: {
         Args: { p_line_id: string; p_quantity: number; p_reserved_by: string }

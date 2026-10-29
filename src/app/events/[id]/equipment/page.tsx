@@ -285,7 +285,8 @@ export default async function EventEquipmentRequestPage({ params }: { params: Pr
         availability={availability}
         refusal={refusal}
       />
-      <EventReservationsSection {...reservations} canReserve={canReserve} />
+      {/* SCRUM-177: releasing takes the same permission as reserving. */}
+      <EventReservationsSection {...reservations} canReserve={canReserve} canRelease={canReserve} />
 
       {/* AC6: the notes, shown with the equipment list. Kept as typed, line
           breaks included (AC5, TC-160-14). */}
