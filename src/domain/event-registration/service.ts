@@ -50,7 +50,7 @@ type EventRow = {
   registration_start_date: string | null;
   registration_end_date: string | null;
   registration_capacity: number | null;
-  venue_booking: { status: string; venues: EventVenue | null }[];
+  venue_booking: { status: string; venue_id: string; venues: EventVenue | null }[];
 };
 
 type RegistrationRow = {

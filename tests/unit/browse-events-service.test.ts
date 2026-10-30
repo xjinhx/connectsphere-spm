@@ -24,6 +24,8 @@ import { listMyRegistrations, listOpenEvents } from '@/domain/event-registration
 
 const NIGHT_ID = '11111111-1111-4111-8111-111111111111';
 const BALLROOM = { name: 'Marina Bay Ballroom', address: '10 Bayfront Avenue, Singapore 018956' };
+const BALLROOM_ID = 'dddddddd-dddd-4ddd-8ddd-dddddddddddd';
+const SEMINAR_ROOM_ID = 'eeeeeeee-eeee-4eee-8eee-eeeeeeeeeeee';
 
 /** An event row as fetchOpenEvents returns it. */
 function eventRow(overrides: Record<string, unknown> = {}) {
@@ -35,7 +37,7 @@ function eventRow(overrides: Record<string, unknown> = {}) {
     end_time: '22:00:00',
     registration_start_date: '2026-10-27',
     registration_end_date: '2026-11-04',
-    venue_booking: [{ status: 'confirmed', venues: BALLROOM }],
+    venue_booking: [{ status: 'confirmed', venue_id: BALLROOM_ID, venues: BALLROOM }],
     // Read only for My registrations (AC6).
     status: 'confirmed',
     ...overrides,
@@ -64,7 +66,7 @@ const BRIEFING = eventRow({
   proposed_date: '2026-11-15',
   start_time: '10:00:00',
   end_time: '12:00:00',
-  venue_booking: [{ status: 'confirmed', venues: { name: 'Bugis Seminar Room', address: null } }],
+  venue_booking: [{ status: 'confirmed', venue_id: SEMINAR_ROOM_ID, venues: { name: 'Bugis Seminar Room', address: null } }],
 });
 
 beforeEach(() => {
@@ -100,6 +102,38 @@ describe('AC1: an event whose registration period is open is listed', () => {
       expect(fetchOpenEvents).toHaveBeenLastCalledWith('2026-10-30');
       expect(events.map((event) => event.eventRequestId)).toEqual(['a', 'b']);
     }
+  });
+
+  it('TC-180-17 a venue the event has booked twice (morning and afternoon) is listed once', async () => {
+    databaseHas(
+      eventRow({
+        venue_booking: [
+          { status: 'confirmed', venue_id: BALLROOM_ID, venues: BALLROOM },
+          { status: 'confirmed', venue_id: BALLROOM_ID, venues: BALLROOM },
+          { status: 'confirmed', venue_id: SEMINAR_ROOM_ID, venues: { name: 'Bugis Seminar Room', address: null } },
+        ],
+      }),
+    );
+
+    const [event] = await listOpenEvents(new Date('2026-10-30T10:00:00+08:00'));
+
+    expect(event?.venues).toEqual([{ name: 'Bugis Seminar Room', address: null }, BALLROOM]);
+  });
+
+  it('TC-180-17 two venues that share a name are both listed: venues are told apart by id', async () => {
+    const otherBallroomId = 'ffffffff-ffff-4fff-8fff-ffffffffffff';
+    databaseHas(
+      eventRow({
+        venue_booking: [
+          { status: 'confirmed', venue_id: BALLROOM_ID, venues: BALLROOM },
+          { status: 'confirmed', venue_id: otherBallroomId, venues: { name: BALLROOM.name, address: null } },
+        ],
+      }),
+    );
+
+    const [event] = await listOpenEvents(new Date('2026-10-30T10:00:00+08:00'));
+
+    expect(event?.venues).toHaveLength(2);
   });
 });
 

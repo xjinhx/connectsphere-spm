@@ -60,8 +60,9 @@ export default async function AttendeeEventRegistrationPage({ params }: { params
             <dt className="text-[var(--text-muted)]">{view.venues.length > 1 ? 'Venues' : 'Venue'}</dt>
             <dd>
               <ul>
-                {view.venues.map((venue) => (
-                  <li key={venue.name}>
+                {/* Each venue is listed once (bookedVenues), but two venues may share a name. */}
+                {view.venues.map((venue, index) => (
+                  <li key={`${index}-${venue.name}`}>
                     {venue.name}
                     {venue.address ? (
                       <span className="block text-[var(--text-muted)]">{venue.address}</span>

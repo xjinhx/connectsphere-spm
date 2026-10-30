@@ -71,7 +71,8 @@ type EventOptions = {
   date?: string;
   start?: string | null;
   end?: string | null;
-  bookings?: { venueId: string; status: 'confirmed' | 'released' }[];
+  /** Each booking runs 18:00 to 22:00 unless it gives its own times. */
+  bookings?: { venueId: string; status: 'confirmed' | 'released'; start?: string; end?: string }[];
 };
 
 /**
@@ -115,12 +116,12 @@ async function createEvent(name: string, options: EventOptions = {}): Promise<st
 
   if (bookings.length > 0) {
     const { error: bookingError } = await admin.from('venue_booking').insert(
-      bookings.map(({ venueId, status }) => ({
+      bookings.map(({ venueId, status, start: bookingStart = '18:00', end: bookingEnd = '22:00' }) => ({
         venue_id: venueId,
         event_request_id: data.id,
         date,
-        start_time: '18:00',
-        end_time: '22:00',
+        start_time: bookingStart,
+        end_time: bookingEnd,
         status,
         // A released booking always records why, who and when (SCRUM-231).
         ...(status === 'released'
@@ -205,6 +206,22 @@ describe('AC1: an event whose registration period is open is listed', () => {
       `Bugis Seminar Room ${RUN}`,
       `Marina Bay Ballroom ${RUN}`,
     ]);
+  });
+
+  it('TC-180-17 a venue booked twice for the event (morning and afternoon) is listed once, on the list and the page', async () => {
+    // Two bookings at one venue on one day: venue_booking_no_overlap allows them, since the times do not overlap.
+    const eventId = await createEvent('Client Training Day', {
+      bookings: [
+        { venueId: ballroomId, status: 'confirmed', start: '09:00', end: '12:00' },
+        { venueId: ballroomId, status: 'confirmed', start: '14:00', end: '17:00' },
+      ],
+    });
+
+    const listed = (await listOpenEvents(NOW)).find((event) => event.eventRequestId === eventId);
+    const page = await getRegistrationPage(eventId, attendeeId, NOW);
+
+    expect(listed?.venues).toEqual([{ name: `Marina Bay Ballroom ${RUN}`, address: BALLROOM_ADDRESS }]);
+    expect(page.venues).toEqual([{ name: `Marina Bay Ballroom ${RUN}`, address: BALLROOM_ADDRESS }]);
   });
 
   it('TC-180-16 a Cancelled or Completed event is not listed, even with its period open (PO, 28/10/2026)', async () => {

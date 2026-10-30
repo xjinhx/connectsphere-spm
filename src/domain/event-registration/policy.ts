@@ -92,18 +92,21 @@ export function eventTimes(startTime: string | null, endTime: string | null): Cl
 }
 
 /**
- * SCRUM-180 AC1, AC3 — the venues the event is held at: one per confirmed
- * booking, in name order. A released booking (SCRUM-231) no longer holds the
- * venue, so it is left out.
+ * SCRUM-180 AC1, AC3 — the venues the event is held at: each venue with a
+ * confirmed booking, once, in name order. An event can hold the same venue
+ * twice on one day (a morning and an afternoon booking, which
+ * venue_booking_no_overlap allows), so venues are told apart by venue_id, not
+ * by booking; and by id, not name, since two venues may share a name. A
+ * released booking (SCRUM-231) no longer holds the venue, so it is left out.
  */
 export function bookedVenues(
-  bookings: readonly { status: string; venues: EventVenue | null }[],
+  bookings: readonly { status: string; venue_id: string; venues: EventVenue | null }[],
 ): EventVenue[] {
-  return bookings
-    .flatMap(({ status, venues }) =>
-      status === 'confirmed' && venues ? [{ name: venues.name, address: venues.address }] : [],
-    )
-    .sort((a, b) => a.name.localeCompare(b.name));
+  const byVenue = new Map<string, EventVenue>();
+  for (const { status, venue_id, venues } of bookings) {
+    if (status === 'confirmed' && venues) byVenue.set(venue_id, { name: venues.name, address: venues.address });
+  }
+  return [...byVenue.values()].sort((a, b) => a.name.localeCompare(b.name));
 }
 
 /**

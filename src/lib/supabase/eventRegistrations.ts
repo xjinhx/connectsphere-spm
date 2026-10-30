@@ -17,10 +17,11 @@ export const REGISTRATION_COLUMNS =
   'id, reference, event_request_id, full_name, email, contact_number, status, registered_at';
 
 /**
- * SCRUM-180: each of the event's bookings with its venue's name and address.
- * The service keeps the confirmed ones (bookedVenues).
+ * SCRUM-180: each of the event's bookings with its venue's id, name and
+ * address. The service keeps each venue with a confirmed booking, once
+ * (bookedVenues); the id is read only to tell venues apart, not shown.
  */
-const BOOKED_VENUES = 'venue_booking (status, venues (name, address))';
+const BOOKED_VENUES = 'venue_booking (status, venue_id, venues (name, address))';
 
 /**
  * SCRUM-180 AC3: what an attendee may see of one event, and nothing else: the
