@@ -1,4 +1,6 @@
 import type { EventRequestStatus } from '@/domain/event-request/schema';
+import { formatDayMonthYear, isISODate } from '@/domain/shared/dates';
+import type { SelectableChangeRequestField } from './schema';
 
 /**
  * SCRUM-187 AC1/AC2/AC5 — which statuses offer the change-request action.
@@ -32,4 +34,18 @@ export function canRaiseChangeRequestFor(
   actorUserId: string,
 ): boolean {
   return request.organiserId === actorUserId;
+}
+
+/**
+ * SCRUM-272 (bug on AC6): how one side of a change request line is shown.
+ * A date is shown as DD/MM/YYYY, the format agreed at Sprint 4 Planning, not
+ * as the stored YYYY-MM-DD; a missing value is shown as "—". Every other
+ * value is shown as before.
+ */
+export function formatChangeRequestValue(field: SelectableChangeRequestField, value: unknown): string {
+  if (value === null || value === undefined) return '—';
+  if (field === 'proposedDate' && typeof value === 'string' && isISODate(value)) {
+    return formatDayMonthYear(value);
+  }
+  return String(value);
 }

@@ -7,6 +7,15 @@
  */
 export const SESSION_IDLE_TIMEOUT_MS = 30 * 60 * 1000;
 
+/**
+ * SCRUM-264 bug fix: the cookie name is shared between the middleware (which
+ * sets/reads it) and the logout route (which must clear it). Previously only
+ * `src/middleware.ts` held this literal, so logout had no way to clear it -
+ * the stale timestamp then got checked against the *next* login's brand-new
+ * session and that first login attempt was wrongly rejected as idle.
+ */
+export const LAST_ACTIVITY_COOKIE = 'csp_last_activity';
+
 export function isSessionIdleExpired(lastActivityAt: Date, now: Date): boolean {
   return now.getTime() - lastActivityAt.getTime() > SESSION_IDLE_TIMEOUT_MS;
 }
