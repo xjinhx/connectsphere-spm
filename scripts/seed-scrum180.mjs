@@ -209,7 +209,7 @@ async function seed() {
       5,
       19,
       ['14:00', '17:00'],
-      'TC-180-11 (withdrawn)',
+      'TC-180-11 (withdrawn), 17',
       {
         description: 'A hands-on afternoon for customers.',
       },
@@ -261,16 +261,18 @@ async function seed() {
   const dateOf = (name) => rows.find((row) => row.name === name);
 
   // --- Venue bookings ---------------------------------------------------------
-  // One booking per venue, at the event's own date and times. Each event that has
-  // one is on a day of its own, so no two clash at the same venue.
-  function booking(eventName, venueName, status = 'confirmed') {
+  // A booking per venue, at the event's own date and times (Customer Workshop has a
+  // second one; TC-180-17). Each event that has one is on a day of its own, so no two
+  // events clash at the same venue.
+  // `times` overrides the event's own, for a second booking at the same venue (TC-180-17).
+  function booking(eventName, venueName, status = 'confirmed', times = null) {
     const event = dateOf(eventName);
     return {
       event_request_id: idOf(eventName),
       venue_id: venueId(venueName),
       date: event.proposed_date,
-      start_time: event.start_time,
-      end_time: event.end_time,
+      start_time: times ? times[0] : event.start_time,
+      end_time: times ? times[1] : event.end_time,
       status,
       // A released booking always records why, who and when (SCRUM-231).
       ...(status === 'released'
@@ -292,6 +294,8 @@ async function seed() {
       booking('Product Launch Briefing', 'Bugis Seminar Room'),
       booking('Product Launch Briefing', 'Jurong East Training Room', 'released'),
       booking('Customer Workshop', 'Bugis Seminar Room'),
+      // TC-180-17: a second, morning booking at the same venue; the venue is still listed once.
+      booking('Customer Workshop', 'Bugis Seminar Room', 'confirmed', ['09:00', '12:00']),
       booking('Year-End Gala', 'Marina Bay Ballroom'),
     ]),
   );
