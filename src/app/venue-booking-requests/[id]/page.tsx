@@ -99,7 +99,12 @@ export default async function VenueBookingRequestPage({ params }: { params: Prom
 
   return (
     <main className="mx-auto max-w-2xl px-4 py-8">
-      <div className="flex flex-wrap items-center gap-3">
+      {/* SCRUM-253 AC3: back to the queue this row was opened from. */}
+      <Link href="/booking-queue" className="text-sm text-[var(--brand)] underline">
+        Back to Booking requests
+      </Link>
+
+      <div className="mt-3 flex flex-wrap items-center gap-3">
         <h1 className="text-xl font-semibold">Booking request</h1>
         <span className="rounded-full border border-[var(--border)] px-2 py-0.5 text-xs font-medium">
           {STATUS_LABELS[request.status]}

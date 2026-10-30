@@ -704,8 +704,14 @@ switch them the next time they edit those files.
   (`currentNavHref` beside `isNavItemCurrent` in
   `src/domain/navigation/policy.ts`, agreed with SCRUM-249's owner); roles
   whose items don't nest are unaffected. TC-249-15 to 17 and 25 to 27 re-run
-  for the organiser as TC-250-02, 06 and 07. **Other roles:** still active,
-  waiting on SCRUM-251 to 253 and 256.
+  for the organiser as TC-250-02, 06 and 07. **Venue Staff:** replaced by SCRUM-253 (branch
+  `scrum-253-venue-staff-nav`): Booking requests, Venues; marker removed. The
+  underlying pages (`/booking-queue`, `/venue-booking-requests/[id]`,
+  `/venues`, `/venues/[id]`, its `edit` and `calendar` pages) already existed
+  from earlier sprints with their own Add venue/Edit venue/View calendar links
+  and back links; this story only added the nav entries and the booking
+  request's back link. **Other roles:** still active,
+  waiting on SCRUM-251, 252 and 256.
 
 ### D-21 — An equipment reservation is released by hand
 
