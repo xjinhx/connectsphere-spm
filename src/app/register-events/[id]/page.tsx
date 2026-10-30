@@ -19,7 +19,8 @@ export const dynamic = 'force-dynamic';
  * end date instead of the form. AC5: someone already registered sees their
  * registration instead of the form. SCRUM-182 AC1: a full event is shown as
  * full instead of the form. SCRUM-184 AC1: a registered attendee can withdraw
- * from their registration, after confirming.
+ * from their registration, after confirming; AC3: not once the event has
+ * taken place.
  *
  * Reached by its address for now: listing the events open for registration is
  * another story's.
@@ -60,7 +61,7 @@ export default async function AttendeeEventRegistrationPage({ params }: { params
       </dl>
 
       {view.registration ? (
-        <RegisteredPanel registration={view.registration} eventName={view.eventName} />
+        <RegisteredPanel registration={view.registration} eventName={view.eventName} canWithdraw={view.canWithdraw} />
       ) : view.periodRefusal ? (
         <p role="status" className="mt-6 rounded-lg border border-[var(--border)] bg-[var(--surface)] p-4 text-sm">
           {view.periodRefusal}

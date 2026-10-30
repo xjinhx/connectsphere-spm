@@ -37,7 +37,8 @@ afterEach(() => {
   vi.unstubAllGlobals();
 });
 
-const renderPanel = () => render(<RegisteredPanel registration={REGISTRATION} eventName="Client Appreciation Night" />);
+const renderPanel = () =>
+  render(<RegisteredPanel registration={REGISTRATION} eventName="Client Appreciation Night" canWithdraw />);
 
 describe('SCRUM-184 AC1: withdraw and confirm', () => {
   it('TC-184-01 Withdraw, then Yes, withdraw: one request to the withdraw route, and the registration is shown as Withdrawn', async () => {
@@ -84,5 +85,17 @@ describe('SCRUM-184 AC1: withdraw and confirm', () => {
 
     await waitFor(() => expect(getByRole('alert').textContent).toBe('This registration has already been withdrawn.'));
     expect(getByText('You are registered for this event.')).toBeTruthy();
+  });
+});
+
+describe('SCRUM-184 AC3: no withdraw action once the event has taken place', () => {
+  it('TC-184-07, TC-184-08 the registration is shown, with no Withdraw', () => {
+    const { getByText, queryByRole } = render(
+      <RegisteredPanel registration={REGISTRATION} eventName="Client Appreciation Night" canWithdraw={false} />,
+    );
+
+    expect(getByText('You are registered for this event.')).toBeTruthy();
+    expect(getByText('Registered')).toBeTruthy();
+    expect(queryByRole('button', { name: 'Withdraw' })).toBeNull();
   });
 });

@@ -68,3 +68,24 @@ export function isEventFull(capacity: number | null, registeredCount: number): b
 
 /** SCRUM-184 AC1: only an active (Registered) registration can be withdrawn (TC-184-03). */
 export const ALREADY_WITHDRAWN = 'This registration has already been withdrawn.';
+
+/** SCRUM-184 AC3: refused once the event has taken place (TC-184-07, TC-184-08). */
+export const EVENT_TAKEN_PLACE = 'This event has already taken place, so the registration can no longer be withdrawn.';
+
+/**
+ * SCRUM-184 AC1, AC3: whether a registration may still be withdrawn on
+ * `today`. The event has taken place from its event date onwards, so the last
+ * day to withdraw is the day before (PO, Slack 30/10/2026, CL-69). The event
+ * date is the one the attendee sees on the registration page (proposed_date),
+ * also for an event with several venue dates. An event with no date yet has not
+ * taken place.
+ *
+ * Deliberately not hasEnded in src/domain/event-status/policy.ts: SCRUM-104
+ * completes an event only once its end date has passed (CL-69).
+ *
+ * `today` is the Singapore date (todayInSingapore); `YYYY-MM-DD` sorts
+ * lexicographically, so a string compare is a date compare.
+ */
+export function canWithdraw(eventDate: ISODate | null, today: ISODate): boolean {
+  return eventDate === null || today < eventDate;
+}

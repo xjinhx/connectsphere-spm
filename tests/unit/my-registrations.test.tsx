@@ -105,3 +105,15 @@ describe('SCRUM-184 AC2: shown as Withdrawn rather than removed', () => {
     expect(within(current).getByRole('button', { name: 'Withdraw' })).toBeTruthy();
   });
 });
+
+describe('SCRUM-184 AC3: no withdraw action once the event has taken place', () => {
+  it('TC-184-07 a past event stays listed, Registered, with no Withdraw', () => {
+    const past: MyRegistration = { ...NIGHT, eventDate: '2026-10-20', canWithdraw: false };
+    const { container } = render(<MyRegistrationsList registrations={[past]} />);
+
+    const row = rowFor(container, 'REG-2026-0001');
+    expect(within(row).getByText('Registered')).toBeTruthy();
+    expect(within(row).getByText('20/10/2026')).toBeTruthy();
+    expect(within(row).queryByRole('button', { name: 'Withdraw' })).toBeNull();
+  });
+});

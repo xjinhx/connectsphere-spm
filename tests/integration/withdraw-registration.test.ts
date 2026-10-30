@@ -6,7 +6,7 @@ import {
   registerForEvent,
   withdrawRegistration,
 } from '@/domain/event-registration/service';
-import { ALREADY_WITHDRAWN } from '@/domain/event-registration/policy';
+import { ALREADY_WITHDRAWN, EVENT_TAKEN_PLACE } from '@/domain/event-registration/policy';
 import { CapacityExceededError, DomainError, NotFoundError } from '@/domain/shared/errors';
 import { TEST_CLIENT_ORGANISATION_ID, ensureTestClientOrganisation } from './fixtures/clientOrganisation';
 
@@ -14,7 +14,9 @@ import { TEST_CLIENT_ORGANISATION_ID, ensureTestClientOrganisation } from './fix
  * SCRUM-184 Withdraw my registration (Jira, authoritative):
  *   AC1 an active registration for an event that has not taken place, withdrawn
  *       and confirmed, becomes Withdrawn and its place returns to the event;
- *   AC2 the attendee's registrations show it as Withdrawn rather than removed.
+ *   AC2 the attendee's registrations show it as Withdrawn rather than removed;
+ *   AC3 once the event has taken place (CL-69: from its event date), no
+ *       withdraw action is offered.
  *
  * Runs against the local Supabase stack, because what is being proved is the
  * row itself: kept, set to withdrawn, and no longer counted by SCRUM-182's
@@ -119,7 +121,7 @@ describe('AC1: withdrawing gives the place back', () => {
     const b = await createAttendee();
     await expect(registerForEvent(eventId, b, VALID, NOW)).rejects.toThrow(CapacityExceededError);
 
-    const withdrawn = await withdrawRegistration(eventId, a.registrationId, a.attendeeId);
+    const withdrawn = await withdrawRegistration(eventId, a.registrationId, a.attendeeId, NOW);
 
     expect(withdrawn).toMatchObject({ id: a.registrationId, status: 'withdrawn' });
     const row = (await rowsFor(eventId)).find((r) => r.id === a.registrationId);
@@ -133,15 +135,15 @@ describe('AC1: withdrawing gives the place back', () => {
     const eventId = await createEvent(3);
     const a = await register(eventId);
     const c = await register(eventId);
-    await withdrawRegistration(eventId, a.registrationId, a.attendeeId);
+    await withdrawRegistration(eventId, a.registrationId, a.attendeeId, NOW);
 
-    const error = await refusal(withdrawRegistration(eventId, a.registrationId, a.attendeeId));
+    const error = await refusal(withdrawRegistration(eventId, a.registrationId, a.attendeeId, NOW));
     expect(error).toBeInstanceOf(DomainError);
     expect(error).toMatchObject({ code: 'INVALID_TRANSITION', message: ALREADY_WITHDRAWN });
 
     const results = await Promise.allSettled([
-      withdrawRegistration(eventId, c.registrationId, c.attendeeId),
-      withdrawRegistration(eventId, c.registrationId, c.attendeeId),
+      withdrawRegistration(eventId, c.registrationId, c.attendeeId, NOW),
+      withdrawRegistration(eventId, c.registrationId, c.attendeeId, NOW),
     ]);
     expect(results.filter((r) => r.status === 'fulfilled')).toHaveLength(1);
     expect(results.filter((r) => r.status === 'rejected' && (r.reason as Error).message === ALREADY_WITHDRAWN)).toHaveLength(1);
@@ -156,7 +158,7 @@ describe('AC1: withdrawing gives the place back', () => {
     const owner = await register(eventId);
     const other = await createAttendee();
 
-    await expect(withdrawRegistration(eventId, owner.registrationId, other)).rejects.toThrow(NotFoundError);
+    await expect(withdrawRegistration(eventId, owner.registrationId, other, NOW)).rejects.toThrow(NotFoundError);
 
     expect((await rowsFor(eventId))[0]).toMatchObject({ attendee_id: owner.attendeeId, status: 'registered' });
   }, TIMEOUT);
@@ -168,11 +170,11 @@ describe('AC2: a withdrawn registration is shown as Withdrawn, not removed', () 
     const lunch = await createEvent(3, '2026-11-20');
     const a = await register(night);
     await register(lunch, a.attendeeId);
-    const before = await listMyRegistrations(a.attendeeId);
+    const before = await listMyRegistrations(a.attendeeId, NOW);
 
-    await withdrawRegistration(night, a.registrationId, a.attendeeId);
+    await withdrawRegistration(night, a.registrationId, a.attendeeId, NOW);
 
-    const list = await listMyRegistrations(a.attendeeId);
+    const list = await listMyRegistrations(a.attendeeId, NOW);
     expect(list).toHaveLength(2);
     const withdrawn = list.find((row) => row.registration.eventRequestId === night);
     expect(withdrawn?.registration).toMatchObject({
@@ -185,10 +187,10 @@ describe('AC2: a withdrawn registration is shown as Withdrawn, not removed', () 
   it('TC-184-06 withdrawn then registered again: two rows for the event, and the page shows the new one', async () => {
     const eventId = await createEvent(3);
     const first = await register(eventId);
-    await withdrawRegistration(eventId, first.registrationId, first.attendeeId);
+    await withdrawRegistration(eventId, first.registrationId, first.attendeeId, NOW);
     const second = await register(eventId, first.attendeeId);
 
-    const list = await listMyRegistrations(first.attendeeId);
+    const list = await listMyRegistrations(first.attendeeId, NOW);
     expect(list.map((row) => [row.registration.id, row.registration.status]).sort()).toEqual(
       [
         [first.registrationId, 'withdrawn'],
@@ -197,5 +199,41 @@ describe('AC2: a withdrawn registration is shown as Withdrawn, not removed', () 
     );
     expect(new Set(list.map((row) => row.registration.reference)).size).toBe(2);
     expect((await getRegistrationPage(eventId, first.attendeeId, NOW)).registration?.id).toBe(second.registrationId);
+  }, TIMEOUT);
+});
+
+describe('AC3: no withdraw once the event has taken place (CL-69: from its event date)', () => {
+  it('TC-184-07 a past event: refused, still Registered, and neither the page nor the list offers Withdraw', async () => {
+    const eventId = await createEvent(3, '2026-10-20');
+    const a = await register(eventId);
+
+    const error = await refusal(withdrawRegistration(eventId, a.registrationId, a.attendeeId, NOW));
+
+    expect(error).toMatchObject({ code: 'INVALID_TRANSITION', message: EVENT_TAKEN_PLACE });
+    expect((await rowsFor(eventId))[0]?.status).toBe('registered');
+    expect((await getRegistrationPage(eventId, a.attendeeId, NOW)).canWithdraw).toBe(false);
+    expect((await listMyRegistrations(a.attendeeId, NOW))[0]?.canWithdraw).toBe(false);
+  }, TIMEOUT);
+
+  it('TC-184-08 an event dated today (Singapore): refused, still Registered', async () => {
+    const eventId = await createEvent(3, '2026-10-30');
+    const a = await register(eventId);
+
+    await expect(withdrawRegistration(eventId, a.registrationId, a.attendeeId, NOW)).rejects.toThrow(EVENT_TAKEN_PLACE);
+    expect((await rowsFor(eventId))[0]?.status).toBe('registered');
+    expect((await getRegistrationPage(eventId, a.attendeeId, NOW)).canWithdraw).toBe(false);
+  }, TIMEOUT);
+
+  it('TC-184-09 an event dated tomorrow: offered, and the withdrawal frees a place', async () => {
+    const eventId = await createEvent(3, '2026-10-31');
+    const a = await register(eventId);
+    await register(eventId);
+    await register(eventId);
+    expect((await getRegistrationPage(eventId, a.attendeeId, NOW)).canWithdraw).toBe(true);
+
+    await expect(withdrawRegistration(eventId, a.registrationId, a.attendeeId, NOW)).resolves.toMatchObject({
+      status: 'withdrawn',
+    });
+    expect(await registered(eventId)).toHaveLength(2);
   }, TIMEOUT);
 });

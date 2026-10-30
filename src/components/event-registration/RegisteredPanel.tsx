@@ -7,15 +7,18 @@ import { WithdrawRegistrationButton } from './WithdrawRegistrationButton';
 
 /**
  * SCRUM-184 — the attendee's own registration on the event page, with the
- * Withdraw action (AC1). Once withdrawn the same panel shows it as Withdrawn;
- * reloading the page then offers the form again, since the place is free.
+ * Withdraw action (AC1), not offered once the event has taken place (AC3).
+ * Once withdrawn the same panel shows it as Withdrawn; reloading the page then
+ * offers the form again, since the place is free.
  */
 export function RegisteredPanel({
   registration: initial,
   eventName,
+  canWithdraw,
 }: {
   registration: Registration;
   eventName: string;
+  canWithdraw: boolean;
 }) {
   const [registration, setRegistration] = useState(initial);
   const withdrawn = registration.status === 'withdrawn';
@@ -28,7 +31,7 @@ export function RegisteredPanel({
         heading={withdrawn ? 'You have withdrawn from this event.' : 'You are registered for this event.'}
         tone={withdrawn ? 'notice' : 'success'}
       />
-      {withdrawn ? null : (
+      {withdrawn || !canWithdraw ? null : (
         <div className="mt-3">
           <WithdrawRegistrationButton
             eventRequestId={registration.eventRequestId}

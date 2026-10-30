@@ -37,6 +37,7 @@ const OPEN: RegistrationPageView = {
   periodRefusal: null,
   registration: null,
   full: false,
+  canWithdraw: false,
 };
 
 beforeEach(() => {

@@ -16,7 +16,7 @@ vi.mock('@/domain/event-registration/service', () => ({ withdrawRegistration: vi
 
 import { getCurrentActor } from '@/lib/auth/currentActor';
 import { withdrawRegistration } from '@/domain/event-registration/service';
-import { ALREADY_WITHDRAWN } from '@/domain/event-registration/policy';
+import { ALREADY_WITHDRAWN, EVENT_TAKEN_PLACE } from '@/domain/event-registration/policy';
 import { DomainError, NotFoundError, UnauthenticatedError } from '@/domain/shared/errors';
 import type { Role } from '@/domain/identity/roles';
 import { POST } from '@/app/api/events/[id]/registrations/[registrationId]/withdraw/route';
@@ -87,4 +87,16 @@ describe('SCRUM-184 AC1: only the attendee withdraws their own registration', ()
       expect(withdrawRegistration).not.toHaveBeenCalled();
     },
   );
+});
+
+describe('SCRUM-184 AC3: the server refuses once the event has taken place', () => {
+  it('TC-184-07 409 INVALID_TRANSITION with the message, so hiding the button is not the only guard', async () => {
+    signInAs('attendee');
+    vi.mocked(withdrawRegistration).mockRejectedValue(new DomainError('INVALID_TRANSITION', EVENT_TAKEN_PLACE));
+
+    const response = await post();
+
+    expect(response.status).toBe(409);
+    expect(await response.json()).toMatchObject({ error: 'INVALID_TRANSITION', message: EVENT_TAKEN_PLACE });
+  });
 });
