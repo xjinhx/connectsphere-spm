@@ -81,6 +81,18 @@ export async function withdrawRegistrationRow(registrationId: string, attendeeId
 }
 
 /**
+ * SCRUM-184 AC2: every registration the attendee has made, Withdrawn ones
+ * included, with the event's name and date, newest first.
+ */
+export async function fetchAttendeeRegistrations(attendeeId: string) {
+  return db()
+    .from('event_registration')
+    .select(`${REGISTRATION_COLUMNS}, event_request ( name, proposed_date )`)
+    .eq('attendee_id', attendeeId)
+    .order('registered_at', { ascending: false });
+}
+
+/**
  * AC1: create the registration. The function re-checks the period, the
  * duplicate and places remaining with the event row locked, and returns
  * 'registered', 'not_found', 'not_open', 'not_started', 'ended', 'full' or

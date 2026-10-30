@@ -36,9 +36,15 @@ export default async function AttendeeEventRegistrationPage({ params }: { params
 
   return (
     <main className="mx-auto flex min-h-screen max-w-xl flex-col p-8">
-      <Link href="/register-events" className="self-start text-sm text-[var(--brand)] underline">
-        Back to Open events
-      </Link>
+      <div className="flex flex-wrap gap-x-4">
+        <Link href="/register-events" className="text-sm text-[var(--brand)] underline">
+          Back to Open events
+        </Link>
+        {/* SCRUM-184 AC2: where a withdrawn registration is still shown. */}
+        <Link href="/my-registrations" className="text-sm text-[var(--brand)] underline">
+          My registrations
+        </Link>
+      </div>
       <h1 className="mt-3 text-2xl font-semibold">{view.eventName}</h1>
       <dl className="mt-4 grid grid-cols-[max-content_1fr] gap-x-4 gap-y-1 text-sm">
         {view.eventDate ? (

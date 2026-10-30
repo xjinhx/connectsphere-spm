@@ -1,6 +1,11 @@
 import { afterAll, beforeAll, describe, expect, it } from 'vitest';
 import { createAdminClient } from '@/lib/supabase/admin';
-import { getRegistrationPage, registerForEvent, withdrawRegistration } from '@/domain/event-registration/service';
+import {
+  getRegistrationPage,
+  listMyRegistrations,
+  registerForEvent,
+  withdrawRegistration,
+} from '@/domain/event-registration/service';
 import { ALREADY_WITHDRAWN } from '@/domain/event-registration/policy';
 import { CapacityExceededError, DomainError, NotFoundError } from '@/domain/shared/errors';
 import { TEST_CLIENT_ORGANISATION_ID, ensureTestClientOrganisation } from './fixtures/clientOrganisation';
@@ -8,7 +13,8 @@ import { TEST_CLIENT_ORGANISATION_ID, ensureTestClientOrganisation } from './fix
 /**
  * SCRUM-184 Withdraw my registration (Jira, authoritative):
  *   AC1 an active registration for an event that has not taken place, withdrawn
- *       and confirmed, becomes Withdrawn and its place returns to the event.
+ *       and confirmed, becomes Withdrawn and its place returns to the event;
+ *   AC2 the attendee's registrations show it as Withdrawn rather than removed.
  *
  * Runs against the local Supabase stack, because what is being proved is the
  * row itself: kept, set to withdrawn, and no longer counted by SCRUM-182's
@@ -153,5 +159,43 @@ describe('AC1: withdrawing gives the place back', () => {
     await expect(withdrawRegistration(eventId, owner.registrationId, other)).rejects.toThrow(NotFoundError);
 
     expect((await rowsFor(eventId))[0]).toMatchObject({ attendee_id: owner.attendeeId, status: 'registered' });
+  }, TIMEOUT);
+});
+
+describe('AC2: a withdrawn registration is shown as Withdrawn, not removed', () => {
+  it('TC-184-05 both registrations are listed; the withdrawn one keeps its reference', async () => {
+    const night = await createEvent(3);
+    const lunch = await createEvent(3, '2026-11-20');
+    const a = await register(night);
+    await register(lunch, a.attendeeId);
+    const before = await listMyRegistrations(a.attendeeId);
+
+    await withdrawRegistration(night, a.registrationId, a.attendeeId);
+
+    const list = await listMyRegistrations(a.attendeeId);
+    expect(list).toHaveLength(2);
+    const withdrawn = list.find((row) => row.registration.eventRequestId === night);
+    expect(withdrawn?.registration).toMatchObject({
+      status: 'withdrawn',
+      reference: before.find((row) => row.registration.eventRequestId === night)?.registration.reference,
+    });
+    expect(list.find((row) => row.registration.eventRequestId === lunch)?.registration.status).toBe('registered');
+  }, TIMEOUT);
+
+  it('TC-184-06 withdrawn then registered again: two rows for the event, and the page shows the new one', async () => {
+    const eventId = await createEvent(3);
+    const first = await register(eventId);
+    await withdrawRegistration(eventId, first.registrationId, first.attendeeId);
+    const second = await register(eventId, first.attendeeId);
+
+    const list = await listMyRegistrations(first.attendeeId);
+    expect(list.map((row) => [row.registration.id, row.registration.status]).sort()).toEqual(
+      [
+        [first.registrationId, 'withdrawn'],
+        [second.registrationId, 'registered'],
+      ].sort(),
+    );
+    expect(new Set(list.map((row) => row.registration.reference)).size).toBe(2);
+    expect((await getRegistrationPage(eventId, first.attendeeId, NOW)).registration?.id).toBe(second.registrationId);
   }, TIMEOUT);
 });

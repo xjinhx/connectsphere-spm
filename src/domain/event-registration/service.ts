@@ -3,6 +3,7 @@ import {
   RegistrationIdSchema,
   RegistrationInputSchema,
   RegistrationStatusSchema,
+  type MyRegistration,
   type Registration,
   type RegistrationPageView,
   type RegistrationPeriod,
@@ -27,6 +28,7 @@ import {
 import {
   countRegisteredRegistrations,
   createRegistrationRow,
+  fetchAttendeeRegistrations,
   fetchRegisteredRegistration,
   fetchRegistrationById,
   fetchRegistrationEvent,
@@ -233,4 +235,26 @@ export async function withdrawRegistration(
   // Another request withdrew it after the read above.
   if (!withdrawn) throw new DomainError('INVALID_TRANSITION', ALREADY_WITHDRAWN);
   return toRegistration(withdrawn as RegistrationRow);
+}
+
+/**
+ * SCRUM-184 AC2: the signed-in attendee's registrations, Withdrawn ones
+ * included rather than removed, newest first. Only their own: the attendee
+ * is whoever is signed in, from the page.
+ */
+export async function listMyRegistrations(attendeeId: string): Promise<MyRegistration[]> {
+  const { data, error } = await fetchAttendeeRegistrations(attendeeId);
+  if (error) throw new ValidationError('Your registrations could not be read.', error.message);
+  const rows = (data ?? []) as (RegistrationRow & {
+    event_request: { name: string; proposed_date: string | null } | null;
+  })[];
+  return rows.map((row) => {
+    const registration = toRegistration(row);
+    return {
+      registration,
+      eventName: row.event_request?.name ?? '',
+      eventDate: row.event_request?.proposed_date ?? null,
+      canWithdraw: registration.status === 'registered',
+    };
+  });
 }

@@ -17,10 +17,15 @@ vi.mock('@/lib/supabase/eventRegistrations', () => ({
   createRegistrationRow: vi.fn(),
   fetchRegistrationById: vi.fn(),
   withdrawRegistrationRow: vi.fn(),
+  fetchAttendeeRegistrations: vi.fn(),
 }));
 
-import { fetchRegistrationById, withdrawRegistrationRow } from '@/lib/supabase/eventRegistrations';
-import { withdrawRegistration } from '@/domain/event-registration/service';
+import {
+  fetchAttendeeRegistrations,
+  fetchRegistrationById,
+  withdrawRegistrationRow,
+} from '@/lib/supabase/eventRegistrations';
+import { listMyRegistrations, withdrawRegistration } from '@/domain/event-registration/service';
 import { ALREADY_WITHDRAWN } from '@/domain/event-registration/policy';
 import { DomainError, NotFoundError } from '@/domain/shared/errors';
 
@@ -111,5 +116,52 @@ describe('SCRUM-184 AC1: withdrawing an active registration', () => {
 
     await expect(withdrawRegistration(EVENT_ID, 'not-a-uuid', ATTENDEE)).rejects.toThrow(NotFoundError);
     expect(withdrawRegistrationRow).not.toHaveBeenCalled();
+  });
+});
+
+/** The attendee's registrations as fetchAttendeeRegistrations reads them, newest first. */
+function myRows(...rows: (typeof ROW & { event_request: { name: string; proposed_date: string | null } })[]) {
+  vi.mocked(fetchAttendeeRegistrations).mockResolvedValue({ data: rows, error: null } as never);
+}
+
+const NIGHT = { name: 'Client Appreciation Night', proposed_date: '2026-11-15' };
+const LUNCH = { name: 'Partner Networking Lunch', proposed_date: '2026-11-20' };
+
+describe('SCRUM-184 AC2: a withdrawn registration is shown as Withdrawn, not removed', () => {
+  it('TC-184-05 lists both registrations, the withdrawn one with its status and reference', async () => {
+    myRows(
+      { ...ROW, status: 'withdrawn', event_request: NIGHT },
+      { ...ROW, id: 'dddddddd-dddd-4ddd-8ddd-dddddddddddd', reference: 'REG-2026-0002', event_request: LUNCH },
+    );
+
+    const list = await listMyRegistrations(ATTENDEE);
+
+    expect(fetchAttendeeRegistrations).toHaveBeenCalledWith(ATTENDEE);
+    expect(list).toHaveLength(2);
+    expect(list[0]).toMatchObject({
+      eventName: 'Client Appreciation Night',
+      eventDate: '2026-11-15',
+      registration: { reference: 'REG-2026-0001', status: 'withdrawn' },
+      canWithdraw: false,
+    });
+    expect(list[1]).toMatchObject({
+      eventName: 'Partner Networking Lunch',
+      registration: { reference: 'REG-2026-0002', status: 'registered' },
+      canWithdraw: true,
+    });
+  });
+
+  it('TC-184-06 withdrawn then registered again for the same event: both rows, each with its own reference', async () => {
+    myRows(
+      { ...ROW, id: 'dddddddd-dddd-4ddd-8ddd-dddddddddddd', reference: 'REG-2026-0002', event_request: NIGHT },
+      { ...ROW, status: 'withdrawn', event_request: NIGHT },
+    );
+
+    const list = await listMyRegistrations(ATTENDEE);
+
+    expect(list.map((row) => [row.registration.reference, row.registration.status, row.canWithdraw])).toEqual([
+      ['REG-2026-0002', 'registered', true],
+      ['REG-2026-0001', 'withdrawn', false],
+    ]);
   });
 });
