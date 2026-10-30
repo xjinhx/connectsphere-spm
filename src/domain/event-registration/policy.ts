@@ -65,3 +65,6 @@ export const NO_PLACES_REMAINING = 'There are no places remaining for this event
 export function isEventFull(capacity: number | null, registeredCount: number): boolean {
   return capacity === null || registeredCount >= capacity;
 }
+
+/** SCRUM-184 AC1: only an active (Registered) registration can be withdrawn (TC-184-03). */
+export const ALREADY_WITHDRAWN = 'This registration has already been withdrawn.';

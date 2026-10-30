@@ -1,5 +1,6 @@
 import {
   EventRequestIdSchema,
+  RegistrationIdSchema,
   RegistrationInputSchema,
   RegistrationStatusSchema,
   type Registration,
@@ -8,6 +9,7 @@ import {
 } from './schema';
 import {
   ALREADY_REGISTERED,
+  ALREADY_WITHDRAWN,
   NO_PLACES_REMAINING,
   endedMessage,
   isEventFull,
@@ -15,12 +17,20 @@ import {
   registrationPeriodRefusal,
 } from './policy';
 import { todayInSingapore } from '@/domain/shared/dates';
-import { CapacityExceededError, ConflictError, NotFoundError, ValidationError } from '@/domain/shared/errors';
+import {
+  CapacityExceededError,
+  ConflictError,
+  DomainError,
+  NotFoundError,
+  ValidationError,
+} from '@/domain/shared/errors';
 import {
   countRegisteredRegistrations,
   createRegistrationRow,
   fetchRegisteredRegistration,
+  fetchRegistrationById,
   fetchRegistrationEvent,
+  withdrawRegistrationRow,
 } from '@/lib/supabase/eventRegistrations';
 
 /**
@@ -186,4 +196,41 @@ export async function registerForEvent(
       // 'not_found' or 'not_open': the event or its period went after the read above.
       throw new NotFoundError('Event');
   }
+}
+
+/**
+ * SCRUM-184 AC1: the signed-in attendee withdraws their registration. Its
+ * status becomes Withdrawn and the row is kept (AC2). The place returns to the
+ * event at once, because only Registered rows count against the capacity
+ * (SCRUM-182's event_has_places_remaining); no waiting list in Release 1.
+ *
+ * Refused with 404 for an unknown registration, one on another event, or
+ * another attendee's, so nobody learns whose registrations exist (TC-184-04);
+ * with 409 for one already Withdrawn (TC-184-03).
+ *
+ * The confirm step is the page's (TC-184-02): this is only called once the
+ * attendee has confirmed. `attendeeId` is whoever is signed in, from the route.
+ */
+export async function withdrawRegistration(
+  eventRequestId: string,
+  registrationId: string,
+  attendeeId: string,
+): Promise<Registration> {
+  if (!EventRequestIdSchema.safeParse(eventRequestId).success || !RegistrationIdSchema.safeParse(registrationId).success) {
+    throw new NotFoundError('Registration');
+  }
+
+  const { data, error } = await fetchRegistrationById(registrationId);
+  if (error) throw new ValidationError('Your registration could not be read.', error.message);
+  const row = data as (RegistrationRow & { attendee_id: string }) | null;
+  if (!row || row.attendee_id !== attendeeId || row.event_request_id !== eventRequestId) {
+    throw new NotFoundError('Registration');
+  }
+  if (row.status !== 'registered') throw new DomainError('INVALID_TRANSITION', ALREADY_WITHDRAWN);
+
+  const { data: withdrawn, error: writeError } = await withdrawRegistrationRow(registrationId, attendeeId);
+  if (writeError) throw new ValidationError('Your registration could not be withdrawn.', writeError.message);
+  // Another request withdrew it after the read above.
+  if (!withdrawn) throw new DomainError('INVALID_TRANSITION', ALREADY_WITHDRAWN);
+  return toRegistration(withdrawn as RegistrationRow);
 }

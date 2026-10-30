@@ -1,6 +1,6 @@
 import Link from 'next/link';
 import { EventFullNotice } from '@/components/event-registration/EventFullNotice';
-import { RegistrationConfirmation } from '@/components/event-registration/RegistrationConfirmation';
+import { RegisteredPanel } from '@/components/event-registration/RegisteredPanel';
 import { RegistrationForm } from '@/components/event-registration/RegistrationForm';
 import { getRegistrationPage } from '@/domain/event-registration/service';
 import { formatDayMonthYear } from '@/domain/shared/dates';
@@ -18,7 +18,8 @@ export const dynamic = 'force-dynamic';
  * AC1: the form, while the period is open. AC2, AC3: outside it, the start or
  * end date instead of the form. AC5: someone already registered sees their
  * registration instead of the form. SCRUM-182 AC1: a full event is shown as
- * full instead of the form.
+ * full instead of the form. SCRUM-184 AC1: a registered attendee can withdraw
+ * from their registration, after confirming.
  *
  * Reached by its address for now: listing the events open for registration is
  * another story's.
@@ -53,11 +54,7 @@ export default async function AttendeeEventRegistrationPage({ params }: { params
       </dl>
 
       {view.registration ? (
-        <RegistrationConfirmation
-          registration={view.registration}
-          eventName={view.eventName}
-          heading="You are registered for this event."
-        />
+        <RegisteredPanel registration={view.registration} eventName={view.eventName} />
       ) : view.periodRefusal ? (
         <p role="status" className="mt-6 rounded-lg border border-[var(--border)] bg-[var(--surface)] p-4 text-sm">
           {view.periodRefusal}

@@ -51,6 +51,36 @@ export async function fetchRegisteredRegistration(eventRequestId: string, attend
 }
 
 /**
+ * SCRUM-184 AC1: one registration by its id, with whose it is, whatever its
+ * status, so the service can tell someone else's (not found) from one already
+ * withdrawn. maybeSingle: an unknown id is null, not an error.
+ */
+export async function fetchRegistrationById(registrationId: string) {
+  return db()
+    .from('event_registration')
+    .select(`${REGISTRATION_COLUMNS}, attendee_id`)
+    .eq('id', registrationId)
+    .maybeSingle();
+}
+
+/**
+ * SCRUM-184 AC1: set the attendee's registration to Withdrawn. One statement,
+ * guarded on the status, so two withdrawals sent together change it once: the
+ * second finds no Registered row and returns null (TC-184-03). The row is
+ * kept, never deleted (AC2).
+ */
+export async function withdrawRegistrationRow(registrationId: string, attendeeId: string) {
+  return db()
+    .from('event_registration')
+    .update({ status: 'withdrawn' })
+    .eq('id', registrationId)
+    .eq('attendee_id', attendeeId)
+    .eq('status', 'registered')
+    .select(REGISTRATION_COLUMNS)
+    .maybeSingle();
+}
+
+/**
  * AC1: create the registration. The function re-checks the period, the
  * duplicate and places remaining with the event row locked, and returns
  * 'registered', 'not_found', 'not_open', 'not_started', 'ended', 'full' or
