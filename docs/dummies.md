@@ -857,6 +857,10 @@ switch them the next time they edit those files.
     (`DUMMY(SCRUM-191) D-26` for the rejected half; the approved half is real)
   - `tests/integration/change-request.test.ts` — `seedDecision()`, still used
     for the rejected-path test (`DUMMY(SCRUM-191) D-26`)
+  - `scripts/seed-b6.mjs` — `seedDecision()` for the manual TC-187-11/12
+    events S187-H and S187-I (`DUMMY(SCRUM-190) D-26`,
+    `DUMMY(SCRUM-191) D-26`): the seed writes straight to Postgres, so it
+    still sets their decisions by hand
 - **What is real and what is faked:** raising a request (AC1) and listing it
   (AC6) are both real, against a real database. SCRUM-190 (branch
   `scrum-190-approve-change-request`) replaced the approved half: `change_
@@ -864,7 +868,10 @@ switch them the next time they edit those files.
   `approveChangeRequest()` (`src/domain/change-request/service.ts`), through
   `approve_change_request` (`supabase/migrations/
   20261030100000_approve_change_request.sql`), re-run against TC-187-11's
-  shape in `tests/integration/approve-change-request.test.ts`. The rejected
+  shape in `tests/integration/approve-change-request.test.ts`. TC-187-12 in
+  `tests/integration/change-request.test.ts` now approves through
+  `approveChangeRequest()` instead of seeding the decision and writing the
+  value by hand (re-run and passed 30/10/2026). The rejected
   half (`decision_reason`, and `status = 'rejected'`) is still faked —
   nothing in the app rejects a change request yet — so
   `tests/integration/change-request.test.ts`'s `seedDecision()` still sets
@@ -914,4 +921,16 @@ the meantime.*
   rows with `status = 'registered'`) with the new date/times/venue when an
   approved change request changes them. Add an automated test for it, then
   remove this entry's "not attempted" status and mark it Replaced.
-- **Status:** Active.
+- **Replaced (30/10/2026):** the premise above was wrong. A registration does
+  belong to a signed-in Attendee account (SCRUM-181,
+  `event_registration.attendee_id`), so the in-app mechanism already reaches
+  them; nothing had to wait on SCRUM-194. `approveChangeRequest()` now
+  notifies every attendee with a Registered registration
+  (`fetchRegisteredAttendeeIds()` in `src/lib/supabase/eventRegistrations.ts`)
+  with an `event_details_changed` notification giving the new date
+  (DD/MM/YYYY) and times, whenever the approved change alters the name,
+  description, date or times; an attendance-only change notifies nobody.
+  Tested by TC-190-05 (`tests/integration/approve-change-request.test.ts`,
+  two tests; `tests/unit/approve-change-request-policy.test.ts`) and by hand
+  on 30/10/2026.
+- **Status:** Replaced (SCRUM-190, branch `scrum-190-approve-change-request`).
