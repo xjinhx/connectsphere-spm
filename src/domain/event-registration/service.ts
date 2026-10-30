@@ -3,7 +3,6 @@ import {
   RegistrationIdSchema,
   RegistrationInputSchema,
   RegistrationStatusSchema,
-  type MyRegistration,
   type Registration,
   type RegistrationPageView,
   type RegistrationPeriod,
@@ -30,7 +29,6 @@ import {
 import {
   countRegisteredRegistrations,
   createRegistrationRow,
-  fetchAttendeeRegistrations,
   fetchRegisteredRegistration,
   fetchRegistrationById,
   fetchRegistrationEvent,
@@ -253,29 +251,4 @@ export async function withdrawRegistration(
   // Another request withdrew it after the read above.
   if (!withdrawn) throw new DomainError('INVALID_TRANSITION', ALREADY_WITHDRAWN);
   return toRegistration(withdrawn as RegistrationRow);
-}
-
-/**
- * SCRUM-184 AC2: the signed-in attendee's registrations, Withdrawn ones
- * included rather than removed, newest first. Only their own: the attendee
- * is whoever is signed in, from the page. Withdraw is offered on a Registered
- * one until its event has taken place (AC3).
- */
-export async function listMyRegistrations(attendeeId: string, now: Date = new Date()): Promise<MyRegistration[]> {
-  const today = todayInSingapore(now);
-  const { data, error } = await fetchAttendeeRegistrations(attendeeId);
-  if (error) throw new ValidationError('Your registrations could not be read.', error.message);
-  const rows = (data ?? []) as (RegistrationRow & {
-    event_request: { name: string; proposed_date: string | null } | null;
-  })[];
-  return rows.map((row) => {
-    const registration = toRegistration(row);
-    const eventDate = row.event_request?.proposed_date ?? null;
-    return {
-      registration,
-      eventName: row.event_request?.name ?? '',
-      eventDate,
-      canWithdraw: registration.status === 'registered' && canWithdraw(eventDate, today),
-    };
-  });
 }

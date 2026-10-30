@@ -1,11 +1,6 @@
 import { afterAll, beforeAll, describe, expect, it } from 'vitest';
 import { createAdminClient } from '@/lib/supabase/admin';
-import {
-  getRegistrationPage,
-  listMyRegistrations,
-  registerForEvent,
-  withdrawRegistration,
-} from '@/domain/event-registration/service';
+import { getRegistrationPage, registerForEvent, withdrawRegistration } from '@/domain/event-registration/service';
 import { ALREADY_WITHDRAWN, EVENT_TAKEN_PLACE } from '@/domain/event-registration/policy';
 import { CapacityExceededError, DomainError, NotFoundError } from '@/domain/shared/errors';
 import { TEST_CLIENT_ORGANISATION_ID, ensureTestClientOrganisation } from './fixtures/clientOrganisation';
@@ -14,7 +9,9 @@ import { TEST_CLIENT_ORGANISATION_ID, ensureTestClientOrganisation } from './fix
  * SCRUM-184 Withdraw my registration (Jira, authoritative):
  *   AC1 an active registration for an event that has not taken place, withdrawn
  *       and confirmed, becomes Withdrawn and its place returns to the event;
- *   AC2 the attendee's registrations show it as Withdrawn rather than removed;
+ *   AC2 the attendee's registrations show it as Withdrawn rather than removed
+ *       (SCRUM-180's My registrations section, CL-70; tested once PR #154 is
+ *       on main);
  *   AC3 once the event has taken place (CL-69: from its event date), no
  *       withdraw action is offered.
  *
@@ -164,44 +161,6 @@ describe('AC1: withdrawing gives the place back', () => {
   }, TIMEOUT);
 });
 
-describe('AC2: a withdrawn registration is shown as Withdrawn, not removed', () => {
-  it('TC-184-05 both registrations are listed; the withdrawn one keeps its reference', async () => {
-    const night = await createEvent(3);
-    const lunch = await createEvent(3, '2026-11-20');
-    const a = await register(night);
-    await register(lunch, a.attendeeId);
-    const before = await listMyRegistrations(a.attendeeId, NOW);
-
-    await withdrawRegistration(night, a.registrationId, a.attendeeId, NOW);
-
-    const list = await listMyRegistrations(a.attendeeId, NOW);
-    expect(list).toHaveLength(2);
-    const withdrawn = list.find((row) => row.registration.eventRequestId === night);
-    expect(withdrawn?.registration).toMatchObject({
-      status: 'withdrawn',
-      reference: before.find((row) => row.registration.eventRequestId === night)?.registration.reference,
-    });
-    expect(list.find((row) => row.registration.eventRequestId === lunch)?.registration.status).toBe('registered');
-  }, TIMEOUT);
-
-  it('TC-184-06 withdrawn then registered again: two rows for the event, and the page shows the new one', async () => {
-    const eventId = await createEvent(3);
-    const first = await register(eventId);
-    await withdrawRegistration(eventId, first.registrationId, first.attendeeId, NOW);
-    const second = await register(eventId, first.attendeeId);
-
-    const list = await listMyRegistrations(first.attendeeId, NOW);
-    expect(list.map((row) => [row.registration.id, row.registration.status]).sort()).toEqual(
-      [
-        [first.registrationId, 'withdrawn'],
-        [second.registrationId, 'registered'],
-      ].sort(),
-    );
-    expect(new Set(list.map((row) => row.registration.reference)).size).toBe(2);
-    expect((await getRegistrationPage(eventId, first.attendeeId, NOW)).registration?.id).toBe(second.registrationId);
-  }, TIMEOUT);
-});
-
 describe('AC3: no withdraw once the event has taken place (CL-69: from its event date)', () => {
   it('TC-184-07 a past event: refused, still Registered, and neither the page nor the list offers Withdraw', async () => {
     const eventId = await createEvent(3, '2026-10-20');
@@ -212,7 +171,6 @@ describe('AC3: no withdraw once the event has taken place (CL-69: from its event
     expect(error).toMatchObject({ code: 'INVALID_TRANSITION', message: EVENT_TAKEN_PLACE });
     expect((await rowsFor(eventId))[0]?.status).toBe('registered');
     expect((await getRegistrationPage(eventId, a.attendeeId, NOW)).canWithdraw).toBe(false);
-    expect((await listMyRegistrations(a.attendeeId, NOW))[0]?.canWithdraw).toBe(false);
   }, TIMEOUT);
 
   it('TC-184-08 an event dated today (Singapore): refused, still Registered', async () => {

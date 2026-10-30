@@ -79,15 +79,3 @@ export interface RegistrationPageView {
   /** SCRUM-184 AC3: whether the Withdraw action is offered on `registration`. */
   canWithdraw: boolean;
 }
-
-/**
- * SCRUM-184 AC2: one row of the attendee's own registrations. A withdrawn
- * registration stays in the list, shown as Withdrawn. `canWithdraw` says
- * whether the Withdraw action is offered on it.
- */
-export interface MyRegistration {
-  registration: Registration;
-  eventName: string;
-  eventDate: ISODate | null;
-  canWithdraw: boolean;
-}

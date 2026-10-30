@@ -5,8 +5,9 @@
 //
 //   node scripts/seed-scrum184.mjs
 //
-// It prints each event's page address (/register-events/<id>) and My
-// registrations (/my-registrations). Safe to run again: it deletes and
+// It prints each event's page address (/register-events/<id>) and Open
+// events (/register-events), whose My registrations section (SCRUM-180) shows
+// each registration's status. Safe to run again: it deletes and
 // recreates only the events it made (matched by their description), which also
 // clears their registrations.
 //
@@ -148,7 +149,7 @@ check('registrations', await supabase.from('event_registration').insert(registra
 
 console.log(`Seeded ${created.length} events. Today (D) is ${ddmmyyyy(singaporeDate(0))}.`);
 console.log(`Password for every account: ${TEST_PASSWORD}`);
-console.log('My registrations: http://localhost:3000/my-registrations\n');
+console.log('My registrations (on Open events): http://localhost:3000/register-events#my-registrations\n');
 for (const [name, eventDay, , fillerCount, people, cases] of EVENTS) {
   console.log(`${cases.padEnd(22)} ${name}`);
   console.log(

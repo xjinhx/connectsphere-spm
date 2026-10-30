@@ -41,8 +41,8 @@ export default async function AttendeeEventRegistrationPage({ params }: { params
         <Link href="/register-events" className="text-sm text-[var(--brand)] underline">
           Back to Open events
         </Link>
-        {/* SCRUM-184 AC2: where a withdrawn registration is still shown. */}
-        <Link href="/my-registrations" className="text-sm text-[var(--brand)] underline">
+        {/* SCRUM-184 AC2: SCRUM-180's My registrations section, where a withdrawn registration is still shown (CL-70). */}
+        <Link href="/register-events#my-registrations" className="text-sm text-[var(--brand)] underline">
           My registrations
         </Link>
       </div>
