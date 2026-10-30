@@ -144,7 +144,7 @@ async function main() {
       quantity: 10,
       currentLocation: 'Bugis store room',
     });
-    return created.id;
+    return created.equipment.id;
   }
   const projectorId = await ensureEquipment('Projector');
   const micId = await ensureEquipment('Wireless microphone');

@@ -1,11 +1,10 @@
 # PR review process
 
 How a PR gets reviewed before merge, and how it's checked again after. This is
-one reviewer's working method (Jinhong); it satisfies the Definition of
-Done's "code reviewed by someone other than the author" and "merged into main
-and existing functionality still works" rows. Worked examples: SCRUM-232 (He
-Jinhong's own card, self-reviewed before PR), SCRUM-230 (Marcus Liow's PR
-#106, reviewed as a second reviewer).
+one reviewer's working method (Jinhong). Before merge it covers the Definition
+of Done's "code reviewed by someone other than the author" row; after merge it
+covers the reviewer's end-to-end test on `main`. Worked example: SCRUM-230
+(Marcus Liow's PR #106, reviewed as a second reviewer).
 
 ## Before merge
 
@@ -29,7 +28,10 @@ Jinhong's own card, self-reviewed before PR), SCRUM-230 (Marcus Liow's PR
      a fix for something already covered elsewhere. Push back on scope
      creep the same as on a missed bug: confirm what's actually required
      against the Jira card before accepting a suggestion.
-4. **If everything aligns, approve and merge.** The localhost isn't opened at
+4. **Check the Sprint 4 gates, then approve and merge if everything aligns.**
+   CI is green, every AC on the card has at least one automated test, and the
+   author ran the full suite (`npm test`) on the branch after merging `main`
+   into it. The localhost isn't opened at
    this stage — the screenshots/evidence already in the PR and Jira comment
    stand in for a live check. Opening localhost now would just be redoing the
    author's own manual testing, not independent review.
