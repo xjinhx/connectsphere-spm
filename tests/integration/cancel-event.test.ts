@@ -10,7 +10,7 @@ import { cancelEvent, getEventCancellation } from '@/domain/event-status/service
 import type { Role } from '@/domain/identity/roles';
 import { todayInSingapore } from '@/domain/shared/dates';
 import { ConflictError, ForbiddenError, ValidationError } from '@/domain/shared/errors';
-import { decideVenueBookingRequest } from '@/domain/venue-booking/service';
+import { decideVenueBookingRequest, listEventVenueBookings } from '@/domain/venue-booking/service';
 import { createVenue, searchVenues } from '@/domain/venues/service';
 import { ensureTestClientOrganisation, TEST_CLIENT_ORGANISATION_ID } from './fixtures/clientOrganisation';
 
@@ -366,6 +366,14 @@ describe('AC3, AC4, AC5, AC6 — an event with bookings, a reservation and an at
       expect(booking.release_reason).toBe('Event cancelled');
       expect(booking.released_by).toBe(coordinator.userId);
       expect(booking.released_at).not.toBeNull();
+    }
+    // The event's Venue bookings list (its booking history, CL-71) shows them.
+    const { data: profile } = await admin.from('profiles').select('full_name').eq('id', coordinator.userId).single();
+    const listed = await listEventVenueBookings(eventA, coordinator.userId);
+    expect(listed).toHaveLength(2);
+    for (const entry of listed) {
+      expect(entry).toMatchObject({ status: 'released', releaseReason: 'Event cancelled', releasedByName: profile?.full_name });
+      expect(entry.releasedAt).not.toBeNull();
     }
   });
 

@@ -1,6 +1,6 @@
 import { EVENT_REQUEST_STATUS_LABELS, type EventRequestStatus } from '@/domain/event-request/schema';
 import { addDays } from '@/domain/equipment-reservation/policy';
-import { formatDayMonthYear, isPastDate, toSingaporeISODate, type ISODate } from '@/domain/shared/dates';
+import { formatDayMonthYear, formatDayMonthYearTime, isPastDate, type ISODate } from '@/domain/shared/dates';
 
 /**
  * SCRUM-101 — Move an event through its statuses as work is done.
@@ -196,14 +196,7 @@ export function cancellationStatusRefusal(status: EventRequestStatus): string {
 
 /** AC1: when it was cancelled, as DD/MM/YYYY HH:mm in Singapore. */
 export function formatCancelledAt(instant: string): string {
-  const date = new Date(instant);
-  const time = new Intl.DateTimeFormat('en-SG', {
-    timeZone: 'Asia/Singapore',
-    hour: '2-digit',
-    minute: '2-digit',
-    hourCycle: 'h23',
-  }).format(date);
-  return `${formatDayMonthYear(toSingaporeISODate(date))} ${time}`;
+  return formatDayMonthYearTime(instant);
 }
 
 /** What cancel_event released, as the notifications need it. */

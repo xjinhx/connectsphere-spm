@@ -826,6 +826,9 @@ type EventVenueBookingRow = {
   end_time: string;
   status: string;
   release_reason: string | null;
+  // SCRUM-105 AC6.
+  released_by: string | null;
+  released_at: string | null;
   // SCRUM-111 AC6.
   review_required: boolean;
   review_required_at: string | null;
@@ -848,7 +851,18 @@ export async function listEventVenueBookings(eventRequestId: string, actorId: st
   const { data, error } = await fetchEventVenueBookings(eventRequestId);
   if (error || !data) throw new ValidationError("Could not read the event's venue bookings.", error?.message);
 
-  return (data as unknown as EventVenueBookingRow[]).map((row) => {
+  const rows = data as unknown as EventVenueBookingRow[];
+  // SCRUM-105 AC6: the names of whoever released a booking, in one read.
+  const releasedByIds = [...new Set(rows.flatMap((row) => (row.released_by ? [row.released_by] : [])))];
+  const names = new Map<string, string>();
+  if (releasedByIds.length > 0) {
+    const { data: profiles } = await fetchProfileNames(releasedByIds);
+    for (const profile of profiles ?? []) {
+      if (profile.full_name && profile.full_name.trim() !== '') names.set(profile.id, profile.full_name);
+    }
+  }
+
+  return rows.map((row) => {
     const status = VenueBookingStatusEnum.parse(row.status);
     return {
       id: row.id,
@@ -859,6 +873,8 @@ export async function listEventVenueBookings(eventRequestId: string, actorId: st
       endTime: row.end_time.slice(0, 5),
       status,
       releaseReason: row.release_reason,
+      releasedByName: row.released_by ? (names.get(row.released_by) ?? 'An unnamed account') : null,
+      releasedAt: row.released_at,
       canRelease: status === 'confirmed' && isCurrentCoordinator(row.event_request?.coordinator_id ?? null, actorId),
       // SCRUM-229 AC4.
       replaced: isReplacedBooking(

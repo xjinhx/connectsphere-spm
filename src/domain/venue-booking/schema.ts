@@ -463,6 +463,12 @@ export interface EventVenueBooking {
   endTime: string;
   status: VenueBookingStatus;
   releaseReason: string | null;
+  /**
+   * SCRUM-105 AC6: who released it and when, so a release by a cancellation
+   * shows the cancelling coordinator and the time. Null while confirmed.
+   */
+  releasedByName: string | null;
+  releasedAt: string | null;
   /** AC3: true only for a confirmed booking, shown to the event's assigned coordinator. */
   canRelease: boolean;
   /** SCRUM-229 AC4: released because its replacement request was approved (CONTEXT.md: Replaced booking). */
