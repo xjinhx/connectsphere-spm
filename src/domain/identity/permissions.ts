@@ -81,6 +81,10 @@ export const ACTIONS = [
   // SCRUM-104 — "Mark an event as completed". The event's assigned coordinator
   // only, checked in the service.
   'event_completion',
+  // SCRUM-105 — "Cancel an event at any stage". The event's assigned
+  // coordinator only (AC2: never the Event Coordinator Lead), checked in the
+  // service.
+  'event_cancellation',
 ] as const;
 
 export type Action = (typeof ACTIONS)[number];
@@ -119,6 +123,8 @@ export const ROLE_PERMISSIONS: Record<Role, readonly Action[]> = {
     'event_confirmation',
     // SCRUM-104: mark their event completed once it has happened.
     'event_completion',
+    // SCRUM-105: cancel their event at any stage, with a reason.
+    'event_cancellation',
   ],
   operations_manager: ['venue_catalogue_view', 'coordinator_assignment', 'account_role_management'],
   venue_staff: ['venue_administration', 'venue_catalogue_view'],
