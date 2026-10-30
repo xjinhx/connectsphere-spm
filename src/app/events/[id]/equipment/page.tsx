@@ -3,6 +3,7 @@ import { notFound } from 'next/navigation';
 import AddEquipmentLineForm from '@/components/equipment-request/AddEquipmentLineForm';
 import EquipmentLineEditor from '@/components/equipment-request/EquipmentLineEditor';
 import EquipmentRequestStatusForm from '@/components/equipment-request/EquipmentRequestStatusForm';
+import EquipmentSuitabilityForm from '@/components/equipment-request/EquipmentSuitabilityForm';
 import { EquipmentRequestStatusBadge } from '@/components/equipment-request/EquipmentRequestStatusBadge';
 import TechnicalRequirementsForm from '@/components/equipment-request/TechnicalRequirementsForm';
 import { EquipmentAvailabilitySection } from '@/components/equipment-reservation/EquipmentAvailabilitySection';
@@ -10,7 +11,8 @@ import { EventReservationsSection } from '@/components/equipment-reservation/Eve
 import { EventRequestStatusBadge } from '@/components/event-request/EventRequestStatusBadge';
 import { EQUIPMENT_CATEGORY_LABELS } from '@/domain/equipment/schema';
 import { listEquipmentOptions } from '@/domain/equipment/service';
-import type { EquipmentRequestView } from '@/domain/equipment-request/schema';
+import { unmetRequirements } from '@/domain/equipment-request/policy';
+import { SUITABILITY_LABELS, type EquipmentRequestView } from '@/domain/equipment-request/schema';
 import { getEquipmentRequest } from '@/domain/equipment-request/service';
 import type { EquipmentAvailability } from '@/domain/equipment-reservation/schema';
 import { checkEquipmentAvailability, listEventReservations } from '@/domain/equipment-reservation/service';
@@ -42,6 +44,12 @@ import { getCurrentActor } from '@/lib/auth/currentActor';
  * items (AC3) and the reason it cannot be fulfilled (AC4), shown to everyone
  * who can open the page - Technical Support Staff and the assigned
  * coordinator. Technical Support Staff set it here (request.canSetStatus).
+ *
+ * SCRUM-171: each item's suitability verdict and why (AC1), the items not
+ * suitable listed as unmet requirements with the reason (AC2), and whether the
+ * last completed review left the request ready to reserve (AC4), shown to both
+ * viewers. Technical Support Staff mark the items and complete the review here
+ * (request.canReview).
  *
  * A server component reading through the domain service, and force-dynamic,
  * so after a save the list is read back from the stored rows (TC-160-01).
@@ -175,6 +183,9 @@ export default async function EventEquipmentRequestPage({ params }: { params: Pr
                   <th scope="col" className="p-3 font-medium">
                     Reserved
                   </th>
+                  <th scope="col" className="p-3 font-medium">
+                    Suitability
+                  </th>
                   {request.canEdit ? (
                     <th scope="col" className="p-3 font-medium">
                       Change or remove
@@ -189,6 +200,15 @@ export default async function EventEquipmentRequestPage({ params }: { params: Pr
                     <td className="p-3">{EQUIPMENT_CATEGORY_LABELS[line.category]}</td>
                     <td className="p-3">{line.quantity}</td>
                     <td className="p-3">{line.reserved ? 'Yes' : 'No'}</td>
+                    {/* SCRUM-171 AC1: the verdict and why, as Technical Support saved it. */}
+                    <td className="p-3">
+                      {line.suitability ? SUITABILITY_LABELS[line.suitability] : 'Not yet reviewed'}
+                      {line.suitabilityReason ? (
+                        <span className="block text-xs whitespace-pre-wrap text-[var(--text-muted)]">
+                          {line.suitabilityReason}
+                        </span>
+                      ) : null}
+                    </td>
                     {request.canEdit ? (
                       <td className="p-3">
                         {/* AC7, AC8: keyed on the stored quantity, so the box resets after a save. */}
@@ -207,6 +227,52 @@ export default async function EventEquipmentRequestPage({ params }: { params: Pr
         )}
       </section>
 
+      {request.requestStatus ? (
+        // SCRUM-171: the suitability review, for both viewers.
+        <section className="mt-6 rounded-lg border border-[var(--border)] bg-[var(--surface)] p-4">
+          <h2 className="text-sm font-semibold">Suitability review</h2>
+          <div className="mt-2 flex flex-wrap items-center gap-2 text-sm">
+            {request.review ? (
+              <>
+                {/* AC4: whether the last completed review left it ready to reserve. */}
+                <span
+                  className={[
+                    'inline-block whitespace-nowrap rounded-full px-2.5 py-0.5 text-xs font-medium',
+                    request.review.readyToReserve ? 'bg-green-50 text-green-700' : 'bg-amber-50 text-amber-700',
+                  ].join(' ')}
+                >
+                  {request.review.readyToReserve ? 'Ready to reserve' : 'Not ready to reserve'}
+                </span>
+                <span className="text-[var(--text-muted)]">
+                  Review completed by {request.review.completedByName} on{' '}
+                  {formatSingaporeDateTime(request.review.completedAt)}
+                </span>
+              </>
+            ) : (
+              <span className="text-[var(--text-muted)]">Review not completed yet.</span>
+            )}
+          </div>
+          {unmetRequirements(request.lines).length > 0 ? (
+            // AC2: each item not suitable, as an unmet requirement with the reason.
+            <div className="mt-3">
+              <h3 className="text-sm font-medium">Unmet requirements</h3>
+              <ul className="mt-1 list-disc pl-5 text-sm">
+                {unmetRequirements(request.lines).map((line) => (
+                  <li key={line.id} className="whitespace-pre-wrap">
+                    {line.equipmentName} × {line.quantity}: {line.suitabilityReason}
+                  </li>
+                ))}
+              </ul>
+            </div>
+          ) : null}
+          {request.canReview && request.lines.length > 0 ? (
+            <div className="mt-4 border-t border-[var(--border)] pt-4">
+              <EquipmentSuitabilityForm eventRequestId={request.eventRequestId} lines={request.lines} />
+            </div>
+          ) : null}
+        </section>
+      ) : null}
+
       {request.canEdit ? (
         <section className="mt-6 rounded-lg border border-[var(--border)] bg-[var(--surface)] p-4">
           <h2 className="mb-3 text-sm font-semibold">Add equipment</h2>
@@ -219,7 +285,8 @@ export default async function EventEquipmentRequestPage({ params }: { params: Pr
         availability={availability}
         refusal={refusal}
       />
-      <EventReservationsSection {...reservations} canReserve={canReserve} />
+      {/* SCRUM-177: releasing takes the same permission as reserving. */}
+      <EventReservationsSection {...reservations} canReserve={canReserve} canRelease={canReserve} />
 
       {/* AC6: the notes, shown with the equipment list. Kept as typed, line
           breaks included (AC5, TC-160-14). */}

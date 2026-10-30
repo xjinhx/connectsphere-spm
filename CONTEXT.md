@@ -102,6 +102,10 @@ An equipment line Technical Support Staff cannot meet, on a partially fulfilled 
 An equipment line whose equipment has been set aside for the event. Reducing or removing it needs the coordinator to confirm a warning first (SCRUM-160 AC8). Technical Support Staff reserve it with a **reservation** (SCRUM-173): a quantity of the line's item held for the event's commitment window, Reserved until it is Released (SCRUM-177).
 _Avoid_: booked, held (those words are for venues)
 
+**Released reservation**:
+A reservation Technical Support Staff have given up, with a reason. Its units are available again for its window; the event's other reservations are unchanged (SCRUM-177). Reserving the line again makes it Reserved, and the earlier release is not kept.
+_Avoid_: cancelled reservation (cancelling is for a whole event, SCRUM-105)
+
 **Commitment window** (equipment):
 The days an event's equipment is committed to it: from the day before its first confirmed venue booking (collection day, F-1) to its last booked day (Return Day, L), both included; the units are free again from L+1 (SCRUM-167 AC1, SCRUM-173 AC3). Whole days, so a morning and an afternoon event on the same date share it. What is **available** to an event is the item's quantity, less units out of service (SCRUM-170), less the most units other events hold on any single day of the window (SCRUM-167 AC9); the event's own reservations are not counted against it (AC4).
 _Avoid_: booking period, hold (those words are for venues)
@@ -117,6 +121,16 @@ An arrangement (venue, equipment, technical support or registration) the coordin
 
 **Complete** (of an arrangement):
 Venue is complete when the event has at least one confirmed booking, no Pending booking line and no affected booking. Equipment is complete when every line is fully reserved, and is never complete when nothing is requested (SCRUM-102).
+
+### Completion
+
+**End date** (of an event):
+The last day of the event's confirmed venue bookings, or its proposed date when it has none. It has passed when it is before today in Singapore (SCRUM-104).
+_Avoid_: event date (for a multi-day event, that is its first day)
+
+**System-completed**:
+An event the daily completion check moved to Completed, 7 or more days after its end date, because nobody marked it completed. Only a Preparation event is completed this way (SCRUM-104, Change Log CL-60).
+_Avoid_: auto-closed, expired
 
 ### Safety
 

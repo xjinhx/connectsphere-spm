@@ -7,6 +7,7 @@ import { RESERVE_NEEDS_APPROVED_BOOKING_MESSAGE } from '@/domain/equipment-reser
 import {
   checkEquipmentAvailability,
   listEventReservations,
+  releaseEquipmentReservation,
   reserveEquipment,
 } from '@/domain/equipment-reservation/service';
 import { addDays } from '@/domain/equipment-reservation/policy';
@@ -332,8 +333,8 @@ describe('SCRUM-173: reserving for the commitment window', () => {
     const e1 = await createEvent('S4-E1 173-09', E1_DATES);
     const line = await request(e1, item, 3);
     const reservation = await reserveEquipment(e1, line, technicalSupport.userId, { quantity: 3 });
-    // DUMMY(SCRUM-177) D-21: released by hand; releasing is SCRUM-177's.
-    await admin.from('equipment_reservation').update({ status: 'released' }).eq('id', reservation.id);
+    // Released through the app (SCRUM-177), which replaced dummy D-21.
+    await releaseEquipmentReservation(e1, reservation.id, technicalSupport.userId, { reason: 'Client no longer needs it' });
 
     const { reservations, outstanding } = await listEventReservations(e1, technicalSupport);
     expect(reservations.map((r) => [r.equipmentName, r.quantity, r.window, r.status])).toEqual([

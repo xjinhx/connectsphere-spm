@@ -1,14 +1,11 @@
 'use client';
 
-import { useRouter } from 'next/navigation';
 import { LoginForm, type LoginResult } from '@/components/auth/LoginForm';
 import { INVALID_CREDENTIALS_MESSAGE, type LoginInput } from '@/domain/identity/login';
 import { landingPathForRoles } from '@/domain/identity/roles';
 import { createSupabaseBrowserClient } from '@/lib/supabase/client';
 
 export default function LoginPage() {
-  const router = useRouter();
-
   async function handleLogin(input: LoginInput): Promise<LoginResult> {
     const supabase = createSupabaseBrowserClient();
     const { data, error } = await supabase.auth.signInWithPassword(input);
@@ -31,8 +28,9 @@ export default function LoginPage() {
     // session ended without Log out (idle expiry) and left a "Working as" choice.
     await fetch('/api/me/working-as', { method: 'DELETE' }).catch(() => undefined);
 
-    router.push(landingPathForRoles(roles));
-    router.refresh();
+    // SCRUM-268: a full page load, so the header is built for this account and
+    // never carries over from whoever was signed in before.
+    window.location.assign(landingPathForRoles(roles));
     return { ok: true };
   }
 

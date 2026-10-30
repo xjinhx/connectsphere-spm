@@ -26,7 +26,9 @@ import { ArrangementReviewPanel } from '@/components/event-request/ArrangementRe
 import { EventSchedulePanel } from '@/components/event-request/EventSchedulePanel';
 import { getEventSchedule } from '@/domain/significant-change/service';
 import { ConfirmEventButton } from '@/components/event-request/ConfirmEventButton';
-import { canBeConfirmed } from '@/domain/event-status/policy';
+import { CompleteEventButton } from '@/components/event-request/CompleteEventButton';
+import { canBeCompleted, canBeConfirmed, hasEnded } from '@/domain/event-status/policy';
+import { getEventCompletion } from '@/domain/event-status/service';
 import {
   describeAccessibility,
   describeEquipment,
@@ -47,7 +49,7 @@ import { isActionPermitted } from '@/domain/identity/permissions';
 import { getCurrentActor } from '@/lib/auth/currentActor';
 import { SafetyCheckOutcome } from '@/components/safety-check/SafetyCheckOutcome';
 import { getLatestSafetyCheck } from '@/domain/safety-check/service';
-import { formatSingaporeDate, formatSingaporeDateTime } from '@/domain/shared/dates';
+import { formatDayMonthYear, formatSingaporeDate, formatSingaporeDateTime, todayInSingapore } from '@/domain/shared/dates';
 
 /**
  * US-7.1 AC2 (`ConnectSphere_Test_Cases_v3.xlsx`, US-7.1-TC02) — open a
@@ -203,6 +205,10 @@ export default async function ReviewEventRequestPage({
   // same gate as the decision sections below: the Lead is not shown it.
   const safetyCheck = request.canManage ? await getLatestSafetyCheck(request.id, actor) : null;
 
+  // SCRUM-104 — the end date decides whether Mark as completed is offered
+  // (AC4), and a completed event says when and by whom (AC1, AC2).
+  const completion = await getEventCompletion(request.id);
+
   return (
     <main className="mx-auto max-w-2xl px-4 py-8">
       <Link href="/assigned-events" className="text-sm text-[var(--brand)] hover:underline">
@@ -214,6 +220,12 @@ export default async function ReviewEventRequestPage({
         <EventRequestStatusBadge status={request.status} />
       </div>
       <p className="mt-1 font-mono text-sm text-[var(--text-muted)]">{request.reference}</p>
+      {completion.completed ? (
+        <p className="mt-1 text-sm text-[var(--text-muted)]">
+          Completed on {formatDayMonthYear(completion.completed.on)}{' '}
+          {completion.completed.byName === null ? 'by the system' : `by ${completion.completed.byName}`}
+        </p>
+      ) : null}
 
       {/* SCRUM-151 AC3: a confirmed booking on a slot Venue Staff have since
           made unavailable, listed until it is released or replaced. First on
@@ -340,6 +352,14 @@ export default async function ReviewEventRequestPage({
       {request.canManage && canBeConfirmed(request.status) ? (
         <section className="mt-6 rounded-lg border border-[var(--border)] bg-[var(--surface)] p-4">
           <ConfirmEventButton requestId={request.id} />
+        </section>
+      ) : null}
+
+      {/* SCRUM-104 AC1, AC4, AC5 — mark the event completed. Preparation only,
+          once its end date has passed, and only for the assigned coordinator. */}
+      {request.canManage && canBeCompleted(request.status) && hasEnded(completion.endDate, todayInSingapore()) ? (
+        <section className="mt-6 rounded-lg border border-[var(--border)] bg-[var(--surface)] p-4">
+          <CompleteEventButton requestId={request.id} />
         </section>
       ) : null}
 

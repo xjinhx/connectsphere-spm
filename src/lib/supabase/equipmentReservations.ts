@@ -1,7 +1,8 @@
 import { createAdminClient } from './admin';
 
 /**
- * Equipment availability and reservation queries (SCRUM-167, SCRUM-173).
+ * Equipment availability and reservation queries (SCRUM-167, SCRUM-173,
+ * SCRUM-177).
  *
  * Same rules as equipmentRequests.ts: the client and the query building live
  * here, src/domain/equipment-reservation/service.ts decides when to run them,
@@ -11,6 +12,10 @@ import { createAdminClient } from './admin';
 function db() {
   return createAdminClient();
 }
+
+/** A reservation as the service reads it, with its item's name (SCRUM-177: and its release). */
+const RESERVATION_COLUMNS =
+  'id, line_id, equipment_id, quantity, window_start, window_end, status, created_at, review_required, review_required_at, review_required_cause, release_reason, released_at, equipment ( name )';
 
 /** 167 AC1, AC3: the dates of the event's confirmed venue bookings (a released one no longer counts). */
 export async function fetchConfirmedBookingDates(eventRequestId: string) {
@@ -37,7 +42,7 @@ export async function fetchLinesWithItems(eventRequestId: string) {
 export async function fetchEventReservations(eventRequestId: string) {
   return db()
     .from('equipment_reservation')
-    .select('id, line_id, equipment_id, quantity, window_start, window_end, status, created_at, review_required, review_required_at, review_required_cause, equipment ( name )')
+    .select(RESERVATION_COLUMNS)
     .eq('event_request_id', eventRequestId)
     .order('created_at')
     .order('id');
@@ -76,7 +81,29 @@ export async function reserveEquipmentLine(lineId: string, quantity: number, res
 export async function fetchReservation(reservationId: string) {
   return db()
     .from('equipment_reservation')
-    .select('id, line_id, equipment_id, quantity, window_start, window_end, status, created_at, review_required, review_required_at, review_required_cause, equipment ( name )')
+    .select(RESERVATION_COLUMNS)
     .eq('id', reservationId)
     .single();
+}
+
+/** SCRUM-177: one of the event's reservations, or none when it is not the event's. */
+export async function fetchEventReservation(eventRequestId: string, reservationId: string) {
+  return db()
+    .from('equipment_reservation')
+    .select(RESERVATION_COLUMNS)
+    .eq('id', reservationId)
+    .eq('event_request_id', eventRequestId)
+    .maybeSingle();
+}
+
+/**
+ * SCRUM-177 AC1: one call to release_equipment_reservation. Resolves to true
+ * when it was released, false when it was not Reserved (already released).
+ */
+export async function releaseReservation(reservationId: string, reason: string, releasedBy: string) {
+  return db().rpc('release_equipment_reservation', {
+    p_reservation_id: reservationId,
+    p_reason: reason,
+    p_released_by: releasedBy,
+  });
 }
