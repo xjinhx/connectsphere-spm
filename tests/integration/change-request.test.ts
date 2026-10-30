@@ -154,18 +154,31 @@ beforeAll(async () => {
   coordinatorId = await createAccount('Casey Coordinator', ['coordinator']);
 });
 
-/** An accessibility feature by name, created if this database does not have it yet. */
+/** The accessibility features this file created, removed again in afterAll (PR #156 review). */
+const createdFeatureIds: string[] = [];
+
+/**
+ * An accessibility feature by name, created if this database does not have it
+ * yet. Only a feature created here is tracked for clean-up; one that already
+ * existed is left alone.
+ */
 async function ensureFeature(name: string): Promise<string> {
   const { data: existing } = await supabase.from('accessibility_features').select('id').eq('name', name).maybeSingle();
   if (existing) return existing.id;
   const { data, error } = await supabase.from('accessibility_features').insert({ name }).select('id').single();
   if (error || !data) throw new Error(`could not create accessibility feature ${name}: ${error?.message ?? 'no row'}`);
+  createdFeatureIds.push(data.id);
   return data.id;
 }
 
 afterAll(async () => {
   for (const id of createdRequestIds) {
     await supabase.from('event_request').delete().eq('id', id);
+  }
+  // After the events, so nothing still refers to them; they would otherwise
+  // stay as tick boxes in the change request form until a db:reset.
+  for (const id of createdFeatureIds) {
+    await supabase.from('accessibility_features').delete().eq('id', id);
   }
   for (const id of createdUserIds) {
     await supabase.auth.admin.deleteUser(id);
