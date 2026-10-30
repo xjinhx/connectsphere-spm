@@ -836,11 +836,15 @@ switch them the next time they edit those files.
   Only the withdrawing is faked: the flags and the test helper set
   `event_registration.status` to `withdrawn`, the value SCRUM-184 will write
   (SCRUM-181's migration already allows it).
-- **To replace:** once SCRUM-184 is on main, withdraw through its page or
+- **To replace:** ~~once SCRUM-184 is on main, withdraw through its page or
   function in TC-182-09 to TC-182-12 instead of the flags, have `withdraw()`
   in the integration test call SCRUM-184's function, remove the marker and
-  re-run those cases.
-- **Status:** Active.
+  re-run those cases.~~ Done: `withdraw()` calls `withdrawRegistration`; the
+  four flags are gone from `scripts/seed-scrum182.mjs`, whose header names the
+  account that withdraws on each event's page. TC-182-09 to TC-182-12
+  re-run (automated) on branch `withdraw-registration`; their manual runs
+  withdraw on the page instead of running a flag.
+- **Status:** Replaced (SCRUM-184, branch `withdraw-registration`).
 
 ### D-26 — A change request's decision is set by hand
 
