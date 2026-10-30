@@ -51,6 +51,23 @@ function hrefOf(html: string, text: string): string | null {
   return null;
 }
 
+describe('SCRUM-256 AC1: Safety checks is only for a Safety Officer', () => {
+  it('TC-256-03: a role without access is refused Safety checks by URL, and no event is listed', async () => {
+    vi.mocked(getCurrentActor).mockResolvedValue({
+      userId: 'dddddddd-dddd-4ddd-8ddd-dddddddddddd',
+      fullName: 'Coordinator A',
+      roles: ['coordinator'],
+      clientOrganisation: null,
+    });
+
+    const html = renderToStaticMarkup((await SafetyChecksPage()) as ReactElement);
+
+    expect(html).toContain('This page is for Safety Officers.');
+    expect(html).not.toContain('<table');
+    expect(listEventsAwaitingSafetyCheck).not.toHaveBeenCalled();
+  });
+});
+
 describe('SCRUM-256 AC3: from Safety checks to a check page and back', () => {
   it("TC-256-11: a row on Safety checks opens that event's check page", async () => {
     vi.mocked(listEventsAwaitingSafetyCheck).mockResolvedValue([

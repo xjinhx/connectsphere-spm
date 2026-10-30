@@ -15,6 +15,10 @@ describe('SCRUM-256 AC1: a Safety Officer lands on Safety checks', () => {
     expect(landingPathForRoles(['safety_officer'])).toBe('/safety-checks');
   });
 
+  it('TC-256-02: another role does not land on Safety checks', () => {
+    expect(landingPathForRoles(['venue_staff'])).toBe('/booking-queue');
+  });
+
   it('TC-256-04: a coordinator who is also a Safety Officer lands on /safety-checks, whichever is stored first', () => {
     expect(landingPathForRoles(['coordinator', 'safety_officer'])).toBe('/safety-checks');
     expect(landingPathForRoles(['safety_officer', 'coordinator'])).toBe('/safety-checks');
@@ -28,6 +32,16 @@ describe('SCRUM-256 AC1: a Safety Officer lands on Safety checks', () => {
 describe('SCRUM-256 AC2: the nav shows Safety checks', () => {
   it('TC-256-06: the nav is exactly Safety checks, linking to /safety-checks', () => {
     expect(ROLE_NAV.safety_officer).toEqual([{ href: '/safety-checks', label: 'Safety checks' }]);
+  });
+
+  it("TC-256-09: no other role's items appear", () => {
+    const otherHrefs = Object.entries(ROLE_NAV)
+      .filter(([role]) => role !== 'safety_officer')
+      .flatMap(([, items]) => items.map((item) => item.href))
+      .filter((href) => href !== '/safety-checks');
+    for (const href of otherHrefs) {
+      expect(ROLE_NAV.safety_officer.map((item) => item.href)).not.toContain(href);
+    }
   });
 
   it('TC-256-07: Safety checks is highlighted on its own page', () => {
