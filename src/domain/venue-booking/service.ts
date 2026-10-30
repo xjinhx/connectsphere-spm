@@ -633,9 +633,8 @@ export async function decideVenueBookingRequest(
  *
  * SCRUM-155 AC3: a booking that has been released (SCRUM-231) or cancelled is
  * no longer confirmed, so getVenueCommitments no longer returns it and the
- * approval goes through.
- * DUMMY(SCRUM-105) D-15: nothing cancels an event's bookings yet; testers
- * remove the booking by hand for the cancelled case.
+ * approval goes through. Cancelling an event (SCRUM-105) releases its bookings
+ * the same way.
  */
 async function conflictsFor(
   venueId: string,
