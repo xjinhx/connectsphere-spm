@@ -127,6 +127,25 @@ export function changeRequestArrangementCauses(before: ScheduleValues, after: Sc
   return changeCauses(before, after);
 }
 
+/**
+ * AC4 — the staff member's notification. It links to the notifications page
+ * (notification/policy.ts), so it says on its own what changed on each kind
+ * of arrangement this person actioned: `booking` for the Venue Staff who
+ * approved a booking, `reservation` for the Technical Support Staff who
+ * reserved equipment, both for someone who did both (still one notification
+ * per person, CL-64). Each is SCRUM-111's cause text, e.g. "Date changed from
+ * 29/11/2026 to 06/12/2026".
+ */
+export function arrangementReviewMessage(
+  eventName: string,
+  actioned: { booking: string | null; reservation: string | null },
+): string {
+  const lines = [`An approved change to "${eventName}" means an arrangement you actioned now needs review.`];
+  if (actioned.booking) lines.push(`Venue booking: ${actioned.booking}.`);
+  if (actioned.reservation) lines.push(`Equipment reservation: ${actioned.reservation}.`);
+  return lines.join(' ');
+}
+
 /** The details registered attendees are shown of an event (SCRUM-180 AC3) that a change request can change. */
 export interface AttendeeFacingDetails {
   name: string;

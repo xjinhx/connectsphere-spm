@@ -1,5 +1,6 @@
 import { describe, expect, it } from 'vitest';
 import {
+  arrangementReviewMessage,
   attendeeChangeMessage,
   canDecideChangeRequestFor,
   changeAffectsAttendees,
@@ -149,6 +150,35 @@ describe('changeRequestArrangementCauses (AC4 TC-190-04) — reuses SCRUM-111\'s
   it('no schedule change causes neither', () => {
     const causes = changeRequestArrangementCauses(BASE_SCHEDULE, BASE_SCHEDULE);
     expect(causes).toEqual({ booking: null, reservation: null });
+  });
+});
+
+describe('arrangementReviewMessage and its link (AC4 TC-190-04)', () => {
+  const booking = 'Date changed from 29/11/2026 to 06/12/2026';
+  const reservation = 'Times changed from 10:00–12:00 to 11:00–13:00';
+
+  it('TC-190-04 Venue Staff are told what changed on the booking they approved, and nothing about equipment', () => {
+    expect(arrangementReviewMessage('Tech Summit', { booking, reservation: null })).toBe(
+      'An approved change to "Tech Summit" means an arrangement you actioned now needs review. ' +
+        'Venue booking: Date changed from 29/11/2026 to 06/12/2026.',
+    );
+  });
+
+  it('TC-190-04 Technical Support Staff are told what changed on the equipment they reserved', () => {
+    const message = arrangementReviewMessage('Tech Summit', { booking: null, reservation });
+    expect(message).toContain('Equipment reservation: Times changed from 10:00–12:00 to 11:00–13:00.');
+    expect(message).not.toContain('Venue booking');
+  });
+
+  it('TC-190-04 someone who actioned both gets both, in one message', () => {
+    const message = arrangementReviewMessage('Tech Summit', { booking, reservation });
+    expect(message).toContain('Venue booking: ');
+    expect(message).toContain('Equipment reservation: ');
+  });
+
+  it("TC-190-04 the staff notification opens the notifications page, not the organiser's event page they can't open", () => {
+    const eventRequestId = '11111111-1111-4111-8111-111111111111';
+    expect(notificationHref({ type: 'arrangement_needs_review', eventRequestId })).toBe('/notifications');
   });
 });
 

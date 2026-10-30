@@ -28,6 +28,7 @@ import {
   type SelectableChangeRequestField,
 } from './schema';
 import {
+  arrangementReviewMessage,
   attendeeChangeMessage,
   canDecideChangeRequestFor,
   canRaiseChangeRequest,
@@ -547,14 +548,19 @@ export async function approveChangeRequest(
     message: `Your change request for "${event.name}" was approved.`,
   });
 
-  // AC4 — the staff who actioned each affected arrangement.
-  const staffToNotify = new Set([...(result.venueStaffIds ?? []), ...(result.equipmentStaffIds ?? [])]);
-  for (const staffId of staffToNotify) {
+  // AC4 — the staff who actioned each affected arrangement, one notification
+  // each, saying what changed on the kind(s) they actioned.
+  const venueStaff = new Set(result.venueStaffIds ?? []);
+  const equipmentStaff = new Set(result.equipmentStaffIds ?? []);
+  for (const staffId of new Set([...venueStaff, ...equipmentStaff])) {
     await notifyBestEffort({
       recipientId: staffId,
       type: 'arrangement_needs_review',
       eventRequestId: event.id,
-      message: `An approved change to "${event.name}" means an arrangement you actioned now needs review.`,
+      message: arrangementReviewMessage(event.name, {
+        booking: venueStaff.has(staffId) ? causes.booking : null,
+        reservation: equipmentStaff.has(staffId) ? causes.reservation : null,
+      }),
     });
   }
 

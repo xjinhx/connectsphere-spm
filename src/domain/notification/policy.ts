@@ -60,10 +60,19 @@ const EQUIPMENT_REQUEST_TYPES = new Set<string>(['equipment_unable_to_fulfil']);
 // SCRUM-190 AC5: sent to attendees, who cannot open /events/<id>; their own
 // page for the event is /register-events/<id> (SCRUM-180 AC3).
 const ATTENDEE_FACING_TYPES = new Set<string>(['event_details_changed']);
+// SCRUM-190 AC4: sent to the Venue Staff and Technical Support Staff who
+// actioned an arrangement. No one event page is open to both (Venue Staff
+// have none at all), so the message says what changed on each arrangement
+// and links to the notifications page itself - the same as SCRUM-105's
+// 'event_cancelled' (PR #163), which uses this same set.
+const SELF_CONTAINED_TYPES = new Set<string>(['arrangement_needs_review']);
 
 export function notificationHref(notification: { type: string; eventRequestId: string }): string {
   if (ATTENDEE_FACING_TYPES.has(notification.type)) {
     return `/register-events/${notification.eventRequestId}`;
+  }
+  if (SELF_CONTAINED_TYPES.has(notification.type)) {
+    return '/notifications';
   }
   if (LEAD_FACING_TYPES.has(notification.type)) {
     return `/assignment-queue/${notification.eventRequestId}`;

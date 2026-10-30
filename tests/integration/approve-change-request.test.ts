@@ -344,8 +344,19 @@ describe('SCRUM-190 AC4: affected arrangements are flagged and the staff who act
     expect(await flagOf('venue_booking', bookingId)).toBe(true);
     expect(await flagOf('equipment_reservation', reservationId)).toBe(true);
 
-    expect(await notificationsFor(venueStaffId, eventId, 'arrangement_needs_review')).toHaveLength(1);
-    expect(await notificationsFor(technicalSupportId, eventId, 'arrangement_needs_review')).toHaveLength(1);
+    const venueNotices = await notificationsFor(venueStaffId, eventId, 'arrangement_needs_review');
+    const equipmentNotices = await notificationsFor(technicalSupportId, eventId, 'arrangement_needs_review');
+    expect(venueNotices).toHaveLength(1);
+    expect(equipmentNotices).toHaveLength(1);
+
+    // Each message says what changed on the arrangement that person actioned,
+    // since it opens no event page (they can't open the organiser's).
+    const [venueNotice] = venueNotices;
+    const [equipmentNotice] = equipmentNotices;
+    expect(venueNotice?.message).toContain('Venue booking: Date changed');
+    expect(venueNotice?.message).not.toContain('Equipment reservation');
+    expect(equipmentNotice?.message).toContain('Equipment reservation: Date changed');
+    expect(equipmentNotice?.message).not.toContain('Venue booking');
   });
 });
 
