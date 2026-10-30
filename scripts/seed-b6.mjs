@@ -11,10 +11,12 @@
 // client organisation but owns nothing (TC-187-07, AC4).
 //
 // TC-187-11/12 depend on SCRUM-190/191 (approve/reject) actually deciding a
-// request; neither is built yet, so S187-H and S187-I seed their decision
-// directly in Postgres (DUMMY(SCRUM-190)/(SCRUM-191) D-26, docs/dummies.md) -
-// same pattern as tests/integration/change-request.test.ts's seedDecision.
-// Re-run both manual cases once SCRUM-190/191 merge.
+// request. SCRUM-190 is built (the automated TC-187-12 runs against its real
+// approval), but this script writes straight to Postgres rather than going
+// through the app, and SCRUM-191 is not built, so S187-H and S187-I still
+// seed their decision directly (DUMMY(SCRUM-190)/(SCRUM-191) D-26,
+// docs/dummies.md) - same pattern as tests/integration/change-request.test.ts's
+// seedDecision. Re-run both manual cases once SCRUM-191 merges.
 //
 // S187-J, S187-K, S187-L cover CL-61 (PO clarification, 24/10/2026): J
 // (Approved) and K (Preparation) extend the status scope (Planning is
