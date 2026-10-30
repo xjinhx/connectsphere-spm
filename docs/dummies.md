@@ -704,8 +704,12 @@ switch them the next time they edit those files.
   (`currentNavHref` beside `isNavItemCurrent` in
   `src/domain/navigation/policy.ts`, agreed with SCRUM-249's owner); roles
   whose items don't nest are unaffected. TC-249-15 to 17 and 25 to 27 re-run
-  for the organiser as TC-250-02, 06 and 07. **Other roles:** still active,
-  waiting on SCRUM-251 to 253 and 256.
+  for the organiser as TC-250-02, 06 and 07. **Safety Officer:** replaced by
+  SCRUM-256 (branch `safety-officer-navigation`): AC2 lists only Safety
+  checks, which was already the stand-in item, so the entry is unchanged and
+  its marker removed; TC-249-15 to 17 and 25 to 27 re-run for the Safety
+  Officer as TC-256-07, 10 and 14. **Other roles:** still active, waiting on
+  SCRUM-251 to 253.
 
 ### D-21 — An equipment reservation is released by hand
 

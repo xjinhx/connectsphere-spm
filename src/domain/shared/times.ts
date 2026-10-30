@@ -46,6 +46,28 @@ export const END_TIME_OPTIONS: readonly ClockTime[] = Array.from({ length: 96 },
   fromMinutes((i + 1) * 15),
 );
 
+/**
+ * SCRUM-266: the end times a form offers once a start is chosen - only those
+ * after it, so an end at or before the start cannot be picked. `options` is
+ * END_TIME_OPTIONS unless the form has narrowed it already (opening hours, for
+ * example). With no start chosen yet, every option is offered.
+ */
+export function endTimesAfter(start: string, options: readonly ClockTime[] = END_TIME_OPTIONS): readonly ClockTime[] {
+  if (!isQuarterHourStart(start)) return options;
+  const from = toMinutes(start);
+  return options.filter((end) => toMinutes(end) > from);
+}
+
+/**
+ * SCRUM-266: the end a form keeps when its start changes - cleared when the
+ * start has moved to or past it, so the form never holds an end at or before
+ * its start.
+ */
+export function keepEndAfterStart(start: string, end: string): string {
+  if (!isQuarterHourStart(start) || !isQuarterHourEnd(end)) return end;
+  return toMinutes(end) > toMinutes(start) ? end : '';
+}
+
 /** Minutes after midnight as `HH:MM`. 1440 is `24:00`. */
 export function fromMinutes(minutes: number): ClockTime {
   const hours = Math.floor(minutes / 60);
