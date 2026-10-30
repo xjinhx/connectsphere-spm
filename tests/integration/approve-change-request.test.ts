@@ -6,6 +6,7 @@ import { recordEssentialArrangements } from '@/domain/essential-arrangements/ser
 import { confirmEvent } from '@/domain/event-status/service';
 import type { EventRequestStatus } from '@/domain/event-request/schema';
 import { approveChangeRequest, raiseChangeRequest } from '@/domain/change-request/service';
+import { registerForEvent } from '@/domain/event-registration/service';
 import { reconfirmArrangement } from '@/domain/significant-change/service';
 import { decideVenueBookingRequest } from '@/domain/venue-booking/service';
 import { createVenue } from '@/domain/venues/service';
@@ -22,12 +23,9 @@ import { ensureTestClientOrganisation, TEST_CLIENT_ORGANISATION_ID } from './fix
  * a negative case (TC-190-08, a non-Pending request). The pure rules are in
  * tests/unit/approve-change-request-policy.test.ts.
  *
- * AC5 ("registered attendees are notified of the new details") is not
- * exercised here: attendees are never signed-in accounts
- * (event-registration's Registration has no userId), so there is no
- * recipient the in-app notification mechanism can reach, and SCRUM-194
- * (email) is out of Release 1. See the comment on approveChangeRequest and
- * docs/dummies.md D-26.
+ * AC5: a registration belongs to the signed-in Attendee account that made it
+ * (SCRUM-181), so the attendee is registered for real (registerForEvent) and
+ * their in-app notification is read back.
  */
 
 vi.setConfig({ testTimeout: 30_000, hookTimeout: 60_000 });
@@ -41,6 +39,7 @@ let technicalSupportId: string;
 let coordinatorId: string;
 let otherCoordinatorId: string;
 let organiserId: string;
+let attendeeId: string;
 const venueIds: string[] = [];
 const equipmentIds: string[] = [];
 const eventIds: string[] = [];
@@ -189,6 +188,7 @@ beforeAll(async () => {
   coordinatorId = await createUser('Coordinator A', ['coordinator']);
   otherCoordinatorId = await createUser('coordinator-b', ['coordinator']);
   organiserId = await createUser('organiser', ['event_organiser']);
+  attendeeId = await createUser('attendee', ['attendee']);
 });
 
 afterAll(async () => {
@@ -346,6 +346,54 @@ describe('SCRUM-190 AC4: affected arrangements are flagged and the staff who act
 
     expect(await notificationsFor(venueStaffId, eventId, 'arrangement_needs_review')).toHaveLength(1);
     expect(await notificationsFor(technicalSupportId, eventId, 'arrangement_needs_review')).toHaveLength(1);
+  });
+});
+
+describe('SCRUM-190 AC5: registered attendees are notified of the new details', () => {
+  /** Registration open from yesterday with places left, as SCRUM-185 AC5 would set it. */
+  async function registerAttendee(eventId: string) {
+    const { error } = await admin
+      .from('event_request')
+      .update({ registration_start_date: daysFromToday(-1), registration_end_date: daysFromToday(20), registration_capacity: 50 })
+      .eq('id', eventId);
+    if (error) throw new Error(`could not open registration: ${error.message}`);
+    await registerForEvent(eventId, attendeeId, { fullName: 'Tan Mei Ling', email: 'mei.ling@example.com', contactNumber: '+65 9123 4567' });
+  }
+
+  it('TC-190-05 tells each registered attendee the new date and times', async () => {
+    const eventId = await createEvent('planning');
+    await registerAttendee(eventId);
+    const later = daysFromToday(44);
+    const cr = await raiseChangeRequest(
+      eventId,
+      {
+        fields: [
+          { field: 'proposedDate', proposedValue: later },
+          { field: 'startTime', proposedValue: '11:00' },
+          { field: 'endTime', proposedValue: '13:00' },
+        ],
+        reason: 'Venue moved the date',
+      },
+      organiserId,
+    );
+
+    await approveChangeRequest(eventId, cr.id, coordinatorId);
+
+    const notifications = await notificationsFor(attendeeId, eventId, 'event_details_changed');
+    expect(notifications).toHaveLength(1);
+    const [notification] = notifications;
+    expect(notification?.message).toContain(later.split('-').reverse().join('/'));
+    expect(notification?.message).toContain('11:00–13:00');
+  });
+
+  it('TC-190-05 tells attendees nothing when nothing they are shown changed (attendance only)', async () => {
+    const eventId = await createEvent('planning');
+    await registerAttendee(eventId);
+    const cr = await raiseChangeRequest(eventId, { fields: [{ field: 'expectedAttendance', proposedValue: 175 }], reason: 'A few more guests' }, organiserId);
+
+    await approveChangeRequest(eventId, cr.id, coordinatorId);
+
+    expect(await notificationsFor(attendeeId, eventId, 'event_details_changed')).toHaveLength(0);
   });
 });
 

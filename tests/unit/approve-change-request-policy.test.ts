@@ -1,11 +1,15 @@
 import { describe, expect, it } from 'vitest';
 import {
+  attendeeChangeMessage,
   canDecideChangeRequestFor,
+  changeAffectsAttendees,
   changeRequestArrangementCauses,
   changeRequestIsSignificant,
+  type AttendeeFacingDetails,
   type ChangeRequestExtras,
 } from '@/domain/change-request/policy';
 import { outstandingReviewArrangements } from '@/domain/essential-arrangements/policy';
+import { notificationHref } from '@/domain/notification/policy';
 import type { ScheduleValues } from '@/domain/significant-change/schema';
 
 /**
@@ -163,5 +167,37 @@ describe('outstandingReviewArrangements (AC2/AC3 TC-190-02/03)', () => {
 
   it('nothing outstanding when nothing is flagged', () => {
     expect(outstandingReviewArrangements(needs, { bookings: [], reservations: [] })).toEqual([]);
+  });
+});
+
+describe('changeAffectsAttendees and attendeeChangeMessage (AC5 TC-190-05)', () => {
+  const SHOWN: AttendeeFacingDetails = {
+    name: 'Client Appreciation Night',
+    description: 'Dinner and awards',
+    proposedDate: '2027-03-15',
+    startTime: '10:00',
+    endTime: '12:00',
+  };
+
+  it('TC-190-05 a new date, new times, a new name or a new description affects registered attendees', () => {
+    expect(changeAffectsAttendees(SHOWN, { ...SHOWN, proposedDate: '2027-03-22' })).toBe(true);
+    expect(changeAffectsAttendees(SHOWN, { ...SHOWN, startTime: '11:00', endTime: '13:00' })).toBe(true);
+    expect(changeAffectsAttendees(SHOWN, { ...SHOWN, name: 'Client Appreciation Night 2.0' })).toBe(true);
+    expect(changeAffectsAttendees(SHOWN, { ...SHOWN, description: 'Dinner only' })).toBe(true);
+  });
+
+  it('TC-190-05 nothing attendees are shown changed (attendance, venue or equipment only), so nobody is told', () => {
+    expect(changeAffectsAttendees(SHOWN, { ...SHOWN })).toBe(false);
+    expect(changeAffectsAttendees({ ...SHOWN, description: null }, { ...SHOWN, description: '' })).toBe(false);
+  });
+
+  it('TC-190-05 the message gives the new date as DD/MM/YYYY and the new times', () => {
+    expect(attendeeChangeMessage({ ...SHOWN, proposedDate: '2027-03-22', startTime: '11:00', endTime: '13:00' })).toBe(
+      '"Client Appreciation Night", which you registered for, has changed. It is now on 22/03/2027, 11:00–13:00.',
+    );
+  });
+
+  it("TC-190-05 the attendee's notification opens their own page for the event, not the organiser's", () => {
+    expect(notificationHref({ type: 'event_details_changed', eventRequestId: 'e1' })).toBe('/register-events/e1');
   });
 });

@@ -57,8 +57,14 @@ const COORDINATOR_FACING_TYPES = new Set<string>(['coordinator_assigned', 'venue
 const LEAD_FACING_TYPES = new Set<string>(['request_submitted']);
 const OWN_EVENTS_LIST_TYPES = new Set<string>(['coordinator_unassigned']);
 const EQUIPMENT_REQUEST_TYPES = new Set<string>(['equipment_unable_to_fulfil']);
+// SCRUM-190 AC5: sent to attendees, who cannot open /events/<id>; their own
+// page for the event is /register-events/<id> (SCRUM-180 AC3).
+const ATTENDEE_FACING_TYPES = new Set<string>(['event_details_changed']);
 
 export function notificationHref(notification: { type: string; eventRequestId: string }): string {
+  if (ATTENDEE_FACING_TYPES.has(notification.type)) {
+    return `/register-events/${notification.eventRequestId}`;
+  }
   if (LEAD_FACING_TYPES.has(notification.type)) {
     return `/assignment-queue/${notification.eventRequestId}`;
   }

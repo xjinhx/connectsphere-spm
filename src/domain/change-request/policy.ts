@@ -126,3 +126,35 @@ export function changeRequestIsSignificant(
 export function changeRequestArrangementCauses(before: ScheduleValues, after: ScheduleValues) {
   return changeCauses(before, after);
 }
+
+/** The details registered attendees are shown of an event (SCRUM-180 AC3) that a change request can change. */
+export interface AttendeeFacingDetails {
+  name: string;
+  description: string | null;
+  proposedDate: string | null;
+  startTime: string | null;
+  endTime: string | null;
+}
+
+/**
+ * AC5 — whether the approved change "affects registered attendees": it
+ * changes a detail they are shown of the event (SCRUM-180 AC3), its name,
+ * description, date or start and end times. Attendance, venue and equipment
+ * requirements are planning details attendees never see.
+ */
+export function changeAffectsAttendees(before: AttendeeFacingDetails, after: AttendeeFacingDetails): boolean {
+  return (
+    before.name !== after.name ||
+    (before.description ?? '') !== (after.description ?? '') ||
+    before.proposedDate !== after.proposedDate ||
+    before.startTime !== after.startTime ||
+    before.endTime !== after.endTime
+  );
+}
+
+/** AC5 — the attendee's notification: the event's new details, the date as DD/MM/YYYY. */
+export function attendeeChangeMessage(after: AttendeeFacingDetails): string {
+  const when = after.proposedDate ? formatDayMonthYear(after.proposedDate) : 'a date still to be confirmed';
+  const times = after.startTime && after.endTime ? `, ${after.startTime}–${after.endTime}` : '';
+  return `"${after.name}", which you registered for, has changed. It is now on ${when}${times}.`;
+}

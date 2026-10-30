@@ -189,7 +189,7 @@ grant execute on function approve_change_request(
 ) to service_role;
 
 -- -----------------------------------------------------------------------------
--- AC4, AC6 - two new notification types, the same pattern as
+-- AC4, AC5, AC6 - three new notification types, the same pattern as
 -- 20261024090000_change_request.sql.
 -- -----------------------------------------------------------------------------
 alter table notifications
@@ -209,5 +209,6 @@ alter table notifications
     'equipment_unable_to_fulfil',
     'change_requested',
     'change_request_approved',
-    'arrangement_needs_review'
+    'arrangement_needs_review',
+    'event_details_changed'
   ));

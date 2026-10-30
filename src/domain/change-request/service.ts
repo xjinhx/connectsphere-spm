@@ -9,6 +9,7 @@ import {
   type ChangeRequestRow,
 } from '@/lib/supabase/changeRequests';
 import { fetchEventRequestById, type EventRequestRow } from '@/lib/supabase/eventRequests';
+import { fetchRegisteredAttendeeIds } from '@/lib/supabase/eventRegistrations';
 import { canViewRequest } from '@/domain/event-request/policy';
 import { timeRangeIssues } from '@/domain/event-request/schema';
 import type { ScheduleValues } from '@/domain/significant-change/schema';
@@ -27,11 +28,14 @@ import {
   type SelectableChangeRequestField,
 } from './schema';
 import {
+  attendeeChangeMessage,
   canDecideChangeRequestFor,
   canRaiseChangeRequest,
   canRaiseChangeRequestFor,
+  changeAffectsAttendees,
   changeRequestArrangementCauses,
   changeRequestIsSignificant,
+  type AttendeeFacingDetails,
   type ChangeRequestExtras,
 } from './policy';
 
@@ -371,14 +375,12 @@ async function readChangeRequest(id: string): Promise<{ row: ChangeRequestRow; f
  * flagged for review, and the staff who actioned it (decided_by/reserved_by)
  * is notified, through the existing in-app mechanism (SCRUM-193/198).
  *
- * AC5 — registered attendees are not notified by this story. Attendees are
- * never signed-in accounts (src/domain/event-registration/schema.ts's
- * Registration has no userId — a full name, an email and a contact number,
- * nothing else), so there is no recipient the in-app mechanism can reach, and
- * SCRUM-194 (email) is out of Release 1 (CLAUDE.md). Faking a recipient would
- * make the test assert nothing true ("Dependencies on other people's
- * stories", CLAUDE.md: "stop only when a dummy would make the test
- * meaningless"). See docs/dummies.md D-26.
+ * AC5 — when the change alters a detail attendees are shown (its name,
+ * description, date or times: changeAffectsAttendees, policy.ts), every
+ * attendee with a Registered registration is notified of the new details.
+ * A registration belongs to the signed-in Attendee account that made it
+ * (SCRUM-181, event_registration.attendee_id), so the in-app mechanism
+ * reaches them; no email (SCRUM-194 is out of Release 1).
  *
  * AC6 — the organiser who raised it is notified it was approved.
  *
@@ -465,12 +467,30 @@ export async function approveChangeRequest(
   const significant = changeRequestIsSignificant({ ...scheduleBefore, ...extrasBefore }, { ...scheduleAfter, ...extrasAfter });
   const causes = changeRequestArrangementCauses(scheduleBefore, scheduleAfter);
 
+  const nameAfter = requireString(effectiveValue('name', proposed, event), 'The event name is required.');
+  const descriptionAfter = requireStringOrNull(effectiveValue('description', proposed, event), 'The proposed description is not valid.');
+  // AC5 — what registered attendees are shown, before and after.
+  const attendeeBefore: AttendeeFacingDetails = {
+    name: event.name,
+    description: event.description ?? null,
+    proposedDate: scheduleBefore.proposedDate,
+    startTime: scheduleBefore.startTime,
+    endTime: scheduleBefore.endTime,
+  };
+  const attendeeAfter: AttendeeFacingDetails = {
+    name: nameAfter,
+    description: descriptionAfter,
+    proposedDate: scheduleAfter.proposedDate,
+    startTime: scheduleAfter.startTime,
+    endTime: scheduleAfter.endTime,
+  };
+
   const { data, error } = await approveChangeRequestRow({
     changeRequestId: parsedCrId.data,
     coordinatorId: actorId,
-    name: requireString(effectiveValue('name', proposed, event), 'The event name is required.'),
+    name: nameAfter,
     purpose: requireStringOrNull(effectiveValue('purpose', proposed, event), 'The proposed purpose is not valid.'),
-    description: requireStringOrNull(effectiveValue('description', proposed, event), 'The proposed description is not valid.'),
+    description: descriptionAfter,
     proposedDate: scheduleAfter.proposedDate,
     startTime: scheduleAfter.startTime,
     endTime: scheduleAfter.endTime,
@@ -536,6 +556,19 @@ export async function approveChangeRequest(
       eventRequestId: event.id,
       message: `An approved change to "${event.name}" means an arrangement you actioned now needs review.`,
     });
+  }
+
+  // AC5 — every attendee with a Registered registration, when the change
+  // alters a detail they are shown. Best effort, like the two above.
+  if (changeAffectsAttendees(attendeeBefore, attendeeAfter)) {
+    const { data: registered, error: registeredError } = await fetchRegisteredAttendeeIds(event.id);
+    if (registeredError) {
+      console.error('Could not read the registered attendees to notify', event.id, registeredError.message);
+    }
+    const message = attendeeChangeMessage(attendeeAfter);
+    for (const attendeeId of new Set((registered ?? []).map((row) => row.attendee_id))) {
+      await notifyBestEffort({ recipientId: attendeeId, type: 'event_details_changed', eventRequestId: event.id, message });
+    }
   }
 
   const { row: decided, fields: decidedFields } = await readChangeRequest(parsedCrId.data);
