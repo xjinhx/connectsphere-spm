@@ -382,8 +382,8 @@ async function readChangeRequest(id: string): Promise<{ row: ChangeRequestRow; f
  *
  * AC6 — the organiser who raised it is notified it was approved.
  *
- * Replaces DUMMY(SCRUM-190) D-24 for the approved path: decided_by/
- * decided_at are now written for real here. SCRUM-191's half of D-24 (the
+ * Replaces DUMMY(SCRUM-190) D-26 for the approved path: decided_by/
+ * decided_at are now written for real here. SCRUM-191's half of D-26 (the
  * rejected path) stays Active until that story writes it.
  */
 export async function approveChangeRequest(

@@ -863,7 +863,7 @@ switch them the next time they edit those files.
   request`'s `status`/`decided_by`/`decided_at` are now written for real by
   `approveChangeRequest()` (`src/domain/change-request/service.ts`), through
   `approve_change_request` (`supabase/migrations/
-  20261027170000_approve_change_request.sql`), re-run against TC-187-11's
+  20261030100000_approve_change_request.sql`), re-run against TC-187-11's
   shape in `tests/integration/approve-change-request.test.ts`. The rejected
   half (`decision_reason`, and `status = 'rejected'`) is still faked —
   nothing in the app rejects a change request yet — so

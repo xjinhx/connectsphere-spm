@@ -206,6 +206,7 @@ alter table notifications
     'request_submitted',
     'coordinator_unassigned',
     'event_confirmed',
+    'equipment_unable_to_fulfil',
     'change_requested',
     'change_request_approved',
     'arrangement_needs_review'

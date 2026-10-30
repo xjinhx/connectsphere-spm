@@ -12,7 +12,7 @@
 //
 // TC-187-11/12 depend on SCRUM-190/191 (approve/reject) actually deciding a
 // request; neither is built yet, so S187-H and S187-I seed their decision
-// directly in Postgres (DUMMY(SCRUM-190)/(SCRUM-191) D-24, docs/dummies.md) -
+// directly in Postgres (DUMMY(SCRUM-190)/(SCRUM-191) D-26, docs/dummies.md) -
 // same pattern as tests/integration/change-request.test.ts's seedDecision.
 // Re-run both manual cases once SCRUM-190/191 merge.
 //
@@ -163,7 +163,7 @@ async function raiseRequest(event, reason, fields, createdAt = new Date().toISOS
 }
 
 /**
- * DUMMY(SCRUM-190) D-24, DUMMY(SCRUM-191) D-24: stands in for SCRUM-190/191's
+ * DUMMY(SCRUM-190) D-26, DUMMY(SCRUM-191) D-26: stands in for SCRUM-190/191's
  * own write. See docs/dummies.md.
  *
  * Refuses a decision dated before the request's own raiseRequest(createdAt) -
