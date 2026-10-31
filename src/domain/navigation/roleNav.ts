@@ -31,6 +31,6 @@ export const ROLE_NAV: Record<Role, readonly NavItem[]> = {
   ],
   // SCRUM-255 AC2: Open events, which is also the landing page.
   attendee: [{ href: '/register-events', label: 'Open events' }],
-  // DUMMY(SCRUM-256) D-20: Safety Officer nav is the landing page only.
+  // SCRUM-256 AC2: Safety checks, which is also the landing page.
   safety_officer: [{ href: '/safety-checks', label: 'Safety checks' }],
 };

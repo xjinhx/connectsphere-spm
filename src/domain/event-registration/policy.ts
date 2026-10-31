@@ -1,5 +1,6 @@
 import { formatDayMonthYear, type ISODate } from '@/domain/shared/dates';
-import type { RegistrationPeriod } from './schema';
+import { fromDatabaseTime, type ClockRange } from '@/domain/shared/times';
+import type { EventVenue, RegistrationPeriod } from './schema';
 
 /**
  * SCRUM-181 — Register for an event. Pure rules only; service.ts applies them.
@@ -49,6 +50,64 @@ export const ALREADY_REGISTERED = 'You are already registered for this event.';
 
 /** SCRUM-182 AC1, AC2: refused as full. */
 export const NO_PLACES_REMAINING = 'There are no places remaining for this event.';
+
+/**
+ * SCRUM-180 AC1 — an event in one of these statuses is not going ahead, so it
+ * is not open for registration whatever its period says (PO, 28/10/2026: read
+ * "registration period is open" as also needing the event to be going ahead).
+ * Both statuses are final. Restated in fetchOpenEvents' query.
+ */
+export const FINAL_EVENT_STATUSES: readonly string[] = ['cancelled', 'completed'];
+
+/**
+ * SCRUM-180 AC1, AC2 — whether the event belongs on Open events today. The
+ * same period rule the event page uses to offer the form (periodRefusalReason),
+ * so the list never shows an event whose page then refuses. No period set
+ * means registration has not opened; a Cancelled or Completed event is not
+ * open at all.
+ */
+export function isOpenForRegistration(
+  period: { startDate: ISODate | null; endDate: ISODate | null },
+  eventStatus: string,
+  today: ISODate,
+): boolean {
+  if (FINAL_EVENT_STATUSES.includes(eventStatus)) return false;
+  if (!period.startDate || !period.endDate) return false;
+  return periodRefusalReason({ startDate: period.startDate, endDate: period.endDate }, today) === null;
+}
+
+/**
+ * SCRUM-180 AC6 — whether My registrations marks the event Cancelled. Only the
+ * Cancelled status does: any other status, Confirmed and Preparation included,
+ * is shown unmarked.
+ */
+export function isEventCancelled(eventStatus: string): boolean {
+  return eventStatus === 'cancelled';
+}
+
+/** SCRUM-180 AC1 — the event's start and end times, or null until both are set. */
+export function eventTimes(startTime: string | null, endTime: string | null): ClockRange | null {
+  if (!startTime || !endTime) return null;
+  return { start: fromDatabaseTime(startTime), end: fromDatabaseTime(endTime) };
+}
+
+/**
+ * SCRUM-180 AC1, AC3 — the venues the event is held at: each venue with a
+ * confirmed booking, once, in name order. An event can hold the same venue
+ * twice on one day (a morning and an afternoon booking, which
+ * venue_booking_no_overlap allows), so venues are told apart by venue_id, not
+ * by booking; and by id, not name, since two venues may share a name. A
+ * released booking (SCRUM-231) no longer holds the venue, so it is left out.
+ */
+export function bookedVenues(
+  bookings: readonly { status: string; venue_id: string; venues: EventVenue | null }[],
+): EventVenue[] {
+  const byVenue = new Map<string, EventVenue>();
+  for (const { status, venue_id, venues } of bookings) {
+    if (status === 'confirmed' && venues) byVenue.set(venue_id, { name: venues.name, address: venues.address });
+  }
+  return [...byVenue.values()].sort((a, b) => a.name.localeCompare(b.name));
+}
 
 /**
  * SCRUM-182 AC1, AC3: whether the event is full. Only Registered

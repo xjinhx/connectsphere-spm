@@ -1,8 +1,11 @@
-import { EventRequestIdSchema } from './schema';
+import { CancelEventInputSchema, EventRequestIdSchema } from './schema';
 import {
   NOT_ENDED_YET,
+  canBeCancelled,
   canBeCompleted,
   canBeConfirmed,
+  cancellationNotices,
+  cancellationStatusRefusal,
   canEnterPlanning,
   canTransition,
   completionStatusRefusal,
@@ -11,6 +14,7 @@ import {
 } from './policy';
 import { fetchEventRequestById, markEventRequestPlanning, markEventRequestStatus } from '@/lib/supabase/eventRequests';
 import { fetchEventCompletion, fetchEventEndDate, markEventCompleted, runCompletionCheck } from '@/lib/supabase/eventCompletion';
+import { fetchEventCancellation, runCancelEvent } from '@/lib/supabase/eventCancellation';
 import { fetchProfileNames } from '@/lib/supabase/profiles';
 import { toSingaporeISODate, type ISODate } from '@/domain/shared/dates';
 import type { EventRequestRow } from '@/lib/supabase/eventRequests';
@@ -322,4 +326,124 @@ export async function completePastEvents(today?: ISODate): Promise<number> {
   const { data, error } = await runCompletionCheck(today);
   if (error || data === null) throw new ValidationError('The completion check could not run.', error?.message);
   return data;
+}
+
+// -----------------------------------------------------------------------------
+// SCRUM-105 — Cancel an event at any stage
+// -----------------------------------------------------------------------------
+
+export interface CancellationOutcome {
+  id: string;
+  status: EventRequestStatus;
+}
+
+/** What cancel_event returns (20261030070000_cancel_event.sql). */
+interface CancelEventResult {
+  outcome: 'cancelled' | 'not_cancellable' | 'not_found';
+  status?: EventRequestStatus;
+  organiser_id?: string;
+  bookings?: { venue_name: string; date: string; start_time: string; end_time: string; approved_by: string | null }[];
+  reservations?: { equipment_name: string; quantity: number; reserved_by: string | null }[];
+  attendee_ids?: string[];
+}
+
+/**
+ * SCRUM-105 — the event's assigned coordinator cancels it, with a reason.
+ *
+ * AC1: from Submitted to Preparation; the status becomes Cancelled and the
+ * reason, the coordinator and the time are recorded.
+ * AC2: anyone but the assigned coordinator is refused, the Event Coordinator
+ * Lead included (the route refuses any role without event_cancellation first).
+ * AC3, AC6: cancel_event releases every confirmed booking ("Event cancelled",
+ * who, when) and every reserved quantity, and rejects any line still Pending,
+ * in the same transaction as the cancellation.
+ * AC4, AC6: then the organiser, the staff who actioned each arrangement and
+ * every registered attendee are told (cancellationNotices). Best effort: the
+ * cancellation has already happened, so a failed notification never undoes it.
+ *
+ * Checked in the same order as completeEvent: the reason, then the
+ * coordinator, then the status. The status is checked again by cancel_event
+ * with the event locked.
+ */
+export async function cancelEvent(eventRequestId: string, actor: Actor, input: unknown): Promise<CancellationOutcome> {
+  const parsedId = EventRequestIdSchema.safeParse(eventRequestId);
+  if (!parsedId.success) throw new NotFoundError('Event request');
+
+  const parsedInput = CancelEventInputSchema.safeParse(input);
+  if (!parsedInput.success) {
+    throw new ValidationError(parsedInput.error.issues[0]?.message ?? 'Give a reason for cancelling the event.', parsedInput.error.flatten());
+  }
+  const { reason } = parsedInput.data;
+
+  const { data, error } = await fetchEventRequestById(parsedId.data);
+  if (error) throw new ValidationError('The event request could not be read.', error.message);
+  if (!data) throw new NotFoundError('Event request');
+  const event = data as unknown as EventRequestRow;
+
+  if (!isCurrentCoordinator(event.coordinator_id, actor.userId)) {
+    throw new ForbiddenError('Only the coordinator assigned to this event can cancel it.');
+  }
+  if (!canBeCancelled(event.status)) throw new ConflictError(cancellationStatusRefusal(event.status));
+
+  const { data: raw, error: writeError } = await runCancelEvent(event.id, reason, actor.userId);
+  if (writeError) throw new ValidationError('The event could not be cancelled.', writeError.message);
+  const result = raw as unknown as CancelEventResult;
+  if (result.outcome === 'not_found') throw new NotFoundError('Event request');
+  // It reached a final status between the read above and the lock.
+  if (result.outcome !== 'cancelled') {
+    throw new ConflictError(cancellationStatusRefusal(result.status ?? event.status));
+  }
+
+  const notices = cancellationNotices(
+    { name: event.name, reference: event.reference, reason },
+    {
+      organiserId: result.organiser_id ?? event.organiser_id,
+      bookings: (result.bookings ?? []).map((booking) => ({
+        venueName: booking.venue_name,
+        date: booking.date,
+        startTime: fromDatabaseTime(booking.start_time),
+        endTime: fromDatabaseTime(booking.end_time),
+        approvedBy: booking.approved_by,
+      })),
+      reservations: (result.reservations ?? []).map((reservation) => ({
+        equipmentName: reservation.equipment_name,
+        quantity: reservation.quantity,
+        reservedBy: reservation.reserved_by,
+      })),
+      attendeeIds: result.attendee_ids ?? [],
+    },
+  );
+  await Promise.all(
+    notices.map((notice) =>
+      notifyBestEffort({ recipientId: notice.recipientId, type: 'event_cancelled', eventRequestId: event.id, message: notice.message }),
+    ),
+  );
+
+  return { id: event.id, status: 'cancelled' };
+}
+
+export interface EventCancellation {
+  reason: string;
+  byName: string;
+  /** ISO timestamp; the page shows it as DD/MM/YYYY HH:mm (formatCancelledAt). */
+  at: string;
+}
+
+/**
+ * SCRUM-105 AC1 — why, by whom and when the event was cancelled, for the event
+ * page. Null when it was not cancelled through the app. The page has already
+ * checked the actor may see the event.
+ */
+export async function getEventCancellation(eventRequestId: string): Promise<EventCancellation | null> {
+  const { data, error } = await fetchEventCancellation(eventRequestId);
+  if (error) throw new ValidationError("The event's cancellation could not be read.", error.message);
+  if (!data?.cancelled_at || !data.cancellation_reason || !data.cancelled_by) return null;
+
+  const { data: names } = await fetchProfileNames([data.cancelled_by]);
+  const name = names?.[0]?.full_name;
+  return {
+    reason: data.cancellation_reason,
+    byName: name && name.trim() !== '' ? name : 'An unnamed account',
+    at: data.cancelled_at,
+  };
 }
