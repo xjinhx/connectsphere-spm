@@ -21,7 +21,8 @@ export const dynamic = 'force-dynamic';
  * registration instead of the form. SCRUM-182 AC1: a full event is shown as
  * full instead of the form. SCRUM-184 AC1: a registered attendee can withdraw
  * from their registration, after confirming; AC3: not once the event has
- * taken place.
+ * taken place. Registering shows Withdraw, and withdrawing shows the form
+ * again while registration is open, without a reload.
  *
  * SCRUM-180 AC3: opened from Open events, it shows only the event name,
  * description, date, start and end times, venue name and address, and the
@@ -88,7 +89,12 @@ export default async function AttendeeEventRegistrationPage({ params }: { params
       </dl>
 
       {view.registration ? (
-        <RegisteredPanel registration={view.registration} eventName={view.eventName} canWithdraw={view.canWithdraw} />
+        <RegisteredPanel
+          registration={view.registration}
+          eventName={view.eventName}
+          canWithdraw={view.canWithdraw}
+          canRegisterAgain={canRegister && view.periodRefusal === null}
+        />
       ) : view.periodRefusal ? (
         <p role="status" className="mt-6 rounded-lg border border-[var(--border)] bg-[var(--surface)] p-4 text-sm">
           {view.periodRefusal}
@@ -96,7 +102,7 @@ export default async function AttendeeEventRegistrationPage({ params }: { params
       ) : view.full ? (
         <EventFullNotice />
       ) : canRegister ? (
-        <RegistrationForm eventRequestId={view.eventRequestId} eventName={view.eventName} />
+        <RegistrationForm eventRequestId={view.eventRequestId} eventName={view.eventName} canWithdraw={view.canWithdraw} />
       ) : (
         <p className="mt-6 text-sm text-[var(--text-muted)]">Only attendees can register for events.</p>
       )}

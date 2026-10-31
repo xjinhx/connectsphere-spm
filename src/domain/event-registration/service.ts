@@ -150,8 +150,9 @@ export async function getRegistrationPage(
     periodRefusal: registrationPeriodRefusal(period, today),
     full: await readFull(event),
     registration,
-    // SCRUM-184 AC3: no Withdraw action once the event has taken place.
-    canWithdraw: registration !== null && canWithdraw(event.proposed_date, today),
+    // SCRUM-184 AC3: no Withdraw action once the event has taken place. Read
+    // with or without a registration, so one made on the page offers it too.
+    canWithdraw: canWithdraw(event.proposed_date, today),
   };
 }
 

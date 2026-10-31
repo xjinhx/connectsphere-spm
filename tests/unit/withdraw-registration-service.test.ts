@@ -187,11 +187,20 @@ describe('SCRUM-184 AC3: no withdraw once the event has taken place (CL-69: from
     expect((await getRegistrationPage(EVENT_ID, ATTENDEE, lastMinute)).canWithdraw).toBe(true);
   });
 
-  it('an event with no date yet has not taken place; with no registration, nothing to withdraw', async () => {
+  it('an event with no date yet has not taken place', async () => {
     expect(canWithdraw(null, '2026-10-30')).toBe(true);
+  });
 
+  it('TC-184-06 with no registration yet, the page still says whether one made on it may be withdrawn', async () => {
     vi.mocked(fetchRegisteredRegistration).mockResolvedValue({ data: null, error: null } as never);
     vi.mocked(countRegisteredRegistrations).mockResolvedValue({ count: 10, error: null } as never);
+
+    eventOn('2026-11-15');
+    const page = await getRegistrationPage(EVENT_ID, ATTENDEE, NOW);
+    expect(page.registration).toBeNull();
+    expect(page.canWithdraw).toBe(true);
+
+    eventOn('2026-10-20');
     expect((await getRegistrationPage(EVENT_ID, ATTENDEE, NOW)).canWithdraw).toBe(false);
   });
 

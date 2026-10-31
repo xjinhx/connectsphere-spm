@@ -2,13 +2,15 @@
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
 import { cleanup, fireEvent, render, waitFor } from '@testing-library/react';
 import { RegisteredPanel } from '@/components/event-registration/RegisteredPanel';
+import { RegistrationForm } from '@/components/event-registration/RegistrationForm';
 import type { Registration } from '@/domain/event-registration/schema';
 
 /**
  * SCRUM-184 AC1: the Withdraw action on the event page. Rendered for real;
  * only fetch is replaced, so what is proved is that nothing is sent until the
  * attendee confirms (TC-184-02), and that a confirmed withdrawal shows the
- * registration as Withdrawn (TC-184-01).
+ * registration as Withdrawn (TC-184-01). Registering offers Withdraw, and
+ * withdrawing offers the form again, without a reload (TC-184-06).
  *
  * Test case IDs are from the ConnectSphere_TestCases_Sprint4 workbook,
  * SCRUM-184 tab (TC-184-nn).
@@ -38,8 +40,15 @@ afterEach(() => {
   vi.unstubAllGlobals();
 });
 
-const renderPanel = () =>
-  render(<RegisteredPanel registration={REGISTRATION} eventName="Client Appreciation Night" canWithdraw />);
+const renderPanel = (canRegisterAgain = false) =>
+  render(
+    <RegisteredPanel
+      registration={REGISTRATION}
+      eventName="Client Appreciation Night"
+      canWithdraw
+      canRegisterAgain={canRegisterAgain}
+    />,
+  );
 
 describe('SCRUM-184 AC1: withdraw and confirm', () => {
   it('TC-184-01 Withdraw, then Yes, withdraw: one request to the withdraw route, and the registration is shown as Withdrawn', async () => {
@@ -92,11 +101,68 @@ describe('SCRUM-184 AC1: withdraw and confirm', () => {
 describe('SCRUM-184 AC3: no withdraw action once the event has taken place', () => {
   it('TC-184-07, TC-184-08 the registration is shown, with no Withdraw', () => {
     const { getByText, queryByRole } = render(
-      <RegisteredPanel registration={REGISTRATION} eventName="Client Appreciation Night" canWithdraw={false} />,
+      <RegisteredPanel
+        registration={REGISTRATION}
+        eventName="Client Appreciation Night"
+        canWithdraw={false}
+        canRegisterAgain
+      />,
     );
 
     expect(getByText('You are registered for this event.')).toBeTruthy();
     expect(getByText('Registered')).toBeTruthy();
+    expect(queryByRole('button', { name: 'Withdraw' })).toBeNull();
+  });
+});
+
+describe('SCRUM-184 AC1: register, withdraw and register again on the same page, without a reload', () => {
+  it('TC-184-06 registering shows the confirmation with Withdraw straight away', async () => {
+    vi.mocked(fetch).mockResolvedValue(new Response(JSON.stringify(REGISTRATION), { status: 201 }));
+    const { getByLabelText, getByRole, getByText } = render(
+      <RegistrationForm eventRequestId={EVENT_ID} eventName="Client Appreciation Night" canWithdraw />,
+    );
+
+    fireEvent.change(getByLabelText('Full name'), { target: { value: 'Tan Mei Ling' } });
+    fireEvent.change(getByLabelText('Email address'), { target: { value: 'attendee@example.com' } });
+    fireEvent.change(getByLabelText('Contact number'), { target: { value: '+65 9123 4567' } });
+    fireEvent.click(getByRole('button', { name: 'Register' }));
+
+    await waitFor(() => expect(getByText('Registration confirmed. Your place is recorded.')).toBeTruthy());
+    expect(getByRole('button', { name: 'Withdraw' })).toBeTruthy();
+  });
+
+  it('TC-184-06 withdrawing shows the form again while registration is open', async () => {
+    const { getByRole, getByText } = renderPanel(true);
+
+    fireEvent.click(getByRole('button', { name: 'Withdraw' }));
+    fireEvent.click(getByRole('button', { name: 'Yes, withdraw' }));
+
+    await waitFor(() => expect(getByText('You have withdrawn from this event.')).toBeTruthy());
+    expect(getByRole('button', { name: 'Register' })).toBeTruthy();
+  });
+
+  it('TC-184-06 once registration has closed, withdrawing shows no form', async () => {
+    const { getByRole, getByText, queryByRole } = renderPanel(false);
+
+    fireEvent.click(getByRole('button', { name: 'Withdraw' }));
+    fireEvent.click(getByRole('button', { name: 'Yes, withdraw' }));
+
+    await waitFor(() => expect(getByText('You have withdrawn from this event.')).toBeTruthy());
+    expect(queryByRole('button', { name: 'Register' })).toBeNull();
+  });
+
+  it('TC-184-07 a registration made on the page of an event that has taken place offers no Withdraw', async () => {
+    vi.mocked(fetch).mockResolvedValue(new Response(JSON.stringify(REGISTRATION), { status: 201 }));
+    const { getByLabelText, getByRole, getByText, queryByRole } = render(
+      <RegistrationForm eventRequestId={EVENT_ID} eventName="Client Appreciation Night" canWithdraw={false} />,
+    );
+
+    fireEvent.change(getByLabelText('Full name'), { target: { value: 'Tan Mei Ling' } });
+    fireEvent.change(getByLabelText('Email address'), { target: { value: 'attendee@example.com' } });
+    fireEvent.change(getByLabelText('Contact number'), { target: { value: '+65 9123 4567' } });
+    fireEvent.click(getByRole('button', { name: 'Register' }));
+
+    await waitFor(() => expect(getByText('Registration confirmed. Your place is recorded.')).toBeTruthy());
     expect(queryByRole('button', { name: 'Withdraw' })).toBeNull();
   });
 });

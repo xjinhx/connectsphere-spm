@@ -82,7 +82,10 @@ export interface RegistrationPageView {
   full: boolean;
   /** The viewer's Registered registration for this event, if any (AC5). */
   registration: Registration | null;
-  /** SCRUM-184 AC3: whether the Withdraw action is offered on `registration`. */
+  /**
+   * SCRUM-184 AC3: whether the event has not taken place yet, so the Withdraw
+   * action is offered on `registration`, or on one made on the page.
+   */
   canWithdraw: boolean;
 }
 
