@@ -45,6 +45,8 @@ const GALA: RegistrationPageView = {
   full: false,
   finalStatus: null,
   registration: null,
+  // SCRUM-184: not taken place yet; a Cancelled or Completed event still shows no Withdraw.
+  canWithdraw: true,
 };
 
 const REGISTRATION = {
@@ -113,6 +115,8 @@ describe('SCRUM-270: a Cancelled or Completed event is shown as such, with no Re
     expect(html).toContain('Your registration for this event.');
     expect(html).not.toContain('You are registered for this event.');
     expect(hasRegisterForm(html)).toBe(false);
+    // SCRUM-184's Withdraw is for an event going ahead, though this one has not taken place.
+    expect(html).not.toContain('>Withdraw<');
   });
 
   it('TC-270-07 an event going ahead is not marked and still offers the form', async () => {

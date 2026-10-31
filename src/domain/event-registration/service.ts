@@ -1,5 +1,6 @@
 import {
   EventRequestIdSchema,
+  RegistrationIdSchema,
   RegistrationInputSchema,
   RegistrationStatusSchema,
   type EventVenue,
@@ -11,9 +12,12 @@ import {
 } from './schema';
 import {
   ALREADY_REGISTERED,
+  ALREADY_WITHDRAWN,
+  EVENT_TAKEN_PLACE,
   FINAL_EVENT_REFUSALS,
   NO_PLACES_REMAINING,
   bookedVenues,
+  canWithdraw,
   endedMessage,
   eventTimes,
   finalEventStatus,
@@ -24,14 +28,22 @@ import {
   registrationPeriodRefusal,
 } from './policy';
 import { todayInSingapore } from '@/domain/shared/dates';
-import { CapacityExceededError, ConflictError, NotFoundError, ValidationError } from '@/domain/shared/errors';
+import {
+  CapacityExceededError,
+  ConflictError,
+  DomainError,
+  NotFoundError,
+  ValidationError,
+} from '@/domain/shared/errors';
 import {
   countRegisteredRegistrations,
   createRegistrationRow,
   fetchMyRegistrations,
   fetchOpenEvents,
   fetchRegisteredRegistration,
+  fetchRegistrationById,
   fetchRegistrationEvent,
+  withdrawRegistrationRow,
 } from '@/lib/supabase/eventRegistrations';
 
 /**
@@ -117,7 +129,8 @@ function alreadyRegistered(registration: Registration | null): ConflictError {
 /**
  * The Attendee's page for one event: its name and date, the registration
  * period, whether it is open today (AC2, AC3, AC4), whether it is full
- * (SCRUM-182 AC1), and the viewer's own registration if they have one (AC5).
+ * (SCRUM-182 AC1), the viewer's own registration if they have one (AC5), and
+ * whether they may still withdraw it (SCRUM-184 AC3).
  * SCRUM-180 AC3: also the description, the start and end times, and each
  * venue's name and address. SCRUM-270: also whether the event is Cancelled or
  * Completed, so the page shows that instead of the form.
@@ -128,6 +141,8 @@ export async function getRegistrationPage(
   now: Date = new Date(),
 ): Promise<RegistrationPageView> {
   const { event, period } = await readEvent(eventRequestId);
+  const today = todayInSingapore(now);
+  const registration = await readRegistration(eventRequestId, attendeeId);
   return {
     eventRequestId: event.id,
     eventName: event.name,
@@ -136,10 +151,13 @@ export async function getRegistrationPage(
     times: eventTimes(event.start_time, event.end_time),
     venues: bookedVenues(event.venue_booking),
     period,
-    periodRefusal: registrationPeriodRefusal(period, todayInSingapore(now)),
+    periodRefusal: registrationPeriodRefusal(period, today),
     full: await readFull(event),
     finalStatus: finalEventStatus(event.status),
-    registration: await readRegistration(eventRequestId, attendeeId),
+    registration,
+    // SCRUM-184 AC3: no Withdraw action once the event has taken place. Read
+    // with or without a registration, so one made on the page offers it too.
+    canWithdraw: canWithdraw(event.proposed_date, today),
   };
 }
 
@@ -289,4 +307,52 @@ export async function registerForEvent(
       // 'not_found' or 'not_open': the event or its period went after the read above.
       throw new NotFoundError('Event');
   }
+}
+
+/**
+ * SCRUM-184 AC1: the signed-in attendee withdraws their registration. Its
+ * status becomes Withdrawn and the row is kept (AC2). The place returns to the
+ * event at once, because only Registered rows count against the capacity
+ * (SCRUM-182's event_has_places_remaining); no waiting list in Release 1.
+ *
+ * Refused with 404 for an unknown registration, one on another event, or
+ * another attendee's, so nobody learns whose registrations exist (TC-184-04);
+ * with 409 for one already Withdrawn (TC-184-03), or once the event has taken
+ * place (AC3, CL-69: from its event date), whatever the page showed.
+ *
+ * `now` is a parameter so tests can fix the clock; callers leave it out.
+ *
+ * The confirm step is the page's (TC-184-02): this is only called once the
+ * attendee has confirmed. `attendeeId` is whoever is signed in, from the route.
+ */
+export async function withdrawRegistration(
+  eventRequestId: string,
+  registrationId: string,
+  attendeeId: string,
+  now: Date = new Date(),
+): Promise<Registration> {
+  if (!EventRequestIdSchema.safeParse(eventRequestId).success || !RegistrationIdSchema.safeParse(registrationId).success) {
+    throw new NotFoundError('Registration');
+  }
+
+  const { data, error } = await fetchRegistrationById(registrationId);
+  if (error) throw new ValidationError('Your registration could not be read.', error.message);
+  const row = data as (RegistrationRow & { attendee_id: string }) | null;
+  if (!row || row.attendee_id !== attendeeId || row.event_request_id !== eventRequestId) {
+    throw new NotFoundError('Registration');
+  }
+  if (row.status !== 'registered') throw new DomainError('INVALID_TRANSITION', ALREADY_WITHDRAWN);
+
+  const { data: event, error: eventError } = await fetchRegistrationEvent(eventRequestId);
+  if (eventError) throw new ValidationError('The event could not be read.', eventError.message);
+  if (!event) throw new NotFoundError('Registration');
+  if (!canWithdraw((event as EventRow).proposed_date, todayInSingapore(now))) {
+    throw new DomainError('INVALID_TRANSITION', EVENT_TAKEN_PLACE);
+  }
+
+  const { data: withdrawn, error: writeError } = await withdrawRegistrationRow(registrationId, attendeeId);
+  if (writeError) throw new ValidationError('Your registration could not be withdrawn.', writeError.message);
+  // Another request withdrew it after the read above.
+  if (!withdrawn) throw new DomainError('INVALID_TRANSITION', ALREADY_WITHDRAWN);
+  return toRegistration(withdrawn as RegistrationRow);
 }

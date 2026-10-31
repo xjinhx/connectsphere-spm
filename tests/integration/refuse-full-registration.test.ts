@@ -1,6 +1,6 @@
 import { afterAll, beforeAll, describe, expect, it } from 'vitest';
 import { createAdminClient } from '@/lib/supabase/admin';
-import { getRegistrationPage, registerForEvent } from '@/domain/event-registration/service';
+import { getRegistrationPage, registerForEvent, withdrawRegistration } from '@/domain/event-registration/service';
 import { NO_PLACES_REMAINING } from '@/domain/event-registration/policy';
 import { CapacityExceededError } from '@/domain/shared/errors';
 import { TEST_CLIENT_ORGANISATION_ID, ensureTestClientOrganisation } from './fixtures/clientOrganisation';
@@ -96,18 +96,20 @@ async function rowsFor(eventId: string) {
 const registered = async (eventId: string) => (await rowsFor(eventId)).filter((row) => row.status === 'registered');
 
 /**
- * DUMMY(SCRUM-184) D-25: withdrawing is SCRUM-184's; until it is on main, set
- * the status it will write by hand. What these cases exercise is the count,
- * which is this story's.
+ * The attendee withdraws their Registered registration, through SCRUM-184's
+ * withdrawRegistration (D-25, Replaced). What these cases exercise is the
+ * count, which is this story's.
  */
 async function withdraw(eventId: string, attendeeId: string) {
-  const { error } = await admin
+  const { data, error } = await admin
     .from('event_registration')
-    .update({ status: 'withdrawn' })
+    .select('id')
     .eq('event_request_id', eventId)
     .eq('attendee_id', attendeeId)
-    .eq('status', 'registered');
-  if (error) throw new Error(error.message);
+    .eq('status', 'registered')
+    .single();
+  if (error || !data) throw new Error(`no Registered registration to withdraw: ${error?.message}`);
+  await withdrawRegistration(eventId, data.id, attendeeId, NOW);
 }
 
 /** Sends one registration per attendee, all at the same moment. */

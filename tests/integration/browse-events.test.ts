@@ -318,10 +318,11 @@ describe('AC3: the event page shows only what an attendee may see', () => {
     const shown = JSON.stringify(view);
 
     // Only the AC3 fields, plus SCRUM-181's registration state, SCRUM-182's
-    // full flag (the capacity itself is not shown) and SCRUM-270's finalStatus
-    // (Cancelled or Completed, which the page shows; PO, 28/10/2026).
+    // full flag (the capacity itself is not shown), SCRUM-270's finalStatus
+    // (Cancelled or Completed, which the page shows; PO, 28/10/2026) and
+    // SCRUM-184's canWithdraw (whether the event has not taken place yet).
     expect(Object.keys(view).sort()).toEqual(
-      ['description', 'eventDate', 'eventName', 'eventRequestId', 'finalStatus', 'full', 'period', 'periodRefusal', 'registration', 'times', 'venues'],
+      ['canWithdraw', 'description', 'eventDate', 'eventName', 'eventRequestId', 'finalStatus', 'full', 'period', 'periodRefusal', 'registration', 'times', 'venues'],
     );
     expect(view.finalStatus).toBeNull();
     expect(view.venues).toEqual([{ name: `Marina Bay Ballroom ${RUN}`, address: BALLROOM_ADDRESS }]);

@@ -3,7 +3,7 @@
 import { useState } from 'react';
 import type { Registration, RegistrationInput } from '@/domain/event-registration/schema';
 import { EventFullNotice } from './EventFullNotice';
-import { RegistrationConfirmation } from './RegistrationConfirmation';
+import { RegisteredPanel } from './RegisteredPanel';
 
 /**
  * SCRUM-181 — the registration form on the Attendee's event page.
@@ -14,7 +14,8 @@ import { RegistrationConfirmation } from './RegistrationConfirmation';
  * is refused by the API with the date, shown here. AC5: already registered
  * shows the existing registration instead. SCRUM-182 AC1, AC2: refused as
  * full (someone took the last place since the page loaded) shows the event as
- * full instead.
+ * full instead. SCRUM-184 AC1: the confirmation offers Withdraw straight away,
+ * unless the event has taken place (AC3), without a reload.
  *
  * The API decides all of it; this only shows what it says.
  */
@@ -33,7 +34,15 @@ type ApiError = {
   details?: { fieldErrors?: Partial<Record<Field, string[]>>; registration?: Registration };
 };
 
-export function RegistrationForm({ eventRequestId, eventName }: { eventRequestId: string; eventName: string }) {
+export function RegistrationForm({
+  eventRequestId,
+  eventName,
+  canWithdraw,
+}: {
+  eventRequestId: string;
+  eventName: string;
+  canWithdraw: boolean;
+}) {
   const [values, setValues] = useState<RegistrationInput>({ fullName: '', email: '', contactNumber: '' });
   const [fieldErrors, setFieldErrors] = useState<Partial<Record<Field, string[]>>>({});
   const [error, setError] = useState<string | null>(null);
@@ -77,22 +86,27 @@ export function RegistrationForm({ eventRequestId, eventName }: { eventRequestId
     }
   }
 
+  // The form is shown only while registration is open to an attendee, so a
+  // registration withdrawn from here may register again.
   if (registered) {
     return (
-      <RegistrationConfirmation
+      <RegisteredPanel
         registration={registered}
         eventName={eventName}
+        canWithdraw={canWithdraw}
+        canRegisterAgain
         heading="Registration confirmed. Your place is recorded."
       />
     );
   }
   if (existing) {
     return (
-      <RegistrationConfirmation
+      <RegisteredPanel
         registration={existing}
         eventName={eventName}
+        canWithdraw={canWithdraw}
+        canRegisterAgain
         heading="You are already registered for this event. Your existing registration:"
-        tone="notice"
       />
     );
   }

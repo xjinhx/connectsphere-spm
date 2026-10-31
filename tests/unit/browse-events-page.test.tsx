@@ -93,6 +93,7 @@ const NIGHT_PAGE: RegistrationPageView = {
   // SCRUM-270: going ahead; AC3's details do not depend on it.
   finalStatus: null,
   registration: null,
+  canWithdraw: false,
 };
 
 async function renderEventPage(view: RegistrationPageView): Promise<string> {

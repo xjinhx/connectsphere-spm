@@ -1,5 +1,6 @@
 import Link from 'next/link';
 import { EventFullNotice } from '@/components/event-registration/EventFullNotice';
+import { RegisteredPanel } from '@/components/event-registration/RegisteredPanel';
 import { RegistrationConfirmation } from '@/components/event-registration/RegistrationConfirmation';
 import { RegistrationForm } from '@/components/event-registration/RegistrationForm';
 import { FINAL_EVENT_REFUSALS } from '@/domain/event-registration/policy';
@@ -31,7 +32,10 @@ const FINAL_STATUS_CLASS: Record<FinalEventStatus, string> = {
  * AC1: the form, while the period is open. AC2, AC3: outside it, the start or
  * end date instead of the form. AC5: someone already registered sees their
  * registration instead of the form. SCRUM-182 AC1: a full event is shown as
- * full instead of the form.
+ * full instead of the form. SCRUM-184 AC1: a registered attendee can withdraw
+ * from their registration, after confirming; AC3: not once the event has
+ * taken place. Registering shows Withdraw, and withdrawing shows the form
+ * again while registration is open, without a reload.
  *
  * SCRUM-180 AC3: opened from Open events, it shows only the event name,
  * description, date, start and end times, venue name and address, and the
@@ -44,7 +48,7 @@ const FINAL_STATUS_CLASS: Record<FinalEventStatus, string> = {
  * SCRUM-270: a Cancelled or Completed event says so beside its name and shows
  * why it takes no registrations instead of the form, before any other state
  * (PO, 28/10/2026). Someone already registered still sees their registration
- * below it.
+ * below it, with no Withdraw (SCRUM-184's panel is for an event going ahead).
  */
 export default async function AttendeeEventRegistrationPage({ params }: { params: Promise<{ id: string }> }) {
   const { id } = await params;
@@ -54,9 +58,15 @@ export default async function AttendeeEventRegistrationPage({ params }: { params
 
   return (
     <main className="mx-auto flex min-h-screen max-w-xl flex-col p-8">
-      <Link href="/register-events" className="self-start text-sm text-[var(--brand)] underline">
-        Back to Open events
-      </Link>
+      <div className="flex flex-wrap gap-x-4">
+        <Link href="/register-events" className="text-sm text-[var(--brand)] underline">
+          Back to Open events
+        </Link>
+        {/* SCRUM-184 AC2: SCRUM-180's My registrations section, where a withdrawn registration is still shown (CL-70). */}
+        <Link href="/register-events#my-registrations" className="text-sm text-[var(--brand)] underline">
+          My registrations
+        </Link>
+      </div>
       <h1 className="mt-3 text-2xl font-semibold">
         {view.eventName}
         {view.finalStatus ? (
@@ -119,10 +129,11 @@ export default async function AttendeeEventRegistrationPage({ params }: { params
           ) : null}
         </>
       ) : view.registration ? (
-        <RegistrationConfirmation
+        <RegisteredPanel
           registration={view.registration}
           eventName={view.eventName}
-          heading="You are registered for this event."
+          canWithdraw={view.canWithdraw}
+          canRegisterAgain={canRegister && view.periodRefusal === null}
         />
       ) : view.periodRefusal ? (
         <p role="status" className="mt-6 rounded-lg border border-[var(--border)] bg-[var(--surface)] p-4 text-sm">
@@ -131,7 +142,7 @@ export default async function AttendeeEventRegistrationPage({ params }: { params
       ) : view.full ? (
         <EventFullNotice />
       ) : canRegister ? (
-        <RegistrationForm eventRequestId={view.eventRequestId} eventName={view.eventName} />
+        <RegistrationForm eventRequestId={view.eventRequestId} eventName={view.eventName} canWithdraw={view.canWithdraw} />
       ) : (
         <p className="mt-6 text-sm text-[var(--text-muted)]">Only attendees can register for events.</p>
       )}

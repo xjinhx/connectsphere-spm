@@ -15,7 +15,10 @@ import type { ClockRange } from '@/domain/shared/times';
 // shape locally rather than importing another domain's copy.
 export const EventRequestIdSchema = z.string().uuid();
 
-/** Registered (AC1); Withdrawn is SCRUM-184's, nothing sets it yet. */
+/** SCRUM-184: the registration being withdrawn, from the route's address. */
+export const RegistrationIdSchema = z.string().uuid();
+
+/** Registered (AC1); Withdrawn is set by SCRUM-184's withdrawRegistration. */
 export const RegistrationStatusSchema = z.enum(['registered', 'withdrawn']);
 export type RegistrationStatus = z.infer<typeof RegistrationStatusSchema>;
 
@@ -92,6 +95,11 @@ export interface RegistrationPageView {
   finalStatus: FinalEventStatus | null;
   /** The viewer's Registered registration for this event, if any (AC5). */
   registration: Registration | null;
+  /**
+   * SCRUM-184 AC3: whether the event has not taken place yet, so the Withdraw
+   * action is offered on `registration`, or on one made on the page.
+   */
+  canWithdraw: boolean;
 }
 
 /**
