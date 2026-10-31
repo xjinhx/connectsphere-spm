@@ -33,6 +33,7 @@ import {
   finishedEventNotice,
   isFinishedEvent,
 } from '@/domain/event-information/policy';
+import { hasRegistrationList } from '@/domain/registration-list/policy';
 
 export const dynamic = 'force-dynamic';
 
@@ -350,6 +351,19 @@ export default async function EventRequestPage({
           not touched here) does not grant a colleague access to this, so it
           is only rendered for the owner viewing their own request. */}
       {request.organiserId === actor.userId && <CoordinatorPanel eventRequestId={request.id} />}
+
+      {/* SCRUM-185 AC2, AC3 — the event's registration list, once registration
+          can be open (hasRegistrationList). Shown to the responsible organiser
+          and to a colleague who can see this request; Export is offered on the
+          list page to the responsible organiser only. */}
+      {hasRegistrationList(request.status) ? (
+        <Link
+          href={`/events/${request.id}/registrations`}
+          className="mt-6 inline-block rounded-md border border-[var(--border)] bg-white px-4 py-2 text-sm font-medium hover:bg-slate-50"
+        >
+          Registration list
+        </Link>
+      ) : null}
 
       {/* SCRUM-82 AC4: a submitted request is read-only - no edit, save or
           delete is offered. Only a draft gets an action.
