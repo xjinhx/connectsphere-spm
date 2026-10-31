@@ -46,6 +46,15 @@ export const NOTIFICATION_TYPES = [
   'change_requested',
   // SCRUM-105 AC4, AC6: an event was cancelled and will not take place.
   'event_cancelled',
+  // SCRUM-190 AC6: the organiser who raised it, told their change request
+  // was approved.
+  'change_request_approved',
+  // SCRUM-190 AC4: the Venue/Technical Support staff who actioned a booking
+  // or reservation (decided_by/reserved_by), told it now needs review.
+  'arrangement_needs_review',
+  // SCRUM-190 AC5: every attendee with a Registered registration, told an
+  // approved change altered the details they are shown of the event.
+  'event_details_changed',
 ] as const;
 export const NotificationTypeSchema = z.enum(NOTIFICATION_TYPES);
 export type NotificationType = z.infer<typeof NotificationTypeSchema>;

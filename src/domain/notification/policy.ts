@@ -63,9 +63,20 @@ const COORDINATOR_FACING_TYPES = new Set<string>(['coordinator_assigned', 'venue
 const LEAD_FACING_TYPES = new Set<string>(['request_submitted']);
 const OWN_EVENTS_LIST_TYPES = new Set<string>(['coordinator_unassigned']);
 const EQUIPMENT_REQUEST_TYPES = new Set<string>(['equipment_unable_to_fulfil']);
-const SELF_CONTAINED_TYPES = new Set<string>(['event_cancelled']);
+// SCRUM-190 AC5: sent to attendees, who cannot open /events/<id>; their own
+// page for the event is /register-events/<id> (SCRUM-180 AC3).
+const ATTENDEE_FACING_TYPES = new Set<string>(['event_details_changed']);
+// SCRUM-190 AC4 adds 'arrangement_needs_review', sent to the Venue Staff and
+// Technical Support Staff who actioned an arrangement. No one event page is
+// open to both (Venue Staff have none at all), so, like SCRUM-105's
+// 'event_cancelled' above, the message says what changed on each arrangement
+// and it links to the notifications page itself.
+const SELF_CONTAINED_TYPES = new Set<string>(['event_cancelled', 'arrangement_needs_review']);
 
 export function notificationHref(notification: { type: string; eventRequestId: string }): string {
+  if (ATTENDEE_FACING_TYPES.has(notification.type)) {
+    return `/register-events/${notification.eventRequestId}`;
+  }
   if (LEAD_FACING_TYPES.has(notification.type)) {
     return `/assignment-queue/${notification.eventRequestId}`;
   }

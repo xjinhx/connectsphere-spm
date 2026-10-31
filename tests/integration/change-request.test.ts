@@ -37,7 +37,7 @@ const CLIENT_ORGANISATION_ID = '22222222-2222-2222-2222-222222222222';
 
 const supabase = createAdminClient();
 
-const { raiseChangeRequest, listChangeRequests } = await import('@/domain/change-request/service');
+const { raiseChangeRequest, listChangeRequests, approveChangeRequest } = await import('@/domain/change-request/service');
 
 let organiserId: string;
 let colleagueId: string;
@@ -136,8 +136,9 @@ async function readNotifications(recipientId: string, eventRequestId: string) {
   return data;
 }
 
-// DUMMY(SCRUM-190) D-26, DUMMY(SCRUM-191) D-26: stands in for SCRUM-190/191's
-// own write. See docs/dummies.md.
+// DUMMY(SCRUM-191) D-26: stands in for SCRUM-191's own write (SCRUM-190's
+// approved-path write is now real — tests/integration/approve-change-request.test.ts).
+// See docs/dummies.md.
 async function seedDecision(changeRequestId: string, status: 'approved' | 'rejected', reason: string) {
   const { error } = await supabase
     .from('change_request')
@@ -504,7 +505,8 @@ describe('listChangeRequests', () => {
     expect(list[0]?.fields).toEqual([{ field: 'expectedAttendance', currentValue: 150, proposedValue: 180 }]);
   });
 
-  // TC-187-11 (AC6) — a decided request (seeded directly, DUMMY(SCRUM-190)/(SCRUM-191)).
+  // TC-187-11 (AC6) — a decided request (seeded directly here, DUMMY(SCRUM-191);
+  // re-run against a real approval in tests/integration/approve-change-request.test.ts).
   it('lists a decided request with its status, decision date and reason', async () => {
     const id = await createEvent('submitted');
     const outcome = await raiseChangeRequest(
@@ -548,17 +550,16 @@ describe('listChangeRequests', () => {
 });
 
 describe('AC7 — an approved request shows its new values on the event', () => {
-  // TC-187-12 (AC7) — DUMMY(SCRUM-190) D-26: applying an approved request's
-  // proposed values to the event is SCRUM-190's own write, not this story's
-  // (raiseChangeRequest never touches event_request). Stands in for the
-  // write the same way the manual case does (PR description, Jira comment
-  // 10723): apply the proposed value directly in Postgres once the request
-  // is approved. The read is the real one, though: getEventRequest(id), the
-  // same function the event page itself calls, with getCurrentActor mocked
-  // as the responsible organiser (as tests/integration/edit-event-information.test.ts
-  // does) - not a raw select, which would pass even if the app's own read
-  // path were broken (review of PR #143). Re-run once SCRUM-190 applies
-  // approvals for real.
+  // TC-187-12 (AC7) — applying an approved request's proposed values to the
+  // event is SCRUM-190's own write, not this story's (raiseChangeRequest
+  // never touches event_request). Re-run on 30/10/2026 against SCRUM-190's
+  // real approveChangeRequest, replacing D-26's approved half (it used to
+  // seed the decision and write the value directly in Postgres). The read is
+  // the real one: getEventRequest(id), the same function the event page
+  // itself calls, with getCurrentActor mocked as the responsible organiser
+  // (as tests/integration/edit-event-information.test.ts does) - not a raw
+  // select, which would pass even if the app's own read path were broken
+  // (review of PR #143).
   it('shows the new value once an approved change is applied', async () => {
     const id = await createEvent('submitted');
     const outcome = await raiseChangeRequest(
@@ -566,12 +567,7 @@ describe('AC7 — an approved request shows its new values on the event', () => 
       { fields: [{ field: 'expectedAttendance', proposedValue: 220 }], reason: 'Extra guests confirmed' },
       organiserId,
     );
-    await seedDecision(outcome.id, 'approved', 'Matches updated programme');
-
-    // DUMMY(SCRUM-190) D-26: applying the field to the event is SCRUM-190's
-    // own write; stood in for here.
-    const { error } = await supabase.from('event_request').update({ expected_attendance: 220 }).eq('id', id);
-    if (error) throw new Error(`could not apply test decision: ${error.message}`);
+    await approveChangeRequest(id, outcome.id, coordinatorId);
 
     vi.mocked(getCurrentActor).mockResolvedValue({
       userId: organiserId,
