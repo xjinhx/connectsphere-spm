@@ -9,8 +9,8 @@ import { formatDayMonthYear, todayInSingapore } from '@/domain/shared/dates';
  * service in tests/unit/event-registration-service.test.ts and against the
  * database in tests/integration/register-for-event.test.ts.
  *
- * Test case IDs are from SCRUM-181-test-cases.xlsx (TC-181-nn). "Today" is
- * 30/10/2026, Singapore time.
+ * Test case IDs are from the ConnectSphere_TestCases_Sprint4 workbook,
+ * SCRUM-181 tab (TC-181-nn). "Today" is 30/10/2026, Singapore time.
  */
 
 const VALID = { fullName: 'Tan Mei Ling', email: 'attendee@example.com', contactNumber: '+65 9123 4567' };

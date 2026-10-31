@@ -7,8 +7,9 @@ import { beforeEach, describe, expect, it, vi } from 'vitest';
  * That the row really lands in Postgres, and the database function's own
  * checks, run in tests/integration/register-for-event.test.ts.
  *
- * Test case IDs are from SCRUM-181-test-cases.xlsx (TC-181-nn). The clock is
- * fixed at 30/10/2026 10:00 Singapore time unless a test says otherwise.
+ * Test case IDs are from the ConnectSphere_TestCases_Sprint4 workbook,
+ * SCRUM-181 tab (TC-181-nn). The clock is fixed at 30/10/2026 10:00 Singapore
+ * time unless a test says otherwise.
  */
 
 vi.mock('@/lib/supabase/eventRegistrations', () => ({

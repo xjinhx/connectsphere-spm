@@ -16,9 +16,9 @@ import { TEST_CLIENT_ORGANISATION_ID, ensureTestClientOrganisation } from './fix
  *   AC6 no limit on how many events one attendee joins.
  *
  * Runs against the local Supabase stack. The clock is fixed at 30/10/2026
- * 10:00 Singapore time by passing `now`. Test case IDs are from
- * SCRUM-181-test-cases.xlsx (TC-181-nn). Only attendees reaching the route is
- * tests/unit/event-registration-route.test.ts.
+ * 10:00 Singapore time by passing `now`. Test case IDs are from the
+ * ConnectSphere_TestCases_Sprint4 workbook, SCRUM-181 tab (TC-181-nn). Only
+ * attendees reaching the route is tests/unit/event-registration-route.test.ts.
  */
 
 const admin = createAdminClient();
