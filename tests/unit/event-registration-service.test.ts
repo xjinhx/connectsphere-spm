@@ -7,8 +7,9 @@ import { beforeEach, describe, expect, it, vi } from 'vitest';
  * That the row really lands in Postgres, and the database function's own
  * checks, run in tests/integration/register-for-event.test.ts.
  *
- * Test case IDs are from SCRUM-181-test-cases.xlsx (TC-181-nn). The clock is
- * fixed at 30/10/2026 10:00 Singapore time unless a test says otherwise.
+ * Test case IDs are from the ConnectSphere_TestCases_Sprint4 workbook,
+ * SCRUM-181 tab (TC-181-nn). The clock is fixed at 30/10/2026 10:00 Singapore
+ * time unless a test says otherwise.
  */
 
 vi.mock('@/lib/supabase/eventRegistrations', () => ({
@@ -296,8 +297,9 @@ describe("the attendee's event page", () => {
 
 /**
  * SCRUM-182 Refuse registration once the event is full (Jira, authoritative).
- * Test case IDs are from SCRUM-182-test-cases.xlsx (TC-182-nn). That the
- * database counts the same way, and holds under two requests at once, runs in
+ * Test case IDs are from the ConnectSphere_TestCases_Sprint4 workbook,
+ * SCRUM-182 tab (TC-182-nn). That the database counts the same way, and holds
+ * under two requests at once, runs in
  * tests/integration/refuse-full-registration.test.ts.
  */
 describe('SCRUM-182 AC1: a full event refuses registration and is shown as full', () => {

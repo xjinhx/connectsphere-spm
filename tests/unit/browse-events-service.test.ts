@@ -7,8 +7,9 @@ import { beforeEach, describe, expect, it, vi } from 'vitest';
  * attendee's registrations (AC4) and marks a cancelled event (AC6). The same reads against the database run in
  * tests/integration/browse-events.test.ts.
  *
- * Test case IDs are from SCRUM-180-test-cases.xlsx (TC-180-nn). "Today" is
- * 30/10/2026, Singapore time, unless a test says otherwise.
+ * Test case IDs are from the ConnectSphere_TestCases_Sprint4 workbook,
+ * SCRUM-180 tab (TC-180-nn). "Today" is 30/10/2026, Singapore time, unless a
+ * test says otherwise.
  */
 
 vi.mock('@/lib/supabase/eventRegistrations', () => ({

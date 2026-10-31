@@ -9,7 +9,8 @@ import { NextRequest } from 'next/server';
  * the browser with the right status and message. The refusals themselves run
  * against the database in tests/integration/register-for-event.test.ts.
  *
- * Test case IDs are from SCRUM-181-test-cases.xlsx (TC-181-nn).
+ * Test case IDs are from the ConnectSphere_TestCases_Sprint4 workbook,
+ * SCRUM-181 tab (TC-181-nn).
  */
 
 vi.mock('@/lib/auth/currentActor', () => ({ getCurrentActor: vi.fn() }));
