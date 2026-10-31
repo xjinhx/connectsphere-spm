@@ -8,7 +8,8 @@ import { NextRequest } from 'next/server';
  * that the attendee is the signed-in account, and that each refusal reaches
  * the browser with the right status and message.
  *
- * Test case IDs are from SCRUM-184-test-cases.xlsx (TC-184-nn).
+ * Test case IDs are from the ConnectSphere_TestCases_Sprint4 workbook,
+ * SCRUM-184 tab (TC-184-nn).
  */
 
 vi.mock('@/lib/auth/currentActor', () => ({ getCurrentActor: vi.fn() }));

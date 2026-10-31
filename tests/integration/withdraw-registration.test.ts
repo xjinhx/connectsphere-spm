@@ -26,7 +26,8 @@ import { TEST_CLIENT_ORGANISATION_ID, ensureTestClientOrganisation } from './fix
  * Singapore time by passing `now`. Capacity 3 stands in for the sheet's 20:
  * the same boundary, fewer accounts to create.
  *
- * Test case IDs are from SCRUM-184-test-cases.xlsx (TC-184-nn).
+ * Test case IDs are from the ConnectSphere_TestCases_Sprint4 workbook,
+ * SCRUM-184 tab (TC-184-nn).
  */
 
 const admin = createAdminClient();

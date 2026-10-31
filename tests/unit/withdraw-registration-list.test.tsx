@@ -9,7 +9,8 @@ import type { ReactElement } from 'react';
  * service really returns a withdrawn row is
  * tests/integration/withdraw-registration.test.ts.
  *
- * Test case IDs are from SCRUM-184-test-cases.xlsx (TC-184-nn).
+ * Test case IDs are from the ConnectSphere_TestCases_Sprint4 workbook,
+ * SCRUM-184 tab (TC-184-nn).
  */
 
 // next/link needs the App Router mounted; a plain anchor keeps the href.

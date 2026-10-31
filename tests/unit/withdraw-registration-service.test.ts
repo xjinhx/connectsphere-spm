@@ -7,8 +7,9 @@ import { beforeEach, describe, expect, it, vi } from 'vitest';
  * Postgres, and gives its place back, runs in
  * tests/integration/withdraw-registration.test.ts.
  *
- * Test case IDs are from SCRUM-184-test-cases.xlsx (TC-184-nn). The clock is
- * fixed at 30/10/2026 10:00 Singapore time unless a test says otherwise.
+ * Test case IDs are from the ConnectSphere_TestCases_Sprint4 workbook,
+ * SCRUM-184 tab (TC-184-nn). The clock is fixed at 30/10/2026 10:00
+ * Singapore time unless a test says otherwise.
  */
 
 vi.mock('@/lib/supabase/eventRegistrations', () => ({

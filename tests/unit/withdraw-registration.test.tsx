@@ -10,7 +10,8 @@ import type { Registration } from '@/domain/event-registration/schema';
  * attendee confirms (TC-184-02), and that a confirmed withdrawal shows the
  * registration as Withdrawn (TC-184-01).
  *
- * Test case IDs are from SCRUM-184-test-cases.xlsx (TC-184-nn).
+ * Test case IDs are from the ConnectSphere_TestCases_Sprint4 workbook,
+ * SCRUM-184 tab (TC-184-nn).
  */
 
 const EVENT_ID = '11111111-1111-4111-8111-111111111111';
