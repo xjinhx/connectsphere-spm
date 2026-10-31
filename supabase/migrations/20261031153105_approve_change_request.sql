@@ -191,6 +191,8 @@ grant execute on function approve_change_request(
 -- -----------------------------------------------------------------------------
 -- AC4, AC5, AC6 - three new notification types, the same pattern as
 -- 20261024090000_change_request.sql.
+-- Restates every type already allowed, including SCRUM-105's 'event_cancelled'
+-- (20261030070000_cancel_event.sql, which runs before this one).
 -- -----------------------------------------------------------------------------
 alter table notifications
   drop constraint notifications_type_known;
@@ -208,6 +210,7 @@ alter table notifications
     'event_confirmed',
     'equipment_unable_to_fulfil',
     'change_requested',
+    'event_cancelled',
     'change_request_approved',
     'arrangement_needs_review',
     'event_details_changed'

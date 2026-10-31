@@ -901,7 +901,7 @@ switch them the next time they edit those files.
   request`'s `status`/`decided_by`/`decided_at` are now written for real by
   `approveChangeRequest()` (`src/domain/change-request/service.ts`), through
   `approve_change_request` (`supabase/migrations/
-  20261030100000_approve_change_request.sql`), re-run against TC-187-11's
+  20261031153105_approve_change_request.sql`), re-run against TC-187-11's
   shape in `tests/integration/approve-change-request.test.ts`. TC-187-12 in
   `tests/integration/change-request.test.ts` now approves through
   `approveChangeRequest()` instead of seeding the decision and writing the
