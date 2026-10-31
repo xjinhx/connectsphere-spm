@@ -36,10 +36,12 @@ export const ATTENDEE_EVENT_COLUMNS =
 
 /**
  * What the Attendee's page needs from the event (SCRUM-181, and SCRUM-180
- * AC3). maybeSingle: an unknown id is null, not an error.
+ * AC3), and its status, read only to refuse a Cancelled or Completed event and
+ * say so on the page (SCRUM-270). maybeSingle: an unknown id is null, not an
+ * error.
  */
 export async function fetchRegistrationEvent(eventRequestId: string) {
-  return db().from('event_request').select(ATTENDEE_EVENT_COLUMNS).eq('id', eventRequestId).maybeSingle();
+  return db().from('event_request').select(`${ATTENDEE_EVENT_COLUMNS}, status`).eq('id', eventRequestId).maybeSingle();
 }
 
 /**

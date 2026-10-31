@@ -709,8 +709,10 @@ switch them the next time they edit those files.
   SCRUM-256 (branch `safety-officer-navigation`): AC2 lists only Safety
   checks, which was already the stand-in item, so the entry is unchanged and
   its marker removed; TC-249-15 to 17 and 25 to 27 re-run for the Safety
-  Officer as TC-256-07, 10 and 14. **Other roles:** still active, waiting on
-  SCRUM-251 to 253.
+  Officer as TC-256-07, 10 and 14. **Event Coordinator:** replaced by SCRUM-251 (branch
+  `scrum-251-coordinator-nav`): Review queue, My events, Venues, Client
+  organisations, Equipment; marker removed. **Other roles:** still active,
+  waiting on SCRUM-252 and 253.
 
 ### D-21 — An equipment reservation is released by hand
 

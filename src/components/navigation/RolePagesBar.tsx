@@ -15,7 +15,8 @@ import type { Role } from '@/domain/identity/roles';
 
 const PAGES = [
   { href: '/safety-checks', label: 'Safety checks' },
-  { href: '/assigned-events', label: 'Assigned events' },
+  // SCRUM-251 AC2 names this page Review queue in the coordinator's nav.
+  { href: '/assigned-events', label: 'Review queue' },
   { href: '/my-events', label: 'My events' },
 ] as const;
 

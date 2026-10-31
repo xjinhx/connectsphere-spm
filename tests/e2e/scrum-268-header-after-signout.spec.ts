@@ -64,7 +64,7 @@ test('TC-268-02: after an idle sign-out, the login page shows no header', async 
       sameSite: 'Lax',
     },
   ]);
-  await page.getByRole('navigation', { name: 'Main' }).getByRole('link', { name: 'Assigned events' }).click();
+  await page.getByRole('navigation', { name: 'Main' }).getByRole('link', { name: 'Review queue' }).click();
 
   await expect(page).toHaveURL(/\/login$/);
   await expect(page.getByRole('button', { name: 'Log in' })).toBeVisible();
@@ -79,7 +79,7 @@ test('TC-268-03: the next account after Log out sees only its own header', async
 
   const nav = page.getByRole('navigation', { name: 'Main' });
   await expect(nav.getByRole('link', { name: 'Equipment requests' })).toBeVisible();
-  await expect(nav.getByRole('link', { name: 'Assigned events' })).toHaveCount(0);
+  await expect(nav.getByRole('link', { name: 'Review queue' })).toHaveCount(0);
   await expect(page.getByRole('button', { name: `Account menu for ${ACCOUNTS.techSupport}` })).toBeVisible();
   await expect(page.getByRole('button', { name: `Account menu for ${ACCOUNTS.coordinator}` })).toHaveCount(0);
 });
@@ -92,7 +92,7 @@ test('TC-268-04: signing back in shows the full header again', async ({ page }) 
 
   await expect(page).toHaveURL(/\/assigned-events$/);
   await expect(page.getByRole('link', { name: 'ConnectSphere' })).toHaveAttribute('href', '/assigned-events');
-  await expect(page.getByRole('navigation', { name: 'Main' }).getByRole('link', { name: 'Assigned events' })).toBeVisible();
+  await expect(page.getByRole('navigation', { name: 'Main' }).getByRole('link', { name: 'Review queue' })).toBeVisible();
   await expect(page.getByRole('banner').getByRole('link', { name: /Notifications/ })).toBeVisible();
   await expect(page.getByRole('button', { name: `Account menu for ${ACCOUNTS.coordinator}` })).toBeVisible();
 });

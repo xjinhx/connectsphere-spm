@@ -10,7 +10,8 @@ import type { ReactElement } from 'react';
  * Which events the service returns is tests/unit/browse-events-service.test.ts;
  * that nothing internal is read is tests/integration/browse-events.test.ts.
  *
- * Test case IDs are from SCRUM-180-test-cases.xlsx (TC-180-nn).
+ * Test case IDs are from the ConnectSphere_TestCases_Sprint4 workbook,
+ * SCRUM-180 tab (TC-180-nn).
  */
 
 // next/link needs the App Router mounted; a plain anchor keeps the href.
@@ -89,6 +90,8 @@ const NIGHT_PAGE: RegistrationPageView = {
   period: { startDate: '2026-10-27', endDate: '2026-11-04' },
   periodRefusal: 'Registration opens on 27/10/2026.',
   full: false,
+  // SCRUM-270: going ahead; AC3's details do not depend on it.
+  finalStatus: null,
   registration: null,
   canWithdraw: false,
 };

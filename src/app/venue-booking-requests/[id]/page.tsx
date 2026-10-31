@@ -99,6 +99,16 @@ export default async function VenueBookingRequestPage({ params }: { params: Prom
 
   return (
     <main className="mx-auto max-w-2xl px-4 py-8">
+      {/* SCRUM-251 AC4: the event's coordinator opens this from the event, so it links back there.
+          Venue Staff come from their queue instead (SCRUM-253). */}
+      {isCoordinator ? (
+        <Link
+          href={`/events/${request.eventRequestId}/review`}
+          className="mb-4 inline-block text-sm text-[var(--brand)] hover:underline"
+        >
+          ← {requirements.eventName}
+        </Link>
+      ) : null}
       <div className="flex flex-wrap items-center gap-3">
         <h1 className="text-xl font-semibold">Booking request</h1>
         <span className="rounded-full border border-[var(--border)] px-2 py-0.5 text-xs font-medium">

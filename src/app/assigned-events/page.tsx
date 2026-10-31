@@ -45,7 +45,7 @@ export default async function EventCoordinatorAssignedEventsPage() {
   if (!hasRole(actor.roles, 'coordinator')) {
     return (
       <main className="mx-auto max-w-2xl p-8">
-        <h1 className="text-2xl font-semibold">Assigned events</h1>
+        <h1 className="text-2xl font-semibold">Review queue</h1>
         <p className="mt-4 text-[var(--text-muted)]">
           This page is for Event Coordinators. Your account does not currently hold that role.
         </p>
@@ -68,7 +68,7 @@ export default async function EventCoordinatorAssignedEventsPage() {
       <RolePagesBar roles={actor.roles} current="/assigned-events" />
       <div className="mb-6 flex items-start justify-between gap-4">
         <div>
-          <h1 className="text-2xl font-semibold">Assigned events</h1>
+          <h1 className="text-2xl font-semibold">Review queue</h1>
           <p className="mt-1 text-sm text-[var(--text-muted)]">
             {events.length === 0
               ? 'Nothing awaiting your review right now.'

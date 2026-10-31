@@ -1,6 +1,6 @@
 import { formatDayMonthYear, type ISODate } from '@/domain/shared/dates';
 import { fromDatabaseTime, type ClockRange } from '@/domain/shared/times';
-import type { EventVenue, RegistrationPeriod } from './schema';
+import type { EventVenue, FinalEventStatus, RegistrationPeriod } from './schema';
 
 /**
  * SCRUM-181 — Register for an event. Pure rules only; service.ts applies them.
@@ -55,7 +55,8 @@ export const NO_PLACES_REMAINING = 'There are no places remaining for this event
  * SCRUM-180 AC1 — an event in one of these statuses is not going ahead, so it
  * is not open for registration whatever its period says (PO, 28/10/2026: read
  * "registration period is open" as also needing the event to be going ahead).
- * Both statuses are final. Restated in fetchOpenEvents' query.
+ * Both statuses are final. Restated in fetchOpenEvents' query, and the same
+ * two that finalEventStatus (SCRUM-270) refuses registration for.
  */
 export const FINAL_EVENT_STATUSES: readonly string[] = ['cancelled', 'completed'];
 
@@ -108,6 +109,28 @@ export function bookedVenues(
   }
   return [...byVenue.values()].sort((a, b) => a.name.localeCompare(b.name));
 }
+
+/**
+ * SCRUM-270 (bug against AC1) — whether the event is Cancelled or Completed.
+ * Either way it is not going ahead, so it takes no registrations whatever its
+ * period says (PO, 28/10/2026: a registration period is open only while the
+ * event is going ahead). Every other status is null: the period and places
+ * decide as before.
+ *
+ * The same two statuses as FINAL_EVENT_STATUSES (SCRUM-180), which keeps them
+ * off Open events. Restated in SQL by register_for_event
+ * (20261031034916_refuse_registration_final_event.sql), which checks it again
+ * with the event row locked; change one, change the others.
+ */
+export function finalEventStatus(eventStatus: string): FinalEventStatus | null {
+  return eventStatus === 'cancelled' || eventStatus === 'completed' ? eventStatus : null;
+}
+
+/** SCRUM-270: why a Cancelled or Completed event refuses a registration. */
+export const FINAL_EVENT_REFUSALS: Record<FinalEventStatus, string> = {
+  cancelled: 'This event has been cancelled, so it is not taking registrations.',
+  completed: 'This event has already taken place, so it is not taking registrations.',
+};
 
 /**
  * SCRUM-182 AC1, AC3: whether the event is full. Only Registered
