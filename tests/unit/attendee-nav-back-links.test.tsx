@@ -5,8 +5,8 @@ import type { ReactElement } from 'react';
 /**
  * SCRUM-255 AC3: the Attendee's event page opens with a back link to Open
  * events. The page is rendered for real, as an Attendee; only the session and
- * the read behind it are replaced. Test case IDs match
- * SCRUM-255-test-cases.xlsx.
+ * the read behind it are replaced. Test case IDs match the
+ * ConnectSphere_TestCases_Sprint4 workbook, SCRUM-255 tab.
  */
 
 // next/link needs the App Router mounted; a plain anchor keeps the href, which is what AC3 is about.
@@ -32,11 +32,17 @@ const ATTENDEE_ID = 'aaaaaaaa-aaaa-4aaa-8aaa-aaaaaaaaaaaa';
 const OPEN: RegistrationPageView = {
   eventRequestId: EVENT_ID,
   eventName: 'Client Appreciation Night',
+  // SCRUM-180 AC3's details; the back link does not depend on them.
+  description: null,
   eventDate: '2026-11-09',
+  times: null,
+  venues: [],
   period: { startDate: '2026-10-21', endDate: '2026-10-29' },
   periodRefusal: null,
   registration: null,
   full: false,
+  // SCRUM-270: going ahead; the back link does not depend on it.
+  finalStatus: null,
 };
 
 beforeEach(() => {

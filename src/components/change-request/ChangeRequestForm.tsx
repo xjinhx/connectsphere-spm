@@ -9,20 +9,24 @@ import { refusalMessage, type ChangeRequestRefusal } from './refusalMessage';
  * SCRUM-187 AC1 — "selecting each field to change, entering its proposed
  * value and giving a reason."
  *
- * Only the fields SELECTABLE_CHANGE_REQUEST_FIELDS actually allows are
- * offered, so the form can never submit a field the API would reject - the
- * full event-request field set, per CL-61 (24 Oct 2026).
+ * Every field SELECTABLE_CHANGE_REQUEST_FIELDS allows is offered, in the same
+ * order - the full event-request field set, per CL-61 (24 Oct 2026).
  *
- * accessibilityFeatureIds and equipmentItems are left out of this form: both
- * need a catalogue picker (accessibility features, equipment lines) this
- * story does not build. The backend already accepts them
- * (SELECTABLE_CHANGE_REQUEST_FIELDS, change-request/schema.ts); add their
- * inputs here once a picker exists, rather than faking one with free text.
+ * SCRUM-274: Accessibility features and Equipment items are offered too, with
+ * the same pickers as the event request form (SCRUM-79/80): a checkbox per
+ * accessibility feature on the list, and rows of an item name and a quantity.
+ * Each is proposed as a whole new list.
  */
 
-type FieldKind = 'date' | 'time' | 'number' | 'text' | 'longText' | 'boolean';
+type FieldKind = 'date' | 'time' | 'number' | 'text' | 'longText' | 'boolean' | 'features' | 'equipment';
 
-const FIELD_DEFS: { field: SelectableChangeRequestField; kind: FieldKind }[] = [
+/** One equipment row as typed: the quantity stays text until it is sent. */
+export interface EquipmentRowInput {
+  item: string;
+  quantity: string;
+}
+
+export const CHANGE_REQUEST_FORM_FIELDS: { field: SelectableChangeRequestField; kind: FieldKind }[] = [
   { field: 'name', kind: 'text' },
   { field: 'purpose', kind: 'longText' },
   { field: 'description', kind: 'longText' },
@@ -32,12 +36,16 @@ const FIELD_DEFS: { field: SelectableChangeRequestField; kind: FieldKind }[] = [
   { field: 'expectedAttendance', kind: 'number' },
   { field: 'roomLayout', kind: 'text' },
   { field: 'accessibilityRequired', kind: 'boolean' },
+  { field: 'accessibilityFeatureIds', kind: 'features' },
   { field: 'accessibilityNotes', kind: 'text' },
   { field: 'preferredLocationId', kind: 'text' },
   { field: 'equipmentRequired', kind: 'boolean' },
+  { field: 'equipmentItems', kind: 'equipment' },
   { field: 'technicalSupportNotes', kind: 'text' },
   { field: 'registrationRequired', kind: 'boolean' },
 ];
+
+const FIELD_DEFS = CHANGE_REQUEST_FORM_FIELDS;
 
 function parseValue(kind: FieldKind, raw: string): unknown {
   if (kind === 'number') return raw === '' ? null : Number(raw);
@@ -45,11 +53,31 @@ function parseValue(kind: FieldKind, raw: string): unknown {
   return raw === '' ? null : raw;
 }
 
-export function ChangeRequestForm({ requestId }: { requestId: string }) {
+/**
+ * SCRUM-274: the proposed equipment list. Blank rows are dropped; a quantity
+ * is sent as a number, so the API's rule (a whole number above 0) can refuse
+ * it with its own message.
+ */
+export function toProposedEquipmentItems(rows: readonly EquipmentRowInput[]): { item: string; quantity: number }[] {
+  return rows
+    .filter((row) => row.item.trim() !== '' || row.quantity.trim() !== '')
+    .map((row) => ({ item: row.item.trim(), quantity: row.quantity.trim() === '' ? 0 : Number(row.quantity) }));
+}
+
+export function ChangeRequestForm({
+  requestId,
+  accessibilityFeatures,
+}: {
+  requestId: string;
+  /** SCRUM-274: the accessibility features list (id and name), for the picker. */
+  accessibilityFeatures: readonly { id: string; name: string }[];
+}) {
   const router = useRouter();
   const [open, setOpen] = useState(false);
   const [selected, setSelected] = useState<Set<SelectableChangeRequestField>>(new Set());
   const [values, setValues] = useState<Record<string, string>>({});
+  const [featureIds, setFeatureIds] = useState<string[]>([]);
+  const [equipmentRows, setEquipmentRows] = useState<EquipmentRowInput[]>([{ item: '', quantity: '' }]);
   const [reason, setReason] = useState('');
   const [submitting, setSubmitting] = useState(false);
   const [error, setError] = useState<string | null>(null);
@@ -70,7 +98,12 @@ export function ChangeRequestForm({ requestId }: { requestId: string }) {
     try {
       const fields = FIELD_DEFS.filter((def) => selected.has(def.field)).map((def) => ({
         field: def.field,
-        proposedValue: parseValue(def.kind, values[def.field] ?? ''),
+        proposedValue:
+          def.kind === 'features'
+            ? featureIds
+            : def.kind === 'equipment'
+              ? toProposedEquipmentItems(equipmentRows)
+              : parseValue(def.kind, values[def.field] ?? ''),
       }));
 
       const result = await fetch(`/api/event-requests/${requestId}/change-requests`, {
@@ -87,6 +120,8 @@ export function ChangeRequestForm({ requestId }: { requestId: string }) {
       setOpen(false);
       setSelected(new Set());
       setValues({});
+      setFeatureIds([]);
+      setEquipmentRows([{ item: '', quantity: '' }]);
       setReason('');
       router.refresh();
     } catch (caught) {
@@ -127,7 +162,19 @@ export function ChangeRequestForm({ requestId }: { requestId: string }) {
                   {CHANGE_REQUEST_FIELD_LABELS[def.field]}
                 </label>
                 {selected.has(def.field) ? (
-                  def.kind === 'boolean' ? (
+                  def.kind === 'features' ? (
+                    <FeaturePicker
+                      features={accessibilityFeatures}
+                      chosen={featureIds}
+                      onToggle={(id) =>
+                        setFeatureIds((current) =>
+                          current.includes(id) ? current.filter((other) => other !== id) : [...current, id],
+                        )
+                      }
+                    />
+                  ) : def.kind === 'equipment' ? (
+                    <EquipmentRows rows={equipmentRows} onChange={setEquipmentRows} />
+                  ) : def.kind === 'boolean' ? (
                     <select
                       value={values[def.field] ?? ''}
                       onChange={(event) => setValues((v) => ({ ...v, [def.field]: event.target.value }))}
@@ -202,5 +249,86 @@ export function ChangeRequestForm({ requestId }: { requestId: string }) {
         </button>
       </div>
     </form>
+  );
+}
+
+/** SCRUM-274: a checkbox per accessibility feature, as in the event request form. */
+function FeaturePicker({
+  features,
+  chosen,
+  onToggle,
+}: {
+  features: readonly { id: string; name: string }[];
+  chosen: readonly string[];
+  onToggle: (id: string) => void;
+}) {
+  if (features.length === 0) {
+    return <p className="mt-1 text-xs text-[var(--text-muted)]">No accessibility features are on the list yet.</p>;
+  }
+  return (
+    <div className="mt-1 flex flex-wrap gap-x-6 gap-y-2">
+      {features.map((feature) => (
+        <label key={feature.id} className="flex items-center gap-2 text-sm">
+          <input type="checkbox" checked={chosen.includes(feature.id)} onChange={() => onToggle(feature.id)} />
+          {feature.name}
+        </label>
+      ))}
+    </div>
+  );
+}
+
+/** SCRUM-274: rows of an item name and a quantity, as in the event request form. */
+function EquipmentRows({
+  rows,
+  onChange,
+}: {
+  rows: readonly EquipmentRowInput[];
+  onChange: (rows: EquipmentRowInput[]) => void;
+}) {
+  const update = (index: number, change: Partial<EquipmentRowInput>) =>
+    onChange(rows.map((row, i) => (i === index ? { ...row, ...change } : row)));
+  return (
+    <div className="mt-1 space-y-2">
+      {rows.map((row, index) => (
+        <div key={index} className="flex flex-wrap items-end gap-2">
+          <label className="min-w-[10rem] flex-1 text-xs">
+            Item
+            <input
+              value={row.item}
+              maxLength={100}
+              placeholder="e.g. Wireless microphone"
+              onChange={(event) => update(index, { item: event.target.value })}
+              className="mt-1 w-full rounded-md border border-[var(--border)] bg-white px-2 py-1 text-sm"
+            />
+          </label>
+          <label className="w-24 text-xs">
+            Quantity
+            <input
+              type="number"
+              min={1}
+              step={1}
+              value={row.quantity}
+              onChange={(event) => update(index, { quantity: event.target.value })}
+              className="mt-1 w-full rounded-md border border-[var(--border)] bg-white px-2 py-1 text-sm"
+            />
+          </label>
+          <button
+            type="button"
+            onClick={() => onChange(rows.filter((_, i) => i !== index))}
+            aria-label={`Remove equipment item ${index + 1}`}
+            className="rounded-md border border-[var(--border)] bg-white px-3 py-1 text-sm hover:bg-slate-50"
+          >
+            Remove
+          </button>
+        </div>
+      ))}
+      <button
+        type="button"
+        onClick={() => onChange([...rows, { item: '', quantity: '' }])}
+        className="rounded-md border border-[var(--border)] bg-white px-3 py-1 text-sm font-medium hover:bg-slate-50"
+      >
+        Add item
+      </button>
+    </div>
   );
 }

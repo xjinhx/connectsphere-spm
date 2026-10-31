@@ -1,4 +1,5 @@
 import { z } from 'zod';
+import { equipmentRequirementsShape, venueRequirementsShape } from '@/domain/event-request/schema';
 
 /**
  * SCRUM-187 — Request a change and track its outcome.
@@ -60,6 +61,12 @@ export const CHANGE_REQUEST_STATUS_LABELS: Record<ChangeRequestStatus, string> =
   rejected: 'Rejected',
 };
 
+/** SCRUM-274: the list fields' own rules, from the event request schema. */
+const PROPOSED_LIST_SCHEMAS: Partial<Record<SelectableChangeRequestField, z.ZodTypeAny>> = {
+  accessibilityFeatureIds: venueRequirementsShape.accessibilityFeatureIds,
+  equipmentItems: equipmentRequirementsShape.equipmentItems,
+};
+
 /**
  * AC1 — "selecting each field to change, entering its proposed value and
  * giving a reason". One reason covers every field selected in the request
@@ -83,6 +90,22 @@ export const RaiseChangeRequestInputSchema = z.object({
         .refine((entry) => entry.proposedValue !== null && entry.proposedValue !== undefined, {
           message: 'Give the new value for each selected field.',
           path: ['proposedValue'],
+        })
+        // SCRUM-274: the two list fields are checked the same way the event
+        // request form checks them (accessibility features chosen from the
+        // list; equipment items named, a whole quantity above 0, no repeats),
+        // so a proposal can only hold what the event itself could hold.
+        .superRefine((entry, ctx) => {
+          const listSchema = PROPOSED_LIST_SCHEMAS[entry.field];
+          if (!listSchema || entry.proposedValue === null || entry.proposedValue === undefined) return;
+          const parsed = listSchema.safeParse(entry.proposedValue);
+          if (!parsed.success) {
+            ctx.addIssue({
+              code: z.ZodIssueCode.custom,
+              message: parsed.error.issues[0]?.message ?? 'Give a valid value for this field.',
+              path: ['proposedValue'],
+            });
+          }
         }),
     )
     .min(1, 'Select at least one field to change.')

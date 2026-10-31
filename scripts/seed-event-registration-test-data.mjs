@@ -1,5 +1,6 @@
 // Seeds the data for SCRUM-181's manual run (TC-181-01 to TC-181-18), one
-// event per registration period the test case sheet names. Periods are set
+// event per registration period the test case sheet names, and for SCRUM-270's
+// (TC-270-nn): a Cancelled and a Completed event with their periods open. Periods are set
 // relative to today (D in the sheet), so the run works on any day. Run after
 // `npm run db:reset` and `npm run seed:users`:
 //
@@ -8,8 +9,9 @@
 // It prints each event's page address (/register-events/<id>): listing the
 // events open for registration is another story's, so open them by address.
 //
-// DUMMY(SCRUM-185) D-22: the registration period is set here, not by the
-// coordinator's form (SCRUM-185 AC5).
+// The registration period is set here as test data, relative to today. In the
+// app the event's assigned coordinator sets it on the event's registration
+// page (SCRUM-185 AC5), which replaced dummy D-22.
 //
 // Safe to run again: it deletes and recreates only the events it made (matched
 // by their description), which also clears their registrations, so it doubles
@@ -109,6 +111,10 @@ const EVENTS = [
   // is on the same date as the Client Appreciation Night and overlaps it.
   ['Product Launch Briefing', -3, 5, 'TC-181-17, 18 (pre-registered)', { start_time: '10:00', end_time: '12:00' }],
   ['Partner Networking Lunch', -3, 5, 'TC-181-17 (pre-registered)', { proposed_date: singaporeDate(13) }],
+  // SCRUM-270: created Confirmed like the rest, then cancelled or completed below.
+  ['Year-End Gala (cancelled)', -3, 5, 'TC-270-01, 03, 06 (cancelled)', { proposed_date: singaporeDate(30) }],
+  ['Year-End Gala (cancelled, registered)', -3, 5, 'TC-270-05 (cancelled, pre-registered)', { proposed_date: singaporeDate(30) }],
+  ['Annual Dinner (completed)', -3, 5, 'TC-270-02, 04 (completed)', { proposed_date: singaporeDate(2) }],
 ];
 
 const now = new Date().toISOString();
@@ -124,8 +130,8 @@ const rows = EVENTS.map(([name, start, end, , extra]) => ({
   registration_start_date: singaporeDate(start),
   registration_end_date: singaporeDate(end),
   // Since SCRUM-182 an event with no capacity is refused as full, so every
-  // event here has one. DUMMY(SCRUM-185) D-24: set here, not by the
-  // coordinator's form (SCRUM-185 AC5).
+  // event here has one. Test data: in the app the assigned coordinator sets
+  // it on the event's registration page (SCRUM-185 AC5, which replaced D-24).
   registration_capacity: 20,
   submitted_at: now,
   decision: 'approved',
@@ -155,10 +161,29 @@ check(
   await supabase.from('event_registration').insert([
     registration('Product Launch Briefing', attendee, 'Tan Mei Ling', 'attendee@example.com'),
     registration('Partner Networking Lunch', attendee, 'Tan Mei Ling', 'attendee@example.com'),
+    registration('Year-End Gala (cancelled, registered)', attendee, 'Tan Mei Ling', 'attendee@example.com'),
     ...fillers.map((id, i) =>
       registration(`${NIGHT} (last place)`, id, `Filler Attendee ${i + 1}`, `registration-filler-${i + 1}@example.com`),
     ),
   ]),
+);
+
+// --- SCRUM-270: cancelled and completed after the registrations above ---------
+// Cancelling is SCRUM-105's and completing SCRUM-104's; this writes the
+// status each sets.
+check(
+  'cancel the galas',
+  await supabase
+    .from('event_request')
+    .update({ status: 'cancelled' })
+    .in('id', [idOf('Year-End Gala (cancelled)'), idOf('Year-End Gala (cancelled, registered)')]),
+);
+check(
+  'complete the dinner',
+  await supabase
+    .from('event_request')
+    .update({ status: 'completed', completed_at: now })
+    .eq('id', idOf('Annual Dinner (completed)')),
 );
 
 // --- Summary ----------------------------------------------------------------

@@ -44,6 +44,8 @@ export const NOTIFICATION_TYPES = [
   // SCRUM-187 AC1: the assigned coordinator, told the organiser raised a
   // change request on their event.
   'change_requested',
+  // SCRUM-105 AC4, AC6: an event was cancelled and will not take place.
+  'event_cancelled',
   // SCRUM-190 AC6: the organiser who raised it, told their change request
   // was approved.
   'change_request_approved',

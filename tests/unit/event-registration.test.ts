@@ -9,8 +9,8 @@ import { formatDayMonthYear, todayInSingapore } from '@/domain/shared/dates';
  * service in tests/unit/event-registration-service.test.ts and against the
  * database in tests/integration/register-for-event.test.ts.
  *
- * Test case IDs are from SCRUM-181-test-cases.xlsx (TC-181-nn). "Today" is
- * 30/10/2026, Singapore time.
+ * Test case IDs are from the ConnectSphere_TestCases_Sprint4 workbook,
+ * SCRUM-181 tab (TC-181-nn). "Today" is 30/10/2026, Singapore time.
  */
 
 const VALID = { fullName: 'Tan Mei Ling', email: 'attendee@example.com', contactNumber: '+65 9123 4567' };
@@ -108,8 +108,9 @@ describe('dates shown to users', () => {
 
 /**
  * SCRUM-182 Refuse registration once the event is full (Jira, authoritative).
- * The full check, by test case (SCRUM-182-test-cases.xlsx, TC-182-nn); the
- * same rule in SQL runs in tests/integration/refuse-full-registration.test.ts.
+ * The full check, by test case (ConnectSphere_TestCases_Sprint4 workbook,
+ * SCRUM-182 tab, TC-182-nn); the same rule in SQL runs in
+ * tests/integration/refuse-full-registration.test.ts.
  */
 describe('SCRUM-182 whether the event is full', () => {
   it('TC-182-03 19 of 20 is not full; 20 of 20 is full', () => {

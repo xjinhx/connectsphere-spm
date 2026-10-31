@@ -501,12 +501,13 @@ switch them the next time they edit those files.
 - **To replace:** once a booking can be released or cancelled through the app,
   re-run SCRUM-155 AC3 (TC-155-04 and TC-155-05) through that action, then
   remove the marker.
-- **Status:** Release half replaced (SCRUM-231, branch
+- **Status:** **Replaced.** Release half by SCRUM-231 (branch
   `venue-booking-release`): a booking is released through the app, so
-  TC-155-04 no longer needs the helper; re-check it that way. Still active for
-  cancellation: nothing cancels an event's bookings until SCRUM-105, so
-  TC-155-05 still removes the booking by hand. The marker now names
-  SCRUM-105.
+  TC-155-04 no longer needs the helper. Cancellation half by SCRUM-105 (branch
+  `cancel-event`): cancelling an event releases its bookings ("Event
+  cancelled", who and when), so TC-155-05 is re-run by cancelling the event
+  through the app instead of deleting its booking (TC-105-19). Marker
+  removed.
 
 ### D-16 — getVenueCommitments returns a fixture booking
 
@@ -745,8 +746,10 @@ switch them the next time they edit those files.
 - **Waiting on:** SCRUM-185 AC5 (the coordinator sets the registration start
   and end dates)
 - **Where:** `scripts/seed-event-registration-test-data.mjs` — the header
-  comment (`DUMMY(SCRUM-185) D-22`), and the `registration_start_date` /
-  `registration_end_date` it writes for each event
+  comment (its D-22 marker, removed when SCRUM-185 replaced it), and the `registration_start_date` /
+  `registration_end_date` it writes for each event. Also
+  `scripts/seed-scrum180.mjs` (SCRUM-180, branch `browse-open-events`), the
+  same way, for the events Open events lists or leaves out (TC-180-01 to 05)
 - **What is real and what is faked:** the period is real. The columns
   `event_request.registration_start_date` and `registration_end_date` (dates,
   both inclusive, added by SCRUM-181's migration
@@ -759,8 +762,29 @@ switch them the next time they edit those files.
 - **To replace:** SCRUM-185 AC5's form saves to the same two columns (both
   together; the table refuses one without the other, or an end before the
   start). Set the periods through the form for TC-181-05 to TC-181-12 instead
-  of the seed, remove the marker, and re-run those test cases.
-- **Status:** Active.
+  of the seed, remove the marker, and re-run those test cases. Then the same
+  for SCRUM-180's TC-180-01 to TC-180-05, which read the same two columns
+  (Open events lists an event while today is inside its period).
+- **Limit which events can have a period (SCRUM-180 review, PR #154):** Open
+  events leaves out only Cancelled and Completed events (the PO's reading of
+  SCRUM-180 AC1, 28/10/2026), so it lists any other event whose period
+  includes today: a Draft, Submitted, Rejected or Planning one too. That
+  cannot happen while only the seed sets a period. When SCRUM-185 AC5's form
+  replaces the seed, it must let a period be set only on an event that is
+  going ahead (SCRUM-185 allows editing only while the event is Confirmed),
+  or Open events needs a list of the statuses it may show instead.
+- **Status:** Replaced by SCRUM-185 AC5 (branch `scrum-185-registration-list`,
+  27 Oct 2026). The assigned coordinator of a Confirmed event sets the start
+  date, end date and capacity on `/events/<id>/registrations`, which saves to
+  the same columns. The seed scripts (`seed-event-registration-test-data.mjs`,
+  `seed-scrum180.mjs`) still set periods as test data, without the marker. TC-181-05 to TC-181-13 and `tests/integration/register-for-event.test.ts`
+  re-run and pass; `tests/integration/registration-list.test.ts` TC-185-08
+  checks 181's attendee page reads the period the form saved. The limit above
+  is met: the form saves a period only while the event is Confirmed
+  (`acceptsRegistrationSettings`, and the update is filtered on
+  `status = 'confirmed'`), so the app gives a period only to an event that is
+  going ahead. SCRUM-180's automated TC-180-01 to TC-180-05 re-run after
+  merging `main` (31 Oct) and pass.
 
 ### D-23 — Places always remain
 
@@ -805,10 +829,10 @@ switch them the next time they edit those files.
   registration dates). AC6 only refuses a capacity above the largest of the
   event's venue capacities; it does not fill it in (PO, 25/10/2026).
 - **Where:** `scripts/seed-scrum182.mjs` — the header comment
-  (`DUMMY(SCRUM-185) D-24`) and the `registration_capacity` it writes per
+  (its D-24 marker, removed when SCRUM-185 replaced it) and the `registration_capacity` it writes per
   event; `scripts/seed-event-registration-test-data.mjs` — the
   `registration_capacity: 20` it now writes for SCRUM-181's events
-  (`DUMMY(SCRUM-185) D-24`)
+  (marker likewise removed)
 - **What is real and what is faked:** the count is real.
   `event_has_places_remaining` and `isEventFull` compare the event's
   Registered rows with `event_request.registration_capacity` (integer, null
@@ -822,7 +846,13 @@ switch them the next time they edit those files.
   TC-182-01 to TC-182-12 instead of the seed (TC-182-10 still needs the
   capacity lowered after three have registered), remove both markers, and
   re-run those cases.
-- **Status:** Active.
+- **Status:** Replaced by SCRUM-185 AC5 (branch `scrum-185-registration-list`,
+  28 Oct 2026). The assigned coordinator of a Confirmed event enters the
+  capacity with the two dates on `/events/<id>/registrations`; AC6 refuses one
+  above the largest of the event's venue capacities. A capacity can be lowered
+  later through the same form (TC-182-10's step). Both seed scripts still set
+  capacities as test data, without the marker. `tests/integration/refuse-full-registration.test.ts`
+  (TC-182-01 to 12) re-run and pass.
 
 ### D-25 — A registration is withdrawn by hand
 

@@ -27,8 +27,10 @@ import { EventSchedulePanel } from '@/components/event-request/EventSchedulePane
 import { getEventSchedule } from '@/domain/significant-change/service';
 import { ConfirmEventButton } from '@/components/event-request/ConfirmEventButton';
 import { CompleteEventButton } from '@/components/event-request/CompleteEventButton';
-import { canBeCompleted, canBeConfirmed, hasEnded } from '@/domain/event-status/policy';
-import { getEventCompletion } from '@/domain/event-status/service';
+import { CancelEventForm } from '@/components/event-request/CancelEventForm';
+import { canBeCancelled, canBeCompleted, canBeConfirmed, formatCancelledAt, hasEnded } from '@/domain/event-status/policy';
+import { getEventCancellation, getEventCompletion } from '@/domain/event-status/service';
+import { acceptsRegistrationSettings, hasRegistrationList } from '@/domain/registration-list/policy';
 import {
   describeAccessibility,
   describeEquipment,
@@ -208,6 +210,8 @@ export default async function ReviewEventRequestPage({
   // SCRUM-104 — the end date decides whether Mark as completed is offered
   // (AC4), and a completed event says when and by whom (AC1, AC2).
   const completion = await getEventCompletion(request.id);
+  // SCRUM-105 AC1 — a cancelled event says why, by whom and when.
+  const cancellation = request.status === 'cancelled' ? await getEventCancellation(request.id) : null;
 
   return (
     <main className="mx-auto max-w-2xl px-4 py-8">
@@ -225,6 +229,14 @@ export default async function ReviewEventRequestPage({
           Completed on {formatDayMonthYear(completion.completed.on)}{' '}
           {completion.completed.byName === null ? 'by the system' : `by ${completion.completed.byName}`}
         </p>
+      ) : null}
+      {cancellation ? (
+        <div className="mt-3 rounded-md border border-[var(--border)] bg-[var(--surface)] px-3 py-2 text-sm">
+          <p>
+            Cancelled on {formatCancelledAt(cancellation.at)} by {cancellation.byName}
+          </p>
+          <p className="mt-1 whitespace-pre-wrap">Reason: {cancellation.reason}</p>
+        </div>
       ) : null}
 
       {/* SCRUM-151 AC3: a confirmed booking on a slot Venue Staff have since
@@ -363,6 +375,15 @@ export default async function ReviewEventRequestPage({
         </section>
       ) : null}
 
+      {/* SCRUM-105 AC1, AC2 — cancel the event, with a reason. Submitted to
+          Preparation, and only for the assigned coordinator (canManage), so the
+          Lead viewing read-only never sees it. */}
+      {request.canManage && canBeCancelled(request.status) ? (
+        <section className="mt-6 rounded-lg border border-[var(--border)] bg-[var(--surface)] p-4">
+          <CancelEventForm requestId={request.id} />
+        </section>
+      ) : null}
+
       {/* SCRUM-231 AC1-AC4 — the event's venue bookings, each released on its
           own with a reason. Releasing an affected one closes the outstanding
           action at the top of the page. */}
@@ -431,6 +452,27 @@ export default async function ReviewEventRequestPage({
             className="mt-3 inline-block rounded-md bg-[var(--brand)] px-4 py-2 text-sm font-medium text-white hover:bg-[var(--brand-dark)]"
           >
             Equipment request
+          </Link>
+        </section>
+      ) : null}
+
+      {/* SCRUM-185 — the event's registration page: the list and counts
+          (AC1), and the start date, end date and capacity (AC5), set while the
+          event is Confirmed. Offered from Confirmed on (hasRegistrationList),
+          when registration can be open, and kept afterwards for the list. */}
+      {hasRegistrationList(request.status) ? (
+        <section className="mt-6 rounded-lg border border-[var(--border)] bg-[var(--surface)] p-4">
+          <h2 className="text-sm font-semibold">Registration</h2>
+          <p className="mt-1 text-sm text-[var(--text-muted)]">
+            {acceptsRegistrationSettings(request.status)
+              ? 'Set when attendees can register and how many places the event has, and see who has registered.'
+              : 'See who has registered and how many places remain.'}
+          </p>
+          <Link
+            href={`/events/${request.id}/registrations`}
+            className="mt-3 inline-block rounded-md bg-[var(--brand)] px-4 py-2 text-sm font-medium text-white hover:bg-[var(--brand-dark)]"
+          >
+            Registration
           </Link>
         </section>
       ) : null}

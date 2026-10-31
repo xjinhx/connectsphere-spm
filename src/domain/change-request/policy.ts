@@ -45,10 +45,23 @@ export function canRaiseChangeRequestFor(
  * as the stored YYYY-MM-DD; a missing value is shown as "—". Every other
  * value is shown as before.
  */
-export function formatChangeRequestValue(field: SelectableChangeRequestField, value: unknown): string {
+export function formatChangeRequestValue(
+  field: SelectableChangeRequestField,
+  value: unknown,
+  names: ChangeRequestValueNames = {},
+): string {
   if (value === null || value === undefined) return '—';
   if (field === 'proposedDate' && typeof value === 'string' && isISODate(value)) {
     return formatDayMonthYear(value);
+  }
+  // SCRUM-274: the two list fields read by name, not as ids or [object Object].
+  if (field === 'accessibilityFeatureIds' && Array.isArray(value)) {
+    if (value.length === 0) return 'None';
+    return value.map((id) => names.accessibilityFeatures?.get(String(id)) ?? 'Unknown feature').join(', ');
+  }
+  if (field === 'equipmentItems' && Array.isArray(value)) {
+    if (value.length === 0) return 'None';
+    return value.map(describeEquipmentLine).join(', ');
   }
   return String(value);
 }
@@ -176,4 +189,16 @@ export function attendeeChangeMessage(after: AttendeeFacingDetails): string {
   const when = after.proposedDate ? formatDayMonthYear(after.proposedDate) : 'a date still to be confirmed';
   const times = after.startTime && after.endTime ? `, ${after.startTime}–${after.endTime}` : '';
   return `"${after.name}", which you registered for, has changed. It is now on ${when}${times}.`;
+}
+
+/** SCRUM-274: names for values stored as ids, e.g. accessibility feature id → "Step-free access". */
+export interface ChangeRequestValueNames {
+  accessibilityFeatures?: ReadonlyMap<string, string>;
+}
+
+/** An equipment line, stored or proposed, as "Projector P-100 × 2". */
+function describeEquipmentLine(line: unknown): string {
+  if (typeof line !== 'object' || line === null) return String(line);
+  const { item, quantity } = line as { item?: unknown; quantity?: unknown };
+  return `${String(item ?? '—')} × ${String(quantity ?? '—')}`;
 }

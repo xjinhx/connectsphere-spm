@@ -52,6 +52,12 @@ export function canAccessNotification(recipientId: string, actorId: string): boo
  * coordinator sees the status, who set it, when and the reason (SCRUM-166
  * AC2, AC4) - a page open to them (canViewEquipmentRequest), unlike the
  * organiser's /events/<id>.
+ *
+ * SCRUM-105 adds 'event_cancelled', sent to the organiser, the staff who
+ * actioned the event's arrangements and its registered attendees: no one event
+ * page is open to all of them, and the message itself says everything (that it
+ * will not take place, and for Venue Staff which times are free). It links to
+ * the notifications page itself.
  */
 const COORDINATOR_FACING_TYPES = new Set<string>(['coordinator_assigned', 'venue_booking_update']);
 const LEAD_FACING_TYPES = new Set<string>(['request_submitted']);
@@ -60,19 +66,16 @@ const EQUIPMENT_REQUEST_TYPES = new Set<string>(['equipment_unable_to_fulfil']);
 // SCRUM-190 AC5: sent to attendees, who cannot open /events/<id>; their own
 // page for the event is /register-events/<id> (SCRUM-180 AC3).
 const ATTENDEE_FACING_TYPES = new Set<string>(['event_details_changed']);
-// SCRUM-190 AC4: sent to the Venue Staff and Technical Support Staff who
-// actioned an arrangement. No one event page is open to both (Venue Staff
-// have none at all), so the message says what changed on each arrangement
-// and links to the notifications page itself - the same as SCRUM-105's
-// 'event_cancelled' (PR #163), which uses this same set.
-const SELF_CONTAINED_TYPES = new Set<string>(['arrangement_needs_review']);
+// SCRUM-190 AC4 adds 'arrangement_needs_review', sent to the Venue Staff and
+// Technical Support Staff who actioned an arrangement. No one event page is
+// open to both (Venue Staff have none at all), so, like SCRUM-105's
+// 'event_cancelled' above, the message says what changed on each arrangement
+// and it links to the notifications page itself.
+const SELF_CONTAINED_TYPES = new Set<string>(['event_cancelled', 'arrangement_needs_review']);
 
 export function notificationHref(notification: { type: string; eventRequestId: string }): string {
   if (ATTENDEE_FACING_TYPES.has(notification.type)) {
     return `/register-events/${notification.eventRequestId}`;
-  }
-  if (SELF_CONTAINED_TYPES.has(notification.type)) {
-    return '/notifications';
   }
   if (LEAD_FACING_TYPES.has(notification.type)) {
     return `/assignment-queue/${notification.eventRequestId}`;
@@ -82,6 +85,9 @@ export function notificationHref(notification: { type: string; eventRequestId: s
   }
   if (OWN_EVENTS_LIST_TYPES.has(notification.type)) {
     return '/my-events';
+  }
+  if (SELF_CONTAINED_TYPES.has(notification.type)) {
+    return '/notifications';
   }
   return COORDINATOR_FACING_TYPES.has(notification.type)
     ? `/events/${notification.eventRequestId}/review`
