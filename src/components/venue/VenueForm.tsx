@@ -14,7 +14,7 @@ import {
   type VenueFormOptions,
 } from '@/domain/venues/schema';
 import { formatSingaporeDate } from '@/domain/shared/dates';
-import { END_TIME_OPTIONS, START_TIME_OPTIONS } from '@/domain/shared/times';
+import { START_TIME_OPTIONS, endTimesAfter, keepEndAfterStart } from '@/domain/shared/times';
 import { capacityToSend } from './capacityInput';
 
 /**
@@ -114,7 +114,8 @@ export default function VenueForm({
   const [turnaroundMinutes, setTurnaroundMinutes] = useState(venue ? String(venue.turnaroundMinutes) : '0');
 
   // SCRUM-239 AC1: opening hours in 15-minute steps. A new venue starts with
-  // the hours all three slots used to cover.
+  // the hours all three slots used to cover. SCRUM-266: closing offers only
+  // times after opening, and is cleared when opening moves to or past it.
   const [opensAt, setOpensAt] = useState(venue?.opensAt ?? '07:00');
   const [closesAt, setClosesAt] = useState(venue?.closesAt ?? '24:00');
 
@@ -389,7 +390,11 @@ export default function VenueForm({
               id="venue-opens-at"
               className={inputClass}
               value={opensAt}
-              onChange={(event) => setOpensAt(event.target.value)}
+              onChange={(event) => {
+                const opens = event.target.value;
+                setOpensAt(opens);
+                setClosesAt((closes) => keepEndAfterStart(opens, closes));
+              }}
             >
               {START_TIME_OPTIONS.map((time) => (
                 <option key={time} value={time}>
@@ -409,7 +414,9 @@ export default function VenueForm({
               value={closesAt}
               onChange={(event) => setClosesAt(event.target.value)}
             >
-              {END_TIME_OPTIONS.map((time) => (
+              {/* Shown once a moved opening time has cleared the closing time. */}
+              <option value="">--:--</option>
+              {endTimesAfter(opensAt).map((time) => (
                 <option key={time} value={time}>
                   {time}
                 </option>

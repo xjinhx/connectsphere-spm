@@ -2,7 +2,7 @@
 
 import { useState } from 'react';
 import { useRouter } from 'next/navigation';
-import { END_TIME_OPTIONS, START_TIME_OPTIONS } from '@/domain/shared/times';
+import { START_TIME_OPTIONS, endTimesAfter, keepEndAfterStart } from '@/domain/shared/times';
 import { ROOM_LAYOUTS, ROOM_LAYOUT_LABELS } from '@/domain/venues/schema';
 import type { VenueBookingLineErrors, VenueBookingRequestErrorDetails } from '@/domain/venue-booking/schema';
 
@@ -97,7 +97,8 @@ function FieldError({ id, messages }: { id: string; messages: string[] | undefin
  * every requested date is carried on the one request"). Each line has a start
  * and an end time chosen from the 15-minute options SCRUM-238's event form
  * uses (START_TIME_OPTIONS / END_TIME_OPTIONS), so a time off the unit cannot
- * be picked.
+ * be picked. SCRUM-266: a line's end list offers only times after its start,
+ * and the end is cleared when the start moves to or past it.
  *
  * The first line starts as the event's own date and times (SCRUM-238), and a
  * line added later starts with the event's times and no date; the coordinator
@@ -285,7 +286,9 @@ export function RequestVenueBookingForm({
                   <select
                     id={`${idPrefix}-start-${index}`}
                     value={line.start}
-                    onChange={(event) => updateLine(index, { start: event.target.value })}
+                    onChange={(event) =>
+                      updateLine(index, { start: event.target.value, end: keepEndAfterStart(event.target.value, line.end) })
+                    }
                     aria-invalid={lineErrors.start ? true : undefined}
                     aria-describedby={lineErrors.start ? `${idPrefix}-start-${index}-error` : undefined}
                     className="mt-1 rounded-md border border-[var(--border)] bg-[var(--surface)] px-3 py-2 text-sm"
@@ -311,7 +314,7 @@ export function RequestVenueBookingForm({
                     className="mt-1 rounded-md border border-[var(--border)] bg-[var(--surface)] px-3 py-2 text-sm"
                   >
                     <option value="">Choose</option>
-                    {END_TIME_OPTIONS.map((time) => (
+                    {endTimesAfter(line.start).map((time) => (
                       <option key={time} value={time}>
                         {time}
                       </option>

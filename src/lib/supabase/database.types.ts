@@ -489,6 +489,9 @@ export type Database = {
           accessibility_required: boolean | null
           assigned_at: string | null
           assigned_by: string | null
+          cancellation_reason: string | null
+          cancelled_at: string | null
+          cancelled_by: string | null
           clarification_note: string | null
           clarification_requested_at: string | null
           clarification_requested_by: string | null
@@ -533,6 +536,9 @@ export type Database = {
           accessibility_required?: boolean | null
           assigned_at?: string | null
           assigned_by?: string | null
+          cancellation_reason?: string | null
+          cancelled_at?: string | null
+          cancelled_by?: string | null
           clarification_note?: string | null
           clarification_requested_at?: string | null
           clarification_requested_by?: string | null
@@ -577,6 +583,9 @@ export type Database = {
           accessibility_required?: boolean | null
           assigned_at?: string | null
           assigned_by?: string | null
+          cancellation_reason?: string | null
+          cancelled_at?: string | null
+          cancelled_by?: string | null
           clarification_note?: string | null
           clarification_requested_at?: string | null
           clarification_requested_by?: string | null
@@ -1553,6 +1562,7 @@ export type Database = {
       }
       venues: {
         Row: {
+          address: string | null
           closes_at: string
           created_at: string
           id: string
@@ -1569,6 +1579,7 @@ export type Database = {
           updated_at: string
         }
         Insert: {
+          address?: string | null
           closes_at: string
           created_at?: string
           id?: string
@@ -1585,6 +1596,7 @@ export type Database = {
           updated_at?: string
         }
         Update: {
+          address?: string | null
           closes_at?: string
           created_at?: string
           id?: string
@@ -1645,6 +1657,14 @@ export type Database = {
       }
     }
     Functions: {
+      cancel_event: {
+        Args: {
+          p_cancelled_by: string
+          p_event_request_id: string
+          p_reason: string
+        }
+        Returns: Json
+      }
       change_event_schedule: {
         Args: {
           p_accessibility_notes: string

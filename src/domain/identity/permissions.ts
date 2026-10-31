@@ -88,6 +88,10 @@ export const ACTIONS = [
   // Organiser responsible for the event (AC3: not a colleague), checked in the
   // service.
   'registration_list_export',
+  // SCRUM-105 — "Cancel an event at any stage". The event's assigned
+  // coordinator only (AC2: never the Event Coordinator Lead), checked in the
+  // service.
+  'event_cancellation',
 ] as const;
 
 export type Action = (typeof ACTIONS)[number];
@@ -129,6 +133,8 @@ export const ROLE_PERMISSIONS: Record<Role, readonly Action[]> = {
     'event_completion',
     // SCRUM-185 AC5: only the event's assigned coordinator.
     'registration_settings_edit',
+    // SCRUM-105: cancel their event at any stage, with a reason.
+    'event_cancellation',
   ],
   operations_manager: ['venue_catalogue_view', 'coordinator_assignment', 'account_role_management'],
   venue_staff: ['venue_administration', 'venue_catalogue_view'],
