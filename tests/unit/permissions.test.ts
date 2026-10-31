@@ -18,7 +18,8 @@ describe('getPermittedActions', () => {
     expect(actions).not.toContain('venue_administration');
     expect(actions).not.toContain('equipment_administration');
     expect(actions).not.toContain('coordinator_assignment');
-    expect(actions).toEqual(['event_request_creation']);
+    // SCRUM-185 AC2: their own event's registration list export.
+    expect(actions).toEqual(['event_request_creation', 'registration_list_export']);
   });
 
   // SCRUM-181 gave the attendee its first action, so the attendee is now
