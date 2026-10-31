@@ -58,7 +58,7 @@ export const NO_PLACES_REMAINING = 'There are no places remaining for this event
  * decide as before.
  *
  * Restated in SQL by register_for_event
- * (20261029073301_refuse_registration_final_event.sql), which checks it again
+ * (20261031034916_refuse_registration_final_event.sql), which checks it again
  * with the event row locked; change one, change the other.
  */
 export function finalEventStatus(eventStatus: string): FinalEventStatus | null {
