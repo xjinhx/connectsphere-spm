@@ -1,6 +1,22 @@
-import { EventRequestIdSchema } from './schema';
-import { canBeConfirmed, canEnterPlanning, canTransition, confirmationStatusRefusal, needsSafetyApproval } from './policy';
+import { CancelEventInputSchema, EventRequestIdSchema } from './schema';
+import {
+  NOT_ENDED_YET,
+  canBeCancelled,
+  canBeCompleted,
+  canBeConfirmed,
+  cancellationNotices,
+  cancellationStatusRefusal,
+  canEnterPlanning,
+  canTransition,
+  completionStatusRefusal,
+  confirmationStatusRefusal,
+  needsSafetyApproval,
+} from './policy';
 import { fetchEventRequestById, markEventRequestPlanning, markEventRequestStatus } from '@/lib/supabase/eventRequests';
+import { fetchEventCompletion, fetchEventEndDate, markEventCompleted, runCompletionCheck } from '@/lib/supabase/eventCompletion';
+import { fetchEventCancellation, runCancelEvent } from '@/lib/supabase/eventCancellation';
+import { fetchProfileNames } from '@/lib/supabase/profiles';
+import { toSingaporeISODate, type ISODate } from '@/domain/shared/dates';
 import type { EventRequestRow } from '@/lib/supabase/eventRequests';
 import { fetchEventBookingRequests, type EventBookingRequestRow } from '@/lib/supabase/venueBookingRequests';
 import type { EventRequestStatus } from '@/domain/event-request/schema';
@@ -228,4 +244,206 @@ export async function confirmEvent(eventRequestId: string, actor: Actor): Promis
   });
 
   return { id: event.id, status: 'confirmed' };
+}
+
+export interface EventCompletion {
+  /** The last day of the event's confirmed bookings, else its proposed date; null with neither. */
+  endDate: ISODate | null;
+  /** AC1, AC2: the Singapore date it was completed, and by whom; byName null is the completion check. */
+  completed: { on: ISODate; byName: string | null } | null;
+}
+
+/**
+ * SCRUM-104 — what the event page needs: the end date, to decide whether to
+ * offer Mark as completed (AC4), and who completed it and when (AC1, AC2).
+ * The page has already checked the actor may see the event.
+ */
+export async function getEventCompletion(eventRequestId: string): Promise<EventCompletion> {
+  const [endDate, completion] = await Promise.all([fetchEventEndDate(eventRequestId), fetchEventCompletion(eventRequestId)]);
+  if (endDate.error) throw new ValidationError("The event's end date could not be read.", endDate.error.message);
+  if (completion.error) throw new ValidationError("The event's completion could not be read.", completion.error.message);
+
+  const completedAt = completion.data?.completed_at ?? null;
+  const completedBy = completion.data?.completed_by ?? null;
+  let byName: string | null = null;
+  if (completedBy !== null) {
+    const { data } = await fetchProfileNames([completedBy]);
+    const name = data?.[0]?.full_name;
+    byName = name && name.trim() !== '' ? name : 'An unnamed account';
+  }
+
+  return {
+    endDate: endDate.data ?? null,
+    completed: completedAt === null ? null : { on: toSingaporeISODate(new Date(completedAt)), byName },
+  };
+}
+
+export interface CompletionOutcome {
+  id: string;
+  status: EventRequestStatus;
+}
+
+/**
+ * SCRUM-104 AC1, AC4, AC5 — the event's assigned coordinator marks it
+ * completed (TC-104-09), from Preparation only (AC5), once its end date has
+ * passed (AC4). The time and the coordinator are recorded (AC1).
+ *
+ * Checked in the same order as confirmEvent: the coordinator first, then the
+ * status. The end date is checked by complete_event itself, with the event
+ * locked, so the completion check running at the same moment cannot complete
+ * it twice.
+ */
+export async function completeEvent(eventRequestId: string, actor: Actor): Promise<CompletionOutcome> {
+  const parsedId = EventRequestIdSchema.safeParse(eventRequestId);
+  if (!parsedId.success) throw new NotFoundError('Event request');
+
+  const { data, error } = await fetchEventRequestById(parsedId.data);
+  if (error) throw new ValidationError('The event request could not be read.', error.message);
+  if (!data) throw new NotFoundError('Event request');
+  const event = data as unknown as EventRequestRow;
+
+  if (!isCurrentCoordinator(event.coordinator_id, actor.userId)) {
+    throw new ForbiddenError('This event is not assigned to you.');
+  }
+  if (!canBeCompleted(event.status)) throw new ConflictError(completionStatusRefusal(event.status));
+
+  const { data: outcome, error: writeError } = await markEventCompleted(event.id, actor.userId);
+  if (writeError) throw new ValidationError('The event could not be marked completed.', writeError.message);
+  if (outcome === 'not_ended') throw new ConflictError(NOT_ENDED_YET);
+  // It left Preparation between the read above and the lock.
+  if (outcome !== 'completed') throw new ConflictError('This event is no longer in Preparation. Reload the page.');
+
+  return { id: event.id, status: 'completed' };
+}
+
+/**
+ * SCRUM-104 AC2, AC3 — run the completion check once, as pg_cron does daily.
+ * The check itself is complete_past_events, so the timer and the rule live in
+ * one place; this is for tests and the seed's completion-check. Resolves to
+ * how many events it completed.
+ */
+export async function completePastEvents(today?: ISODate): Promise<number> {
+  const { data, error } = await runCompletionCheck(today);
+  if (error || data === null) throw new ValidationError('The completion check could not run.', error?.message);
+  return data;
+}
+
+// -----------------------------------------------------------------------------
+// SCRUM-105 — Cancel an event at any stage
+// -----------------------------------------------------------------------------
+
+export interface CancellationOutcome {
+  id: string;
+  status: EventRequestStatus;
+}
+
+/** What cancel_event returns (20261030070000_cancel_event.sql). */
+interface CancelEventResult {
+  outcome: 'cancelled' | 'not_cancellable' | 'not_found';
+  status?: EventRequestStatus;
+  organiser_id?: string;
+  bookings?: { venue_name: string; date: string; start_time: string; end_time: string; approved_by: string | null }[];
+  reservations?: { equipment_name: string; quantity: number; reserved_by: string | null }[];
+  attendee_ids?: string[];
+}
+
+/**
+ * SCRUM-105 — the event's assigned coordinator cancels it, with a reason.
+ *
+ * AC1: from Submitted to Preparation; the status becomes Cancelled and the
+ * reason, the coordinator and the time are recorded.
+ * AC2: anyone but the assigned coordinator is refused, the Event Coordinator
+ * Lead included (the route refuses any role without event_cancellation first).
+ * AC3, AC6: cancel_event releases every confirmed booking ("Event cancelled",
+ * who, when) and every reserved quantity, and rejects any line still Pending,
+ * in the same transaction as the cancellation.
+ * AC4, AC6: then the organiser, the staff who actioned each arrangement and
+ * every registered attendee are told (cancellationNotices). Best effort: the
+ * cancellation has already happened, so a failed notification never undoes it.
+ *
+ * Checked in the same order as completeEvent: the reason, then the
+ * coordinator, then the status. The status is checked again by cancel_event
+ * with the event locked.
+ */
+export async function cancelEvent(eventRequestId: string, actor: Actor, input: unknown): Promise<CancellationOutcome> {
+  const parsedId = EventRequestIdSchema.safeParse(eventRequestId);
+  if (!parsedId.success) throw new NotFoundError('Event request');
+
+  const parsedInput = CancelEventInputSchema.safeParse(input);
+  if (!parsedInput.success) {
+    throw new ValidationError(parsedInput.error.issues[0]?.message ?? 'Give a reason for cancelling the event.', parsedInput.error.flatten());
+  }
+  const { reason } = parsedInput.data;
+
+  const { data, error } = await fetchEventRequestById(parsedId.data);
+  if (error) throw new ValidationError('The event request could not be read.', error.message);
+  if (!data) throw new NotFoundError('Event request');
+  const event = data as unknown as EventRequestRow;
+
+  if (!isCurrentCoordinator(event.coordinator_id, actor.userId)) {
+    throw new ForbiddenError('Only the coordinator assigned to this event can cancel it.');
+  }
+  if (!canBeCancelled(event.status)) throw new ConflictError(cancellationStatusRefusal(event.status));
+
+  const { data: raw, error: writeError } = await runCancelEvent(event.id, reason, actor.userId);
+  if (writeError) throw new ValidationError('The event could not be cancelled.', writeError.message);
+  const result = raw as unknown as CancelEventResult;
+  if (result.outcome === 'not_found') throw new NotFoundError('Event request');
+  // It reached a final status between the read above and the lock.
+  if (result.outcome !== 'cancelled') {
+    throw new ConflictError(cancellationStatusRefusal(result.status ?? event.status));
+  }
+
+  const notices = cancellationNotices(
+    { name: event.name, reference: event.reference, reason },
+    {
+      organiserId: result.organiser_id ?? event.organiser_id,
+      bookings: (result.bookings ?? []).map((booking) => ({
+        venueName: booking.venue_name,
+        date: booking.date,
+        startTime: fromDatabaseTime(booking.start_time),
+        endTime: fromDatabaseTime(booking.end_time),
+        approvedBy: booking.approved_by,
+      })),
+      reservations: (result.reservations ?? []).map((reservation) => ({
+        equipmentName: reservation.equipment_name,
+        quantity: reservation.quantity,
+        reservedBy: reservation.reserved_by,
+      })),
+      attendeeIds: result.attendee_ids ?? [],
+    },
+  );
+  await Promise.all(
+    notices.map((notice) =>
+      notifyBestEffort({ recipientId: notice.recipientId, type: 'event_cancelled', eventRequestId: event.id, message: notice.message }),
+    ),
+  );
+
+  return { id: event.id, status: 'cancelled' };
+}
+
+export interface EventCancellation {
+  reason: string;
+  byName: string;
+  /** ISO timestamp; the page shows it as DD/MM/YYYY HH:mm (formatCancelledAt). */
+  at: string;
+}
+
+/**
+ * SCRUM-105 AC1 — why, by whom and when the event was cancelled, for the event
+ * page. Null when it was not cancelled through the app. The page has already
+ * checked the actor may see the event.
+ */
+export async function getEventCancellation(eventRequestId: string): Promise<EventCancellation | null> {
+  const { data, error } = await fetchEventCancellation(eventRequestId);
+  if (error) throw new ValidationError("The event's cancellation could not be read.", error.message);
+  if (!data?.cancelled_at || !data.cancellation_reason || !data.cancelled_by) return null;
+
+  const { data: names } = await fetchProfileNames([data.cancelled_by]);
+  const name = names?.[0]?.full_name;
+  return {
+    reason: data.cancellation_reason,
+    byName: name && name.trim() !== '' ? name : 'An unnamed account',
+    at: data.cancelled_at,
+  };
 }

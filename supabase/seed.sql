@@ -144,3 +144,9 @@ join (values
   ('theatre', 80)
 ) as l (layout, capacity) on true
 where v.name = 'Bugis Old Annex';
+
+-- SCRUM-180 AC3: the event page shows each venue's address. Bugis Old Annex
+-- (retired) is left without one, as a venue with no address recorded.
+update venues set address = '10 Bayfront Avenue, Singapore 018956' where name = 'Marina Bay Ballroom';
+update venues set address = '200 Victoria Street, Singapore 188021' where name = 'Bugis Seminar Room';
+update venues set address = '50 Jurong Gateway Road, Singapore 608549' where name = 'Jurong East Training Room';

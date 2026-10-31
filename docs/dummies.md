@@ -501,12 +501,13 @@ switch them the next time they edit those files.
 - **To replace:** once a booking can be released or cancelled through the app,
   re-run SCRUM-155 AC3 (TC-155-04 and TC-155-05) through that action, then
   remove the marker.
-- **Status:** Release half replaced (SCRUM-231, branch
+- **Status:** **Replaced.** Release half by SCRUM-231 (branch
   `venue-booking-release`): a booking is released through the app, so
-  TC-155-04 no longer needs the helper; re-check it that way. Still active for
-  cancellation: nothing cancels an event's bookings until SCRUM-105, so
-  TC-155-05 still removes the booking by hand. The marker now names
-  SCRUM-105.
+  TC-155-04 no longer needs the helper. Cancellation half by SCRUM-105 (branch
+  `cancel-event`): cancelling an event releases its bookings ("Event
+  cancelled", who and when), so TC-155-05 is re-run by cancelling the event
+  through the app instead of deleting its booking (TC-105-19). Marker
+  removed.
 
 ### D-16 — getVenueCommitments returns a fixture booking
 
@@ -694,10 +695,24 @@ switch them the next time they edit those files.
   SCRUM-254 (branch `tech-support-nav`): Equipment requests, Equipment
   catalogue, Venues; marker removed. The SCRUM-164 tabs (`TechnicalSupportNav`)
   were removed in the same change, since the nav bar now does their job on
-  every page (PO, 22 Oct 2026). **Event Coordinator:** replaced by SCRUM-251
-  (branch `scrum-251-coordinator-nav`): Review queue, My events, Venues,
-  Client organisations, Equipment; marker removed. **Other roles:** still
-  active, waiting on SCRUM-250, 252, 253, 255 and 256.
+  every page (PO, 22 Oct 2026). **Attendee:** replaced by SCRUM-255 (branch
+  `attendee-navigation`): AC2 lists only Open events, which was already the
+  stand-in item, so the entry is unchanged and its marker removed; TC-249-15
+  to 17 and 25 to 27 re-run for the Attendee as TC-255-04. **Event
+  Organiser:** replaced by SCRUM-250 (branch `organiser-navigation`): Event
+  requests, New event request; marker removed. Because `/events/new` sits under
+  `/events`, the header now highlights only the most specific current item
+  (`currentNavHref` beside `isNavItemCurrent` in
+  `src/domain/navigation/policy.ts`, agreed with SCRUM-249's owner); roles
+  whose items don't nest are unaffected. TC-249-15 to 17 and 25 to 27 re-run
+  for the organiser as TC-250-02, 06 and 07. **Safety Officer:** replaced by
+  SCRUM-256 (branch `safety-officer-navigation`): AC2 lists only Safety
+  checks, which was already the stand-in item, so the entry is unchanged and
+  its marker removed; TC-249-15 to 17 and 25 to 27 re-run for the Safety
+  Officer as TC-256-07, 10 and 14. **Event Coordinator:** replaced by SCRUM-251 (branch
+  `scrum-251-coordinator-nav`): Review queue, My events, Venues, Client
+  organisations, Equipment; marker removed. **Other roles:** still active,
+  waiting on SCRUM-252 and 253.
 
 ### D-21 — An equipment reservation is released by hand
 
@@ -719,7 +734,10 @@ switch them the next time they edit those files.
 - **To replace:** SCRUM-177 releases through the app into the same status
   column. Release through it in `scripts/seed-b1.mjs` and TC-173-09, remove
   the markers, and re-run TC-173-09.
-- **Status:** Active.
+- **Status:** Replaced (SCRUM-177, branch `equipment-release`). The seed
+  releases EQ-173-09 through `release_equipment_reservation` and TC-173-09
+  through `releaseEquipmentReservation`, with a reason; markers removed;
+  TC-173-09 re-run (SCRUM-177's TC-177-10).
 
 ### D-22 — An event's registration period is set by the seed script
 
@@ -731,7 +749,9 @@ switch them the next time they edit those files.
   and end dates)
 - **Where:** `scripts/seed-event-registration-test-data.mjs` — the header
   comment (`DUMMY(SCRUM-185) D-22`), and the `registration_start_date` /
-  `registration_end_date` it writes for each event
+  `registration_end_date` it writes for each event. Also
+  `scripts/seed-scrum180.mjs` (SCRUM-180, branch `browse-open-events`), the
+  same way, for the events Open events lists or leaves out (TC-180-01 to 05)
 - **What is real and what is faked:** the period is real. The columns
   `event_request.registration_start_date` and `registration_end_date` (dates,
   both inclusive, added by SCRUM-181's migration
@@ -744,7 +764,17 @@ switch them the next time they edit those files.
 - **To replace:** SCRUM-185 AC5's form saves to the same two columns (both
   together; the table refuses one without the other, or an end before the
   start). Set the periods through the form for TC-181-05 to TC-181-12 instead
-  of the seed, remove the marker, and re-run those test cases.
+  of the seed, remove the marker, and re-run those test cases. Then the same
+  for SCRUM-180's TC-180-01 to TC-180-05, which read the same two columns
+  (Open events lists an event while today is inside its period).
+- **Limit which events can have a period (SCRUM-180 review, PR #154):** Open
+  events leaves out only Cancelled and Completed events (the PO's reading of
+  SCRUM-180 AC1, 28/10/2026), so it lists any other event whose period
+  includes today: a Draft, Submitted, Rejected or Planning one too. That
+  cannot happen while only the seed sets a period. When SCRUM-185 AC5's form
+  replaces the seed, it must let a period be set only on an event that is
+  going ahead (SCRUM-185 allows editing only while the event is Confirmed),
+  or Open events needs a list of the statuses it may show instead.
 - **Status:** Active.
 
 ### D-23 — Places always remain
@@ -755,8 +785,9 @@ switch them the next time they edit those files.
   `event-register`
 - **Waiting on:** SCRUM-182 AC1 (a full event refuses registration) and AC2
   (two people taking the last place at the same moment)
-- **Where:** `supabase/migrations/20261024130843_event_registration.sql` —
-  `event_has_places_remaining` (`DUMMY(SCRUM-182) D-23`)
+- **Where:** ~~`supabase/migrations/20261024130843_event_registration.sql` —~~
+  ~~`event_has_places_remaining` (`DUMMY(SCRUM-182) D-23`)~~ — marker removed;
+  the comment there now points at SCRUM-182's migration
 - **What is real and what is faked:** registering is real and goes through one
   database function, `register_for_event`, which locks the event row, checks
   the period and the duplicate, then asks `event_has_places_remaining` and
@@ -764,10 +795,109 @@ switch them the next time they edit those files.
   `CAPACITY_EXCEEDED`). Only the answer is faked: the function always returns
   true. `event_request.registration_capacity` exists (null until set; what it
   is set to is SCRUM-185 AC6's rule) but nothing counts against it yet.
-- **To replace:** SCRUM-182 replaces the body of `event_has_places_remaining`
+- **To replace:** ~~SCRUM-182 replaces the body of `event_has_places_remaining`
   in a new migration with a count of the event's Registered rows against
   `registration_capacity`. `register_for_event` already calls it with the
   event row locked, so two registrations for the last place are counted one
   after the other. Remove the marker and re-run TC-181-02 (the last place can
-  still be taken) and `tests/integration/register-for-event.test.ts`.
+  still be taken) and `tests/integration/register-for-event.test.ts`.~~ Done
+  (SCRUM-182, branch `refuse-register`):
+  `20261025184920_event_registration_capacity.sql` counts the Registered rows
+  against `registration_capacity`; no capacity set counts as full (PO,
+  25/10/2026). Because of that, every event in
+  `scripts/seed-event-registration-test-data.mjs` and
+  `register-for-event.test.ts` now has a capacity. TC-181-02 and
+  `register-for-event.test.ts` re-run and passed on 25/10/2026.
+- **Status:** Replaced (SCRUM-182, branch `refuse-register`).
+
+### D-24 — An event's registration capacity is set by the seed script
+
+- **Kind:** In-sprint stand-in (entering the capacity is SCRUM-185 AC5, in
+  Sprint 4 but owned by Dylan; CL-59)
+- **Added by:** SCRUM-182 AC1, AC2, AC3 (TC-182-01 to TC-182-12) — branch
+  `refuse-register`
+- **Waiting on:** SCRUM-185 AC5 (the coordinator enters the capacity with the
+  registration dates). AC6 only refuses a capacity above the largest of the
+  event's venue capacities; it does not fill it in (PO, 25/10/2026).
+- **Where:** `scripts/seed-scrum182.mjs` — the header comment
+  (`DUMMY(SCRUM-185) D-24`) and the `registration_capacity` it writes per
+  event; `scripts/seed-event-registration-test-data.mjs` — the
+  `registration_capacity: 20` it now writes for SCRUM-181's events
+  (`DUMMY(SCRUM-185) D-24`)
+- **What is real and what is faked:** the count is real.
+  `event_has_places_remaining` and `isEventFull` compare the event's
+  Registered rows with `event_request.registration_capacity` (integer, null
+  until set, at least 1). Only the setting is faked: nothing in the app writes
+  the column yet, so the seed sets it. An event with no capacity is refused as
+  full, so until SCRUM-185 AC5 is on main, only seeded events take
+  registrations. Replacing a venue does not change the stored capacity; only
+  the coordinator's save does (PO, 25/10/2026).
+- **To replace:** SCRUM-185 AC5's form saves `registration_capacity` with the
+  two registration dates. Set the capacities through the form for
+  TC-182-01 to TC-182-12 instead of the seed (TC-182-10 still needs the
+  capacity lowered after three have registered), remove both markers, and
+  re-run those cases.
 - **Status:** Active.
+
+### D-25 — A registration is withdrawn by hand
+
+- **Kind:** In-sprint stand-in (withdrawing is SCRUM-184, in Sprint 4)
+- **Added by:** SCRUM-182 AC3 (TC-182-09 to TC-182-12) — branch
+  `refuse-register`
+- **Waiting on:** SCRUM-184 (the attendee withdraws their registration)
+- **Where:** `scripts/seed-scrum182.mjs` — the `--withdraw`,
+  `--withdraw-over`, `--withdraw-attendee` and `--withdraw-waiting` flags
+  (`DUMMY(SCRUM-184) D-25`); `tests/integration/refuse-full-registration.test.ts`
+  — `withdraw()` (`DUMMY(SCRUM-184) D-25`)
+- **What is real and what is faked:** what SCRUM-182 tests is real: only
+  Registered rows count against the capacity, so a withdrawn registration
+  gives its place back as soon as its status changes, with no waiting list.
+  Only the withdrawing is faked: the flags and the test helper set
+  `event_registration.status` to `withdrawn`, the value SCRUM-184 will write
+  (SCRUM-181's migration already allows it).
+- **To replace:** once SCRUM-184 is on main, withdraw through its page or
+  function in TC-182-09 to TC-182-12 instead of the flags, have `withdraw()`
+  in the integration test call SCRUM-184's function, remove the marker and
+  re-run those cases.
+- **Status:** Active.
+
+### D-26 — A change request's decision is set by hand
+
+- **Kind:** Stand-in code (a shared table created early, with nothing yet
+  writing its decision columns)
+- **Added by:** SCRUM-187 — branch `change-request-raise`
+- **Waiting on:** SCRUM-190 (Approve a change request and apply it), SCRUM-191
+  (Reject a change request with a reason)
+- **Where:**
+  - `supabase/migrations/20261028090000_change_request.sql` — `change_request`'s
+    `decided_by`, `decided_at`, `decision_reason` columns
+  - `src/domain/change-request/service.ts` — `raiseChangeRequest()` never
+    writes them; `listChangeRequests()` reads them back as-is
+    (`DUMMY(SCRUM-190) D-26`, `DUMMY(SCRUM-191) D-26`)
+  - `tests/integration/change-request.test.ts` — `seedDecision()`
+    (`DUMMY(SCRUM-190) D-26`, `DUMMY(SCRUM-191) D-26`)
+- **What is real and what is faked:** raising a request (AC1) and listing it
+  (AC6) are both real, against a real database. Only the decision itself is
+  faked: nothing in the app approves or rejects a change request yet, so the
+  integration test's `seedDecision()` sets `status`/`decided_at`/
+  `decision_reason` directly in Postgres to prove AC6 reads a decided request
+  correctly once one exists. AC7 ("the event shows the new values") is out of
+  scope for this story entirely — it is SCRUM-190's own write, not read back
+  here.
+- **To replace:** SCRUM-190/191 write these three columns from their own
+  approve/reject actions (already shaped the way their ACs describe them: one
+  decision, one reason, one timestamp). Re-run TC-187-11 against a request
+  decided through the app, and TC-187-12 against an event whose approved
+  change was actually applied by SCRUM-190, then remove the markers. Stamp
+  `decided_at` the
+  same "one clock" way `event_request.decided_at`/`submitted_at`/`assigned_at`
+  already are (a DB trigger reading `now()`, not a caller-supplied value -
+  see `set_decided_at`/`set_assigned_at`/`set_submitted_at` in the
+  event_request migrations), so a decision can never be backdated before its
+  own request. `change_request` has no such trigger yet since nothing writes
+  `decided_at` yet; add one alongside SCRUM-190/191's migration.
+- **Status:** Active.
+
+*Originally numbered D-22; renumbered to D-26 during the 2026-10-28 rebase
+onto `main`, since SCRUM-181/182/184 had taken D-22 through D-25 on `main` in
+the meantime.*

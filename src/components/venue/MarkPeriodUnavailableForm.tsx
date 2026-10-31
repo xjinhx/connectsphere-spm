@@ -2,7 +2,8 @@
 
 import { useState } from 'react';
 import { useRouter } from 'next/navigation';
-import { END_TIME_OPTIONS, START_TIME_OPTIONS, toMinutes } from '@/domain/shared/times';
+import { LATEST_DATE } from '@/domain/shared/dates';
+import { END_TIME_OPTIONS, START_TIME_OPTIONS, endTimesAfter, keepEndAfterStart, toMinutes } from '@/domain/shared/times';
 
 /**
  * SCRUM-151 AC2: after a save, say how many affected bookings' coordinators
@@ -20,6 +21,8 @@ function savedMessage(notifiedBookings: number): string {
  * and end time in 15-minute steps, and record why. Replaces SCRUM-151's slot
  * checkboxes. Only times within the venue's opening hours are offered, since
  * the venue is never offered outside them anyway (the server checks too).
+ * SCRUM-266: within those hours, the end list offers only times after the
+ * start, and the end is cleared when the start moves to or past it.
  *
  * Same request/response shape as before: on success the page is refreshed so
  * the list comes from the server; on refusal the server's message (a blank
@@ -88,6 +91,7 @@ export function MarkPeriodUnavailableForm({
         <input
           id="unavailable-date"
           type="date"
+          max={LATEST_DATE}
           value={date}
           onChange={(event) => setDate(event.target.value)}
           className={selectClass}
@@ -97,7 +101,16 @@ export function MarkPeriodUnavailableForm({
       <div className="flex flex-wrap gap-4">
         <label className="block text-sm" htmlFor="unavailable-start">
           Start time
-          <select id="unavailable-start" value={start} onChange={(event) => setStart(event.target.value)} className={selectClass}>
+          <select
+            id="unavailable-start"
+            value={start}
+            onChange={(event) => {
+              const next = event.target.value;
+              setStart(next);
+              setEnd((current) => keepEndAfterStart(next, current));
+            }}
+            className={selectClass}
+          >
             {startOptions.map((time) => (
               <option key={time} value={time}>
                 {time}
@@ -108,7 +121,9 @@ export function MarkPeriodUnavailableForm({
         <label className="block text-sm" htmlFor="unavailable-end">
           End time
           <select id="unavailable-end" value={end} onChange={(event) => setEnd(event.target.value)} className={selectClass}>
-            {endOptions.map((time) => (
+            {/* Shown once a moved start has cleared the end. */}
+            <option value="">--:--</option>
+            {endTimesAfter(start, endOptions).map((time) => (
               <option key={time} value={time}>
                 {time}
               </option>

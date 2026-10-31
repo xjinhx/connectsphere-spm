@@ -2,6 +2,8 @@
 
 import { useState } from 'react';
 import { useRouter } from 'next/navigation';
+import { LATEST_DATE, LATEST_DATE_TIME } from '@/domain/shared/dates';
+import { endTimesAfter, keepEndAfterStart } from '@/domain/shared/times';
 import type { HoldableEvent } from '@/domain/venue-hold/schema';
 
 /** 00:00 to 24:00 in 15-minute steps: the times a hold may start or end on. */
@@ -19,7 +21,9 @@ const END_TIMES = QUARTER_HOURS.slice(1);
  * is required, which is shown as-is.
  *
  * Times are chosen from 15-minute steps, so only times on the booking unit can
- * be picked (the server checks again, as for every time input). The expiry is
+ * be picked (the server checks again, as for every time input). SCRUM-266: the
+ * end list offers only times after the start, and the end is cleared when the
+ * start moves to or past it. The expiry is
  * a Singapore date and time from a datetime-local input.
  *
  * Same request/response shape as MarkPeriodUnavailableForm: on success the
@@ -90,13 +94,22 @@ export function HoldVenueForm({ venueId, events }: { venueId: string; events: Ho
 
       <label className="block text-sm" htmlFor="hold-date">
         Date
-        <input id="hold-date" type="date" value={date} onChange={(event) => setDate(event.target.value)} className={fieldClass} />
+        <input id="hold-date" type="date" max={LATEST_DATE} value={date} onChange={(event) => setDate(event.target.value)} className={fieldClass} />
       </label>
 
       <div className="flex flex-wrap gap-4">
         <label className="block text-sm" htmlFor="hold-start">
           Start time
-          <select id="hold-start" value={start} onChange={(event) => setStart(event.target.value)} className={fieldClass}>
+          <select
+            id="hold-start"
+            value={start}
+            onChange={(event) => {
+              const next = event.target.value;
+              setStart(next);
+              setEnd((current) => keepEndAfterStart(next, current));
+            }}
+            className={fieldClass}
+          >
             <option value="">--:--</option>
             {START_TIMES.map((time) => (
               <option key={time} value={time}>
@@ -109,7 +122,7 @@ export function HoldVenueForm({ venueId, events }: { venueId: string; events: Ho
           End time
           <select id="hold-end" value={end} onChange={(event) => setEnd(event.target.value)} className={fieldClass}>
             <option value="">--:--</option>
-            {END_TIMES.map((time) => (
+            {endTimesAfter(start, END_TIMES).map((time) => (
               <option key={time} value={time}>
                 {time}
               </option>
@@ -123,6 +136,7 @@ export function HoldVenueForm({ venueId, events }: { venueId: string; events: Ho
         <input
           id="hold-expiry"
           type="datetime-local"
+          max={LATEST_DATE_TIME}
           value={expiresAt}
           onChange={(event) => setExpiresAt(event.target.value)}
           className={fieldClass}

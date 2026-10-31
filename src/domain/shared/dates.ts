@@ -21,6 +21,23 @@ export function isISODate(value: string): boolean {
   return !Number.isNaN(parsed.getTime()) && parsed.toISOString().slice(0, 10) === value;
 }
 
+/**
+ * The latest date a form accepts. A browser date input lets a person type up
+ * to six digits of year (20266), and the schema refuses anything past this.
+ */
+export const LATEST_DATE: ISODate = '9999-12-31';
+
+/**
+ * SCRUM-267: the same limit for a datetime-local input. Without a max, the
+ * browser lets the year segment run on to 275760.
+ */
+export const LATEST_DATE_TIME = '9999-12-31T23:59';
+
+/** True when a date input's value has a year of more than four digits, e.g. "20266-10-10". */
+export function hasLongYear(value: string): boolean {
+  return /^\d{5,}-/.test(value);
+}
+
 export function todayInSingapore(now: Date = new Date()): ISODate {
   const parts = new Intl.DateTimeFormat('en-CA', {
     timeZone: SINGAPORE_TIME_ZONE,
@@ -108,4 +125,20 @@ export function formatSingaporeDateTime(instant: Date | string): string {
     hour12: true,
     timeZoneName: 'short',
   }).format(date);
+}
+
+/**
+ * An instant as DD/MM/YYYY HH:mm in Singapore, the format the team writes
+ * dates and times in (SCRUM-105: when an event was cancelled, and when a
+ * booking was released).
+ */
+export function formatDayMonthYearTime(instant: string): string {
+  const date = new Date(instant);
+  const time = new Intl.DateTimeFormat('en-SG', {
+    timeZone: SINGAPORE_TIME_ZONE,
+    hour: '2-digit',
+    minute: '2-digit',
+    hourCycle: 'h23',
+  }).format(date);
+  return `${formatDayMonthYear(toSingaporeISODate(date))} ${time}`;
 }

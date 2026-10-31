@@ -1,7 +1,6 @@
 'use client';
 
 import { useState } from 'react';
-import { useRouter } from 'next/navigation';
 import { createSupabaseBrowserClient } from '@/lib/supabase/client';
 
 /**
@@ -11,7 +10,6 @@ import { createSupabaseBrowserClient } from '@/lib/supabase/client';
  * - this button only needs to trigger that and navigate there directly.
  */
 export function LogoutButton() {
-  const router = useRouter();
   const [isLoggingOut, setIsLoggingOut] = useState(false);
 
   async function handleLogout() {
@@ -20,10 +18,16 @@ export function LogoutButton() {
     // the default role. Done before signing out, while the request is still
     // authenticated; a failure here must not stop the logout.
     await fetch('/api/me/working-as', { method: 'DELETE' }).catch(() => undefined);
+    // SCRUM-264 bug fix: also clear the idle-session marker (csp_last_activity).
+    // It is httpOnly, so signOut() below cannot touch it - left behind, its
+    // stale timestamp gets checked against the next login's brand-new session
+    // and wrongly rejects the first login attempt as idle.
+    await fetch('/api/me/session', { method: 'DELETE' }).catch(() => undefined);
     const supabase = createSupabaseBrowserClient();
     await supabase.auth.signOut();
-    router.push('/login');
-    router.refresh();
+    // SCRUM-268: a full page load, not router.push, so the root layout is
+    // rendered again for nobody and the last account's header is dropped.
+    window.location.assign('/login');
   }
 
   return (

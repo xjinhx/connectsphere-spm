@@ -52,11 +52,18 @@ export function canAccessNotification(recipientId: string, actorId: string): boo
  * coordinator sees the status, who set it, when and the reason (SCRUM-166
  * AC2, AC4) - a page open to them (canViewEquipmentRequest), unlike the
  * organiser's /events/<id>.
+ *
+ * SCRUM-105 adds 'event_cancelled', sent to the organiser, the staff who
+ * actioned the event's arrangements and its registered attendees: no one event
+ * page is open to all of them, and the message itself says everything (that it
+ * will not take place, and for Venue Staff which times are free). It links to
+ * the notifications page itself.
  */
 const COORDINATOR_FACING_TYPES = new Set<string>(['coordinator_assigned', 'venue_booking_update']);
 const LEAD_FACING_TYPES = new Set<string>(['request_submitted']);
 const OWN_EVENTS_LIST_TYPES = new Set<string>(['coordinator_unassigned']);
 const EQUIPMENT_REQUEST_TYPES = new Set<string>(['equipment_unable_to_fulfil']);
+const SELF_CONTAINED_TYPES = new Set<string>(['event_cancelled']);
 
 export function notificationHref(notification: { type: string; eventRequestId: string }): string {
   if (LEAD_FACING_TYPES.has(notification.type)) {
@@ -67,6 +74,9 @@ export function notificationHref(notification: { type: string; eventRequestId: s
   }
   if (OWN_EVENTS_LIST_TYPES.has(notification.type)) {
     return '/my-events';
+  }
+  if (SELF_CONTAINED_TYPES.has(notification.type)) {
+    return '/notifications';
   }
   return COORDINATOR_FACING_TYPES.has(notification.type)
     ? `/events/${notification.eventRequestId}/review`

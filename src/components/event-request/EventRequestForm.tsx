@@ -2,7 +2,8 @@
 
 import { useState } from 'react';
 import { useRouter } from 'next/navigation';
-import { END_OF_DAY, END_TIME_OPTIONS, START_TIME_OPTIONS } from '@/domain/shared/times';
+import { hasLongYear, LATEST_DATE } from '@/domain/shared/dates';
+import { END_OF_DAY, START_TIME_OPTIONS, endTimesAfter, keepEndAfterStart } from '@/domain/shared/times';
 import { ROOM_LAYOUTS, ROOM_LAYOUT_LABELS, type RoomLayout } from '@/domain/venues/schema';
 import type { VenueRequirementOptions } from '@/domain/event-request/service';
 
@@ -20,6 +21,10 @@ import type { VenueRequirementOptions } from '@/domain/event-request/service';
  * may not enforce in its picker and which cannot show 24:00 (the end of a
  * former Night slot, AC6). Nothing crossing midnight can be chosen: the last
  * end on offer is 24:00. Replaces SCRUM-77's slot checkboxes.
+ *
+ * SCRUM-266 — the end list offers only times after the chosen start, and the
+ * end is cleared when the start moves to or past it (endTimesAfter,
+ * keepEndAfterStart). The server's check (AC2) still refuses a bad range.
  *
  * SCRUM-78 — expected attendance, same permissive-save/strict-submit pattern
  * as the date and times above: blank is fine to save, and is only enforced as
@@ -348,7 +353,12 @@ export function EventRequestForm({
           className={fieldClass}
           value={proposedDate}
           min={today}
-          onChange={(event) => setProposedDate(event.target.value)}
+          max={LATEST_DATE}
+          // A date input takes a five- or six-digit year by default; keep the
+          // field at four digits. The server refuses a longer year as well.
+          onChange={(event) => {
+            if (!hasLongYear(event.target.value)) setProposedDate(event.target.value);
+          }}
           aria-describedby="proposedDate-hint"
         />
         <p id="proposedDate-hint" className="mt-1 text-xs text-[var(--text-muted)]">
@@ -369,7 +379,11 @@ export function EventRequestForm({
               // AC2: a refused range marks both fields, not just one.
               className={`${fieldClass} ${fieldErrors.startTime?.length ? 'border-[var(--danger)]' : ''}`}
               value={startTime}
-              onChange={(event) => setStartTime(event.target.value)}
+              onChange={(event) => {
+                const start = event.target.value;
+                setStartTime(start);
+                setEndTime((end) => keepEndAfterStart(start, end));
+              }}
               aria-invalid={Boolean(fieldErrors.startTime?.length)}
               aria-describedby="time-hint"
             >
@@ -396,7 +410,7 @@ export function EventRequestForm({
               aria-describedby="time-hint"
             >
               <option value="">Choose an end time</option>
-              {END_TIME_OPTIONS.map((time) => (
+              {endTimesAfter(startTime).map((time) => (
                 <option key={time} value={time}>
                   {time === END_OF_DAY ? '24:00 (midnight)' : time}
                 </option>

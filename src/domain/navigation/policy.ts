@@ -53,6 +53,23 @@ export function isNavItemCurrent(pathname: string, href: string): boolean {
 }
 
 /**
+ * AC4, for a nav whose items nest — SCRUM-250's Event requests (/events) and
+ * New event request (/events/new): only the most specific current item is
+ * highlighted, so /events/new highlights New event request alone, while
+ * /events/<id> still highlights Event requests. Null when no item is current.
+ * Agreed with SCRUM-249's owner (Slack, 26 Oct 2026).
+ */
+export function currentNavHref(pathname: string, items: readonly { href: string }[]): string | null {
+  let best: string | null = null;
+  for (const { href } of items) {
+    if (isNavItemCurrent(pathname, href) && (best === null || href.length > best.length)) {
+      best = href;
+    }
+  }
+  return best;
+}
+
+/**
  * AC2 — the account menu shows the name and email. With no name recorded
  * (most seeded accounts), the email is shown once in its place (PO, 22 Oct
  * 2026), never "null" or a blank line.
