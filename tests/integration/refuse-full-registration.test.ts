@@ -22,7 +22,8 @@ import { TEST_CLIENT_ORGANISATION_ID, ensureTestClientOrganisation } from './fix
  * 3 registered stands in for the sheet's 20 of 20: the same boundary, fewer
  * accounts to create.
  *
- * Test case IDs are from SCRUM-182-test-cases.xlsx (TC-182-nn).
+ * Test case IDs are from the ConnectSphere_TestCases_Sprint4 workbook,
+ * SCRUM-182 tab (TC-182-nn).
  */
 
 const admin = createAdminClient();
