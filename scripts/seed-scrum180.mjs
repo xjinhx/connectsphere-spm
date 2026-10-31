@@ -10,8 +10,9 @@
 // (matched by their purpose), which also clears their bookings and
 // registrations, so it doubles as "reset my test data".
 //
-// DUMMY(SCRUM-185) D-22: the registration period is set here, not by the
-// coordinator's form (SCRUM-185 AC5).
+// The registration period is set here as test data, relative to today. In the
+// app the event's assigned coordinator sets it on the event's registration
+// page (SCRUM-185 AC5), which replaced dummy D-22.
 //
 // Accounts, all with password TestPass123!:
 //   attendee@    {attendee}  Tan Mei Ling   most cases

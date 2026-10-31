@@ -9,8 +9,9 @@
 // It prints each event's page address (/register-events/<id>): listing the
 // events open for registration is another story's, so open them by address.
 //
-// DUMMY(SCRUM-185) D-22: the registration period is set here, not by the
-// coordinator's form (SCRUM-185 AC5).
+// The registration period is set here as test data, relative to today. In the
+// app the event's assigned coordinator sets it on the event's registration
+// page (SCRUM-185 AC5), which replaced dummy D-22.
 //
 // Safe to run again: it deletes and recreates only the events it made (matched
 // by their description), which also clears their registrations, so it doubles
@@ -129,8 +130,8 @@ const rows = EVENTS.map(([name, start, end, , extra]) => ({
   registration_start_date: singaporeDate(start),
   registration_end_date: singaporeDate(end),
   // Since SCRUM-182 an event with no capacity is refused as full, so every
-  // event here has one. DUMMY(SCRUM-185) D-24: set here, not by the
-  // coordinator's form (SCRUM-185 AC5).
+  // event here has one. Test data: in the app the assigned coordinator sets
+  // it on the event's registration page (SCRUM-185 AC5, which replaced D-24).
   registration_capacity: 20,
   submitted_at: now,
   decision: 'approved',
