@@ -10,7 +10,8 @@ import type { ReactElement } from 'react';
  * Which events the service returns is tests/unit/browse-events-service.test.ts;
  * that nothing internal is read is tests/integration/browse-events.test.ts.
  *
- * Test case IDs are from SCRUM-180-test-cases.xlsx (TC-180-nn).
+ * Test case IDs are from the ConnectSphere_TestCases_Sprint4 workbook,
+ * SCRUM-180 tab (TC-180-nn).
  */
 
 // next/link needs the App Router mounted; a plain anchor keeps the href.

@@ -28,7 +28,7 @@ import { TEST_CLIENT_ORGANISATION_ID, ensureTestClientOrganisation } from './fix
  * Runs against the local Supabase stack. The clock is fixed by passing `now`.
  * Other tests' events may also be open on the fixed date, so each test looks
  * for its own events by id rather than at the whole list. Test case IDs are
- * from SCRUM-180-test-cases.xlsx (TC-180-nn).
+ * from the ConnectSphere_TestCases_Sprint4 workbook, SCRUM-180 tab (TC-180-nn).
  */
 
 const admin = createAdminClient();
