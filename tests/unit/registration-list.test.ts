@@ -133,8 +133,8 @@ describe('SCRUM-185 AC2: the export', () => {
     expect(registrationListCsv([entry(1), entry(2, 'withdrawn')])).toBe(
       [
         EXPORT_HEADERS.join(','),
-        "REG-2026-0001,Attendee 1,attendee1@example.com,'+65 9000 0001,01/11/2026,Registered",
-        "REG-2026-0002,Attendee 2,attendee2@example.com,'+65 9000 0002,01/11/2026,Withdrawn",
+        'REG-2026-0001,Attendee 1,attendee1@example.com,+65 9000 0001,01/11/2026,Registered',
+        'REG-2026-0002,Attendee 2,attendee2@example.com,+65 9000 0002,01/11/2026,Withdrawn',
         '',
       ].join('\r\n'),
     );
@@ -147,12 +147,30 @@ describe('SCRUM-185 AC2: the export', () => {
   it('quotes commas, quotes and line breaks', () => {
     const csv = registrationListCsv([entry(1, 'registered', { fullName: 'Tan, "Mei"\nLing' })]);
     expect(csv.split('\r\n')[1]).toBe(
-      `REG-2026-0001,"Tan, ""Mei""\nLing",attendee1@example.com,'+65 9000 0001,01/11/2026,Registered`,
+      `REG-2026-0001,"Tan, ""Mei""\nLing",attendee1@example.com,+65 9000 0001,01/11/2026,Registered`,
     );
   });
 
-  it('a contact number starting with + is kept as text, not worked out as a formula', () => {
-    expect(registrationListCsv([entry(1)]).split('\r\n')[1]?.split(',')[3]).toBe("'+65 9000 0001");
+  // AC2 exports the attendee information as entered, so a phone number keeps
+  // its +; anything else a spreadsheet could run is still opened with a quote.
+  const contactCell = (contactNumber: string) =>
+    registrationListCsv([entry(1, 'registered', { contactNumber })]).split('\r\n')[1]?.split(',')[3];
+
+  it('SCRUM-185 AC2 TC-185-04 a phone number in Contact number is exported unchanged', () => {
+    expect(contactCell('+65 9123 4567')).toBe('+65 9123 4567');
+    expect(contactCell('+65 (9123) 45-67')).toBe('+65 (9123) 45-67');
+  });
+
+  it('SCRUM-185 AC2 TC-185-04 a contact number that is not only a phone number is still guarded', () => {
+    expect(contactCell('+1+1')).toBe("'+1+1");
+    expect(contactCell('=1+1')).toBe("'=1+1");
+    expect(contactCell('-2+3')).toBe("'-2+3");
+    expect(contactCell('@SUM(A1)')).toBe("'@SUM(A1)");
+  });
+
+  it('a + value in any other column is still guarded', () => {
+    const csv = registrationListCsv([entry(1, 'registered', { fullName: '+65 9123 4567' })]);
+    expect(csv.split('\r\n')[1]?.split(',')[1]).toBe("'+65 9123 4567");
   });
 
   it('a value a spreadsheet would run as a formula is opened with a quote', () => {

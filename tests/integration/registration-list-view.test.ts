@@ -244,7 +244,7 @@ describe('SCRUM-185 AC2: the responsible organiser views and exports', () => {
     expect(lines[0]).toBe(EXPORT_HEADERS.join(','));
     expect(lines).toHaveLength(4);
     const date = formatDayMonthYear(TODAY);
-    expect(lines[1]).toMatch(new RegExp(`^REG-\\d{4}-\\d{4},Attendee 1,attendee1@example.com,'\\+65 9000 0001,${date},Registered$`));
+    expect(lines[1]).toMatch(new RegExp(`^REG-\\d{4}-\\d{4},Attendee 1,attendee1@example.com,\\+65 9000 0001,${date},Registered$`));
   });
 });
 

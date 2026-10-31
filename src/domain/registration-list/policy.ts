@@ -138,14 +138,23 @@ export function registrationDate(registeredAt: string): string {
 
 export const EXPORT_HEADERS = ['Reference', 'Full name', 'Email', 'Contact number', 'Registration date', 'Status'];
 
+const CONTACT_NUMBER_COLUMN = EXPORT_HEADERS.indexOf('Contact number');
+
+/** A phone number as typed: a leading + then only digits, spaces, brackets and dashes. */
+const PHONE_NUMBER = /^\+[\d\s()-]+$/;
+
 /**
- * A spreadsheet treats a cell starting with =, +, - or @ as a formula, and an
- * attendee types their own name and number, so such a cell is opened with a
- * quote. That includes a contact number like +65 9123 4567, which a
- * spreadsheet would otherwise try to work out (and show as an error).
+ * A spreadsheet treats a cell starting with =, +, - or @ (or a tab or carriage
+ * return) as a formula, and an attendee types their own name and number, so
+ * such a cell is opened with a quote. The one exception keeps AC2's data as
+ * entered: a contact number that is only a phone number, like +65 9123 4567,
+ * is exported unchanged, since it has nothing a spreadsheet could run. Any
+ * other + value in that column (+1+1) is still quoted.
  */
-function csvCell(value: string): string {
-  const safe = /^[=+\-@\t\r]/.test(value) ? `'${value}` : value;
+function csvCell(value: string, column: number): string {
+  const formulaLike =
+    /^[=+\-@\t\r]/.test(value) && !(column === CONTACT_NUMBER_COLUMN && PHONE_NUMBER.test(value));
+  const safe = formulaLike ? `'${value}` : value;
   return /[",\r\n]/.test(safe) ? `"${safe.replace(/"/g, '""')}"` : safe;
 }
 
@@ -159,7 +168,7 @@ export function registrationListCsv(entries: readonly RegistrationListEntry[]): 
     registrationDate(entry.registeredAt),
     REGISTRATION_STATUS_LABELS[entry.status],
   ]);
-  return [EXPORT_HEADERS, ...rows].map((row) => row.map(csvCell).join(',')).join('\r\n') + '\r\n';
+  return [EXPORT_HEADERS, ...rows].map((row) => row.map((cell, column) => csvCell(cell, column)).join(',')).join('\r\n') + '\r\n';
 }
 
 /** The export's file name, from the event's reference (letters, digits and dashes only). */

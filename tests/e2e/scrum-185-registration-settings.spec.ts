@@ -164,5 +164,7 @@ test('SCRUM-185 AC1 AC2 TC-185-01, TC-185-04: the coordinator sees the list and 
   expect(download.suggestedFilename()).toMatch(/^registrations-EVT-\d{4}-\d{4}\.csv$/);
   const csv = await (await download.createReadStream()).toArray().then((chunks) => Buffer.concat(chunks).toString('utf8'));
   expect(csv).toContain('Attendee One,attendee@example.com');
+  // The contact number is exported as entered, with no quote in front of the +.
+  expect(csv).toContain('attendee@example.com,+65 9123 4567,');
   expect(csv).toContain(`${shown(today)},Registered`);
 });
