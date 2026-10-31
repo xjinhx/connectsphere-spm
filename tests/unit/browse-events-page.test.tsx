@@ -89,6 +89,8 @@ const NIGHT_PAGE: RegistrationPageView = {
   period: { startDate: '2026-10-27', endDate: '2026-11-04' },
   periodRefusal: 'Registration opens on 27/10/2026.',
   full: false,
+  // SCRUM-270: going ahead; AC3's details do not depend on it.
+  finalStatus: null,
   registration: null,
 };
 

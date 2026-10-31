@@ -326,7 +326,7 @@ async function seed() {
   );
 
   // TC-180-14: the gala is cancelled after the attendee registered. Cancelling
-  // is SCRUM-102 / 177's (B3); this sets the status that flow writes.
+  // is SCRUM-105's; this sets the status that flow writes.
   check(
     'cancel gala',
     await supabase.from('event_request').update({ status: 'cancelled' }).eq('id', idOf('Year-End Gala')),

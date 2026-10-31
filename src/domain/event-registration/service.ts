@@ -11,10 +11,12 @@ import {
 } from './schema';
 import {
   ALREADY_REGISTERED,
+  FINAL_EVENT_REFUSALS,
   NO_PLACES_REMAINING,
   bookedVenues,
   endedMessage,
   eventTimes,
+  finalEventStatus,
   isEventCancelled,
   isEventFull,
   isOpenForRegistration,
@@ -39,10 +41,11 @@ import {
  * "Today" is always the Singapore date (AC4).
  */
 
-/** The event as ATTENDEE_EVENT_COLUMNS reads it, with the venues of its bookings. */
+/** The event as ATTENDEE_EVENT_COLUMNS reads it, with the venues of its bookings, and its status. */
 type EventRow = {
   id: string;
   name: string;
+  status: string;
   description: string | null;
   proposed_date: string | null;
   start_time: string | null;
@@ -116,7 +119,8 @@ function alreadyRegistered(registration: Registration | null): ConflictError {
  * period, whether it is open today (AC2, AC3, AC4), whether it is full
  * (SCRUM-182 AC1), and the viewer's own registration if they have one (AC5).
  * SCRUM-180 AC3: also the description, the start and end times, and each
- * venue's name and address.
+ * venue's name and address. SCRUM-270: also whether the event is Cancelled or
+ * Completed, so the page shows that instead of the form.
  */
 export async function getRegistrationPage(
   eventRequestId: string,
@@ -134,6 +138,7 @@ export async function getRegistrationPage(
     period,
     periodRefusal: registrationPeriodRefusal(period, todayInSingapore(now)),
     full: await readFull(event),
+    finalStatus: finalEventStatus(event.status),
     registration: await readRegistration(eventRequestId, attendeeId),
   };
 }
@@ -159,7 +164,7 @@ export async function listOpenEvents(now: Date = new Date()): Promise<OpenEvent[
   const today = todayInSingapore(now);
   const { data, error } = await fetchOpenEvents(today);
   if (error) throw new ValidationError('The events open for registration could not be read.', error.message);
-  return ((data ?? []) as unknown as (EventRow & { status: string })[])
+  return ((data ?? []) as unknown as EventRow[])
     .filter((row) =>
       isOpenForRegistration(
         { startDate: row.registration_start_date, endDate: row.registration_end_date },
@@ -174,7 +179,7 @@ type MyRegistrationRow = {
   id: string;
   reference: string;
   status: string;
-  event_request: EventRow & { status: string };
+  event_request: EventRow;
 };
 
 /**
@@ -216,6 +221,8 @@ function bySoonestEvent(a: OpenEvent, b: OpenEvent): number {
  * Checked in this order:
  *   - AC5 first: someone already registered is shown their registration, even
  *     once the period has closed, rather than told it is closed;
+ *   - then whether the event is Cancelled or Completed (SCRUM-270), before the
+ *     period, since neither takes registrations whatever the period says;
  *   - then the period (AC2, AC3, AC4) and whether the event is full
  *     (SCRUM-182 AC1), before the fields, so a form that could never be
  *     accepted is not picked apart field by field;
@@ -240,6 +247,9 @@ export async function registerForEvent(
 
   const existing = await readRegistration(eventRequestId, attendeeId);
   if (existing) throw alreadyRegistered(existing);
+
+  const finalStatus = finalEventStatus(event.status);
+  if (finalStatus) throw new ValidationError(FINAL_EVENT_REFUSALS[finalStatus], { eventStatus: finalStatus });
 
   const today = todayInSingapore(now);
   const refusal = registrationPeriodRefusal(period, today);
@@ -271,6 +281,10 @@ export async function registerForEvent(
     case 'full':
       // SCRUM-182 AC2: another request took the last place after the read above.
       throw new CapacityExceededError(NO_PLACES_REMAINING);
+    case 'cancelled':
+    case 'completed':
+      // SCRUM-270: the event was cancelled or completed after the read above.
+      throw new ValidationError(FINAL_EVENT_REFUSALS[outcome], { eventStatus: outcome });
     default:
       // 'not_found' or 'not_open': the event or its period went after the read above.
       throw new NotFoundError('Event');
