@@ -228,7 +228,7 @@ describe('AC1: an event whose registration period is open is listed', () => {
     const goingAhead = await createEvent('Client Appreciation Night');
     const cancelled = await createEvent('Year-End Gala');
     const completed = await createEvent('Annual Dinner');
-    // Cancelling is SCRUM-102 / 177's and completing SCRUM-104's; this writes the status each sets.
+    // Cancelling is SCRUM-105's and completing SCRUM-104's; this writes the status each sets.
     for (const [id, status] of [[cancelled, 'cancelled'], [completed, 'completed']] as const) {
       const { error } = await admin
         .from('event_request')
@@ -481,7 +481,7 @@ describe('AC6: a cancelled event is marked Cancelled against my registration', (
     await register(gala, attendee);
     await register(night, attendee);
 
-    // Cancelling is SCRUM-102 / 177's (B3); this writes the status that flow sets.
+    // Cancelling is SCRUM-105's; this writes the status that flow sets.
     const { error } = await admin
       .from('event_request')
       .update({ status: 'cancelled', submitted_at: new Date().toISOString() })
