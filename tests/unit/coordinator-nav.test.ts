@@ -31,7 +31,7 @@ describe('SCRUM-251 AC2: the nav shows the five items in order', () => {
     expect(ROLE_NAV.coordinator).toEqual(COORDINATOR_NAV);
   });
 
-  it('TC-251-02: each page highlights only its own item', () => {
+  it('TC-251-02, TC-251-03: each page highlights only its own item, and pages under an item keep it', () => {
     const current = (pathname: string) =>
       ROLE_NAV.coordinator.filter((item) => isNavItemCurrent(pathname, item.href)).map((item) => item.label);
 
@@ -45,26 +45,26 @@ describe('SCRUM-251 AC2: the nav shows the five items in order', () => {
     expect(current('/organisations/abc/edit')).toEqual(['Client organisations']);
   });
 
-  it('TC-251-07: an Event Organiser gets none of the coordinator items', () => {
+  it('TC-251-05: an Event Organiser gets none of the coordinator items', () => {
     const organiserHrefs = ROLE_NAV.event_organiser.map((item) => item.href);
     for (const item of COORDINATOR_NAV) expect(organiserHrefs).not.toContain(item.href);
   });
 
-  it('TC-251-08: Technical Support Staff have their own nav, not the coordinator one', () => {
+  it('TC-251-04: Technical Support Staff have their own nav, not the coordinator one', () => {
     expect(ROLE_NAV.technical_support).not.toEqual(ROLE_NAV.coordinator);
   });
 });
 
 describe('SCRUM-251 AC3: the review page links back to the list it came from', () => {
-  it('TC-251-03: opened from Review queue, it links back to Review queue', () => {
+  it('TC-251-06: opened from Review queue, it links back to Review queue', () => {
     expect(reviewBackLink(undefined)).toEqual({ href: '/assigned-events', label: 'Review queue' });
   });
 
-  it('TC-251-03: opened from My events, it links back to My events', () => {
+  it('TC-251-06: opened from My events, it links back to My events', () => {
     expect(reviewBackLink('my-events')).toEqual({ href: '/my-events', label: 'My events' });
   });
 
-  it('TC-251-03: an unknown or repeated from goes back to Review queue', () => {
+  it('TC-251-07: an unknown or repeated from goes back to Review queue', () => {
     expect(reviewBackLink('elsewhere')).toEqual({ href: '/assigned-events', label: 'Review queue' });
     expect(reviewBackLink(['my-events', 'my-events'])).toEqual({ href: '/assigned-events', label: 'Review queue' });
   });

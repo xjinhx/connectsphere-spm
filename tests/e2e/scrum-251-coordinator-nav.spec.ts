@@ -35,7 +35,7 @@ test('SCRUM-251 AC2 TC-251-02: the nav shows the five items in order, and each o
   }
 });
 
-test('SCRUM-251 AC5 TC-251-05: Venues offers Search and Catalogue, and a venue links to its calendar', async ({ page }) => {
+test('SCRUM-251 AC5 TC-251-10: Venues offers Search and Catalogue, and a venue links to its calendar', async ({ page }) => {
   await signIn(page, 'coordinator');
   await page.getByRole('navigation', { name: 'Main' }).getByRole('link', { name: 'Venues', exact: true }).click();
 

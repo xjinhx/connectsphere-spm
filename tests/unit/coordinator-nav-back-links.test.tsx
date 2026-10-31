@@ -103,11 +103,11 @@ describe('SCRUM-251 AC4: a booking request links back to its event', () => {
     return renderToStaticMarkup(page);
   }
 
-  it("TC-251-04: the event's coordinator gets a back link to the event", async () => {
+  it("TC-251-08: the event's coordinator gets a back link to the event", async () => {
     expect(hrefOf(await render(), '← S251 Confirmed Dinner')).toBe(`/events/${EVENT_ID}/review`);
   });
 
-  it('TC-251-04: Venue Staff, who come from their queue, do not', async () => {
+  it('TC-251-09: Venue Staff, who come from their queue, do not', async () => {
     signedInAs(VENUE_STAFF_ID, ['venue_staff']);
     expect(hrefOf(await render(), '← S251 Confirmed Dinner')).toBeNull();
   });
@@ -126,7 +126,7 @@ describe('SCRUM-251 AC6: client organisation pages link back to the page before'
     vi.mocked(listOrganisersForOrganisation).mockResolvedValue([]);
   });
 
-  it('TC-251-06: the detail page links back to Client organisations and on to Edit', async () => {
+  it('TC-251-11: the detail page links back to Client organisations and on to Edit', async () => {
     const page = (await ClientOrganisationPage({ params: Promise.resolve({ id: ORGANISATION_ID }) })) as ReactElement;
     const html = renderToStaticMarkup(page);
 
@@ -134,7 +134,7 @@ describe('SCRUM-251 AC6: client organisation pages link back to the page before'
     expect(html).toContain(`href="/organisations/${ORGANISATION_ID}/edit"`);
   });
 
-  it('TC-251-06: the edit page links back to the organisation', async () => {
+  it('TC-251-11: the edit page links back to the organisation', async () => {
     const page = (await EditClientOrganisationPage({ params: Promise.resolve({ id: ORGANISATION_ID }) })) as ReactElement;
     const html = renderToStaticMarkup(page);
 
