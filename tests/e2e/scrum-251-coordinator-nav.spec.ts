@@ -44,7 +44,8 @@ test('SCRUM-251 AC5 TC-251-10: Venues offers Search and Catalogue, and a venue l
   await page.getByRole('link', { name: 'Back to catalogue' }).click();
   await expect(page).toHaveURL(/\/venues$/);
 
-  await page.getByRole('link', { name: 'Marina Bay Ballroom' }).click();
+  // Exact: other stories' seeds add venues whose names contain this one (e.g. "S185 Marina Bay Ballroom").
+  await page.getByRole('link', { name: 'Marina Bay Ballroom', exact: true }).click();
   await expect(page).toHaveURL(/\/venues\/[0-9a-f-]+$/);
   await page.getByRole('link', { name: 'View calendar' }).click();
   await expect(page).toHaveURL(/\/venues\/[0-9a-f-]+\/calendar/);
