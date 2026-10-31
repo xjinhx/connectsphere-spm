@@ -16,7 +16,7 @@ import {
   describeEventTimes,
 } from '@/domain/event-request/policy';
 import { EVENT_REQUEST_STATUS_DEFINITIONS } from '@/domain/event-request/schema';
-import { getEventRequest } from '@/domain/event-request/service';
+import { getEventRequest, getVenueRequirementOptions } from '@/domain/event-request/service';
 import {
   canRaiseChangeRequest,
   canRaiseChangeRequestFor,
@@ -135,10 +135,18 @@ export default async function EventRequestPage({
   // SCRUM-187 AC6 — every change request raised against this event, for
   // whoever canViewRequest already let onto this page (owner or a colleague
   // in the same client organisation, SCRUM-204 AC3).
-  const changeRequests = await listChangeRequests(id, {
-    userId: actor.userId,
-    clientOrganisationId: actor.clientOrganisation?.id ?? null,
-  });
+  const [changeRequests, { accessibilityFeatures }] = await Promise.all([
+    listChangeRequests(id, {
+      userId: actor.userId,
+      clientOrganisationId: actor.clientOrganisation?.id ?? null,
+    }),
+    // SCRUM-274: the accessibility features list, to offer it in the form and
+    // to show a request's features by name.
+    getVenueRequirementOptions(),
+  ]);
+  const valueNames = {
+    accessibilityFeatures: new Map(accessibilityFeatures.map((feature) => [feature.id, feature.name])),
+  };
   // SCRUM-187 AC1/AC2/AC4/AC5 — only the responsible organiser, and only on
   // a status that currently allows it (canRaiseChangeRequest; the status
   // scope is deliberately narrow pending PO confirmation - see policy.ts).
@@ -310,8 +318,8 @@ export default async function EventRequestPage({
                   {cr.fields.map((field) => (
                     <li key={field.field}>
                       <span className="font-medium">{CHANGE_REQUEST_FIELD_LABELS[field.field]}:</span>{' '}
-                      {formatChangeRequestValue(field.field, field.currentValue)} →{' '}
-                      {formatChangeRequestValue(field.field, field.proposedValue)}
+                      {formatChangeRequestValue(field.field, field.currentValue, valueNames)} →{' '}
+                      {formatChangeRequestValue(field.field, field.proposedValue, valueNames)}
                     </li>
                   ))}
                 </ul>
@@ -333,7 +341,7 @@ export default async function EventRequestPage({
           allows it. */}
       {canRaiseChange ? (
         <section className="mt-6">
-          <ChangeRequestForm requestId={request.id} />
+          <ChangeRequestForm requestId={request.id} accessibilityFeatures={accessibilityFeatures} />
         </section>
       ) : null}
 

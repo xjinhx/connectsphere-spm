@@ -154,9 +154,31 @@ beforeAll(async () => {
   coordinatorId = await createAccount('Casey Coordinator', ['coordinator']);
 });
 
+/** The accessibility features this file created, removed again in afterAll (PR #156 review). */
+const createdFeatureIds: string[] = [];
+
+/**
+ * An accessibility feature by name, created if this database does not have it
+ * yet. Only a feature created here is tracked for clean-up; one that already
+ * existed is left alone.
+ */
+async function ensureFeature(name: string): Promise<string> {
+  const { data: existing } = await supabase.from('accessibility_features').select('id').eq('name', name).maybeSingle();
+  if (existing) return existing.id;
+  const { data, error } = await supabase.from('accessibility_features').insert({ name }).select('id').single();
+  if (error || !data) throw new Error(`could not create accessibility feature ${name}: ${error?.message ?? 'no row'}`);
+  createdFeatureIds.push(data.id);
+  return data.id;
+}
+
 afterAll(async () => {
   for (const id of createdRequestIds) {
     await supabase.from('event_request').delete().eq('id', id);
+  }
+  // After the events, so nothing still refers to them; they would otherwise
+  // stay as tick boxes in the change request form until a db:reset.
+  for (const id of createdFeatureIds) {
+    await supabase.from('accessibility_features').delete().eq('id', id);
   }
   for (const id of createdUserIds) {
     await supabase.auth.admin.deleteUser(id);
@@ -260,6 +282,61 @@ describe('raiseChangeRequest', () => {
 
     const fieldRows = await readFieldRows(outcome.id);
     expect(fieldRows).toHaveLength(2);
+  });
+
+  // SCRUM-274 TC-274-01 — Accessibility features, now offered by the form,
+  // stored as one line: the event's current list (none) and the proposed one.
+  it('TC-274-01: stores a proposed Accessibility features list', async () => {
+    const id = await createEvent('submitted');
+    // Its own two features, so the test does not depend on seed data (CI has none).
+    const featureIds = [await ensureFeature('S274 Step-free access'), await ensureFeature('S274 Hearing loop')];
+
+    const outcome = await raiseChangeRequest(
+      id,
+      { fields: [{ field: 'accessibilityFeatureIds', proposedValue: featureIds }], reason: 'Wheelchair and hearing-aid users attending' },
+      organiserId,
+    );
+
+    expect(outcome.fields).toHaveLength(1);
+    expect(outcome.fields[0]).toMatchObject({ field: 'accessibilityFeatureIds', currentValue: [], proposedValue: featureIds });
+    const fieldRows = await readFieldRows(outcome.id);
+    expect(fieldRows).toEqual([{ field: 'accessibilityFeatureIds', current_value: [], proposed_value: featureIds }]);
+  });
+
+  // SCRUM-274 TC-274-02 — Equipment items, now offered by the form.
+  it('TC-274-02: stores a proposed Equipment items list', async () => {
+    const id = await createEvent('submitted');
+
+    const outcome = await raiseChangeRequest(
+      id,
+      { fields: [{ field: 'equipmentItems', proposedValue: [{ item: 'Projector P-100', quantity: 2 }] }], reason: 'Second screen for the breakout room' },
+      organiserId,
+    );
+
+    expect(outcome.fields[0]).toMatchObject({
+      field: 'equipmentItems',
+      currentValue: [],
+      proposedValue: [{ item: 'Projector P-100', quantity: 2 }],
+    });
+    const fieldRows = await readFieldRows(outcome.id);
+    expect(fieldRows).toEqual([
+      { field: 'equipmentItems', current_value: [], proposed_value: [{ item: 'Projector P-100', quantity: 2 }] },
+    ]);
+  });
+
+  // SCRUM-274 — a quantity of 0 is refused before anything is written.
+  it('TC-274-02: refuses an equipment quantity of 0, and writes nothing', async () => {
+    const id = await createEvent('submitted');
+
+    await expect(
+      raiseChangeRequest(
+        id,
+        { fields: [{ field: 'equipmentItems', proposedValue: [{ item: 'Projector P-100', quantity: 0 }] }], reason: 'Second screen' },
+        organiserId,
+      ),
+    ).rejects.toMatchObject({ code: 'VALIDATION_ERROR' });
+
+    expect(await readChangeRequestRows(id)).toHaveLength(0);
   });
 
   // TC-187-03 (AC1) — several fields, one reason, no extra field recorded.
