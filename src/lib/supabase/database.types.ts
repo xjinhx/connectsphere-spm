@@ -1562,6 +1562,7 @@ export type Database = {
       }
       venues: {
         Row: {
+          address: string | null
           closes_at: string
           created_at: string
           id: string
@@ -1578,6 +1579,7 @@ export type Database = {
           updated_at: string
         }
         Insert: {
+          address?: string | null
           closes_at: string
           created_at?: string
           id?: string
@@ -1594,6 +1596,7 @@ export type Database = {
           updated_at?: string
         }
         Update: {
+          address?: string | null
           closes_at?: string
           created_at?: string
           id?: string
