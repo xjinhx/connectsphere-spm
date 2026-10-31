@@ -12,7 +12,14 @@ test('SCRUM-250 AC2 TC-250-06: at 390 px the organiser nav folds into the menu, 
   await signIn(page, 'organiser');
   await expect(page).toHaveURL(/\/events$/);
 
-  await page.getByRole('button', { name: 'Menu', exact: true }).click();
+  // Since SCRUM-268 the login is a full page load, so a click can land before
+  // the header hydrates and do nothing. Click until the menu opens, as the
+  // SCRUM-268 tests do.
+  const menuButton = page.getByRole('button', { name: 'Menu', exact: true });
+  await expect(async () => {
+    if ((await menuButton.getAttribute('aria-expanded')) !== 'true') await menuButton.click();
+    await expect(menuButton).toHaveAttribute('aria-expanded', 'true', { timeout: 1000 });
+  }).toPass({ timeout: 20_000 });
   const menu = page.locator('#app-nav-menu');
   await expect(menu.getByRole('link')).toHaveText(['Event requests', 'New event request']);
   await expect(menu.getByRole('link', { name: 'Event requests' })).toHaveAttribute('aria-current', 'page');
