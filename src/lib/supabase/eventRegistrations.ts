@@ -87,6 +87,15 @@ export async function countRegisteredRegistrations(eventRequestId: string) {
 }
 
 /** AC5: the attendee's Registered registration for this event, or null. */
+/** SCRUM-190 AC5: the Attendee accounts holding a Registered registration for an event. */
+export async function fetchRegisteredAttendeeIds(eventRequestId: string) {
+  return db()
+    .from('event_registration')
+    .select('attendee_id')
+    .eq('event_request_id', eventRequestId)
+    .eq('status', 'registered');
+}
+
 export async function fetchRegisteredRegistration(eventRequestId: string, attendeeId: string) {
   return db()
     .from('event_registration')
