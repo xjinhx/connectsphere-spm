@@ -501,12 +501,13 @@ switch them the next time they edit those files.
 - **To replace:** once a booking can be released or cancelled through the app,
   re-run SCRUM-155 AC3 (TC-155-04 and TC-155-05) through that action, then
   remove the marker.
-- **Status:** Release half replaced (SCRUM-231, branch
+- **Status:** **Replaced.** Release half by SCRUM-231 (branch
   `venue-booking-release`): a booking is released through the app, so
-  TC-155-04 no longer needs the helper; re-check it that way. Still active for
-  cancellation: nothing cancels an event's bookings until SCRUM-105, so
-  TC-155-05 still removes the booking by hand. The marker now names
-  SCRUM-105.
+  TC-155-04 no longer needs the helper. Cancellation half by SCRUM-105 (branch
+  `cancel-event`): cancelling an event releases its bookings ("Event
+  cancelled", who and when), so TC-155-05 is re-run by cancelling the event
+  through the app instead of deleting its booking (TC-105-19). Marker
+  removed.
 
 ### D-16 — getVenueCommitments returns a fixture booking
 
