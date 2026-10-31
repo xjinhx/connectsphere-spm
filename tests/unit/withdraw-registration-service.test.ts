@@ -68,10 +68,14 @@ function eventOn(date: string | null) {
     data: {
       id: EVENT_ID,
       name: 'Client Appreciation Night',
+      description: null,
       proposed_date: date,
+      start_time: null,
+      end_time: null,
       registration_start_date: '2026-10-27',
       registration_end_date: '2026-11-04',
       registration_capacity: 20,
+      venue_booking: [],
     },
     error: null,
   } as never);

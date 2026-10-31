@@ -32,7 +32,11 @@ const ATTENDEE_ID = 'aaaaaaaa-aaaa-4aaa-8aaa-aaaaaaaaaaaa';
 const OPEN: RegistrationPageView = {
   eventRequestId: EVENT_ID,
   eventName: 'Client Appreciation Night',
+  // SCRUM-180 AC3's details; the back link does not depend on them.
+  description: null,
   eventDate: '2026-11-09',
+  times: null,
+  venues: [],
   period: { startDate: '2026-10-21', endDate: '2026-10-29' },
   periodRefusal: null,
   registration: null,

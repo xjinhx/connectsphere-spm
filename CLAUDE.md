@@ -253,10 +253,15 @@ field, don't grow the current story: complete the 8 fields now, and create a
 new user story for the 9th field or the validation, for a future sprint.
 
 - **Changes that add no work** (rewording an AC, correcting a test case,
-  adding a test case for behaviour already in scope): update the Jira card and
-  `ConnectSphere_Test_Cases_v3.xlsx` together so they don't drift further,
-  agree it in the Daily Scrum, add a row to the Change Log, and note it in the
-  PR description.
+  adding a test case for behaviour already in scope, or narrowing how an AC's
+  wording is read): get it agreed first — in the Daily Scrum, or on Slack when
+  it can't wait for one (e.g. a PO sign-off mid-build, the way CL-56 was
+  confirmed) — then update the Jira card and `ConnectSphere_Test_Cases_v3.xlsx`
+  together so they don't drift further, add a row to the Change Log, and note
+  it in the PR description with a link back to the Slack/Jira record. The
+  Slack thread or Jira comment is what makes it an agreed team decision rather
+  than one person's reading of the card; skipping it leaves the AC effectively
+  unsourced even if the sheet and the code agree with each other.
 - **Changes that add work** (a new field, new validation logic): create a new
   user story for a later sprint instead of widening the current one.
 - **One story or two?** A story that bundles two functions must test both.
