@@ -30,6 +30,8 @@
 --   not_pending          the change request is not Pending (TC-190 negative case)
 --   event_not_found      its event request could not be found (should not happen)
 --   not_assigned         p_coordinator_id is not the event's assigned coordinator
+--   event_finished       the event is Completed or Cancelled (SCRUM-110 AC5:
+--                        read-only for everyone), with its "status"
 --   approved             AC1/AC2/AC4: applied, flagged, with "bookings",
 --                        "reservations", "venueStaffIds", "equipmentStaffIds"
 --                        and "eventStatus" (the event's status after the call)
@@ -83,6 +85,13 @@ begin
   end if;
   if v_event.coordinator_id is distinct from p_coordinator_id then
     return jsonb_build_object('outcome', 'not_assigned');
+  end if;
+  -- SCRUM-110 AC5: a Completed or Cancelled event is read-only for everyone,
+  -- so a request raised before it finished can no longer be applied. Checked
+  -- here, with the event row locked, so a cancellation at the same moment
+  -- (cancel_event locks it too) takes its turn first.
+  if v_event.status in ('completed', 'cancelled') then
+    return jsonb_build_object('outcome', 'event_finished', 'status', v_event.status);
   end if;
 
   -- AC2: only a Confirmed event, and only when the change is significant.

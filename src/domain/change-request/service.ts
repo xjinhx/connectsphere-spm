@@ -11,6 +11,7 @@ import {
 import { fetchEventRequestById, type EventRequestRow } from '@/lib/supabase/eventRequests';
 import { fetchRegisteredAttendeeIds } from '@/lib/supabase/eventRegistrations';
 import { canViewRequest } from '@/domain/event-request/policy';
+import { finishedEventNotice, isFinishedEvent } from '@/domain/event-information/policy';
 import { timeRangeIssues } from '@/domain/event-request/schema';
 import type { ScheduleValues } from '@/domain/significant-change/schema';
 import { RoomLayoutSchema, type RoomLayout } from '@/domain/venues/schema';
@@ -410,6 +411,10 @@ export async function approveChangeRequest(
   if (cr.status !== 'pending') {
     throw new ConflictError('This change request has already been decided.');
   }
+  // SCRUM-110 AC5: a Completed or Cancelled event is read-only, so a request
+  // raised before it finished is refused. approve_change_request checks it
+  // again with the event locked ('event_finished' below).
+  if (isFinishedEvent(event.status)) throw new ConflictError(finishedEventNotice(event.status));
 
   const proposed = proposedValueMap(fields.map((f) => ({ field: f.field as SelectableChangeRequestField, currentValue: f.current_value, proposedValue: f.proposed_value })));
 
@@ -518,6 +523,7 @@ export async function approveChangeRequest(
 
   const result = data as {
     outcome: string;
+    status?: string;
     bookings?: string[];
     reservations?: string[];
     venueStaffIds?: string[];
@@ -532,6 +538,8 @@ export async function approveChangeRequest(
       throw new NotFoundError('Event request');
     case 'not_assigned':
       throw new ForbiddenError('This event is not assigned to you.');
+    case 'event_finished':
+      throw new ConflictError(finishedEventNotice(result.status as 'completed' | 'cancelled'));
     case 'approved':
       break;
     default:

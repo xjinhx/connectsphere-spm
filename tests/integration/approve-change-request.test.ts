@@ -3,7 +3,7 @@ import { createAdminClient } from '@/lib/supabase/admin';
 import { createEquipmentItem } from '@/domain/equipment/service';
 import { reserveEquipment } from '@/domain/equipment-reservation/service';
 import { recordEssentialArrangements } from '@/domain/essential-arrangements/service';
-import { confirmEvent } from '@/domain/event-status/service';
+import { cancelEvent, confirmEvent } from '@/domain/event-status/service';
 import type { EventRequestStatus } from '@/domain/event-request/schema';
 import { approveChangeRequest, raiseChangeRequest } from '@/domain/change-request/service';
 import { registerForEvent } from '@/domain/event-registration/service';
@@ -20,7 +20,8 @@ import { ensureTestClientOrganisation, TEST_CLIENT_ORGANISATION_ID } from './fix
  * Runs against the local Supabase stack. Test case IDs are from the Sprint 4
  * sheet's SCRUM-190 tab (TC-190-nn): a happy path per AC, a boundary case for
  * AC2 (TC-190-07, a non-significant change never drops a Confirmed event) and
- * a negative case (TC-190-08, a non-Pending request). The pure rules are in
+ * negative cases (TC-190-08, a non-Pending request; TC-190-09, a request on
+ * an event cancelled since it was raised). The pure rules are in
  * tests/unit/approve-change-request-policy.test.ts.
  *
  * AC5: a registration belongs to the signed-in Attendee account that made it
@@ -427,5 +428,25 @@ describe('SCRUM-190: a change request that is not Pending cannot be approved', (
     await approveChangeRequest(eventId, cr.id, coordinatorId);
 
     await expect(approveChangeRequest(eventId, cr.id, coordinatorId)).rejects.toBeInstanceOf(ConflictError);
+  });
+
+  // Supplementary (review on PR #164): SCRUM-110 AC5 makes a Completed or
+  // Cancelled event read-only, so a request raised before the event was
+  // cancelled (SCRUM-105) can no longer be approved.
+  it('TC-190-09 (negative) refuses a Pending request once its event is cancelled, and changes nothing', async () => {
+    const eventId = await createEvent('planning');
+    const cr = await raiseChangeRequest(eventId, { fields: [{ field: 'expectedAttendance', proposedValue: 175 }], reason: 'A few more guests' }, organiserId);
+    const attendanceBefore = (await eventRow(eventId)).expected_attendance;
+    await cancelEvent(eventId, asCoordinator(), { reason: 'The client has withdrawn' });
+
+    await expect(approveChangeRequest(eventId, cr.id, coordinatorId)).rejects.toThrow(
+      'This event is Cancelled. Its record is read-only and kept as history.',
+    );
+
+    const event = await eventRow(eventId);
+    expect(event.status).toBe('cancelled');
+    expect(event.expected_attendance).toBe(attendanceBefore);
+    expect((await changeRequestRow(cr.id)).status).toBe('pending');
+    expect(await notificationsFor(organiserId, eventId, 'change_request_approved')).toHaveLength(0);
   });
 });
