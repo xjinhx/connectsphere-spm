@@ -7,7 +7,8 @@ import type { ReactElement } from 'react';
  * event said nothing of it and offered the Register form. PO, 28/10/2026: the
  * page opens, shows the event as Cancelled and has no Register button. The
  * page is rendered for real, as an Attendee; only the session and the read
- * behind it are replaced. Test case IDs are from SCRUM-270-test-cases.xlsx.
+ * behind it are replaced. Test case IDs are from the
+ * ConnectSphere_TestCases_Sprint4 workbook, SCRUM-270 tab (TC-270-nn).
  */
 
 // next/link needs the App Router mounted; a plain anchor is enough here.

@@ -334,10 +334,10 @@ describe('the registration period on the event', () => {
  * SCRUM-270 — bug against AC1: a Cancelled or Completed event took
  * registrations while its period was open. PO, 28/10/2026: a registration
  * period is open only while the event is going ahead. Test case IDs are from
- * SCRUM-270-test-cases.xlsx (TC-270-nn).
+ * the ConnectSphere_TestCases_Sprint4 workbook, SCRUM-270 tab (TC-270-nn).
  */
 describe('SCRUM-270: a Cancelled or Completed event takes no registrations', () => {
-  // Cancelling is SCRUM-102 / 177's and completing SCRUM-104's; this writes the status each sets.
+  // Cancelling is SCRUM-105's and completing SCRUM-104's; this writes the status each sets.
   async function setStatus(eventId: string, status: 'cancelled' | 'completed') {
     const { error } = await admin
       .from('event_request')

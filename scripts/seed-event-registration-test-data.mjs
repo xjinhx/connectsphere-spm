@@ -168,7 +168,7 @@ check(
 );
 
 // --- SCRUM-270: cancelled and completed after the registrations above ---------
-// Cancelling is SCRUM-102 / 177's and completing SCRUM-104's; this writes the
+// Cancelling is SCRUM-105's and completing SCRUM-104's; this writes the
 // status each sets.
 check(
   'cancel the galas',

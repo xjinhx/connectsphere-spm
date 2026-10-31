@@ -393,7 +393,7 @@ describe('SCRUM-182 AC3: a place released by a withdrawal', () => {
  * SCRUM-270 — bug against AC1: a Cancelled or Completed event took
  * registrations while its period was open. PO, 28/10/2026: a registration
  * period is open only while the event is going ahead. Test case IDs are from
- * SCRUM-270-test-cases.xlsx (TC-270-nn).
+ * the ConnectSphere_TestCases_Sprint4 workbook, SCRUM-270 tab (TC-270-nn).
  */
 describe('SCRUM-270: a Cancelled or Completed event takes no registrations', () => {
   it('TC-270-01 the page of a Cancelled event, its period open, is marked Cancelled', async () => {
