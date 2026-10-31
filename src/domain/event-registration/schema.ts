@@ -1,12 +1,14 @@
 import { z } from 'zod';
 import type { ISODate } from '@/domain/shared/dates';
+import type { ClockRange } from '@/domain/shared/times';
 
 /**
  * SCRUM-181 — Register for an event.
  *
  * The registration record is shared: SCRUM-182 (refusing a full event),
  * SCRUM-184 (withdrawing) and SCRUM-185 (the registration list) read and
- * extend these shapes rather than declaring their own.
+ * extend these shapes rather than declaring their own. SCRUM-180 (browsing
+ * open events and my registrations) adds the shapes at the end.
  */
 
 // Same convention as event-status/schema.ts: each domain validates the id
@@ -71,12 +73,16 @@ export interface Registration {
 
 /**
  * What the Attendee's event page needs. Only what an attendee may see: no
- * internal planning fields (SCRUM-72 AC1).
+ * internal planning fields (SCRUM-72 AC1). SCRUM-180 AC3 adds the
+ * description, times and venues; `venues` carries each one's address.
  */
 export interface RegistrationPageView {
   eventRequestId: string;
   eventName: string;
+  description: string | null;
   eventDate: ISODate | null;
+  times: ClockRange | null;
+  venues: EventVenue[];
   period: RegistrationPeriod;
   /** Why registering is refused today (AC2, AC3), or null when it is open. */
   periodRefusal: string | null;
@@ -86,4 +92,42 @@ export interface RegistrationPageView {
   finalStatus: FinalEventStatus | null;
   /** The viewer's Registered registration for this event, if any (AC5). */
   registration: Registration | null;
+}
+
+/**
+ * SCRUM-180 — a venue the event is held at: the venue of each of its confirmed
+ * bookings. A released booking's venue is not one (SCRUM-231).
+ */
+export interface EventVenue {
+  name: string;
+  /** Null when none is recorded for the venue. */
+  address: string | null;
+}
+
+/**
+ * SCRUM-180 AC1 — one event open for registration, as Open events lists it:
+ * name, date, start and end times and venue. The date and times are the
+ * event's own, so a reschedule shows wherever they are read.
+ */
+export interface OpenEvent {
+  eventRequestId: string;
+  eventName: string;
+  eventDate: ISODate | null;
+  /** Null until the event has times. */
+  times: ClockRange | null;
+  venues: EventVenue[];
+}
+
+/**
+ * SCRUM-180 AC4 — one of the attendee's own registrations, as My
+ * registrations lists it: the event's name, date, start and end times and
+ * venue, and the registration's status. The event's details are read when the
+ * list is, so a reschedule shows (AC5).
+ */
+export interface MyRegistration extends OpenEvent {
+  registrationId: string;
+  reference: string;
+  status: RegistrationStatus;
+  /** AC6: the event was cancelled; the registration stays listed, marked Cancelled. */
+  eventCancelled: boolean;
 }

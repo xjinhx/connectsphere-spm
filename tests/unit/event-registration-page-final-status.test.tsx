@@ -34,7 +34,11 @@ const ATTENDEE_ID = 'aaaaaaaa-aaaa-4aaa-8aaa-aaaaaaaaaaaa';
 const GALA: RegistrationPageView = {
   eventRequestId: EVENT_ID,
   eventName: 'Year-End Gala',
+  // SCRUM-180 AC3's details; the status mark does not depend on them.
+  description: null,
   eventDate: '2026-11-28',
+  times: null,
+  venues: [],
   period: { startDate: '2026-10-26', endDate: '2026-11-03' },
   periodRefusal: null,
   full: false,

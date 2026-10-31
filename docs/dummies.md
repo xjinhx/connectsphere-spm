@@ -747,7 +747,9 @@ switch them the next time they edit those files.
   and end dates)
 - **Where:** `scripts/seed-event-registration-test-data.mjs` — the header
   comment (`DUMMY(SCRUM-185) D-22`), and the `registration_start_date` /
-  `registration_end_date` it writes for each event
+  `registration_end_date` it writes for each event. Also
+  `scripts/seed-scrum180.mjs` (SCRUM-180, branch `browse-open-events`), the
+  same way, for the events Open events lists or leaves out (TC-180-01 to 05)
 - **What is real and what is faked:** the period is real. The columns
   `event_request.registration_start_date` and `registration_end_date` (dates,
   both inclusive, added by SCRUM-181's migration
@@ -760,7 +762,17 @@ switch them the next time they edit those files.
 - **To replace:** SCRUM-185 AC5's form saves to the same two columns (both
   together; the table refuses one without the other, or an end before the
   start). Set the periods through the form for TC-181-05 to TC-181-12 instead
-  of the seed, remove the marker, and re-run those test cases.
+  of the seed, remove the marker, and re-run those test cases. Then the same
+  for SCRUM-180's TC-180-01 to TC-180-05, which read the same two columns
+  (Open events lists an event while today is inside its period).
+- **Limit which events can have a period (SCRUM-180 review, PR #154):** Open
+  events leaves out only Cancelled and Completed events (the PO's reading of
+  SCRUM-180 AC1, 28/10/2026), so it lists any other event whose period
+  includes today: a Draft, Submitted, Rejected or Planning one too. That
+  cannot happen while only the seed sets a period. When SCRUM-185 AC5's form
+  replaces the seed, it must let a period be set only on an event that is
+  going ahead (SCRUM-185 allows editing only while the event is Confirmed),
+  or Open events needs a list of the statuses it may show instead.
 - **Status:** Active.
 
 ### D-23 — Places always remain
