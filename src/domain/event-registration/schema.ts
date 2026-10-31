@@ -24,6 +24,17 @@ export const REGISTRATION_STATUS_LABELS: Record<RegistrationStatus, string> = {
   withdrawn: 'Withdrawn',
 };
 
+/**
+ * SCRUM-270 — the two event statuses that close registration for good: the
+ * event is not going ahead, whatever its registration period says.
+ */
+export type FinalEventStatus = 'cancelled' | 'completed';
+
+export const FINAL_EVENT_STATUS_LABELS: Record<FinalEventStatus, string> = {
+  cancelled: 'Cancelled',
+  completed: 'Completed',
+};
+
 /** A required text field: blank or only spaces counts as missing (TC-181-03). */
 function required(message: string) {
   return z.string({ required_error: message, invalid_type_error: message }).trim().min(1, message);
@@ -77,6 +88,8 @@ export interface RegistrationPageView {
   periodRefusal: string | null;
   /** SCRUM-182 AC1: the capacity is reached (or not set), so the event is shown as full. */
   full: boolean;
+  /** SCRUM-270: the event is Cancelled or Completed, so it takes no registrations; null while it is going ahead. */
+  finalStatus: FinalEventStatus | null;
   /** The viewer's Registered registration for this event, if any (AC5). */
   registration: Registration | null;
 }

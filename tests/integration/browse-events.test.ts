@@ -28,7 +28,7 @@ import { TEST_CLIENT_ORGANISATION_ID, ensureTestClientOrganisation } from './fix
  * Runs against the local Supabase stack. The clock is fixed by passing `now`.
  * Other tests' events may also be open on the fixed date, so each test looks
  * for its own events by id rather than at the whole list. Test case IDs are
- * from SCRUM-180-test-cases.xlsx (TC-180-nn).
+ * from the ConnectSphere_TestCases_Sprint4 workbook, SCRUM-180 tab (TC-180-nn).
  */
 
 const admin = createAdminClient();
@@ -228,7 +228,7 @@ describe('AC1: an event whose registration period is open is listed', () => {
     const goingAhead = await createEvent('Client Appreciation Night');
     const cancelled = await createEvent('Year-End Gala');
     const completed = await createEvent('Annual Dinner');
-    // Cancelling is SCRUM-102 / 177's and completing SCRUM-104's; this writes the status each sets.
+    // Cancelling is SCRUM-105's and completing SCRUM-104's; this writes the status each sets.
     for (const [id, status] of [[cancelled, 'cancelled'], [completed, 'completed']] as const) {
       const { error } = await admin
         .from('event_request')
@@ -317,11 +317,13 @@ describe('AC3: the event page shows only what an attendee may see', () => {
     const view = await getRegistrationPage(eventId, attendeeId, NOW);
     const shown = JSON.stringify(view);
 
-    // Only the AC3 fields, plus SCRUM-181's registration state and SCRUM-182's
-    // full flag (the capacity itself is not shown).
+    // Only the AC3 fields, plus SCRUM-181's registration state, SCRUM-182's
+    // full flag (the capacity itself is not shown) and SCRUM-270's finalStatus
+    // (Cancelled or Completed, which the page shows; PO, 28/10/2026).
     expect(Object.keys(view).sort()).toEqual(
-      ['description', 'eventDate', 'eventName', 'eventRequestId', 'full', 'period', 'periodRefusal', 'registration', 'times', 'venues'],
+      ['description', 'eventDate', 'eventName', 'eventRequestId', 'finalStatus', 'full', 'period', 'periodRefusal', 'registration', 'times', 'venues'],
     );
+    expect(view.finalStatus).toBeNull();
     expect(view.venues).toEqual([{ name: `Marina Bay Ballroom ${RUN}`, address: BALLROOM_ADDRESS }]);
     for (const hidden of [
       client!.name,
@@ -479,7 +481,7 @@ describe('AC6: a cancelled event is marked Cancelled against my registration', (
     await register(gala, attendee);
     await register(night, attendee);
 
-    // Cancelling is SCRUM-102 / 177's (B3); this writes the status that flow sets.
+    // Cancelling is SCRUM-105's; this writes the status that flow sets.
     const { error } = await admin
       .from('event_request')
       .update({ status: 'cancelled', submitted_at: new Date().toISOString() })
