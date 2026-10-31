@@ -3,9 +3,9 @@ import { renderToStaticMarkup } from 'react-dom/server';
 import type { ReactElement } from 'react';
 
 /**
- * SCRUM-251 AC4 and AC6: a booking request links back to its event, and a
- * client organisation's detail and edit pages each link back to the page
- * before. The pages are rendered for real; only the session and the reads
+ * SCRUM-251 AC4, AC5 and AC6: a booking request links back to its event;
+ * Venues offers Search and a venue links to its calendar; and a client
+ * organisation's detail and edit pages each link back to the page before. The pages are rendered for real; only the session and the reads
  * behind them are replaced. Test case IDs match the SCRUM-251 tab of the
  * Sprint 4 sheet.
  */
@@ -24,7 +24,13 @@ vi.mock('@/domain/venue-booking/service', () => ({
   getBookingRequestRequirements: vi.fn(),
   findPendingLineConflicts: vi.fn(),
 }));
-vi.mock('@/domain/venues/service', () => ({ getVenue: vi.fn(), listVenues: vi.fn() }));
+vi.mock('@/domain/venues/service', () => ({
+  getVenue: vi.fn(),
+  listVenues: vi.fn(),
+  listSetupTurnaroundAffectedBookings: vi.fn(),
+}));
+vi.mock('@/domain/availability/service', () => ({ listUpcomingUnavailablePeriods: vi.fn() }));
+vi.mock('@/domain/venue-hold/service', () => ({ listActiveVenueHolds: vi.fn(), listHoldableEvents: vi.fn() }));
 vi.mock('@/domain/client-organisation/service', () => ({ getClientOrganisation: vi.fn() }));
 vi.mock('@/domain/identity/service', () => ({ listOrganisersForOrganisation: vi.fn() }));
 // Not about these ACs, and each needs the router or data of its own.
@@ -34,10 +40,13 @@ vi.mock('@/components/venue-booking/VenueBookingDecisionForm', () => ({ VenueBoo
 
 import { getCurrentActor } from '@/lib/auth/currentActor';
 import { getBookingRequestRequirements, viewVenueBookingRequest } from '@/domain/venue-booking/service';
-import { getVenue } from '@/domain/venues/service';
+import { getVenue, listVenues } from '@/domain/venues/service';
+import { listUpcomingUnavailablePeriods } from '@/domain/availability/service';
 import { getClientOrganisation } from '@/domain/client-organisation/service';
 import { listOrganisersForOrganisation } from '@/domain/identity/service';
 import VenueBookingRequestPage from '@/app/venue-booking-requests/[id]/page';
+import VenueCataloguePage from '@/app/venues/page';
+import VenueDetailPage from '@/app/venues/[id]/page';
 import ClientOrganisationPage from '@/app/organisations/[id]/page';
 import EditClientOrganisationPage from '@/app/organisations/[id]/edit/page';
 
@@ -110,6 +119,42 @@ describe('SCRUM-251 AC4: a booking request links back to its event', () => {
   it('TC-251-09: Venue Staff, who come from their queue, do not', async () => {
     signedInAs(VENUE_STAFF_ID, ['venue_staff']);
     expect(hrefOf(await render(), '← S251 Confirmed Dinner')).toBeNull();
+  });
+});
+
+describe('SCRUM-251 AC5: Venues offers Search, and a venue links to its calendar', () => {
+  const VENUE_ID = 'ffffffff-ffff-4fff-8fff-ffffffffffff';
+  const venue = {
+    id: VENUE_ID,
+    name: 'Marina Bay Ballroom',
+    isRetired: false,
+    location: { id: 'l1', name: 'Marina Bay' },
+    maxCapacity: 300,
+    opensAt: '07:00',
+    closesAt: '24:00',
+    layouts: [],
+    facilities: [],
+    accessibilityFeatures: [],
+    setupMinutes: 0,
+    turnaroundMinutes: 0,
+  };
+
+  it('SCRUM-251 AC5 TC-251-10: Venues offers Search by date and time to the coordinator', async () => {
+    vi.mocked(listVenues).mockResolvedValue([] as unknown as Awaited<ReturnType<typeof listVenues>>);
+    const page = (await VenueCataloguePage({ searchParams: Promise.resolve({}) })) as ReactElement;
+    const html = renderToStaticMarkup(page);
+
+    expect(html).toContain('Venue catalogue');
+    expect(hrefOf(html, 'Search by date and time')).toBe('/venues/search');
+  });
+
+  it("SCRUM-251 AC5 TC-251-10: a venue's page links the coordinator to its calendar", async () => {
+    vi.mocked(getVenue).mockResolvedValue(venue as unknown as Awaited<ReturnType<typeof getVenue>>);
+    vi.mocked(listUpcomingUnavailablePeriods).mockResolvedValue([]);
+    const page = (await VenueDetailPage({ params: Promise.resolve({ id: VENUE_ID }) })) as ReactElement;
+    const html = renderToStaticMarkup(page);
+
+    expect(hrefOf(html, 'View calendar')).toBe(`/venues/${VENUE_ID}/calendar`);
   });
 });
 
