@@ -4,7 +4,8 @@ import { isNavItemCurrent, landingPathFor, resolveWorkingRole } from '@/domain/n
 import { ROLE_NAV } from '@/domain/navigation/roleNav';
 
 /**
- * SCRUM-255 Attendee Navigation. Test case IDs match SCRUM-255-test-cases.xlsx.
+ * SCRUM-255 Attendee Navigation. Test case IDs match the
+ * ConnectSphere_TestCases_Sprint4 workbook, SCRUM-255 tab.
  * The redirect itself (login, then /) is tested by hand; the rendered header is
  * in attendee-nav-header.test.tsx and AC3's back link in
  * attendee-nav-back-links.test.tsx.
