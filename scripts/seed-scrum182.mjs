@@ -13,14 +13,13 @@
 // assigned coordinator sets it on the event's registration page (SCRUM-185
 // AC5, CL-59), which replaced dummy D-24.
 //
-// DUMMY(SCRUM-184) D-25: withdrawing is done by these flags, not by the
-// attendee (SCRUM-184). Each sets one Registered registration to Withdrawn on
-// an already-seeded event, without re-seeding:
+// Withdrawing is done by the attendee on the event page (SCRUM-184; D-25,
+// Replaced): sign in as the account below, open the event and Withdraw.
 //
-//   --withdraw           Filler Attendee 1 on (withdrawal)           TC-182-09
-//   --withdraw-over      the next filler on (over capacity)          TC-182-10
-//   --withdraw-attendee  attendee@example.com on (withdraw and return) TC-182-11
-//   --withdraw-waiting   Filler Attendee 1 on (no waiting list)       TC-182-12
+//   (withdrawal)            registration-filler-01@example.com            TC-182-09
+//   (over capacity)         registration-filler-01, then -02@example.com  TC-182-10
+//   (withdraw and return)   attendee@example.com                          TC-182-11
+//   (no waiting list)       registration-filler-01@example.com            TC-182-12
 import { config } from 'dotenv';
 import { resolve } from 'path';
 import { createClient } from '@supabase/supabase-js';
@@ -50,51 +49,6 @@ const NIGHT = 'Client Appreciation Night';
 
 function check(label, { error }) {
   if (error) throw new Error(`${label}: ${error.message}`);
-}
-
-// --- Withdrawing (D-25) -------------------------------------------------------
-const WITHDRAWALS = {
-  '--withdraw': [`${NIGHT} (withdrawal)`, 'filler'],
-  '--withdraw-over': [`${NIGHT} (over capacity)`, 'filler'],
-  '--withdraw-attendee': [`${NIGHT} (withdraw and return)`, 'attendee@example.com'],
-  '--withdraw-waiting': [`${NIGHT} (no waiting list)`, 'filler'],
-};
-
-async function withdrawOne(flag) {
-  if (!WITHDRAWALS[flag]) throw new Error(`Unknown flag ${flag}. Use one of: ${Object.keys(WITHDRAWALS).join(', ')}`);
-  const [eventName, who] = WITHDRAWALS[flag];
-
-  const { data: event, error: eventError } = await supabase
-    .from('event_request')
-    .select('id, registration_capacity')
-    .eq('description', SEEDED_BY)
-    .eq('name', eventName)
-    .maybeSingle();
-  if (eventError) throw new Error(`find ${eventName}: ${eventError.message}`);
-  if (!event) throw new Error(`${eventName} is not seeded. Run node scripts/seed-scrum182.mjs first.`);
-
-  // 'filler' takes the first filler still Registered, so --withdraw-over can run twice.
-  let query = supabase
-    .from('event_registration')
-    .select('id, full_name, email')
-    .eq('event_request_id', event.id)
-    .eq('status', 'registered')
-    .order('email')
-    .limit(1);
-  query = who === 'filler' ? query.like('email', 'registration-filler-%') : query.eq('email', who);
-  const { data: rows, error: findError } = await query;
-  if (findError) throw new Error(`find registration: ${findError.message}`);
-  if (!rows.length) throw new Error(`No Registered registration left to withdraw on ${eventName}.`);
-
-  check('withdraw', await supabase.from('event_registration').update({ status: 'withdrawn' }).eq('id', rows[0].id));
-
-  const { count } = await supabase
-    .from('event_registration')
-    .select('id', { count: 'exact', head: true })
-    .eq('event_request_id', event.id)
-    .eq('status', 'registered');
-  console.log(`Withdrew ${rows[0].full_name} (${rows[0].email}) on ${eventName}.`);
-  console.log(`Now ${count} of ${event.registration_capacity} places taken. Reload the event page.`);
 }
 
 // --- Seeding ------------------------------------------------------------------
@@ -157,10 +111,10 @@ async function seed() {
     [`${NIGHT} (beside a full event)`, 20, 19, false, 'TC-182-04'],
     [`${NIGHT} (race)`, 20, 19, false, 'TC-182-05, then 08'],
     [`${NIGHT} (two places)`, 20, 18, false, 'TC-182-07'],
-    [`${NIGHT} (withdrawal)`, 20, 20, false, 'TC-182-09 (then --withdraw)'],
-    [`${NIGHT} (over capacity)`, 2, 3, false, 'TC-182-10 (then --withdraw-over, twice)'],
-    [`${NIGHT} (withdraw and return)`, 20, 19, true, 'TC-182-11 (then --withdraw-attendee)'],
-    [`${NIGHT} (no waiting list)`, 20, 20, false, 'TC-182-12 (then --withdraw-waiting)'],
+    [`${NIGHT} (withdrawal)`, 20, 20, false, 'TC-182-09 (filler-01 withdraws)'],
+    [`${NIGHT} (over capacity)`, 2, 3, false, 'TC-182-10 (filler-01, then -02 withdraw)'],
+    [`${NIGHT} (withdraw and return)`, 20, 19, true, 'TC-182-11 (attendee withdraws)'],
+    [`${NIGHT} (no waiting list)`, 20, 20, false, 'TC-182-12 (filler-01 withdraws)'],
   ];
 
   const now = new Date().toISOString();
@@ -215,5 +169,4 @@ async function seed() {
   }
 }
 
-const flag = process.argv.slice(2).find((arg) => arg.startsWith('--'));
-await (flag ? withdrawOne(flag) : seed());
+await seed();
