@@ -1,8 +1,10 @@
 import { afterAll, beforeAll, describe, expect, it } from 'vitest';
 import { createAdminClient } from '@/lib/supabase/admin';
-import { registerForEvent } from '@/domain/event-registration/service';
+import { getRegistrationPage, registerForEvent } from '@/domain/event-registration/service';
+import { NO_PLACES_REMAINING } from '@/domain/event-registration/policy';
 import { listNotifications } from '@/domain/notification/service';
 import { NOTIFICATION_TYPES } from '@/domain/notification/schema';
+import { CapacityExceededError } from '@/domain/shared/errors';
 import { createVenue } from '@/domain/venues/service';
 import { TEST_CLIENT_ORGANISATION_ID, ensureTestClientOrganisation } from './fixtures/clientOrganisation';
 
@@ -113,6 +115,16 @@ async function notificationsFor(attendeeId: string, eventId: string) {
 const typesFor = async (attendeeId: string, eventId: string) =>
   (await notificationsFor(attendeeId, eventId)).map((notification) => notification.type);
 
+async function registeredRows(eventId: string) {
+  const { data, error } = await admin
+    .from('event_registration')
+    .select('attendee_id, status')
+    .eq('event_request_id', eventId)
+    .eq('status', 'registered');
+  if (error) throw new Error(error.message);
+  return data;
+}
+
 async function refusal(promise: Promise<unknown>) {
   try {
     await promise;
@@ -211,6 +223,91 @@ describe('AC1: a registration that is created sends a confirmation with the even
 
       expect(registration.status).toBe('registered');
       expect(await typesFor(a, eventId)).toEqual(['registration_confirmed']);
+    },
+    TIMEOUT,
+  );
+});
+
+describe('AC3: a registration refused because the event is full tells the attendee so', () => {
+  it(
+    'TC-201-04 at capacity (3 of 3): refused, no row for the attendee, and one notification that the event is full',
+    async () => {
+      const eventId = await createEvent({ capacity: 3 });
+      await fill(eventId, 3);
+      const b = await createAttendee();
+
+      const error = await refusal(registerForEvent(eventId, b, VALID, NOW));
+
+      expect(error).toBeInstanceOf(CapacityExceededError);
+      expect(error).toMatchObject({ message: NO_PLACES_REMAINING });
+      const rows = await registeredRows(eventId);
+      expect(rows).toHaveLength(3);
+      expect(rows.map((row) => row.attendee_id)).not.toContain(b);
+      const sent = await notificationsFor(b, eventId);
+      expect(sent).toHaveLength(1);
+      expect(sent[0]).toMatchObject({
+        type: 'registration_refused_full',
+        readAt: null,
+        message: `Your registration for "${EVENT_NAME}" on 17/11/2026 was not accepted: the event is full.`,
+      });
+    },
+    TIMEOUT,
+  );
+
+  it(
+    'TC-201-04 an event with no capacity set (CL-63) is refused and told the same',
+    async () => {
+      const eventId = await createEvent({ capacity: null });
+      const b = await createAttendee();
+
+      expect(await refusal(registerForEvent(eventId, b, VALID, NOW))).toBeInstanceOf(CapacityExceededError);
+
+      expect(await registeredRows(eventId)).toEqual([]);
+      expect(await typesFor(b, eventId)).toEqual(['registration_refused_full']);
+    },
+    TIMEOUT,
+  );
+
+  it(
+    'TC-201-05 a full event whose period has closed is refused as closed, and not told it is full; opening a full page sends nothing',
+    async () => {
+      const closedId = await createEvent({ capacity: 3, start: '2026-10-22', end: '2026-10-31' });
+      // Filled while open, before the period closed.
+      for (const id of [await createAttendee(), await createAttendee(), await createAttendee()]) {
+        await registerForEvent(closedId, id, VALID, new Date('2026-10-30T10:00:00+08:00'));
+      }
+      const fullId = await createEvent({ capacity: 3 });
+      await fill(fullId, 3);
+      const a = await createAttendee();
+
+      expect(await refusal(registerForEvent(closedId, a, VALID, NOW))).toMatchObject({
+        message: 'Registration closed on 31/10/2026.',
+      });
+      expect((await getRegistrationPage(fullId, a, NOW)).full).toBe(true);
+
+      expect(await typesFor(a, closedId)).toEqual([]);
+      expect(await typesFor(a, fullId)).toEqual([]);
+    },
+    TIMEOUT,
+  );
+
+  it(
+    'TC-201-06 two attendees going for the last place at once: one confirmed, the other told the event is full',
+    async () => {
+      const eventId = await createEvent({ capacity: 3 });
+      await fill(eventId, 2);
+      const [a, b] = [await createAttendee(), await createAttendee()];
+
+      const results = await Promise.allSettled([a, b].map((id) => registerForEvent(eventId, id, VALID, NOW)));
+
+      const winners = [a, b].filter((_, i) => results[i]?.status === 'fulfilled');
+      const losers = [a, b].filter((_, i) => results[i]?.status === 'rejected');
+      expect(winners).toHaveLength(1);
+      expect(losers).toHaveLength(1);
+      const [winner, loser] = [winners[0] as string, losers[0] as string];
+      expect(await typesFor(winner, eventId)).toEqual(['registration_confirmed']);
+      expect(await typesFor(loser, eventId)).toEqual(['registration_refused_full']);
+      expect(await registeredRows(eventId)).toHaveLength(3);
     },
     TIMEOUT,
   );

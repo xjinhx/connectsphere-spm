@@ -174,3 +174,12 @@ export function registrationConfirmedMessage(event: OpenEvent, reference: string
   const venues = event.venues.length > 0 ? ` at ${listNames(event.venues.map((venue) => venue.name))}` : '';
   return `You are registered for ${eventLabel(event.eventName, event.eventDate)}${times}${venues}. Your reference is ${reference}.`;
 }
+
+/**
+ * SCRUM-201 AC3: the attendee is told their registration was refused because
+ * the event is full. CL-73: this notification is the record of the refusal; no
+ * registration row is stored, so SCRUM-182's count is unchanged.
+ */
+export function eventFullMessage(eventName: string, eventDate: ISODate | null): string {
+  return `Your registration for ${eventLabel(eventName, eventDate)} was not accepted: the event is full.`;
+}

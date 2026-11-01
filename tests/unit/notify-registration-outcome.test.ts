@@ -28,10 +28,10 @@ import {
   fetchRegistrationEvent,
 } from '@/lib/supabase/eventRegistrations';
 import { insertNotification } from '@/lib/supabase/notifications';
-import { registerForEvent } from '@/domain/event-registration/service';
-import { registrationConfirmedMessage } from '@/domain/event-registration/policy';
+import { getRegistrationPage, registerForEvent } from '@/domain/event-registration/service';
+import { NO_PLACES_REMAINING, eventFullMessage, registrationConfirmedMessage } from '@/domain/event-registration/policy';
 import { notificationHref } from '@/domain/notification/policy';
-import { ConflictError, ValidationError } from '@/domain/shared/errors';
+import { CapacityExceededError, ConflictError, ValidationError } from '@/domain/shared/errors';
 
 const EVENT_ID = '11111111-1111-4111-8111-111111111111';
 const ATTENDEE = 'aaaaaaaa-aaaa-4aaa-8aaa-aaaaaaaaaaaa';
@@ -51,6 +51,7 @@ const ROW = {
 
 const CONFIRMED =
   'You are registered for "Client Appreciation Night" on 17/11/2026, 19:00–22:00 at Marina Bay Ballroom. Your reference is REG-2026-0001.';
+const FULL = 'Your registration for "Client Appreciation Night" on 17/11/2026 was not accepted: the event is full.';
 
 type EventOptions = { capacity?: number | null; status?: string; start?: string; end?: string };
 
@@ -221,5 +222,97 @@ describe('AC1: a registration that is created sends a confirmation with the even
 
     expect(registration.status).toBe('registered');
     expect(sentTypes()).toEqual(['registration_confirmed']);
+  });
+});
+
+describe('AC3: a registration refused because the event is full tells the attendee so', () => {
+  it('TC-201-04 the message names the event and its date (DD/MM/YYYY) and says it is full; only the name before it has a date', () => {
+    expect(eventFullMessage('Client Appreciation Night', '2026-11-17')).toBe(FULL);
+    expect(eventFullMessage('Client Appreciation Night', null)).toBe(
+      'Your registration for "Client Appreciation Night" was not accepted: the event is full.',
+    );
+  });
+
+  it("TC-201-04 the notification opens the attendee's own page for the event", () => {
+    expect(notificationHref({ type: 'registration_refused_full', eventRequestId: EVENT_ID })).toBe(`/register-events/${EVENT_ID}`);
+  });
+
+  it('TC-201-04 at capacity (20 of 20): refused as full, nothing written, and the attendee is told the event is full', async () => {
+    placesTaken(20);
+
+    const error = await refusal(registerForEvent(EVENT_ID, ATTENDEE, VALID, NOW));
+
+    expect(error).toBeInstanceOf(CapacityExceededError);
+    expect(error).toMatchObject({ message: NO_PLACES_REMAINING });
+    expect(createRegistrationRow).not.toHaveBeenCalled();
+    expect(insertNotification).toHaveBeenCalledTimes(1);
+    expect(insertNotification).toHaveBeenCalledWith({
+      recipientId: ATTENDEE,
+      type: 'registration_refused_full',
+      eventRequestId: EVENT_ID,
+      message: FULL,
+    });
+  });
+
+  it('TC-201-04 no capacity set counts as full (CL-63): refused and told the same', async () => {
+    event({ capacity: null });
+    placesTaken(0);
+
+    expect(await refusal(registerForEvent(EVENT_ID, ATTENDEE, VALID, NOW))).toBeInstanceOf(CapacityExceededError);
+    expect(sentTypes()).toEqual(['registration_refused_full']);
+  });
+
+  it('TC-201-04 a notification that cannot be saved does not change the refusal', async () => {
+    const logged = vi.spyOn(console, 'error').mockImplementation(() => undefined);
+    placesTaken(20);
+    vi.mocked(insertNotification).mockRejectedValue(new Error('network down'));
+
+    const error = await refusal(registerForEvent(EVENT_ID, ATTENDEE, VALID, NOW));
+
+    expect(error).toBeInstanceOf(CapacityExceededError);
+    expect(error).toMatchObject({ message: NO_PLACES_REMAINING });
+    logged.mockRestore();
+  });
+
+  it('TC-201-05 a refusal for another reason is not told the event is full: not open yet, closed, Cancelled, Completed, already registered', async () => {
+    const refusals: [EventOptions, string][] = [
+      [{ start: '2026-11-04', end: '2026-11-10' }, 'Registration opens on 04/11/2026.'],
+      [{ start: '2026-10-22', end: '2026-10-31' }, 'Registration closed on 31/10/2026.'],
+      [{ status: 'cancelled' }, 'This event has been cancelled, so it is not taking registrations.'],
+      [{ status: 'completed' }, 'This event has already taken place, so it is not taking registrations.'],
+    ];
+    // Full as well, so only the order of the checks keeps these from being told it is full.
+    placesTaken(20);
+    for (const [options, message] of refusals) {
+      event(options);
+      registrations(null, ROW);
+      expect(await refusal(registerForEvent(EVENT_ID, ATTENDEE, VALID, NOW))).toMatchObject({ message });
+    }
+    event();
+    registrations(ROW);
+    expect(await refusal(registerForEvent(EVENT_ID, ATTENDEE, VALID, NOW))).toBeInstanceOf(ConflictError);
+
+    expect(insertNotification).not.toHaveBeenCalled();
+  });
+
+  it('TC-201-05 opening a full event\'s page is not a refusal and sends nothing', async () => {
+    placesTaken(20);
+    registrations(null);
+
+    const view = await getRegistrationPage(EVENT_ID, ATTENDEE, NOW);
+
+    expect(view.full).toBe(true);
+    expect(insertNotification).not.toHaveBeenCalled();
+  });
+
+  it('TC-201-06 the last place taken after the read (the database says full): told the event is full, not confirmed', async () => {
+    placesTaken(19);
+    databaseSays('full');
+
+    const error = await refusal(registerForEvent(EVENT_ID, ATTENDEE, VALID, NOW));
+
+    expect(error).toBeInstanceOf(CapacityExceededError);
+    expect(createRegistrationRow).toHaveBeenCalledTimes(1);
+    expect(sentTypes()).toEqual(['registration_refused_full']);
   });
 });
