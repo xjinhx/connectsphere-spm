@@ -5,16 +5,19 @@ import { cleanup, fireEvent, render, waitFor } from '@testing-library/react';
 vi.mock('next/navigation', () => ({ usePathname: () => '/register-events/event' }));
 
 import { NotificationBell } from '@/components/notification/NotificationBell';
+import { NotificationList } from '@/components/notification/NotificationList';
 import { RegisteredPanel } from '@/components/event-registration/RegisteredPanel';
 import { RegistrationForm } from '@/components/event-registration/RegistrationForm';
 import type { Registration } from '@/domain/event-registration/schema';
+import type { Notification } from '@/domain/notification/schema';
 
 /**
  * SCRUM-201: registering, being refused as full and withdrawing each create a
  * notification without leaving the page, so the bell in the header must show
  * it straight away rather than on the next page change. The real bell and form
  * are rendered together; only fetch is replaced. A refusal that sends no
- * notification (TC-201-02) leaves the bell alone.
+ * notification (TC-201-02) leaves the bell alone. On the notifications page,
+ * each of the three is shown under a readable label, not its type.
  *
  * Test case IDs are from the ConnectSphere_TestCases_Sprint4 workbook,
  * SCRUM-201 tab (TC-201-nn).
@@ -123,5 +126,36 @@ describe('SCRUM-201: the bell shows the new notification without leaving the pag
 
     await waitFor(() => expect(page.getByLabelText('2 unread notifications').textContent).toBe('2'));
     expect(page.getByText('You have withdrawn from this event.')).toBeTruthy();
+  });
+});
+
+describe('SCRUM-201: the notifications page labels the three registration outcomes', () => {
+  const notification = (type: Notification['type'], id: string): Notification => ({
+    id,
+    type,
+    eventRequestId: EVENT_ID,
+    message: `A ${type} message.`,
+    readAt: null,
+    createdAt: '2026-11-01T14:00:00+00:00',
+  });
+
+  it('TC-201-01, TC-201-04, TC-201-07 each is shown under its label and opens the attendee event page', () => {
+    const { getAllByRole } = render(
+      <NotificationList
+        initialNotifications={[
+          notification('registration_withdrawn', 'aaaaaaaa-aaaa-4aaa-8aaa-aaaaaaaaaaa1'),
+          notification('registration_refused_full', 'aaaaaaaa-aaaa-4aaa-8aaa-aaaaaaaaaaa2'),
+          notification('registration_confirmed', 'aaaaaaaa-aaaa-4aaa-8aaa-aaaaaaaaaaa3'),
+        ]}
+      />,
+    );
+
+    const rows = getAllByRole('link');
+    expect(rows.map((row) => row.firstElementChild?.textContent)).toEqual([
+      'Registration withdrawn',
+      'Event full',
+      'Registration confirmed',
+    ]);
+    for (const row of rows) expect(row.getAttribute('href')).toBe(`/register-events/${EVENT_ID}`);
   });
 });
