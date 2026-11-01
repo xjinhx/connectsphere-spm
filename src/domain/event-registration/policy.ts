@@ -1,6 +1,6 @@
 import { formatDayMonthYear, type ISODate } from '@/domain/shared/dates';
-import { fromDatabaseTime, type ClockRange } from '@/domain/shared/times';
-import type { EventVenue, FinalEventStatus, RegistrationPeriod } from './schema';
+import { formatClockRange, fromDatabaseTime, type ClockRange } from '@/domain/shared/times';
+import type { EventVenue, FinalEventStatus, OpenEvent, RegistrationPeriod } from './schema';
 
 /**
  * SCRUM-181 — Register for an event. Pure rules only; service.ts applies them.
@@ -146,4 +146,31 @@ export const FINAL_EVENT_REFUSALS: Record<FinalEventStatus, string> = {
  */
 export function isEventFull(capacity: number | null, registeredCount: number): boolean {
   return capacity === null || registeredCount >= capacity;
+}
+
+/**
+ * SCRUM-201: the event as its notifications name it, e.g. `"Client
+ * Appreciation Night" on 17/11/2026` (DD/MM/YYYY); only the name until the
+ * event has a date.
+ */
+function eventLabel(eventName: string, eventDate: ISODate | null): string {
+  return eventDate ? `"${eventName}" on ${formatDayMonthYear(eventDate)}` : `"${eventName}"`;
+}
+
+/** e.g. "Marina Bay Ballroom", "A and B", "A, B and C". */
+function listNames(names: readonly string[]): string {
+  if (names.length <= 1) return names.join('');
+  return `${names.slice(0, -1).join(', ')} and ${names[names.length - 1]}`;
+}
+
+/**
+ * SCRUM-201 AC1: the confirmation, with the event details an attendee is shown
+ * of the event (SCRUM-180: its name, date, start and end times and venues) and
+ * the registration's reference. Times and venues are left out until the event
+ * has them.
+ */
+export function registrationConfirmedMessage(event: OpenEvent, reference: string): string {
+  const times = event.times ? `, ${formatClockRange(event.times)}` : '';
+  const venues = event.venues.length > 0 ? ` at ${listNames(event.venues.map((venue) => venue.name))}` : '';
+  return `You are registered for ${eventLabel(event.eventName, event.eventDate)}${times}${venues}. Your reference is ${reference}.`;
 }

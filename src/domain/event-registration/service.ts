@@ -21,8 +21,10 @@ import {
   isEventFull,
   isOpenForRegistration,
   notStartedMessage,
+  registrationConfirmedMessage,
   registrationPeriodRefusal,
 } from './policy';
+import { notifyBestEffort } from '@/domain/notification/service';
 import { todayInSingapore } from '@/domain/shared/dates';
 import { CapacityExceededError, ConflictError, NotFoundError, ValidationError } from '@/domain/shared/errors';
 import {
@@ -235,6 +237,9 @@ function bySoonestEvent(a: OpenEvent, b: OpenEvent): number {
  * No limit on how many events one attendee joins (AC6): nothing here looks at
  * the attendee's other registrations.
  *
+ * SCRUM-201 AC1: a registration that is created sends the attendee a
+ * confirmation notification with the event details.
+ *
  * `attendeeId` is whoever is signed in, from the route, never from the body.
  */
 export async function registerForEvent(
@@ -269,6 +274,14 @@ export async function registerForEvent(
     case 'registered': {
       const registration = await readRegistration(eventRequestId, attendeeId);
       if (!registration) throw new ValidationError('Your registration could not be read back.');
+      // SCRUM-201 AC1: only now, once the row is in, so no refusal is ever
+      // confirmed (TC-201-02). Best effort: the registration stands either way.
+      await notifyBestEffort({
+        recipientId: attendeeId,
+        type: 'registration_confirmed',
+        eventRequestId: event.id,
+        message: registrationConfirmedMessage(toOpenEvent(event), registration.reference),
+      });
       return registration;
     }
     case 'already_registered':
