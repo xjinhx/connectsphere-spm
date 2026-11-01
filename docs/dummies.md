@@ -986,6 +986,8 @@ the meantime.*
     (`DUMMY(SCRUM-184) D-28`)
   - `tests/unit/notify-registration-outcome.test.ts` — the AC4 block
     (`DUMMY(SCRUM-184) D-28`)
+  - `scripts/seed-scrum201.mjs` — the AC4 events, seeded for the manual run
+    once the Withdraw action is on main (`DUMMY(SCRUM-184) D-28`)
 - **What is real and what is faked:** the notification itself is real: its
   type is allowed by `notifications_type_known`, the message names the event,
   its date (DD/MM/YYYY) and the reference, it links to the attendee's own
