@@ -229,6 +229,10 @@ export default async function ReviewEventRequestPage({
         <EventRequestStatusBadge status={request.status} />
       </div>
       <p className="mt-1 font-mono text-sm text-[var(--text-muted)]">{request.reference}</p>
+      {/* SCRUM-109 AC1, AC3: everything about the event in one place, read-only. */}
+      <Link href={`/events/${request.id}/record`} className="mt-2 inline-block text-sm text-[var(--brand)] hover:underline">
+        Full event record →
+      </Link>
       {completion.completed ? (
         <p className="mt-1 text-sm text-[var(--text-muted)]">
           Completed on {formatDayMonthYear(completion.completed.on)}{' '}

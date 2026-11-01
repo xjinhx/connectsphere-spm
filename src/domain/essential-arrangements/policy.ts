@@ -115,6 +115,63 @@ export function confirmationRefusal(outstanding: readonly string[]): string {
 }
 
 // -----------------------------------------------------------------------------
+// SCRUM-109 AC3 — each essential arrangement, and whether it is complete
+// -----------------------------------------------------------------------------
+
+/**
+ * complete / not_complete: venue and equipment by SCRUM-102's rule (and
+ * SCRUM-190's review flag), so the record and confirmation never disagree;
+ * registration by SCRUM-185 AC5's three settings. not_recorded: technical
+ * support, which nothing in ConnectSphere marks as done (see
+ * outstandingEssentialArrangements above).
+ */
+export type ArrangementProgress = 'complete' | 'not_complete' | 'not_recorded';
+
+export const ARRANGEMENT_PROGRESS_LABELS: Record<ArrangementProgress, string> = {
+  complete: 'Complete',
+  not_complete: 'Not complete',
+  not_recorded: 'Not recorded in ConnectSphere',
+};
+
+export const REGISTRATION_NOT_SET = 'Registration: the start date, end date and capacity are not all set yet.';
+
+export interface EssentialArrangementProgress {
+  arrangement: Arrangement;
+  progress: ArrangementProgress;
+  /** What is still outstanding, one line each; empty unless not_complete. */
+  outstanding: string[];
+}
+
+/**
+ * AC3: every arrangement marked essential, in card order, with whether it is
+ * complete. One not marked essential is not listed: the Lead is shown "which
+ * arrangements are marked essential".
+ */
+export function essentialArrangementProgress(
+  snapshot: ConfirmationSnapshot,
+  flagged: { bookings: readonly string[]; reservations: readonly string[] },
+  registration: { startDate: string | null; endDate: string | null; capacity: number | null },
+): EssentialArrangementProgress[] {
+  return essentialArrangementsIn(snapshot.needs).map((arrangement) => {
+    if (arrangement === 'technicalSupport') return { arrangement, progress: 'not_recorded', outstanding: [] };
+
+    let outstanding: string[];
+    if (arrangement === 'registration') {
+      const set = registration.startDate !== null && registration.endDate !== null && registration.capacity !== null;
+      outstanding = set ? [] : [REGISTRATION_NOT_SET];
+    } else {
+      // This one arrangement on its own, so each line lands under its own heading.
+      const needs: ArrangementNeeds = { ...NO_ARRANGEMENTS_RECORDED, [arrangement]: 'essential' };
+      outstanding = [
+        ...outstandingEssentialArrangements({ ...snapshot, needs }),
+        ...outstandingReviewArrangements(needs, flagged),
+      ];
+    }
+    return { arrangement, progress: outstanding.length === 0 ? 'complete' : 'not_complete', outstanding };
+  });
+}
+
+// -----------------------------------------------------------------------------
 // SCRUM-190 AC2/AC3 — a flagged-for-review arrangement blocks re-confirmation
 // only when it is also essential
 // -----------------------------------------------------------------------------

@@ -173,6 +173,10 @@ export default async function EventRequestPage({
       </p>
       {/* AC2: the unique reference the database assigned on save. */}
       <p className="mt-1 font-mono text-sm text-[var(--text-muted)]">{request.reference}</p>
+      {/* SCRUM-109 AC1: everything about the event in one place. */}
+      <Link href={`/events/${request.id}/record`} className="mt-2 inline-block text-sm text-[var(--brand)] hover:underline">
+        Full event record →
+      </Link>
 
       {/* SCRUM-92 AC2: the outcome, the date, and the statement — the three
           things the card asks the Organiser be shown, in that order.
