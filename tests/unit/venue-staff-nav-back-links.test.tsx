@@ -49,6 +49,8 @@ import VenueBookingRequestPage from '@/app/venue-booking-requests/[id]/page';
 
 const VENUE_ID = 'bbbbbbbb-bbbb-4bbb-8bbb-bbbbbbbbbbbb';
 const REQUEST_ID = 'cccccccc-cccc-4ccc-8ccc-cccccccccccc';
+const EVENT_ID = 'dddddddd-dddd-4ddd-8ddd-dddddddddddd';
+const COORDINATOR_ID = 'eeeeeeee-eeee-4eee-8eee-eeeeeeeeeeee';
 
 beforeEach(() => {
   vi.clearAllMocks();
@@ -110,40 +112,66 @@ describe('SCRUM-253 AC4: a venue page links to Edit and Calendar, each with a ba
   });
 });
 
+/**
+ * Mocks a decided (not 'pending') booking request, so the page renders the
+ * read-only list rather than VenueBookingDecisionForm (a client component
+ * that needs the App Router mounted); these tests are only about the links
+ * above it.
+ */
+function mockBookingRequest(coordinatorId: string | null) {
+  vi.mocked(viewVenueBookingRequest).mockResolvedValue({
+    id: REQUEST_ID,
+    venueId: VENUE_ID,
+    eventRequestId: EVENT_ID,
+    coordinatorId,
+    status: 'approved',
+    lines: [],
+  } as unknown as Awaited<ReturnType<typeof viewVenueBookingRequest>>);
+  vi.mocked(getVenue).mockResolvedValue({
+    id: VENUE_ID,
+    name: 'Marina Bay Ballroom',
+  } as unknown as Awaited<ReturnType<typeof getVenue>>);
+  vi.mocked(getBookingRequestRequirements).mockResolvedValue({
+    eventName: 'Launch Party',
+    eventReference: 'EVT-1',
+    requestedByName: 'Coordinator A',
+    requestedAt: new Date().toISOString(),
+    venueRequirements: {
+      expectedAttendance: { value: null },
+      roomLayout: { value: null },
+      accessibility: { required: null, features: [], notes: null },
+    },
+  } as unknown as Awaited<ReturnType<typeof getBookingRequestRequirements>>);
+  vi.mocked(findPendingLineConflicts).mockResolvedValue([]);
+  vi.mocked(listVenues).mockResolvedValue([]);
+}
+
 describe('SCRUM-253 AC3: the booking request page links back to Booking requests', () => {
   it('TC-253-03: back link is present and points at /booking-queue', async () => {
-    // Decided (not 'pending'), so the page renders the read-only list rather
-    // than VenueBookingDecisionForm (a client component that needs the App
-    // Router mounted) — this test is only about the back link above it.
-    vi.mocked(viewVenueBookingRequest).mockResolvedValue({
-      id: REQUEST_ID,
-      venueId: VENUE_ID,
-      eventRequestId: 'dddddddd-dddd-4ddd-8ddd-dddddddddddd',
-      coordinatorId: null,
-      status: 'approved',
-      lines: [],
-    } as unknown as Awaited<ReturnType<typeof viewVenueBookingRequest>>);
-    vi.mocked(getVenue).mockResolvedValue({
-      id: VENUE_ID,
-      name: 'Marina Bay Ballroom',
-    } as unknown as Awaited<ReturnType<typeof getVenue>>);
-    vi.mocked(getBookingRequestRequirements).mockResolvedValue({
-      eventName: 'Launch Party',
-      eventReference: 'EVT-1',
-      requestedByName: 'Coordinator A',
-      requestedAt: new Date().toISOString(),
-      venueRequirements: {
-        expectedAttendance: { value: null },
-        roomLayout: { value: null },
-        accessibility: { required: null, features: [], notes: null },
-      },
-    } as unknown as Awaited<ReturnType<typeof getBookingRequestRequirements>>);
-    vi.mocked(findPendingLineConflicts).mockResolvedValue([]);
-    vi.mocked(listVenues).mockResolvedValue([]);
+    mockBookingRequest(null);
 
     const page = (await VenueBookingRequestPage({ params: Promise.resolve({ id: REQUEST_ID }) })) as ReactElement;
     const html = renderToStaticMarkup(page);
 
     expect(hrefOf(html, 'Back to Booking requests')).toBe('/booking-queue');
+  });
+
+  it("TC-253-06: the event's coordinator gets no back link to a queue they cannot use", async () => {
+    // Supplementary negative case (review on #159): the assigned coordinator
+    // opens this page from the event, and /booking-queue is for Venue Staff.
+    vi.mocked(getCurrentActor).mockResolvedValue({
+      userId: COORDINATOR_ID,
+      fullName: 'Coordinator A',
+      roles: ['coordinator'],
+      clientOrganisation: null,
+    });
+    mockBookingRequest(COORDINATOR_ID);
+
+    const page = (await VenueBookingRequestPage({ params: Promise.resolve({ id: REQUEST_ID }) })) as ReactElement;
+    const html = renderToStaticMarkup(page);
+
+    expect(hrefOf(html, 'Back to Booking requests')).toBeNull();
+    // SCRUM-251 AC4: the coordinator's own back link, to the event, is still there.
+    expect(html).toContain(`href="/events/${EVENT_ID}/review"`);
   });
 });
