@@ -24,6 +24,7 @@ import {
   notStartedMessage,
   registrationConfirmedMessage,
   registrationPeriodRefusal,
+  registrationWithdrawnMessage,
 } from './policy';
 import { notifyBestEffort } from '@/domain/notification/service';
 import { todayInSingapore } from '@/domain/shared/dates';
@@ -325,4 +326,30 @@ export async function registerForEvent(
       // 'not_found' or 'not_open': the event or its period went after the read above.
       throw new NotFoundError('Event');
   }
+}
+
+/**
+ * SCRUM-201 AC4: tell the attendee their withdrawal is confirmed. Shaped for
+ * SCRUM-184's withdrawRegistration to call with what it already has (the
+ * event it read and the registration its update returned), only after that
+ * update has changed the row: so a cancelled confirm step, a refused
+ * withdrawal (already Withdrawn, the event has taken place, someone else's)
+ * and the losing one of two withdrawals sent together send nothing
+ * (TC-201-08, TC-201-09). Best effort: the withdrawal stands either way.
+ *
+ * DUMMY(SCRUM-184) D-28: withdrawRegistration is not on main yet (PR #167), so
+ * nothing in the app calls this; once it is, call this from
+ * withdrawRegistration after the update succeeds.
+ */
+export async function notifyRegistrationWithdrawn(
+  attendeeId: string,
+  event: { id: string; name: string; proposed_date: string | null },
+  registration: { reference: string },
+): Promise<void> {
+  await notifyBestEffort({
+    recipientId: attendeeId,
+    type: 'registration_withdrawn',
+    eventRequestId: event.id,
+    message: registrationWithdrawnMessage(event.name, event.proposed_date, registration.reference),
+  });
 }

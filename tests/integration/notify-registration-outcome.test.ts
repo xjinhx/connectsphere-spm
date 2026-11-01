@@ -1,6 +1,6 @@
 import { afterAll, beforeAll, describe, expect, it } from 'vitest';
 import { createAdminClient } from '@/lib/supabase/admin';
-import { getRegistrationPage, registerForEvent } from '@/domain/event-registration/service';
+import { getRegistrationPage, notifyRegistrationWithdrawn, registerForEvent } from '@/domain/event-registration/service';
 import { NO_PLACES_REMAINING } from '@/domain/event-registration/policy';
 import { listNotifications } from '@/domain/notification/service';
 import { NOTIFICATION_TYPES } from '@/domain/notification/schema';
@@ -123,6 +123,25 @@ async function registeredRows(eventId: string) {
     .eq('status', 'registered');
   if (error) throw new Error(error.message);
   return data;
+}
+
+/**
+ * DUMMY(SCRUM-184) D-28: withdrawRegistration (PR #167) is not on main. Until
+ * it is, set the status it writes by hand, then send the notification it will
+ * send once its update has gone through. Replace with a call to
+ * withdrawRegistration.
+ */
+async function withdraw(eventId: string, attendeeId: string): Promise<void> {
+  const { data, error } = await admin
+    .from('event_registration')
+    .update({ status: 'withdrawn' })
+    .eq('event_request_id', eventId)
+    .eq('attendee_id', attendeeId)
+    .eq('status', 'registered')
+    .select('reference')
+    .single();
+  if (error || !data) throw new Error(`could not withdraw: ${error?.message}`);
+  await notifyRegistrationWithdrawn(attendeeId, { id: eventId, name: EVENT_NAME, proposed_date: '2026-11-17' }, data);
 }
 
 async function refusal(promise: Promise<unknown>) {
@@ -308,6 +327,29 @@ describe('AC3: a registration refused because the event is full tells the attend
       expect(await typesFor(winner, eventId)).toEqual(['registration_confirmed']);
       expect(await typesFor(loser, eventId)).toEqual(['registration_refused_full']);
       expect(await registeredRows(eventId)).toHaveLength(3);
+    },
+    TIMEOUT,
+  );
+});
+
+describe('AC4: a confirmed withdrawal sends the attendee a notification confirming it', () => {
+  it(
+    'TC-201-07 the attendee gets one unread notification with the event and their reference, newest first; nobody else does',
+    async () => {
+      const eventId = await createEvent({ capacity: 3 });
+      const [a, b] = [await createAttendee(), await createAttendee()];
+      const registration = await registerForEvent(eventId, a, VALID, NOW);
+      await registerForEvent(eventId, b, VALID, NOW);
+
+      await withdraw(eventId, a);
+
+      const sent = await notificationsFor(a, eventId);
+      expect(sent.map((notification) => notification.type)).toEqual(['registration_withdrawn', 'registration_confirmed']);
+      expect(sent[0]).toMatchObject({
+        readAt: null,
+        message: `You have withdrawn from "${EVENT_NAME}" on 17/11/2026. Your registration ${registration.reference} is now Withdrawn.`,
+      });
+      expect(await typesFor(b, eventId)).toEqual(['registration_confirmed']);
     },
     TIMEOUT,
   );

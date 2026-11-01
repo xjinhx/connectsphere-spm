@@ -28,8 +28,13 @@ import {
   fetchRegistrationEvent,
 } from '@/lib/supabase/eventRegistrations';
 import { insertNotification } from '@/lib/supabase/notifications';
-import { getRegistrationPage, registerForEvent } from '@/domain/event-registration/service';
-import { NO_PLACES_REMAINING, eventFullMessage, registrationConfirmedMessage } from '@/domain/event-registration/policy';
+import { getRegistrationPage, notifyRegistrationWithdrawn, registerForEvent } from '@/domain/event-registration/service';
+import {
+  NO_PLACES_REMAINING,
+  eventFullMessage,
+  registrationConfirmedMessage,
+  registrationWithdrawnMessage,
+} from '@/domain/event-registration/policy';
 import { notificationHref } from '@/domain/notification/policy';
 import { CapacityExceededError, ConflictError, ValidationError } from '@/domain/shared/errors';
 
@@ -51,6 +56,7 @@ const ROW = {
 
 const CONFIRMED =
   'You are registered for "Client Appreciation Night" on 17/11/2026, 19:00–22:00 at Marina Bay Ballroom. Your reference is REG-2026-0001.';
+const WITHDRAWN = 'You have withdrawn from "Client Appreciation Night" on 17/11/2026. Your registration REG-2026-0001 is now Withdrawn.';
 const FULL = 'Your registration for "Client Appreciation Night" on 17/11/2026 was not accepted: the event is full.';
 
 type EventOptions = { capacity?: number | null; status?: string; start?: string; end?: string };
@@ -314,5 +320,48 @@ describe('AC3: a registration refused because the event is full tells the attend
     expect(error).toBeInstanceOf(CapacityExceededError);
     expect(createRegistrationRow).toHaveBeenCalledTimes(1);
     expect(sentTypes()).toEqual(['registration_refused_full']);
+  });
+});
+
+/**
+ * AC4 against DUMMY(SCRUM-184) D-28: withdrawRegistration (PR #167) is not on
+ * main, so these call notifyRegistrationWithdrawn as it will once the
+ * withdrawal has gone through. TC-201-08 and TC-201-09 (nothing is sent when
+ * the withdrawal does not happen) need withdrawRegistration's own refusals and
+ * are not tested here; see docs/dummies.md, D-28.
+ */
+describe('AC4: a confirmed withdrawal sends the attendee a notification confirming it', () => {
+  const EVENT = { id: EVENT_ID, name: 'Client Appreciation Night', proposed_date: '2026-11-17' };
+
+  it('TC-201-07 the message names the event and its date (DD/MM/YYYY) and the registration now Withdrawn', () => {
+    expect(registrationWithdrawnMessage('Client Appreciation Night', '2026-11-17', 'REG-2026-0001')).toBe(WITHDRAWN);
+    expect(registrationWithdrawnMessage('Client Appreciation Night', null, 'REG-2026-0001')).toBe(
+      'You have withdrawn from "Client Appreciation Night". Your registration REG-2026-0001 is now Withdrawn.',
+    );
+  });
+
+  it("TC-201-07 the notification opens the attendee's own page for the event", () => {
+    expect(notificationHref({ type: 'registration_withdrawn', eventRequestId: EVENT_ID })).toBe(`/register-events/${EVENT_ID}`);
+  });
+
+  it('TC-201-07 sends the attendee exactly one notification, for this event, with the message', async () => {
+    await notifyRegistrationWithdrawn(ATTENDEE, EVENT, { reference: 'REG-2026-0001' });
+
+    expect(insertNotification).toHaveBeenCalledTimes(1);
+    expect(insertNotification).toHaveBeenCalledWith({
+      recipientId: ATTENDEE,
+      type: 'registration_withdrawn',
+      eventRequestId: EVENT_ID,
+      message: WITHDRAWN,
+    });
+  });
+
+  it('TC-201-07 a notification that cannot be saved is not an error, so it cannot undo the withdrawal', async () => {
+    const logged = vi.spyOn(console, 'error').mockImplementation(() => undefined);
+    vi.mocked(insertNotification).mockResolvedValue({ error: { message: 'insert failed' } } as never);
+
+    await expect(notifyRegistrationWithdrawn(ATTENDEE, EVENT, { reference: 'REG-2026-0001' })).resolves.toBeUndefined();
+    expect(logged).toHaveBeenCalled();
+    logged.mockRestore();
   });
 });

@@ -183,3 +183,8 @@ export function registrationConfirmedMessage(event: OpenEvent, reference: string
 export function eventFullMessage(eventName: string, eventDate: ISODate | null): string {
   return `Your registration for ${eventLabel(eventName, eventDate)} was not accepted: the event is full.`;
 }
+
+/** SCRUM-201 AC4: the attendee is told their withdrawal is confirmed, with the registration's reference. */
+export function registrationWithdrawnMessage(eventName: string, eventDate: ISODate | null, reference: string): string {
+  return `You have withdrawn from ${eventLabel(eventName, eventDate)}. Your registration ${reference} is now Withdrawn.`;
+}
