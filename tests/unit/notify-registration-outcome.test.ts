@@ -9,8 +9,9 @@ import { beforeEach, describe, expect, it, vi } from 'vitest';
  * nothing here needs a database. That the rows land in Postgres runs in
  * tests/integration/notify-registration-outcome.test.ts.
  *
- * Test case IDs are from SCRUM-201-test-cases.xlsx (TC-201-nn). The clock is
- * fixed at 01/11/2026 10:00 Singapore time unless a test says otherwise.
+ * Test case IDs are from the ConnectSphere_TestCases_Sprint4 workbook,
+ * SCRUM-201 tab (TC-201-nn). The clock is fixed at 01/11/2026 10:00
+ * Singapore time unless a test says otherwise.
  */
 
 vi.mock('@/lib/supabase/eventRegistrations', () => ({

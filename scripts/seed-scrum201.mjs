@@ -1,6 +1,6 @@
 // Seeds the data for SCRUM-201's manual run (TC-201-01 to TC-201-09): one
-// event per case in SCRUM-201-test-cases.xlsx, so the run needs no re-seeding
-// part way. Dates are set relative to today (D in the sheet), so the run works
+// event per case in the ConnectSphere_TestCases_Sprint4 workbook, SCRUM-201
+// tab, so the run needs no re-seeding part way. Dates are set relative to today (D in the sheet), so the run works
 // on any day. Run after `npm run db:reset` and `npm run seed:users`:
 //
 //   node scripts/seed-scrum201.mjs
@@ -73,6 +73,12 @@ function singaporeDate(daysFromToday) {
 }
 
 const ddmmyyyy = (iso) => iso.split('-').reverse().join('/');
+
+// A day as the sheet writes it, e.g. D+3 (04/11/2026) when D is 01/11/2026.
+function sheetDay(daysFromToday) {
+  const offset = daysFromToday === 0 ? '' : daysFromToday > 0 ? `+${daysFromToday}` : `${daysFromToday}`;
+  return `D${offset} (${ddmmyyyy(singaporeDate(daysFromToday))})`;
+}
 
 // Registration periods, as days from today.
 const OPEN = [-3, 5];
@@ -177,15 +183,15 @@ async function seed() {
   ]).map((row) => ({ ...row, contact_number: '+65 9000 0000' }));
   check('registrations', await supabase.from('event_registration').insert(registrations));
 
-  console.log(`Seeded ${created.length} events. Today (D) is ${ddmmyyyy(singaporeDate(0))}.`);
+  console.log(`Seeded ${created.length} events. Today (D) is ${ddmmyyyy(singaporeDate(0))}; the sheet's dates assume D is 01/11/2026.`);
   console.log(`Password for every account: ${TEST_PASSWORD}\n`);
   for (const [name, eventDay, [start, end], capacity, fillerCount, withAttendee, cases] of EVENTS) {
     const taken = fillerCount + (withAttendee ? 1 : 0);
     const places = capacity === null ? 'no capacity set' : `${taken} of ${capacity} places taken`;
     console.log(`${cases.padEnd(28)} ${name}`);
     console.log(
-      `${''.padEnd(28)} held ${ddmmyyyy(singaporeDate(eventDay))} 19:00-22:00${name === BOOKED ? ` at ${BALLROOM}` : ''}; ` +
-        `registration ${ddmmyyyy(singaporeDate(start))} to ${ddmmyyyy(singaporeDate(end))}; ${places}` +
+      `${''.padEnd(28)} held ${sheetDay(eventDay)} 19:00-22:00${name === BOOKED ? ` at ${BALLROOM}` : ''}; ` +
+        `registration ${sheetDay(start)} to ${sheetDay(end)}; ${places}` +
         `${withAttendee ? '; attendee@example.com Registered' : ''}`,
     );
     console.log(`${''.padEnd(28)} http://localhost:3000/register-events/${idOf(name)}\n`);
