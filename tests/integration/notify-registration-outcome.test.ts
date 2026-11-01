@@ -1,10 +1,10 @@
 import { afterAll, beforeAll, describe, expect, it } from 'vitest';
 import { createAdminClient } from '@/lib/supabase/admin';
-import { getRegistrationPage, notifyRegistrationWithdrawn, registerForEvent } from '@/domain/event-registration/service';
-import { NO_PLACES_REMAINING } from '@/domain/event-registration/policy';
+import { getRegistrationPage, registerForEvent, withdrawRegistration } from '@/domain/event-registration/service';
+import { EVENT_TAKEN_PLACE, NO_PLACES_REMAINING } from '@/domain/event-registration/policy';
 import { listNotifications } from '@/domain/notification/service';
 import { NOTIFICATION_TYPES } from '@/domain/notification/schema';
-import { CapacityExceededError } from '@/domain/shared/errors';
+import { CapacityExceededError, DomainError, NotFoundError } from '@/domain/shared/errors';
 import { createVenue } from '@/domain/venues/service';
 import { TEST_CLIENT_ORGANISATION_ID, ensureTestClientOrganisation } from './fixtures/clientOrganisation';
 
@@ -125,24 +125,12 @@ async function registeredRows(eventId: string) {
   return data;
 }
 
-/**
- * DUMMY(SCRUM-184) D-28: withdrawRegistration (PR #167) is not on main. Until
- * it is, set the status it writes by hand, then send the notification it will
- * send once its update has gone through. Replace with a call to
- * withdrawRegistration.
- */
-async function withdraw(eventId: string, attendeeId: string): Promise<void> {
-  const { data, error } = await admin
-    .from('event_registration')
-    .update({ status: 'withdrawn' })
-    .eq('event_request_id', eventId)
-    .eq('attendee_id', attendeeId)
-    .eq('status', 'registered')
-    .select('reference')
-    .single();
-  if (error || !data) throw new Error(`could not withdraw: ${error?.message}`);
-  await notifyRegistrationWithdrawn(attendeeId, { id: eventId, name: EVENT_NAME, proposed_date: '2026-11-17' }, data);
-}
+/** SCRUM-184's withdrawal, as the Withdraw button sends it once confirmed. */
+const withdraw = (eventId: string, registrationId: string, attendeeId: string, now: Date = NOW) =>
+  withdrawRegistration(eventId, registrationId, attendeeId, now);
+
+const withdrawnCount = async (attendeeId: string, eventId: string) =>
+  (await typesFor(attendeeId, eventId)).filter((type) => type === 'registration_withdrawn').length;
 
 async function refusal(promise: Promise<unknown>) {
   try {
@@ -341,7 +329,7 @@ describe('AC4: a confirmed withdrawal sends the attendee a notification confirmi
       const registration = await registerForEvent(eventId, a, VALID, NOW);
       await registerForEvent(eventId, b, VALID, NOW);
 
-      await withdraw(eventId, a);
+      await withdraw(eventId, registration.id, a);
 
       const sent = await notificationsFor(a, eventId);
       expect(sent.map((notification) => notification.type)).toEqual(['registration_withdrawn', 'registration_confirmed']);
@@ -350,6 +338,45 @@ describe('AC4: a confirmed withdrawal sends the attendee a notification confirmi
         message: `You have withdrawn from "${EVENT_NAME}" on 17/11/2026. Your registration ${registration.reference} is now Withdrawn.`,
       });
       expect(await typesFor(b, eventId)).toEqual(['registration_confirmed']);
+    },
+    TIMEOUT,
+  );
+
+  it(
+    "TC-201-08 two withdrawals sent together send one notification; another attendee's registration sends none",
+    async () => {
+      const eventId = await createEvent({ capacity: 3 });
+      const [a, b] = [await createAttendee(), await createAttendee()];
+      const registration = await registerForEvent(eventId, a, VALID, NOW);
+      const theirs = await registerForEvent(eventId, b, VALID, NOW);
+
+      const results = await Promise.allSettled([withdraw(eventId, registration.id, a), withdraw(eventId, registration.id, a)]);
+      expect(results.filter((result) => result.status === 'fulfilled')).toHaveLength(1);
+      expect(await withdrawnCount(a, eventId)).toBe(1);
+
+      expect(await refusal(withdraw(eventId, theirs.id, a))).toBeInstanceOf(NotFoundError);
+      expect(await withdrawnCount(a, eventId)).toBe(1);
+      expect(await withdrawnCount(b, eventId)).toBe(0);
+    },
+    TIMEOUT,
+  );
+
+  it(
+    'TC-201-09 withdrawn and notified on 16/11/2026 23:59 SGT; refused with nothing sent from 00:00 SGT on 17/11/2026, the event date',
+    async () => {
+      const lastDay = await createEvent({ capacity: 3 });
+      const eventDay = await createEvent({ capacity: 3 });
+      const a = await createAttendee();
+      const before = await registerForEvent(lastDay, a, VALID, NOW);
+      const on = await registerForEvent(eventDay, a, VALID, NOW);
+
+      await withdraw(lastDay, before.id, a, new Date('2026-11-16T23:59:00+08:00'));
+      expect(await withdrawnCount(a, lastDay)).toBe(1);
+
+      const error = await refusal(withdraw(eventDay, on.id, a, new Date('2026-11-16T16:00:00Z')));
+      expect(error).toBeInstanceOf(DomainError);
+      expect((error as DomainError).message).toBe(EVENT_TAKEN_PLACE);
+      expect(await withdrawnCount(a, eventDay)).toBe(0);
     },
     TIMEOUT,
   );

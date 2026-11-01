@@ -297,6 +297,7 @@ describe('AC3: a place released by a withdrawal (no waiting list in Release 1)',
     const [first, second, third] = await fill(eventId, 3);
     // SCRUM-201 AC1 confirms each registration as it is made; what follows must add nothing.
     const toldBefore = await notificationCount([first!, second!, third!]);
+    const thirdToldBefore = await notificationCount([third!]);
     // Only the coordinator's save in SCRUM-185 changes the capacity; set by hand here.
     await admin.from('event_request').update({ registration_capacity: 2 }).eq('id', eventId);
     const attendee = await createAttendee();
@@ -315,8 +316,10 @@ describe('AC3: a place released by a withdrawal (no waiting list in Release 1)',
     const rows = await rowsFor(eventId);
     expect(rows.filter((row) => row.status === 'registered')).toHaveLength(2);
     expect(rows.filter((row) => row.status === 'withdrawn')).toHaveLength(2);
-    // Nobody already registered was removed or told anything by the cut or the withdrawals.
-    expect(await notificationCount([first!, second!, third!])).toBe(toldBefore);
+    // Nobody already registered was removed or told anything by the cut; each
+    // withdrawal is confirmed once, to whoever withdrew (SCRUM-201 AC4).
+    expect(await notificationCount([third!])).toBe(thirdToldBefore);
+    expect(await notificationCount([first!, second!, third!])).toBe(toldBefore + 2);
   }, TIMEOUT);
 
   it('TC-182-11 the attendee who withdrew can take the freed place again, with a new reference', async () => {

@@ -12,9 +12,8 @@
 // Registrations are inserted directly, not through the app, so seeding sends
 // no notifications: every notification seen in the run comes from the steps.
 //
-// DUMMY(SCRUM-184) D-28: the AC4 events (TC-201-07 to TC-201-09) need
-// SCRUM-184's Withdraw action (PR #167), which is not on main yet. They are
-// seeded now so the run is ready once it is.
+// The AC4 events (TC-201-07 to TC-201-09) are withdrawn on the page with
+// SCRUM-184's Withdraw action.
 import { config } from 'dotenv';
 import { resolve } from 'path';
 import { createClient } from '@supabase/supabase-js';
@@ -91,12 +90,12 @@ const EVENTS = [
   [`${LUNCH} (full and closed)`, 10, CLOSED, 20, 20, false, 'TC-201-05'],
   ['Product Launch Briefing (not open yet)', 20, [3, 9], 20, 0, false, 'TC-201-05'],
   [`${NIGHT} (last place race)`, 16, OPEN, 20, 19, false, 'TC-201-06'],
-  [`${NIGHT} (withdraw)`, 16, OPEN, 20, 19, true, 'TC-201-07 (needs PR #167)'],
-  [`${NIGHT} (cancel withdraw)`, 16, OPEN, 20, 0, true, 'TC-201-08 (needs PR #167)'],
-  [`${NIGHT} (withdraw twice)`, 16, OPEN, 20, 0, true, 'TC-201-08 (needs PR #167)'],
-  [`${NIGHT} (past)`, -10, [-20, -11], 20, 0, true, 'TC-201-08 (needs PR #167)'],
-  [`${NIGHT} (tomorrow)`, 1, [-10, 0], 20, 0, true, 'TC-201-09 (needs PR #167)'],
-  [`${NIGHT} (today)`, 0, CLOSED, 20, 0, true, 'TC-201-09 (needs PR #167)'],
+  [`${NIGHT} (withdraw)`, 16, OPEN, 20, 19, true, 'TC-201-07'],
+  [`${NIGHT} (cancel withdraw)`, 16, OPEN, 20, 0, true, 'TC-201-08'],
+  [`${NIGHT} (withdraw twice)`, 16, OPEN, 20, 0, true, 'TC-201-08'],
+  [`${NIGHT} (past)`, -10, [-20, -11], 20, 0, true, 'TC-201-08'],
+  [`${NIGHT} (tomorrow)`, 1, [-10, 0], 20, 0, true, 'TC-201-09'],
+  [`${NIGHT} (today)`, 0, CLOSED, 20, 0, true, 'TC-201-09'],
 ];
 
 // TC-201-01's confirmation names the venue: its event has a confirmed booking.

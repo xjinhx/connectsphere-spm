@@ -1005,12 +1005,17 @@ the meantime.*
   registration, the losing one of two withdrawals sent together), which is
   decided by `withdrawRegistration`'s own refusals. Faking those would test
   the dummy, not the code, so they stay untested until the swap.
-- **To replace:** once PR #167 is on main, merge main into this branch (or
+- **To replace:** ~~once PR #167 is on main, merge main into this branch (or
   the story's own follow-up) and, in `withdrawRegistration`, call
   `notifyRegistrationWithdrawn(attendeeId, event as EventRow, withdrawn)`
   after the `if (!withdrawn)` refusal and before the return, so only an
   update that changed the row notifies. Have `withdraw()` in the integration
   test call `withdrawRegistration`, add TC-201-08 and TC-201-09 to the unit
   and integration tests, run them and the manual cases, remove the markers
-  and mark this entry Replaced.
-- **Status:** Active.
+  and mark this entry Replaced.~~ Done: `withdrawRegistration` calls
+  `notifyRegistrationWithdrawn()` (now private to the service) once its
+  update has returned the row; the integration test's `withdraw()` and the
+  unit AC4 block go through `withdrawRegistration`; TC-201-07 re-run and
+  TC-201-08 and TC-201-09 added (automated) on branch `notify-attendee`; the
+  seed script's AC4 events are withdrawn on the page. The markers are removed.
+- **Status:** Replaced (SCRUM-184, PR #167, merged into `notify-attendee`).

@@ -18,6 +18,8 @@ vi.mock('@/lib/supabase/eventRegistrations', () => ({
   fetchRegistrationEvent: vi.fn(),
   fetchRegisteredRegistration: vi.fn(),
   createRegistrationRow: vi.fn(),
+  fetchRegistrationById: vi.fn(),
+  withdrawRegistrationRow: vi.fn(),
 }));
 vi.mock('@/lib/supabase/notifications', () => ({ insertNotification: vi.fn() }));
 
@@ -25,21 +27,26 @@ import {
   countRegisteredRegistrations,
   createRegistrationRow,
   fetchRegisteredRegistration,
+  fetchRegistrationById,
   fetchRegistrationEvent,
+  withdrawRegistrationRow,
 } from '@/lib/supabase/eventRegistrations';
 import { insertNotification } from '@/lib/supabase/notifications';
-import { getRegistrationPage, notifyRegistrationWithdrawn, registerForEvent } from '@/domain/event-registration/service';
+import { getRegistrationPage, registerForEvent, withdrawRegistration } from '@/domain/event-registration/service';
 import {
+  ALREADY_WITHDRAWN,
+  EVENT_TAKEN_PLACE,
   NO_PLACES_REMAINING,
   eventFullMessage,
   registrationConfirmedMessage,
   registrationWithdrawnMessage,
 } from '@/domain/event-registration/policy';
 import { notificationHref } from '@/domain/notification/policy';
-import { CapacityExceededError, ConflictError, ValidationError } from '@/domain/shared/errors';
+import { CapacityExceededError, ConflictError, DomainError, NotFoundError, ValidationError } from '@/domain/shared/errors';
 
 const EVENT_ID = '11111111-1111-4111-8111-111111111111';
 const ATTENDEE = 'aaaaaaaa-aaaa-4aaa-8aaa-aaaaaaaaaaaa';
+const ATTENDEE_2 = 'bbbbbbbb-bbbb-4bbb-8bbb-bbbbbbbbbbbb';
 const VALID = { fullName: 'Tan Mei Ling', email: 'attendee@example.com', contactNumber: '+65 9123 4567' };
 const NOW = new Date('2026-11-01T10:00:00+08:00');
 
@@ -59,17 +66,17 @@ const CONFIRMED =
 const WITHDRAWN = 'You have withdrawn from "Client Appreciation Night" on 17/11/2026. Your registration REG-2026-0001 is now Withdrawn.';
 const FULL = 'Your registration for "Client Appreciation Night" on 17/11/2026 was not accepted: the event is full.';
 
-type EventOptions = { capacity?: number | null; status?: string; start?: string; end?: string };
+type EventOptions = { capacity?: number | null; status?: string; start?: string; end?: string; date?: string };
 
 /** Client Appreciation Night, 17/11/2026 19:00–22:00 at Marina Bay Ballroom, registration open 29/10/2026 to 06/11/2026. */
-function event({ capacity = 20, status = 'confirmed', start = '2026-10-29', end = '2026-11-06' }: EventOptions = {}) {
+function event({ capacity = 20, status = 'confirmed', start = '2026-10-29', end = '2026-11-06', date = '2026-11-17' }: EventOptions = {}) {
   vi.mocked(fetchRegistrationEvent).mockResolvedValue({
     data: {
       id: EVENT_ID,
       name: 'Client Appreciation Night',
       status,
       description: null,
-      proposed_date: '2026-11-17',
+      proposed_date: date,
       start_time: '19:00:00',
       end_time: '22:00:00',
       registration_start_date: start,
@@ -95,6 +102,16 @@ function registrations(before: typeof ROW | null, after: typeof ROW | null = bef
     .mockResolvedValue({ data: after, error: null } as never);
 }
 
+/** The registration withdrawRegistration reads: `attendee_id` is whose it is. */
+function stored(overrides: Partial<typeof ROW & { attendee_id: string }> = {}) {
+  vi.mocked(fetchRegistrationById).mockResolvedValue({ data: { ...ROW, attendee_id: ATTENDEE, ...overrides }, error: null } as never);
+}
+
+/** What the guarded update returns: the row now Withdrawn, or null when another request withdrew it first. */
+function updateReturns(row: typeof ROW | null) {
+  vi.mocked(withdrawRegistrationRow).mockResolvedValue({ data: row, error: null } as never);
+}
+
 function databaseSays(outcome: string) {
   vi.mocked(createRegistrationRow).mockResolvedValue({ data: outcome, error: null } as never);
 }
@@ -117,6 +134,8 @@ beforeEach(() => {
   placesTaken(5);
   registrations(null, ROW);
   databaseSays('registered');
+  stored();
+  updateReturns({ ...ROW, status: 'withdrawn' });
   vi.mocked(insertNotification).mockResolvedValue({ error: null } as never);
 });
 
@@ -324,15 +343,11 @@ describe('AC3: a registration refused because the event is full tells the attend
 });
 
 /**
- * AC4 against DUMMY(SCRUM-184) D-28: withdrawRegistration (PR #167) is not on
- * main, so these call notifyRegistrationWithdrawn as it will once the
- * withdrawal has gone through. TC-201-08 and TC-201-09 (nothing is sent when
- * the withdrawal does not happen) need withdrawRegistration's own refusals and
- * are not tested here; see docs/dummies.md, D-28.
+ * AC4 through SCRUM-184's withdrawRegistration. The confirm step is the page's:
+ * cancelling it sends no request at all (TC-184-02 in
+ * tests/unit/withdraw-registration.test.tsx), so nothing can be notified.
  */
 describe('AC4: a confirmed withdrawal sends the attendee a notification confirming it', () => {
-  const EVENT = { id: EVENT_ID, name: 'Client Appreciation Night', proposed_date: '2026-11-17' };
-
   it('TC-201-07 the message names the event and its date (DD/MM/YYYY) and the registration now Withdrawn', () => {
     expect(registrationWithdrawnMessage('Client Appreciation Night', '2026-11-17', 'REG-2026-0001')).toBe(WITHDRAWN);
     expect(registrationWithdrawnMessage('Client Appreciation Night', null, 'REG-2026-0001')).toBe(
@@ -344,9 +359,10 @@ describe('AC4: a confirmed withdrawal sends the attendee a notification confirmi
     expect(notificationHref({ type: 'registration_withdrawn', eventRequestId: EVENT_ID })).toBe(`/register-events/${EVENT_ID}`);
   });
 
-  it('TC-201-07 sends the attendee exactly one notification, for this event, with the message', async () => {
-    await notifyRegistrationWithdrawn(ATTENDEE, EVENT, { reference: 'REG-2026-0001' });
+  it('TC-201-07 withdrawing sends the attendee exactly one notification, for this event, with the message', async () => {
+    const withdrawn = await withdrawRegistration(EVENT_ID, ROW.id, ATTENDEE, NOW);
 
+    expect(withdrawn.status).toBe('withdrawn');
     expect(insertNotification).toHaveBeenCalledTimes(1);
     expect(insertNotification).toHaveBeenCalledWith({
       recipientId: ATTENDEE,
@@ -360,8 +376,58 @@ describe('AC4: a confirmed withdrawal sends the attendee a notification confirmi
     const logged = vi.spyOn(console, 'error').mockImplementation(() => undefined);
     vi.mocked(insertNotification).mockResolvedValue({ error: { message: 'insert failed' } } as never);
 
-    await expect(notifyRegistrationWithdrawn(ATTENDEE, EVENT, { reference: 'REG-2026-0001' })).resolves.toBeUndefined();
+    await expect(withdrawRegistration(EVENT_ID, ROW.id, ATTENDEE, NOW)).resolves.toMatchObject({ status: 'withdrawn' });
     expect(logged).toHaveBeenCalled();
     logged.mockRestore();
+  });
+
+  it('TC-201-08 an already Withdrawn registration is refused (409) and sends nothing', async () => {
+    stored({ status: 'withdrawn' });
+
+    const error = await refusal(withdrawRegistration(EVENT_ID, ROW.id, ATTENDEE, NOW));
+
+    expect(error).toBeInstanceOf(DomainError);
+    expect((error as DomainError).message).toBe(ALREADY_WITHDRAWN);
+    expect(insertNotification).not.toHaveBeenCalled();
+  });
+
+  it('TC-201-08 a past event (20/10/2026) is refused (409) and sends nothing', async () => {
+    event({ date: '2026-10-20' });
+
+    const error = await refusal(withdrawRegistration(EVENT_ID, ROW.id, ATTENDEE, NOW));
+
+    expect(error).toBeInstanceOf(DomainError);
+    expect((error as DomainError).message).toBe(EVENT_TAKEN_PLACE);
+    expect(withdrawRegistrationRow).not.toHaveBeenCalled();
+    expect(insertNotification).not.toHaveBeenCalled();
+  });
+
+  it("TC-201-08 another attendee's registration is refused (404) and sends nothing, to either of them", async () => {
+    stored({ attendee_id: ATTENDEE_2 });
+
+    expect(await refusal(withdrawRegistration(EVENT_ID, ROW.id, ATTENDEE, NOW))).toBeInstanceOf(NotFoundError);
+    expect(insertNotification).not.toHaveBeenCalled();
+  });
+
+  it('TC-201-08 the losing one of two withdrawals sent together (the update changed nothing) sends nothing', async () => {
+    updateReturns(null);
+
+    const error = await refusal(withdrawRegistration(EVENT_ID, ROW.id, ATTENDEE, NOW));
+
+    expect((error as DomainError).message).toBe(ALREADY_WITHDRAWN);
+    expect(insertNotification).not.toHaveBeenCalled();
+  });
+
+  it('TC-201-09 16/11/2026 23:59 SGT, the day before the event: withdrawn and notified', async () => {
+    await withdrawRegistration(EVENT_ID, ROW.id, ATTENDEE, new Date('2026-11-16T23:59:00+08:00'));
+
+    expect(sentTypes()).toEqual(['registration_withdrawn']);
+  });
+
+  it('TC-201-09 17/11/2026 00:00 SGT (16/11/2026 16:00 UTC), the event date: refused and nothing sent', async () => {
+    const error = await refusal(withdrawRegistration(EVENT_ID, ROW.id, ATTENDEE, new Date('2026-11-16T16:00:00Z')));
+
+    expect((error as DomainError).message).toBe(EVENT_TAKEN_PLACE);
+    expect(insertNotification).not.toHaveBeenCalled();
   });
 });
