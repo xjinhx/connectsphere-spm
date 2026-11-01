@@ -4,8 +4,8 @@ import { renderToStaticMarkup } from 'react-dom/server';
 /**
  * SCRUM-255 AC2: the shared header, rendered for real for an Attendee-only
  * account, shows Open events and nothing else. Only the router and the
- * Supabase browser client are replaced. Test case IDs match
- * SCRUM-255-test-cases.xlsx.
+ * Supabase browser client are replaced. Test case IDs match the
+ * ConnectSphere_TestCases_Sprint4 workbook, SCRUM-255 tab.
  */
 
 let pathname = '/register-events';

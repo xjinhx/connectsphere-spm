@@ -48,14 +48,14 @@ describe('SCRUM-268: no header on the login page after signing out', () => {
   it("TC-268-01/02: no trace of the last account's name or nav on /login", () => {
     const html = renderCoordinatorHeader('/login');
     expect(html).not.toContain('coordinator@example.com');
-    expect(html).not.toContain('Assigned events');
+    expect(html).not.toContain('Review queue');
     expect(html).not.toContain('Log out');
   });
 
   it('TC-268-04: signed-in pages still show the full header', () => {
     const html = renderCoordinatorHeader('/assigned-events');
     expect(html).toContain('<header');
-    expect(html).toContain('Assigned events');
+    expect(html).toContain('Review queue');
     expect(html).toContain('Account menu for coordinator@example.com');
   });
 

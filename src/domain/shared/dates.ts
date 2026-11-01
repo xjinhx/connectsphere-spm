@@ -126,3 +126,19 @@ export function formatSingaporeDateTime(instant: Date | string): string {
     timeZoneName: 'short',
   }).format(date);
 }
+
+/**
+ * An instant as DD/MM/YYYY HH:mm in Singapore, the format the team writes
+ * dates and times in (SCRUM-105: when an event was cancelled, and when a
+ * booking was released).
+ */
+export function formatDayMonthYearTime(instant: string): string {
+  const date = new Date(instant);
+  const time = new Intl.DateTimeFormat('en-SG', {
+    timeZone: SINGAPORE_TIME_ZONE,
+    hour: '2-digit',
+    minute: '2-digit',
+    hourCycle: 'h23',
+  }).format(date);
+  return `${formatDayMonthYear(toSingaporeISODate(date))} ${time}`;
+}

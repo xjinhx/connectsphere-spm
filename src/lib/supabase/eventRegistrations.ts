@@ -17,17 +17,64 @@ export const REGISTRATION_COLUMNS =
   'id, reference, event_request_id, full_name, email, contact_number, status, registered_at';
 
 /**
- * What the Attendee's page needs from the event: its name and date, the
- * registration period and its capacity (SCRUM-182). Nothing else, so no
- * internal planning field can reach an attendee (SCRUM-72 AC1). maybeSingle:
- * an unknown id is null, not an error.
+ * SCRUM-180: each of the event's bookings with its venue's id, name and
+ * address. The service keeps each venue with a confirmed booking, once
+ * (bookedVenues); the id is read only to tell venues apart, not shown.
+ */
+const BOOKED_VENUES = 'venue_booking (status, venue_id, venues (name, address))';
+
+/**
+ * SCRUM-180 AC3: what an attendee may see of one event, and nothing else: the
+ * name, description, date, start and end times, the venues' names and
+ * addresses, the registration period and its capacity (SCRUM-182). No client
+ * organisation, internal comment, booking status shown, equipment, staff or
+ * other attendees, so none can reach an attendee (SCRUM-72 AC1). Shared by the
+ * list and the page.
+ */
+export const ATTENDEE_EVENT_COLUMNS =
+  `id, name, description, proposed_date, start_time, end_time, registration_start_date, registration_end_date, registration_capacity, ${BOOKED_VENUES}`;
+
+/**
+ * What the Attendee's page needs from the event (SCRUM-181, and SCRUM-180
+ * AC3), and its status, read only to refuse a Cancelled or Completed event and
+ * say so on the page (SCRUM-270). maybeSingle: an unknown id is null, not an
+ * error.
  */
 export async function fetchRegistrationEvent(eventRequestId: string) {
+  return db().from('event_request').select(`${ATTENDEE_EVENT_COLUMNS}, status`).eq('id', eventRequestId).maybeSingle();
+}
+
+/**
+ * SCRUM-180 AC1, AC2: the events whose registration period includes `today`
+ * (a Singapore date; both ends inclusive), soonest first. The same attendee
+ * columns as the page, so nothing internal reaches an attendee (SCRUM-72
+ * AC1). An event with no period never matches. The status is read only to
+ * leave out a Cancelled or Completed event (FINAL_EVENT_STATUSES in
+ * src/domain/event-registration/policy.ts; change one, change the other).
+ */
+export async function fetchOpenEvents(today: string) {
   return db()
     .from('event_request')
-    .select('id, name, proposed_date, registration_start_date, registration_end_date, registration_capacity')
-    .eq('id', eventRequestId)
-    .maybeSingle();
+    .select(`${ATTENDEE_EVENT_COLUMNS}, status`)
+    .lte('registration_start_date', today)
+    .gte('registration_end_date', today)
+    .not('status', 'in', '(cancelled,completed)')
+    .order('proposed_date', { ascending: true })
+    .order('name', { ascending: true });
+}
+
+/**
+ * SCRUM-180 AC4: every registration the attendee has made, whatever its
+ * status, each with its event's attendee columns. Filtered by attendee_id, so
+ * nobody else's registration (or name, or email) is read. AC6: the event's
+ * status too, only so a cancelled event can be marked.
+ */
+export async function fetchMyRegistrations(attendeeId: string) {
+  return db()
+    .from('event_registration')
+    .select(`id, reference, status, event_request (${ATTENDEE_EVENT_COLUMNS}, status)`)
+    .eq('attendee_id', attendeeId)
+    .order('registered_at', { ascending: false });
 }
 
 /** SCRUM-182 AC1: how many places the event's Registered registrations take. */
@@ -40,6 +87,15 @@ export async function countRegisteredRegistrations(eventRequestId: string) {
 }
 
 /** AC5: the attendee's Registered registration for this event, or null. */
+/** SCRUM-190 AC5: the Attendee accounts holding a Registered registration for an event. */
+export async function fetchRegisteredAttendeeIds(eventRequestId: string) {
+  return db()
+    .from('event_registration')
+    .select('attendee_id')
+    .eq('event_request_id', eventRequestId)
+    .eq('status', 'registered');
+}
+
 export async function fetchRegisteredRegistration(eventRequestId: string, attendeeId: string) {
   return db()
     .from('event_registration')
@@ -47,6 +103,36 @@ export async function fetchRegisteredRegistration(eventRequestId: string, attend
     .eq('event_request_id', eventRequestId)
     .eq('attendee_id', attendeeId)
     .eq('status', 'registered')
+    .maybeSingle();
+}
+
+/**
+ * SCRUM-184 AC1: one registration by its id, with whose it is, whatever its
+ * status, so the service can tell someone else's (not found) from one already
+ * withdrawn. maybeSingle: an unknown id is null, not an error.
+ */
+export async function fetchRegistrationById(registrationId: string) {
+  return db()
+    .from('event_registration')
+    .select(`${REGISTRATION_COLUMNS}, attendee_id`)
+    .eq('id', registrationId)
+    .maybeSingle();
+}
+
+/**
+ * SCRUM-184 AC1: set the attendee's registration to Withdrawn. One statement,
+ * guarded on the status, so two withdrawals sent together change it once: the
+ * second finds no Registered row and returns null (TC-184-03). The row is
+ * kept, never deleted (AC2).
+ */
+export async function withdrawRegistrationRow(registrationId: string, attendeeId: string) {
+  return db()
+    .from('event_registration')
+    .update({ status: 'withdrawn' })
+    .eq('id', registrationId)
+    .eq('attendee_id', attendeeId)
+    .eq('status', 'registered')
+    .select(REGISTRATION_COLUMNS)
     .maybeSingle();
 }
 

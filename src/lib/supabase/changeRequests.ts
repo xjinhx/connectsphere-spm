@@ -63,3 +63,67 @@ export async function listChangeRequestsForEvent(eventRequestId: string) {
 export async function listChangeRequestFields(changeRequestIds: string[]) {
   return createAdminClient().from('change_request_field').select(FIELD_COLUMNS).in('change_request_id', changeRequestIds);
 }
+
+// ---------------------------------------------------------------------------
+// SCRUM-190 — Approve a change request and apply it
+// ---------------------------------------------------------------------------
+
+/** AC1/AC2/AC4/AC5/AC6 — the one request being decided. */
+export async function fetchChangeRequestById(id: string) {
+  return createAdminClient().from('change_request').select(CHANGE_REQUEST_COLUMNS).eq('id', id).maybeSingle();
+}
+
+/**
+ * AC1, AC2, AC4, AC6 — one call to approve_change_request, which applies the
+ * event update, flips the change request to Approved and flags every
+ * affected arrangement in one transaction (the same shape as
+ * change_event_schedule, src/lib/supabase/eventSchedule.ts). Resolves to
+ * {"outcome": ...}; see the migration for each outcome.
+ */
+export async function approveChangeRequestRow(params: {
+  changeRequestId: string;
+  coordinatorId: string;
+  name: string;
+  purpose: string | null;
+  description: string | null;
+  proposedDate: string | null;
+  startTime: string | null;
+  endTime: string | null;
+  expectedAttendance: number | null;
+  roomLayout: string | null;
+  accessibilityRequired: boolean | null;
+  accessibilityNotes: string | null;
+  accessibilityFeatureIds: string[];
+  preferredLocationId: string | null;
+  equipmentRequired: boolean | null;
+  equipmentItems: { item: string; quantity: number }[];
+  technicalSupportNotes: string | null;
+  registrationRequired: boolean | null;
+  bookingCause: string | null;
+  reservationCause: string | null;
+  dropToPlanning: boolean;
+}) {
+  return createAdminClient().rpc('approve_change_request', {
+    p_change_request_id: params.changeRequestId,
+    p_coordinator_id: params.coordinatorId,
+    p_name: params.name,
+    p_purpose: params.purpose,
+    p_description: params.description,
+    p_proposed_date: params.proposedDate,
+    p_start_time: params.startTime,
+    p_end_time: params.endTime,
+    p_expected_attendance: params.expectedAttendance,
+    p_room_layout: params.roomLayout,
+    p_accessibility_required: params.accessibilityRequired,
+    p_accessibility_notes: params.accessibilityNotes,
+    p_accessibility_feature_ids: params.accessibilityFeatureIds,
+    p_preferred_location_id: params.preferredLocationId,
+    p_equipment_required: params.equipmentRequired,
+    p_equipment_items: params.equipmentItems,
+    p_technical_support_notes: params.technicalSupportNotes,
+    p_registration_required: params.registrationRequired,
+    p_booking_cause: params.bookingCause,
+    p_reservation_cause: params.reservationCause,
+    p_drop_to_planning: params.dropToPlanning,
+  });
+}

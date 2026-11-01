@@ -1,6 +1,7 @@
 import Link from 'next/link';
 import { getCurrentActor } from '@/lib/auth/currentActor';
 import { RolePagesBar } from '@/components/navigation/RolePagesBar';
+import { FROM_MY_EVENTS } from '@/domain/navigation/reviewBackLink';
 import { hasRole } from '@/domain/identity/policy';
 import { listMyAssignedEvents } from '@/domain/assignment/service';
 import { EventRequestStatusBadge } from '@/components/event-request/EventRequestStatusBadge';
@@ -96,7 +97,7 @@ export default async function CoordinatorMyEventsPage() {
                     <EventRequestStatusBadge status={event.status} />
                   </td>
                   <td className="p-3">
-                    <Link href={`/events/${event.id}/review`} className="text-[var(--brand)] hover:underline">
+                    <Link href={`/events/${event.id}/review?from=${FROM_MY_EVENTS}`} className="text-[var(--brand)] hover:underline">
                       Open
                     </Link>
                   </td>

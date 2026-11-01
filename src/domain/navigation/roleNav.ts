@@ -17,8 +17,14 @@ export const ROLE_NAV: Record<Role, readonly NavItem[]> = {
     { href: '/events', label: 'Event requests' },
     { href: '/events/new', label: 'New event request' },
   ],
-  // DUMMY(SCRUM-251) D-20: Event Coordinator nav is the landing page only.
-  coordinator: [{ href: '/assigned-events', label: 'Assigned events' }],
+  // SCRUM-251 AC2: Review queue, My events, Venues, Client organisations, Equipment, in that order.
+  coordinator: [
+    { href: '/assigned-events', label: 'Review queue' },
+    { href: '/my-events', label: 'My events' },
+    { href: '/venues', label: 'Venues' },
+    { href: '/organisations', label: 'Client organisations' },
+    { href: '/equipment', label: 'Equipment' },
+  ],
   // DUMMY(SCRUM-252) D-20: Event Coordinator Lead nav is the landing page only.
   operations_manager: [{ href: '/assignment-queue', label: 'Assignment queue' }],
   // SCRUM-253 AC2: Booking requests, Venues, in that order.
@@ -34,6 +40,6 @@ export const ROLE_NAV: Record<Role, readonly NavItem[]> = {
   ],
   // SCRUM-255 AC2: Open events, which is also the landing page.
   attendee: [{ href: '/register-events', label: 'Open events' }],
-  // DUMMY(SCRUM-256) D-20: Safety Officer nav is the landing page only.
+  // SCRUM-256 AC2: Safety checks, which is also the landing page.
   safety_officer: [{ href: '/safety-checks', label: 'Safety checks' }],
 };

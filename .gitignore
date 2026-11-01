@@ -88,3 +88,7 @@ __pycache__/
 TEST_CASES_LOGIN.md
 TEST_CASES_LOGIN.tsv
 supabase/snippets/
+
+# Each developer keeps their own test case sheets locally (CLAUDE.md, Adding a
+# new feature, step 7); they are not committed.
+*-test-cases.xlsx

@@ -1,3 +1,4 @@
+import Link from 'next/link';
 import { ClientOrganisationForm } from '@/components/client-organisation/ClientOrganisationForm';
 import { getClientOrganisation } from '@/domain/client-organisation/service';
 
@@ -10,7 +11,12 @@ export default async function EditClientOrganisationPage({ params }: { params: P
 
   return (
     <main className="mx-auto max-w-2xl px-4 py-8">
-      <h1 className="text-xl font-semibold">Edit {organisation.name}</h1>
+      {/* SCRUM-251 AC6: back to the organisation, the page before this one. */}
+      <Link href={`/organisations/${organisation.id}`} className="text-sm text-[var(--brand)] hover:underline">
+        ← {organisation.name}
+      </Link>
+
+      <h1 className="mt-4 text-xl font-semibold">Edit {organisation.name}</h1>
       <p className="mt-1 mb-6 text-sm text-[var(--text-muted)]">
         The name must stay unique. Contact details are optional.
       </p>
