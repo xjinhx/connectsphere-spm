@@ -291,6 +291,22 @@ export async function getEquipmentRequest(eventRequestId: string, actor: Actor):
   });
 }
 
+/**
+ * SCRUM-109 AC1: the event's equipment arrangement for its event record: each
+ * line with whether it is reserved, and the request's status (SCRUM-166), null
+ * while nothing has been requested. A request is raised by its first item
+ * (SCRUM-160 AC10), so one with only technical requirements has no status yet.
+ *
+ * No access check of its own, the same as listEventBookingRequests (SCRUM-236):
+ * its only caller is getEventRecord, which decides first who may see it.
+ */
+export async function readEquipmentArrangement(
+  eventRequestId: string,
+): Promise<{ lines: EquipmentRequestLine[]; status: EquipmentRequestStatus | null }> {
+  const [lines, request] = await Promise.all([readLines(eventRequestId), readRequest(eventRequestId)]);
+  return { lines, status: lines.length > 0 ? (request?.status ?? null) : null };
+}
+
 // -----------------------------------------------------------------------------
 // AC1: add an item
 // -----------------------------------------------------------------------------

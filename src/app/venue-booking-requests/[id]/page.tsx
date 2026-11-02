@@ -134,6 +134,13 @@ export default async function VenueBookingRequestPage({ params }: { params: Prom
         <dt className="font-medium text-[var(--text-muted)]">Requested on</dt>
         <dd>{formatSingaporeDateTime(requirements.requestedAt)}</dd>
       </dl>
+      {/* SCRUM-109 AC1, AC2: the event's record, with the sections Venue Staff may see. */}
+      <Link
+        href={`/events/${request.eventRequestId}/record`}
+        className="mt-2 inline-block text-sm text-[var(--brand)] hover:underline"
+      >
+        Full event record →
+      </Link>
 
       {/* SCRUM-143 AC2 and AC4, SCRUM-230 AC2 and AC3: what this request needs from the venue. */}
       <h2 className="mt-6 text-base font-semibold">Venue requirements</h2>
