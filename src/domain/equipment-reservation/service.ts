@@ -335,12 +335,21 @@ export async function reserveEquipment(
  */
 export async function listEventReservations(eventRequestId: string, actor: Actor): Promise<EventReservations> {
   const event = await readEventForView(eventRequestId, actor);
-  const rows = await readReservationRows(event.id);
+  return readEventReservations(event.id);
+}
+
+/**
+ * listEventReservations without its access check, for SCRUM-102's
+ * confirmation check and SCRUM-109's event record, which each decide who may
+ * see the event first. `eventRequestId` must be an event that exists.
+ */
+export async function readEventReservations(eventRequestId: string): Promise<EventReservations> {
+  const rows = await readReservationRows(eventRequestId);
   const reserved = reservedByLine(rows);
-  const lines = await readLineRows(event.id);
+  const lines = await readLineRows(eventRequestId);
 
   return EventReservationsSchema.parse({
-    eventRequestId: event.id,
+    eventRequestId,
     reservations: rows.map(toReservation),
     outstanding: outstandingLines(
       lines.map((line) => ({

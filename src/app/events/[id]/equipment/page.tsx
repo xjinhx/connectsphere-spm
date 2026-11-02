@@ -117,6 +117,10 @@ export default async function EventEquipmentRequestPage({ params }: { params: Pr
       <p className="mt-1 text-sm text-[var(--text-muted)]">
         Event date: {request.proposedDate ? formatSingaporeDate(request.proposedDate) : 'Not yet provided'}
       </p>
+      {/* SCRUM-109 AC1, AC2: the event's record, with the sections the viewer may see. */}
+      <Link href={`/events/${id}/record`} className="mt-2 inline-block text-sm text-[var(--brand)] hover:underline">
+        Full event record →
+      </Link>
 
       {request.requestStatus ? (
         // SCRUM-166 AC1, AC2: the status as stored - under review until it is set.
