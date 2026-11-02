@@ -1,4 +1,6 @@
 import { EVENT_REQUEST_STATUS_LABELS, type EventRequestStatus } from '@/domain/event-request/schema';
+import { addDays } from '@/domain/equipment-reservation/policy';
+import { formatDayMonthYear, formatDayMonthYearTime, isPastDate, type ISODate } from '@/domain/shared/dates';
 
 /**
  * SCRUM-101 — Move an event through its statuses as work is done.
@@ -132,4 +134,134 @@ export function canBeConfirmed(status: EventRequestStatus): boolean {
 
 export function confirmationStatusRefusal(status: EventRequestStatus): string {
   return `Only an event in Planning can be confirmed. This event is ${EVENT_REQUEST_STATUS_LABELS[status]}.`;
+}
+
+/**
+ * SCRUM-104 — Mark an event as completed.
+ *
+ * The same rules as complete_event and complete_past_events
+ * (20261027060115_event_completion.sql), restated here for the page and the
+ * service because the database cannot import them: change one, change the
+ * other. The end date is the last day of the event's confirmed venue bookings,
+ * or its proposed date when it has none (event_end_date in that file).
+ */
+
+/**
+ * AC5: only an event in Preparation, the one status reached through an approved
+ * safety check (SCRUM-234), so any other status has not passed it (CL-60).
+ * Narrower than ALLOWED_TRANSITIONS, which still lists confirmed -> completed.
+ */
+export function canBeCompleted(status: EventRequestStatus): boolean {
+  return status === 'preparation';
+}
+
+/** AC1, AC4: the end date has passed when it is before today (Singapore). */
+export function hasEnded(endDate: ISODate | null, today: ISODate): boolean {
+  return endDate !== null && isPastDate(endDate, today);
+}
+
+/** AC2, AC3: how long after its end date the completion check completes an event. */
+export const COMPLETION_CHECK_DAYS = 7;
+
+/** AC2, AC3: a Preparation event 7 or more days past its end date; never one 6 days past. */
+export function isDueForCompletionCheck(status: EventRequestStatus, endDate: ISODate | null, today: ISODate): boolean {
+  return canBeCompleted(status) && endDate !== null && endDate <= addDays(today, -COMPLETION_CHECK_DAYS);
+}
+
+export function completionStatusRefusal(status: EventRequestStatus): string {
+  return `Only an event in Preparation can be marked completed: it must pass the Operational Safety Check first. This event is ${EVENT_REQUEST_STATUS_LABELS[status]}.`;
+}
+
+export const NOT_ENDED_YET = "This event can't be marked completed until its end date has passed.";
+
+// -----------------------------------------------------------------------------
+// SCRUM-105 — Cancel an event at any stage
+// -----------------------------------------------------------------------------
+
+/**
+ * AC1 "an event in any status": Submitted to Preparation, the statuses
+ * EVENT_STATUS_TRANSITIONS lets move to Cancelled. A Draft has no coordinator
+ * yet, and Rejected, Completed and Cancelled are final. cancel_event
+ * (20261030070000_cancel_event.sql) checks the same list with the event
+ * locked: change one, change the other.
+ */
+export function canBeCancelled(status: EventRequestStatus): boolean {
+  return status !== 'draft' && canTransition(status, 'cancelled');
+}
+
+/** AC1: why an event in a final status (or a Draft) cannot be cancelled. */
+export function cancellationStatusRefusal(status: EventRequestStatus): string {
+  return `This event is ${EVENT_REQUEST_STATUS_LABELS[status]} and cannot be cancelled.`;
+}
+
+/** AC1: when it was cancelled, as DD/MM/YYYY HH:mm in Singapore. */
+export function formatCancelledAt(instant: string): string {
+  return formatDayMonthYearTime(instant);
+}
+
+/** What cancel_event released, as the notifications need it. */
+export interface CancelledArrangements {
+  organiserId: string;
+  /** AC3, AC6: each released booking and the Venue Staff who approved it (null if unknown). */
+  bookings: { venueName: string; date: string; startTime: string; endTime: string; approvedBy: string | null }[];
+  /** AC3: each released reservation and who reserved it (null if unknown). */
+  reservations: { equipmentName: string; quantity: number; reservedBy: string | null }[];
+  /** AC4: every attendee with an active registration. */
+  attendeeIds: string[];
+}
+
+/**
+ * AC4, AC6 — who is told, and what. One notification per person (TC-105-13):
+ *   - the organiser, with the reason;
+ *   - each Venue Staff member who approved a released booking, naming the
+ *     venues, dates and times that are free again (AC6);
+ *   - each Technical Support Staff member who reserved released equipment,
+ *     naming what was released;
+ *   - each attendee with an active registration.
+ * Someone in more than one group (e.g. Venue Staff who also reserved
+ * equipment) gets one notification with every part that applies.
+ */
+export function cancellationNotices(
+  event: { name: string; reference: string; reason: string },
+  released: CancelledArrangements,
+): { recipientId: string; message: string }[] {
+  const headline = `${event.name} (${event.reference}) has been cancelled and will not take place.`;
+  const parts = new Map<string, string[]>();
+  const add = (recipientId: string | null, part: string) => {
+    if (!recipientId) return;
+    const list = parts.get(recipientId) ?? [];
+    if (!list.includes(part)) list.push(part);
+    parts.set(recipientId, list);
+  };
+
+  add(released.organiserId, `Reason: ${event.reason}`);
+
+  const freedByApprover = new Map<string, string[]>();
+  for (const booking of released.bookings) {
+    if (!booking.approvedBy) continue;
+    const times = `${booking.venueName}, ${formatDayMonthYear(booking.date)}, ${booking.startTime.slice(0, 5)} to ${booking.endTime.slice(0, 5)}`;
+    freedByApprover.set(booking.approvedBy, [...(freedByApprover.get(booking.approvedBy) ?? []), times]);
+  }
+  for (const [approver, times] of freedByApprover) {
+    add(approver, `These venue times are free again: ${times.join('; ')}.`);
+  }
+
+  const releasedByReserver = new Map<string, string[]>();
+  for (const reservation of released.reservations) {
+    if (!reservation.reservedBy) continue;
+    const item = `${reservation.equipmentName} × ${reservation.quantity}`;
+    releasedByReserver.set(reservation.reservedBy, [...(releasedByReserver.get(reservation.reservedBy) ?? []), item]);
+  }
+  for (const [reserver, items] of releasedByReserver) {
+    add(reserver, `Its equipment reservations are released: ${items.join(', ')}.`);
+  }
+
+  for (const attendeeId of released.attendeeIds) {
+    if (!parts.has(attendeeId)) parts.set(attendeeId, []);
+  }
+
+  return [...parts].map(([recipientId, extra]) => ({
+    recipientId,
+    message: [headline, ...extra].join(' '),
+  }));
 }

@@ -100,7 +100,7 @@ export async function fetchEventVenueBookings(eventRequestId: string) {
   return db()
     .from('venue_booking')
     .select(
-      'id, date, start_time, end_time, status, release_reason, review_required, review_required_at, review_required_cause, venue:venue_id (name), event_request:event_request_id (coordinator_id), replacements:venue_booking_request!venue_booking_request_replaces_booking_id_fkey ( venue_booking_request_line ( status ) )',
+      'id, date, start_time, end_time, status, release_reason, released_by, released_at, review_required, review_required_at, review_required_cause, venue:venue_id (name), event_request:event_request_id (coordinator_id), replacements:venue_booking_request!venue_booking_request_replaces_booking_id_fkey ( venue_booking_request_line ( status ) )',
     )
     .eq('event_request_id', eventRequestId)
     .order('date')

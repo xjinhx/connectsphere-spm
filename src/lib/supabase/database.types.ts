@@ -207,6 +207,9 @@ export type Database = {
         Row: {
           created_at: string
           event_request_id: string
+          ready_to_reserve: boolean
+          review_completed_at: string | null
+          review_completed_by: string | null
           status: string
           status_set_at: string | null
           status_set_by: string | null
@@ -217,6 +220,9 @@ export type Database = {
         Insert: {
           created_at?: string
           event_request_id: string
+          ready_to_reserve?: boolean
+          review_completed_at?: string | null
+          review_completed_by?: string | null
           status?: string
           status_set_at?: string | null
           status_set_by?: string | null
@@ -227,6 +233,9 @@ export type Database = {
         Update: {
           created_at?: string
           event_request_id?: string
+          ready_to_reserve?: boolean
+          review_completed_at?: string | null
+          review_completed_by?: string | null
           status?: string
           status_set_at?: string | null
           status_set_by?: string | null
@@ -252,6 +261,10 @@ export type Database = {
           event_request_id: string
           id: string
           quantity: number
+          suitability: string | null
+          suitability_reason: string | null
+          suitability_set_at: string | null
+          suitability_set_by: string | null
           unavailable: boolean
           updated_at: string
         }
@@ -262,6 +275,10 @@ export type Database = {
           event_request_id: string
           id?: string
           quantity: number
+          suitability?: string | null
+          suitability_reason?: string | null
+          suitability_set_at?: string | null
+          suitability_set_by?: string | null
           unavailable?: boolean
           updated_at?: string
         }
@@ -272,6 +289,10 @@ export type Database = {
           event_request_id?: string
           id?: string
           quantity?: number
+          suitability?: string | null
+          suitability_reason?: string | null
+          suitability_set_at?: string | null
+          suitability_set_by?: string | null
           unavailable?: boolean
           updated_at?: string
         }
@@ -302,6 +323,9 @@ export type Database = {
           quantity: number
           reconfirmed_at: string | null
           reconfirmed_by: string | null
+          release_reason: string | null
+          released_at: string | null
+          released_by: string | null
           reserved_by: string | null
           review_required: boolean
           review_required_at: string | null
@@ -320,6 +344,9 @@ export type Database = {
           quantity: number
           reconfirmed_at?: string | null
           reconfirmed_by?: string | null
+          release_reason?: string | null
+          released_at?: string | null
+          released_by?: string | null
           reserved_by?: string | null
           review_required?: boolean
           review_required_at?: string | null
@@ -338,6 +365,9 @@ export type Database = {
           quantity?: number
           reconfirmed_at?: string | null
           reconfirmed_by?: string | null
+          release_reason?: string | null
+          released_at?: string | null
+          released_by?: string | null
           reserved_by?: string | null
           review_required?: boolean
           review_required_at?: string | null
@@ -459,6 +489,9 @@ export type Database = {
           accessibility_required: boolean | null
           assigned_at: string | null
           assigned_by: string | null
+          cancellation_reason: string | null
+          cancelled_at: string | null
+          cancelled_by: string | null
           clarification_note: string | null
           clarification_requested_at: string | null
           clarification_requested_by: string | null
@@ -466,6 +499,8 @@ export type Database = {
           client_contact_name: string | null
           client_contact_phone: string | null
           client_organisation_id: string | null
+          completed_at: string | null
+          completed_by: string | null
           coordinator_id: string | null
           created_at: string
           decided_at: string | null
@@ -501,6 +536,9 @@ export type Database = {
           accessibility_required?: boolean | null
           assigned_at?: string | null
           assigned_by?: string | null
+          cancellation_reason?: string | null
+          cancelled_at?: string | null
+          cancelled_by?: string | null
           clarification_note?: string | null
           clarification_requested_at?: string | null
           clarification_requested_by?: string | null
@@ -508,6 +546,8 @@ export type Database = {
           client_contact_name?: string | null
           client_contact_phone?: string | null
           client_organisation_id?: string | null
+          completed_at?: string | null
+          completed_by?: string | null
           coordinator_id?: string | null
           created_at?: string
           decided_at?: string | null
@@ -543,6 +583,9 @@ export type Database = {
           accessibility_required?: boolean | null
           assigned_at?: string | null
           assigned_by?: string | null
+          cancellation_reason?: string | null
+          cancelled_at?: string | null
+          cancelled_by?: string | null
           clarification_note?: string | null
           clarification_requested_at?: string | null
           clarification_requested_by?: string | null
@@ -550,6 +593,8 @@ export type Database = {
           client_contact_name?: string | null
           client_contact_phone?: string | null
           client_organisation_id?: string | null
+          completed_at?: string | null
+          completed_by?: string | null
           coordinator_id?: string | null
           created_at?: string
           decided_at?: string | null
@@ -1517,6 +1562,7 @@ export type Database = {
       }
       venues: {
         Row: {
+          address: string | null
           closes_at: string
           created_at: string
           id: string
@@ -1533,6 +1579,7 @@ export type Database = {
           updated_at: string
         }
         Insert: {
+          address?: string | null
           closes_at: string
           created_at?: string
           id?: string
@@ -1549,6 +1596,7 @@ export type Database = {
           updated_at?: string
         }
         Update: {
+          address?: string | null
           closes_at?: string
           created_at?: string
           id?: string
@@ -1609,6 +1657,40 @@ export type Database = {
       }
     }
     Functions: {
+      approve_change_request: {
+        Args: {
+          p_accessibility_feature_ids: string[]
+          p_accessibility_notes: string
+          p_accessibility_required: boolean
+          p_booking_cause: string
+          p_change_request_id: string
+          p_coordinator_id: string
+          p_description: string
+          p_drop_to_planning: boolean
+          p_end_time: string
+          p_equipment_items: Json
+          p_equipment_required: boolean
+          p_expected_attendance: number
+          p_name: string
+          p_preferred_location_id: string
+          p_proposed_date: string
+          p_purpose: string
+          p_registration_required: boolean
+          p_reservation_cause: string
+          p_room_layout: string
+          p_start_time: string
+          p_technical_support_notes: string
+        }
+        Returns: Json
+      }
+      cancel_event: {
+        Args: {
+          p_cancelled_by: string
+          p_event_request_id: string
+          p_reason: string
+        }
+        Returns: Json
+      }
       change_event_schedule: {
         Args: {
           p_accessibility_notes: string
@@ -1628,6 +1710,11 @@ export type Database = {
         Returns: Json
       }
       clock_minutes: { Args: { p_time: string }; Returns: number }
+      complete_event: {
+        Args: { p_completed_by: string; p_event_request_id: string }
+        Returns: string
+      }
+      complete_past_events: { Args: { p_today?: string }; Returns: number }
       create_venue: {
         Args: {
           p_accessibility_feature_ids: string[]
@@ -1676,6 +1763,7 @@ export type Database = {
           window_start: string
         }[]
       }
+      event_end_date: { Args: { p_event_request_id: string }; Returns: string }
       event_has_places_remaining: {
         Args: { p_event_request_id: string }
         Returns: boolean
@@ -1726,8 +1814,20 @@ export type Database = {
         }
         Returns: string
       }
+      release_equipment_reservation: {
+        Args: {
+          p_reason: string
+          p_released_by: string
+          p_reservation_id: string
+        }
+        Returns: boolean
+      }
       reserve_equipment: {
         Args: { p_line_id: string; p_quantity: number; p_reserved_by: string }
+        Returns: Json
+      }
+      save_equipment_suitability: {
+        Args: { p_event_request_id: string; p_set_by: string; p_verdicts: Json }
         Returns: Json
       }
       set_equipment_request_status: {

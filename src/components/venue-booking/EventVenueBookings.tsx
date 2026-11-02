@@ -1,4 +1,4 @@
-import { formatSingaporeDate, formatSingaporeDateTime } from '@/domain/shared/dates';
+import { formatDayMonthYearTime, formatSingaporeDate, formatSingaporeDateTime } from '@/domain/shared/dates';
 import type { EventVenueBooking, VenueBookingStatus } from '@/domain/venue-booking/schema';
 import { ReleaseVenueBookingForm } from './ReleaseVenueBookingForm';
 
@@ -18,6 +18,9 @@ const STATUS_LABELS: Record<VenueBookingStatus, string> = {
  *
  * SCRUM-111 AC6: a booking flagged by a significant change shows Review
  * required, with the change that caused it and when.
+ *
+ * SCRUM-105 AC6: a released booking also says who released it and when, so a
+ * release by a cancellation shows the cancelling coordinator and the time.
  */
 export function EventVenueBookings({ bookings }: { bookings: EventVenueBooking[] }) {
   if (bookings.length === 0) return null;
@@ -49,6 +52,11 @@ export function EventVenueBookings({ bookings }: { bookings: EventVenueBooking[]
             ) : null}
             {booking.releaseReason ? (
               <p className="mt-1 text-[var(--text-muted)]">Reason: {booking.releaseReason}</p>
+            ) : null}
+            {booking.releasedByName && booking.releasedAt ? (
+              <p className="mt-1 text-[var(--text-muted)]">
+                Released by {booking.releasedByName} on {formatDayMonthYearTime(booking.releasedAt)}
+              </p>
             ) : null}
             {booking.canRelease ? <ReleaseVenueBookingForm bookingId={booking.id} /> : null}
           </li>

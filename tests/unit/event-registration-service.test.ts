@@ -7,23 +7,26 @@ import { beforeEach, describe, expect, it, vi } from 'vitest';
  * That the row really lands in Postgres, and the database function's own
  * checks, run in tests/integration/register-for-event.test.ts.
  *
- * Test case IDs are from SCRUM-181-test-cases.xlsx (TC-181-nn). The clock is
- * fixed at 30/10/2026 10:00 Singapore time unless a test says otherwise.
+ * Test case IDs are from the ConnectSphere_TestCases_Sprint4 workbook,
+ * SCRUM-181 tab (TC-181-nn). The clock is fixed at 30/10/2026 10:00 Singapore
+ * time unless a test says otherwise.
  */
 
 vi.mock('@/lib/supabase/eventRegistrations', () => ({
+  countRegisteredRegistrations: vi.fn(),
   fetchRegistrationEvent: vi.fn(),
   fetchRegisteredRegistration: vi.fn(),
   createRegistrationRow: vi.fn(),
 }));
 
 import {
+  countRegisteredRegistrations,
   createRegistrationRow,
   fetchRegisteredRegistration,
   fetchRegistrationEvent,
 } from '@/lib/supabase/eventRegistrations';
 import { getRegistrationPage, registerForEvent } from '@/domain/event-registration/service';
-import { ALREADY_REGISTERED } from '@/domain/event-registration/policy';
+import { ALREADY_REGISTERED, FINAL_EVENT_REFUSALS, NO_PLACES_REMAINING } from '@/domain/event-registration/policy';
 import { CapacityExceededError, ConflictError, NotFoundError, ValidationError } from '@/domain/shared/errors';
 
 const EVENT_ID = '11111111-1111-4111-8111-111111111111';
@@ -43,17 +46,29 @@ const ROW = {
   registered_at: '2026-10-30T02:00:00+00:00',
 };
 
-function eventWithPeriod(start: string | null, end: string | null) {
+function eventWithPeriod(start: string | null, end: string | null, capacity: number | null = 20, status = 'confirmed') {
   vi.mocked(fetchRegistrationEvent).mockResolvedValue({
     data: {
       id: EVENT_ID,
       name: 'Client Appreciation Night',
+      status,
+      description: null,
       proposed_date: '2026-11-15',
+      start_time: null,
+      end_time: null,
       registration_start_date: start,
       registration_end_date: end,
+      registration_capacity: capacity,
+      // SCRUM-180 AC3 reads the venues too; none are needed here.
+      venue_booking: [],
     },
     error: null,
   } as never);
+}
+
+/** SCRUM-182: how many places the event's Registered registrations take. */
+function placesTaken(count: number) {
+  vi.mocked(countRegisteredRegistrations).mockResolvedValue({ count, error: null } as never);
 }
 
 /** The attendee's Registered row: none before the insert, then `after` once it has run. */
@@ -80,6 +95,7 @@ async function refusal(promise: Promise<unknown>) {
 beforeEach(() => {
   vi.clearAllMocks();
   eventWithPeriod('2026-10-27', '2026-11-04');
+  placesTaken(10);
   registrations(null, ROW);
   databaseSays('registered');
 });
@@ -120,7 +136,7 @@ describe('AC1: registering with the period open and places remaining', () => {
     expect(createRegistrationRow).not.toHaveBeenCalled();
   });
 
-  it('refuses when the database finds no places remaining (SCRUM-182 decides when; D-23 never says so yet)', async () => {
+  it('refuses when the database finds no places remaining (SCRUM-182; its cases are below)', async () => {
     databaseSays('full');
     await expect(registerForEvent(EVENT_ID, ATTENDEE, VALID, NOW)).rejects.toThrow(CapacityExceededError);
   });
@@ -276,5 +292,186 @@ describe("the attendee's event page", () => {
     const view = await getRegistrationPage(EVENT_ID, ATTENDEE, NOW);
     expect(view.registration).toMatchObject({ reference: 'REG-2026-0001' });
     expect(view).toMatchObject({ eventName: 'Client Appreciation Night', eventDate: '2026-11-15' });
+  });
+});
+
+/**
+ * SCRUM-182 Refuse registration once the event is full (Jira, authoritative).
+ * Test case IDs are from the ConnectSphere_TestCases_Sprint4 workbook,
+ * SCRUM-182 tab (TC-182-nn). That the database counts the same way, and holds
+ * under two requests at once, runs in
+ * tests/integration/refuse-full-registration.test.ts.
+ */
+describe('SCRUM-182 AC1: a full event refuses registration and is shown as full', () => {
+  it('TC-182-01 at 20 of 20: refused as full, and nothing is written', async () => {
+    placesTaken(20);
+
+    const error = await refusal(registerForEvent(EVENT_ID, ATTENDEE, VALID, NOW));
+
+    expect(error).toBeInstanceOf(CapacityExceededError);
+    expect((error as Error).message).toBe(NO_PLACES_REMAINING);
+    expect(createRegistrationRow).not.toHaveBeenCalled();
+    expect((await getRegistrationPage(EVENT_ID, ATTENDEE, NOW)).full).toBe(true);
+  });
+
+  it('TC-182-02 no capacity set: refused the same way, and the page shows it as full', async () => {
+    eventWithPeriod('2026-10-27', '2026-11-04', null);
+    placesTaken(0);
+
+    await expect(registerForEvent(EVENT_ID, ATTENDEE, VALID, NOW)).rejects.toThrow(NO_PLACES_REMAINING);
+    expect(createRegistrationRow).not.toHaveBeenCalled();
+    expect((await getRegistrationPage(EVENT_ID, ATTENDEE, NOW)).full).toBe(true);
+  });
+
+  it('TC-182-03 at 19 of 20 the last place can be taken, and the page is not full', async () => {
+    placesTaken(19);
+
+    await registerForEvent(EVENT_ID, ATTENDEE, VALID, NOW);
+
+    expect(createRegistrationRow).toHaveBeenCalledTimes(1);
+    registrations(null);
+    expect((await getRegistrationPage(EVENT_ID, ATTENDEE, NOW)).full).toBe(false);
+  });
+
+  it("TC-182-04 counts only this event's registrations", async () => {
+    await registerForEvent(EVENT_ID, ATTENDEE, VALID, NOW);
+    expect(countRegisteredRegistrations).toHaveBeenCalledWith(EVENT_ID);
+  });
+
+  it('a full event is refused before the fields are checked, as a closed period is', async () => {
+    placesTaken(20);
+    await expect(registerForEvent(EVENT_ID, ATTENDEE, { fullName: '', email: '', contactNumber: '' }, NOW)).rejects.toThrow(
+      CapacityExceededError,
+    );
+  });
+
+  it('a closed period is said before full: the end date is what the attendee needs (SCRUM-181 AC3)', async () => {
+    eventWithPeriod('2026-10-20', '2026-10-28');
+    placesTaken(20);
+    await expect(registerForEvent(EVENT_ID, ATTENDEE, VALID, NOW)).rejects.toThrow('Registration closed on 28/10/2026.');
+  });
+
+  it('someone already registered on a full event is shown their registration, not told it is full (SCRUM-181 AC5)', async () => {
+    placesTaken(20);
+    registrations(ROW);
+    await expect(registerForEvent(EVENT_ID, ATTENDEE, VALID, NOW)).rejects.toThrow(ALREADY_REGISTERED);
+  });
+});
+
+describe('SCRUM-182 AC2: two attendees going for the last place at the same moment', () => {
+  it('TC-182-05, TC-182-08 when the database finds the last place taken after the read, refused as full, not as a duplicate', async () => {
+    placesTaken(19);
+    databaseSays('full');
+
+    const error = await refusal(registerForEvent(EVENT_ID, ATTENDEE_2, VALID, NOW));
+
+    expect(error).toBeInstanceOf(CapacityExceededError);
+    expect(error).not.toBeInstanceOf(ConflictError);
+    expect((error as Error).message).toBe(NO_PLACES_REMAINING);
+  });
+});
+
+describe('SCRUM-182 AC3: a place released by a withdrawal', () => {
+  it('TC-182-09 one place below the capacity (a withdrawal from 20 of 20) can be registered for', async () => {
+    placesTaken(19);
+    await expect(registerForEvent(EVENT_ID, ATTENDEE, VALID, NOW)).resolves.toMatchObject({ status: 'registered' });
+  });
+
+  it('TC-182-10 capacity 2 with 3 or 2 registered is refused as full; with 1 it is open again', async () => {
+    eventWithPeriod('2026-10-27', '2026-11-04', 2);
+    for (const count of [3, 2]) {
+      placesTaken(count);
+      registrations(null);
+      await expect(registerForEvent(EVENT_ID, ATTENDEE, VALID, NOW)).rejects.toThrow(CapacityExceededError);
+    }
+    placesTaken(1);
+    registrations(null, ROW);
+    await expect(registerForEvent(EVENT_ID, ATTENDEE, VALID, NOW)).resolves.toMatchObject({ status: 'registered' });
+    expect(createRegistrationRow).toHaveBeenCalledTimes(1);
+  });
+});
+
+/**
+ * SCRUM-270 — bug against AC1: a Cancelled or Completed event took
+ * registrations while its period was open. PO, 28/10/2026: a registration
+ * period is open only while the event is going ahead. Test case IDs are from
+ * the ConnectSphere_TestCases_Sprint4 workbook, SCRUM-270 tab (TC-270-nn).
+ */
+describe('SCRUM-270: a Cancelled or Completed event takes no registrations', () => {
+  it('TC-270-01 the page of a Cancelled event, its period open, is marked Cancelled', async () => {
+    eventWithPeriod('2026-10-27', '2026-11-04', 20, 'cancelled');
+    registrations(null);
+
+    const view = await getRegistrationPage(EVENT_ID, ATTENDEE, NOW);
+
+    expect(view.finalStatus).toBe('cancelled');
+    expect(view.periodRefusal).toBeNull();
+    expect(view.registration).toBeNull();
+  });
+
+  it('TC-270-02 the page of a Completed event, its period open, is marked Completed', async () => {
+    eventWithPeriod('2026-10-27', '2026-11-04', 20, 'completed');
+    registrations(null);
+
+    expect((await getRegistrationPage(EVENT_ID, ATTENDEE, NOW)).finalStatus).toBe('completed');
+  });
+
+  it('TC-270-03 registering for a Cancelled event is refused with the reason, and nothing is written', async () => {
+    eventWithPeriod('2026-10-27', '2026-11-04', 20, 'cancelled');
+
+    const error = await refusal(registerForEvent(EVENT_ID, ATTENDEE, VALID, NOW));
+
+    expect(error).toBeInstanceOf(ValidationError);
+    expect((error as ValidationError).message).toBe(FINAL_EVENT_REFUSALS.cancelled);
+    expect((error as ValidationError).details).toEqual({ eventStatus: 'cancelled' });
+    expect(createRegistrationRow).not.toHaveBeenCalled();
+  });
+
+  it('TC-270-04 registering for a Completed event is refused with the reason, and nothing is written', async () => {
+    eventWithPeriod('2026-10-27', '2026-11-04', 20, 'completed');
+
+    const error = await refusal(registerForEvent(EVENT_ID, ATTENDEE, VALID, NOW));
+
+    expect((error as ValidationError).message).toBe(FINAL_EVENT_REFUSALS.completed);
+    expect(createRegistrationRow).not.toHaveBeenCalled();
+  });
+
+  it('TC-270-05 someone registered before the event was cancelled keeps seeing their registration, with the event marked Cancelled', async () => {
+    eventWithPeriod('2026-10-27', '2026-11-04', 20, 'cancelled');
+    registrations(ROW);
+
+    const view = await getRegistrationPage(EVENT_ID, ATTENDEE, NOW);
+    expect(view.finalStatus).toBe('cancelled');
+    expect(view.registration).toMatchObject({ reference: 'REG-2026-0001', status: 'registered' });
+
+    // Registering again is still the duplicate refusal (AC5 is checked first), not a second row.
+    await expect(registerForEvent(EVENT_ID, ATTENDEE, VALID, NOW)).rejects.toThrow(ConflictError);
+    expect(createRegistrationRow).not.toHaveBeenCalled();
+  });
+
+  it('TC-270-06 an event cancelled or completed after the page loaded is refused by the database function', async () => {
+    for (const status of ['cancelled', 'completed'] as const) {
+      registrations(null);
+      databaseSays(status);
+
+      const error = await refusal(registerForEvent(EVENT_ID, ATTENDEE, VALID, NOW));
+
+      expect(error).toBeInstanceOf(ValidationError);
+      expect((error as ValidationError).message).toBe(FINAL_EVENT_REFUSALS[status]);
+    }
+  });
+
+  it('TC-270-07 every other status takes registrations as before', async () => {
+    for (const status of ['approved', 'planning', 'confirmed', 'preparation']) {
+      eventWithPeriod('2026-10-27', '2026-11-04', 20, status);
+      registrations(null, ROW);
+
+      expect((await getRegistrationPage(EVENT_ID, ATTENDEE, NOW)).finalStatus, status).toBeNull();
+      registrations(null, ROW);
+      await expect(registerForEvent(EVENT_ID, ATTENDEE, VALID, NOW), status).resolves.toMatchObject({
+        status: 'registered',
+      });
+    }
+    expect(createRegistrationRow).toHaveBeenCalledTimes(4);
   });
 });

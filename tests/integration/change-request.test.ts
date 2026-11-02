@@ -1,6 +1,12 @@
-import { describe, it, expect, beforeAll, afterAll } from 'vitest';
+import { describe, it, expect, beforeAll, afterAll, vi } from 'vitest';
+
+vi.mock('@/lib/auth/currentActor', () => ({ getCurrentActor: vi.fn() }));
+
+import { getCurrentActor } from '@/lib/auth/currentActor';
 import { createAdminClient } from '@/lib/supabase/admin';
 import { ensureTestClientOrganisation } from './fixtures/clientOrganisation';
+import { todayInSingapore } from '@/domain/shared/dates';
+import { getEventRequest } from '@/domain/event-request/service';
 
 /**
  * SCRUM-187 — Request a change and track its outcome.
@@ -12,8 +18,11 @@ import { ensureTestClientOrganisation } from './fixtures/clientOrganisation';
  * A real database is the point: the one-reason-per-field write and the
  * event-visibility rule (canViewRequest) cannot be proven without Postgres.
  *
- * getCurrentActor is not used here (raiseChangeRequest/listChangeRequests take
- * the actor id/roles directly, unlike the route), so no mock is needed.
+ * getCurrentActor is not used by raiseChangeRequest/listChangeRequests (they
+ * take the actor id/roles directly, unlike the route), so no mock is needed
+ * for most of this file. The AC7 block mocks it, because that one test calls
+ * getEventRequest(id) - the event page's own read - which does take it from
+ * there.
  *
  * Status scope (Submitted through Preparation) and field scope (the full
  * event-request field set) both per CL-61, the PO's 24 Oct 2026
@@ -28,7 +37,7 @@ const CLIENT_ORGANISATION_ID = '22222222-2222-2222-2222-222222222222';
 
 const supabase = createAdminClient();
 
-const { raiseChangeRequest, listChangeRequests } = await import('@/domain/change-request/service');
+const { raiseChangeRequest, listChangeRequests, approveChangeRequest } = await import('@/domain/change-request/service');
 
 let organiserId: string;
 let colleagueId: string;
@@ -57,7 +66,12 @@ async function createAccount(label: string, roles: string[], clientOrganisationI
   return data.user.id;
 }
 
-async function createEvent(status: string, ownerId = organiserId, coordinator: string | null = coordinatorId) {
+async function createEvent(
+  status: string,
+  ownerId = organiserId,
+  coordinator: string | null = coordinatorId,
+  proposedDate = '2027-03-15',
+) {
   const { data, error } = await supabase
     .from('event_request')
     .insert({
@@ -66,7 +80,7 @@ async function createEvent(status: string, ownerId = organiserId, coordinator: s
       name: 'Annual Tech Summit',
       purpose: 'Bring the engineering teams together for the yearly update.',
       description: 'A full day of talks, workshops and a closing reception.',
-      proposed_date: '2027-03-15',
+      proposed_date: proposedDate,
       start_time: '10:00',
       end_time: '12:00',
       expected_attendance: 150,
@@ -86,6 +100,12 @@ async function createEvent(status: string, ownerId = organiserId, coordinator: s
   const id = data.id as string;
   createdRequestIds.push(id);
   return id;
+}
+
+function tomorrowInSingapore(): string {
+  const today = new Date(`${todayInSingapore()}T00:00:00Z`);
+  today.setUTCDate(today.getUTCDate() + 1);
+  return today.toISOString().slice(0, 10);
 }
 
 async function readChangeRequestRows(eventRequestId: string) {
@@ -116,9 +136,9 @@ async function readNotifications(recipientId: string, eventRequestId: string) {
   return data;
 }
 
-// DUMMY(SCRUM-190) D-24: stands in for SCRUM-190's own (approve) write. The
-// reject half is Replaced — see tests/integration/reject-change-request.test.ts
-// and docs/dummies.md D-24.
+// D-26 (replaced): stands in for SCRUM-191's own write (SCRUM-190's
+// approved-path write is now real — tests/integration/approve-change-request.test.ts).
+// See docs/dummies.md.
 async function seedDecision(changeRequestId: string, status: 'approved' | 'rejected', reason: string) {
   const { error } = await supabase
     .from('change_request')
@@ -135,9 +155,31 @@ beforeAll(async () => {
   coordinatorId = await createAccount('Casey Coordinator', ['coordinator']);
 });
 
+/** The accessibility features this file created, removed again in afterAll (PR #156 review). */
+const createdFeatureIds: string[] = [];
+
+/**
+ * An accessibility feature by name, created if this database does not have it
+ * yet. Only a feature created here is tracked for clean-up; one that already
+ * existed is left alone.
+ */
+async function ensureFeature(name: string): Promise<string> {
+  const { data: existing } = await supabase.from('accessibility_features').select('id').eq('name', name).maybeSingle();
+  if (existing) return existing.id;
+  const { data, error } = await supabase.from('accessibility_features').insert({ name }).select('id').single();
+  if (error || !data) throw new Error(`could not create accessibility feature ${name}: ${error?.message ?? 'no row'}`);
+  createdFeatureIds.push(data.id);
+  return data.id;
+}
+
 afterAll(async () => {
   for (const id of createdRequestIds) {
     await supabase.from('event_request').delete().eq('id', id);
+  }
+  // After the events, so nothing still refers to them; they would otherwise
+  // stay as tick boxes in the change request form until a db:reset.
+  for (const id of createdFeatureIds) {
+    await supabase.from('accessibility_features').delete().eq('id', id);
   }
   for (const id of createdUserIds) {
     await supabase.auth.admin.deleteUser(id);
@@ -243,6 +285,61 @@ describe('raiseChangeRequest', () => {
     expect(fieldRows).toHaveLength(2);
   });
 
+  // SCRUM-274 TC-274-01 — Accessibility features, now offered by the form,
+  // stored as one line: the event's current list (none) and the proposed one.
+  it('TC-274-01: stores a proposed Accessibility features list', async () => {
+    const id = await createEvent('submitted');
+    // Its own two features, so the test does not depend on seed data (CI has none).
+    const featureIds = [await ensureFeature('S274 Step-free access'), await ensureFeature('S274 Hearing loop')];
+
+    const outcome = await raiseChangeRequest(
+      id,
+      { fields: [{ field: 'accessibilityFeatureIds', proposedValue: featureIds }], reason: 'Wheelchair and hearing-aid users attending' },
+      organiserId,
+    );
+
+    expect(outcome.fields).toHaveLength(1);
+    expect(outcome.fields[0]).toMatchObject({ field: 'accessibilityFeatureIds', currentValue: [], proposedValue: featureIds });
+    const fieldRows = await readFieldRows(outcome.id);
+    expect(fieldRows).toEqual([{ field: 'accessibilityFeatureIds', current_value: [], proposed_value: featureIds }]);
+  });
+
+  // SCRUM-274 TC-274-02 — Equipment items, now offered by the form.
+  it('TC-274-02: stores a proposed Equipment items list', async () => {
+    const id = await createEvent('submitted');
+
+    const outcome = await raiseChangeRequest(
+      id,
+      { fields: [{ field: 'equipmentItems', proposedValue: [{ item: 'Projector P-100', quantity: 2 }] }], reason: 'Second screen for the breakout room' },
+      organiserId,
+    );
+
+    expect(outcome.fields[0]).toMatchObject({
+      field: 'equipmentItems',
+      currentValue: [],
+      proposedValue: [{ item: 'Projector P-100', quantity: 2 }],
+    });
+    const fieldRows = await readFieldRows(outcome.id);
+    expect(fieldRows).toEqual([
+      { field: 'equipmentItems', current_value: [], proposed_value: [{ item: 'Projector P-100', quantity: 2 }] },
+    ]);
+  });
+
+  // SCRUM-274 — a quantity of 0 is refused before anything is written.
+  it('TC-274-02: refuses an equipment quantity of 0, and writes nothing', async () => {
+    const id = await createEvent('submitted');
+
+    await expect(
+      raiseChangeRequest(
+        id,
+        { fields: [{ field: 'equipmentItems', proposedValue: [{ item: 'Projector P-100', quantity: 0 }] }], reason: 'Second screen' },
+        organiserId,
+      ),
+    ).rejects.toMatchObject({ code: 'VALIDATION_ERROR' });
+
+    expect(await readChangeRequestRows(id)).toHaveLength(0);
+  });
+
   // TC-187-03 (AC1) — several fields, one reason, no extra field recorded.
   it('stores each selected field with its own current and proposed value under one reason', async () => {
     const id = await createEvent('submitted');
@@ -279,10 +376,30 @@ describe('raiseChangeRequest', () => {
     expect(await readChangeRequestRows(id)).toHaveLength(0);
   });
 
-  // Bug found manually testing TC-187-03 (28/10/2026): nothing checked that a
-  // proposed start/end pair stays chronological, so Submitted had an end
-  // before its start. Same rule as the event request's own save
-  // (timeRangeIssues, domain/event-request/schema.ts).
+  // Bug found in review of PR #143 (28/10/2026): the form sends null for an
+  // empty text, number, date or time field, and proposedValue: z.unknown()
+  // passed it through. The change_request row was then created before the
+  // field insert failed on the DB's proposed_value not null constraint,
+  // leaving a Pending request with nothing asked. Refused before anything
+  // is written (RaiseChangeRequestInputSchema), same as TC-187-04.
+  it('refuses a missing proposed value, and writes nothing', async () => {
+    const id = await createEvent('submitted');
+
+    await expect(
+      raiseChangeRequest(
+        id,
+        { fields: [{ field: 'description', proposedValue: null }], reason: 'Clearing the description' },
+        organiserId,
+      ),
+    ).rejects.toMatchObject({ code: 'VALIDATION_ERROR' });
+
+    expect(await readChangeRequestRows(id)).toHaveLength(0);
+  });
+
+  // TC-187-13 (AC1) — bug found manually testing TC-187-03 (28/10/2026):
+  // nothing checked that a proposed start/end pair stays chronological, so
+  // Submitted had an end before its start. Same rule as the event request's
+  // own save (timeRangeIssues, domain/event-request/schema.ts).
   it('refuses a proposed end time before a proposed start time, and writes nothing', async () => {
     const id = await createEvent('submitted');
 
@@ -303,8 +420,8 @@ describe('raiseChangeRequest', () => {
     expect(await readChangeRequestRows(id)).toHaveLength(0);
   });
 
-  // Same bug, the one-sided case: only startTime selected, but it lands after
-  // the event's current (unchanged) end time.
+  // TC-187-14 (AC1) — same bug, the one-sided case: only startTime selected,
+  // but it lands after the event's current (unchanged) end time.
   it('refuses a proposed start time that is after the event\'s current end time', async () => {
     const id = await createEvent('submitted'); // start_time 10:00, end_time 12:00 (createEvent fixture)
 
@@ -328,6 +445,21 @@ describe('raiseChangeRequest', () => {
     ).rejects.toMatchObject({ code: 'CONFLICT' });
 
     expect(await readChangeRequestRows(id)).toHaveLength(0);
+  });
+
+  // TC-187-06 (AC3) — no change cut-off period: an event dated tomorrow is
+  // still accepted.
+  it('accepts a change request on an event dated tomorrow', async () => {
+    const id = await createEvent('submitted', organiserId, coordinatorId, tomorrowInSingapore());
+
+    const outcome = await raiseChangeRequest(
+      id,
+      { fields: [{ field: 'expectedAttendance', proposedValue: 200 }], reason: 'Numbers confirmed late' },
+      organiserId,
+    );
+
+    expect(outcome.status).toBe('pending');
+    expect(await readChangeRequestRows(id)).toHaveLength(1);
   });
 
   // TC-187-07 (AC4) — a colleague in the same client organisation, not responsible.
@@ -373,7 +505,8 @@ describe('listChangeRequests', () => {
     expect(list[0]?.fields).toEqual([{ field: 'expectedAttendance', currentValue: 150, proposedValue: 180 }]);
   });
 
-  // TC-187-11 (AC6) — a decided request (seeded directly, DUMMY(SCRUM-190)/(SCRUM-191)).
+  // TC-187-11 (AC6) — a decided request (seeded directly here, D-26 replaced;
+  // re-run against a real approval in tests/integration/approve-change-request.test.ts).
   it('lists a decided request with its status, decision date and reason', async () => {
     const id = await createEvent('submitted');
     const outcome = await raiseChangeRequest(
@@ -413,5 +546,37 @@ describe('listChangeRequests', () => {
     const id = await createEvent('submitted');
     const list = await listChangeRequests(id, { userId: organiserId, clientOrganisationId: CLIENT_ORGANISATION_ID });
     expect(list).toEqual([]);
+  });
+});
+
+describe('AC7 — an approved request shows its new values on the event', () => {
+  // TC-187-12 (AC7) — applying an approved request's proposed values to the
+  // event is SCRUM-190's own write, not this story's (raiseChangeRequest
+  // never touches event_request). Re-run on 30/10/2026 against SCRUM-190's
+  // real approveChangeRequest, replacing D-26's approved half (it used to
+  // seed the decision and write the value directly in Postgres). The read is
+  // the real one: getEventRequest(id), the same function the event page
+  // itself calls, with getCurrentActor mocked as the responsible organiser
+  // (as tests/integration/edit-event-information.test.ts does) - not a raw
+  // select, which would pass even if the app's own read path were broken
+  // (review of PR #143).
+  it('shows the new value once an approved change is applied', async () => {
+    const id = await createEvent('submitted');
+    const outcome = await raiseChangeRequest(
+      id,
+      { fields: [{ field: 'expectedAttendance', proposedValue: 220 }], reason: 'Extra guests confirmed' },
+      organiserId,
+    );
+    await approveChangeRequest(id, outcome.id, coordinatorId);
+
+    vi.mocked(getCurrentActor).mockResolvedValue({
+      userId: organiserId,
+      fullName: 'Test',
+      roles: ['event_organiser'],
+      clientOrganisation: { id: CLIENT_ORGANISATION_ID, name: 'Test organisation' },
+    });
+    const event = await getEventRequest(id);
+
+    expect(event.expectedAttendance).toBe(220);
   });
 });

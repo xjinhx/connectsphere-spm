@@ -97,6 +97,10 @@ export const EquipmentRequestLineSchema = z.object({
   reserved: z.boolean(),
   /** SCRUM-166 AC3: marked unavailable by Technical Support Staff (only while partially fulfilled). */
   unavailable: z.boolean(),
+  /** SCRUM-171 AC1: Technical Support Staff's verdict on the item; null until it is marked. */
+  suitability: z.lazy(() => SuitabilitySchema).nullable(),
+  /** SCRUM-171 AC1: why. Always present for not suitable (AC2 shows it), optional for suitable. */
+  suitabilityReason: z.string().nullable(),
   createdAt: z.string(),
 });
 export type EquipmentRequestLine = z.infer<typeof EquipmentRequestLineSchema>;
@@ -133,6 +137,20 @@ export const EquipmentRequestViewSchema = z.object({
     .nullable(),
   /** SCRUM-166 AC2: whether the signed-in account may set the status - Technical Support Staff. */
   canSetStatus: z.boolean(),
+  /**
+   * SCRUM-171 AC4: the last completed suitability review - whether it left the
+   * request ready to reserve, who completed it and when. Null until a review
+   * is completed.
+   */
+  review: z
+    .object({
+      readyToReserve: z.boolean(),
+      completedByName: z.string(),
+      completedAt: z.string(),
+    })
+    .nullable(),
+  /** SCRUM-171 AC1, AC4: whether the signed-in account may review it - Technical Support Staff. */
+  canReview: z.boolean(),
 });
 export type EquipmentRequestView = z.infer<typeof EquipmentRequestViewSchema>;
 
@@ -232,3 +250,70 @@ export const UpdateEquipmentRequestStatusInputSchema = z.object({
     .transform((text) => (text == null || text.trim() === '' ? null : text.trim())),
 });
 export type UpdateEquipmentRequestStatusInput = z.infer<typeof UpdateEquipmentRequestStatusInputSchema>;
+
+// ---------------------------------------------------------------------------
+// SCRUM-171 — Assess whether requested equipment is suitable for the event
+// ---------------------------------------------------------------------------
+
+/** AC1: "mark each requested item suitable or not suitable". */
+export const SUITABILITY_VERDICTS = ['suitable', 'not_suitable'] as const;
+export const CHOOSE_SUITABILITY_MESSAGE = 'Choose suitable or not suitable.';
+export const SuitabilitySchema = z.enum(SUITABILITY_VERDICTS, {
+  errorMap: () => ({ message: CHOOSE_SUITABILITY_MESSAGE }),
+});
+export type Suitability = z.infer<typeof SuitabilitySchema>;
+
+export const SUITABILITY_LABELS: Record<Suitability, string> = {
+  suitable: 'Suitable',
+  not_suitable: 'Not suitable',
+};
+
+/** AC1: "record why". 500 characters is enough for a reason; the column holds the same limit. */
+export const SUITABILITY_REASON_MAX_LENGTH = 500;
+
+/**
+ * AC1: one item's verdict. suitability null leaves the item unmarked (a review
+ * can be completed with items unmarked, AC4). Text that is only spaces counts
+ * as no reason (TC-171-04); whether a reason is needed is policy.ts
+ * (suitabilityProblem), so it is optional here.
+ */
+export const SuitabilityVerdictSchema = z.object({
+  lineId: EquipmentRequestLineIdSchema,
+  suitability: SuitabilitySchema.nullable(),
+  reason: z
+    .string({ invalid_type_error: 'The reason must be text.' })
+    .max(SUITABILITY_REASON_MAX_LENGTH, `The reason must be ${SUITABILITY_REASON_MAX_LENGTH} characters or fewer.`)
+    .nullish()
+    .transform((text) => (text == null || text.trim() === '' ? null : text.trim())),
+});
+export type SuitabilityVerdict = z.infer<typeof SuitabilityVerdictSchema>;
+
+/** AC1: the verdicts saved together - one per item being marked, each item at most once. */
+export const SaveSuitabilityInputSchema = z.object({
+  verdicts: z
+    .array(SuitabilityVerdictSchema, { required_error: 'Mark at least one item.', invalid_type_error: 'Mark at least one item.' })
+    .min(1, 'Mark at least one item.')
+    .max(200, 'Too many items.')
+    .refine((verdicts) => new Set(verdicts.map((v) => v.lineId)).size === verdicts.length, {
+      message: 'Each item can be marked only once.',
+    }),
+});
+export type SaveSuitabilityInput = z.infer<typeof SaveSuitabilityInputSchema>;
+
+/**
+ * AC4: why a completed review did not leave the request ready to reserve, one
+ * entry per item (or one for the whole request), so Technical Support Staff
+ * see what to resolve.
+ */
+export const NotReadyReasonSchema = z.object({
+  kind: z.enum(['no_items', 'unmarked', 'not_suitable', 'short', 'no_window']),
+  message: z.string(),
+});
+export type NotReadyReason = z.infer<typeof NotReadyReasonSchema>;
+
+/** AC4: what completing a review returns: the request as it now reads, and why it is not ready, if it is not. */
+export const CompleteReviewOutcomeSchema = z.object({
+  request: EquipmentRequestViewSchema,
+  notReady: z.array(NotReadyReasonSchema),
+});
+export type CompleteReviewOutcome = z.infer<typeof CompleteReviewOutcomeSchema>;

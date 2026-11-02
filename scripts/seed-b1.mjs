@@ -1,9 +1,10 @@
 // Seeds the manual run of SCRUM-167, SCRUM-173, SCRUM-175 and SCRUM-170
 // (TC-167-01 to TC-167-10, TC-173-01 to TC-173-09, TC-175-01 to TC-175-03,
-// TC-170-01 to TC-170-11) from the B1 test case sheet, "B1 Seed and Run Order".
+// TC-170-01 to TC-170-12) from the B1 test case sheet, "B1 Seed and Run Order".
 // Needs 20261022004756_equipment_commitment_window,
-// 20261022011508_reserve_equipment and 20261024084449_equipment_out_of_service
-// applied (`npm run db:reset` after pulling them) and `npm run seed:users`.
+// 20261022011508_reserve_equipment, 20261024084449_equipment_out_of_service and
+// 20261028094938_release_equipment_reservation applied (`npm run db:reset`
+// after pulling them) and `npm run seed:users`.
 //
 //   node scripts/seed-b1.mjs        Every SCRUM-167/173/175/170 event, item and hold (resets them all)
 //
@@ -98,6 +99,7 @@ const ITEMS = {
   'EQ-175-01': 10, 'EQ-175-02': 10, 'EQ-175-03': 10,
   'EQ-170-01': 10, 'EQ-170-02': 10, 'EQ-170-03': 10, 'EQ-170-04': 10, 'EQ-170-05': 10, 'EQ-170-06': 10,
   'EQ-170-07': 10, 'EQ-170-08': 10, 'EQ-170-09A': 10, 'EQ-170-09B': 10, 'EQ-170-09C': 10, 'EQ-170-10': 10,
+  'EQ-170-12': 10,
 };
 const item = {};
 for (const [name, quantity] of Object.entries(ITEMS)) {
@@ -112,12 +114,13 @@ for (const [name, quantity] of Object.entries(ITEMS)) {
   item[name] = saved.id;
 }
 
-// SCRUM-170: units already out of service at seed (TC-170-04, 05, 08), and items
+// SCRUM-170: units already out of service at seed (TC-170-04, 05, 08, 12), and items
 // whose own status is not Available (TC-170-09, set as in SCRUM-240's catalogue).
 const SEEDED_STATE = {
   'EQ-170-04': { units_damaged: 2 },
   'EQ-170-05': { units_under_maintenance: 2 },
   'EQ-170-08': { units_damaged: 8 },
+  'EQ-170-12': { units_damaged: 2 },
   'EQ-170-09A': { operational_status: 'damaged' },
   'EQ-170-09B': { operational_status: 'unavailable' },
   'EQ-170-09C': { operational_status: 'under_maintenance' },
@@ -240,15 +243,19 @@ async function reserve(event, lineId, quantity) {
   if (data?.outcome !== 'reserved') throw new Error(`reserve for ${event.name}: ${JSON.stringify(data)}`);
 }
 
-/**
- * DUMMY(SCRUM-177) D-21: releases the line's reservation by hand. Releasing is
- * SCRUM-177's; TC-173-09 only needs a Released one to list.
- */
-async function releaseByHand(event, lineId) {
-  check(
-    `release for ${event.name}`,
-    await supabase.from('equipment_reservation').update({ status: 'released' }).eq('line_id', lineId),
+/** Releases the line's reservation through release_equipment_reservation, as Technical Support would in the app (SCRUM-177). */
+async function release(event, lineId) {
+  const reservation = await single(
+    `reservation for ${event.name}`,
+    supabase.from('equipment_reservation').select('id').eq('line_id', lineId).single(),
   );
+  const { data, error } = await supabase.rpc('release_equipment_reservation', {
+    p_reservation_id: reservation.id,
+    p_reason: 'Client no longer needs it (B1 seed)',
+    p_released_by: techSupport,
+  });
+  if (error) throw new Error(`release for ${event.name}: ${error.message}`);
+  if (data !== true) throw new Error(`release for ${event.name}: not released`);
 }
 
 /** Another event holding `quantity` of the item: requested and reserved. */
@@ -279,7 +286,7 @@ await reserve(e1, await request(e1, 'EQ-173-07A', 4), 4); // TC-173-07
 await reserve(e1, await request(e1, 'EQ-173-07B', 6), 4); // TC-173-07: only 4 exist
 const released = await request(e1, 'EQ-173-09', 3); // TC-173-09: reserved, then released
 await reserve(e1, released, 3);
-await releaseByHand(e1, released);
+await release(e1, released);
 await request(e1, 'EQ-175-01', 6); // TC-175-01: 5 available
 await request(e1, 'EQ-175-02', 5); // TC-175-02: exactly 5 available
 await request(e1, 'EQ-175-03', 2); // TC-175-03: none available
@@ -343,6 +350,11 @@ const far = await createEvent('S4-FAR', { booked: dates('2027-06-01', '2027-06-0
 await request(far, 'EQ-170-05', 2); // TC-170-05: a far future window
 created.push(far);
 created.push(await hold('H-170-10', dates('2026-11-10', '2026-11-12'), 'EQ-170-10', 6)); // TC-170-10
+// TC-170-12: 2 Damaged and two holds that meet on 11/11 and 12/11 (3 + 1), so
+// S4-E1's busiest day is 4 and 8 in service leave 4 of the 6 it asks for.
+created.push(await hold('H-170-12A', dates('2026-11-11', '2026-11-12'), 'EQ-170-12', 3));
+created.push(await hold('H-170-12B', dates('2026-11-12', '2026-11-13'), 'EQ-170-12', 1));
+await request(e1, 'EQ-170-12', 6);
 
 console.log('\nSCRUM-167/173/175/170 events (open each at the link, as tech-support@example.com unless the case says otherwise):');
 for (const event of created) {

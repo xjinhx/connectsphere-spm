@@ -4,16 +4,9 @@ import { useState } from 'react';
 import { useRouter } from 'next/navigation';
 
 /**
- * SCRUM-191 AC1/AC4 — a reason textbox and a confirm action for the
- * assigned coordinator to reject a Pending change request.
- *
- * Not yet wired into a page: SCRUM-188's coordinator-facing change-request
- * view does not exist on this branch yet (checked 27 Oct 2026 - no
- * coordinator event detail page exists to host it). This component is ready
- * to drop onto that view once it lands - it only needs `eventRequestId` and
- * `changeRequestId`, same props shape as ChangeRequestForm's `requestId`.
- * The backend (rejectChangeRequest, the API route and their tests) is the
- * priority for this story and is complete independent of this component.
+ * SCRUM-191 AC1/AC4 - a reason textbox and a confirm action for the
+ * assigned coordinator to reject a Pending change request. Rendered on the
+ * coordinator's review page (src/app/events/[id]/review/page.tsx).
  */
 export function RejectChangeRequestForm({
   eventRequestId,

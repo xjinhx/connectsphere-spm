@@ -1,4 +1,5 @@
 import { z } from 'zod';
+import { equipmentRequirementsShape, venueRequirementsShape } from '@/domain/event-request/schema';
 
 /**
  * SCRUM-187 — Request a change and track its outcome.
@@ -60,6 +61,12 @@ export const CHANGE_REQUEST_STATUS_LABELS: Record<ChangeRequestStatus, string> =
   rejected: 'Rejected',
 };
 
+/** SCRUM-274: the list fields' own rules, from the event request schema. */
+const PROPOSED_LIST_SCHEMAS: Partial<Record<SelectableChangeRequestField, z.ZodTypeAny>> = {
+  accessibilityFeatureIds: venueRequirementsShape.accessibilityFeatureIds,
+  equipmentItems: equipmentRequirementsShape.equipmentItems,
+};
+
 /**
  * AC1 — "selecting each field to change, entering its proposed value and
  * giving a reason". One reason covers every field selected in the request
@@ -69,10 +76,37 @@ export const CHANGE_REQUEST_STATUS_LABELS: Record<ChangeRequestStatus, string> =
 export const RaiseChangeRequestInputSchema = z.object({
   fields: z
     .array(
-      z.object({
-        field: SelectableChangeRequestFieldSchema,
-        proposedValue: z.unknown(),
-      }),
+      z
+        .object({
+          field: SelectableChangeRequestFieldSchema,
+          proposedValue: z.unknown(),
+        })
+        // Review feedback, PR #143: the form sends null for an empty text,
+        // number, date or time field, and proposedValue: z.unknown() passed
+        // it through. The change_request row was then created before the
+        // field insert failed on proposed_value not null, leaving a Pending
+        // request with nothing asked. Refused here, before anything is
+        // written, so a retry cannot leave a second orphan either.
+        .refine((entry) => entry.proposedValue !== null && entry.proposedValue !== undefined, {
+          message: 'Give the new value for each selected field.',
+          path: ['proposedValue'],
+        })
+        // SCRUM-274: the two list fields are checked the same way the event
+        // request form checks them (accessibility features chosen from the
+        // list; equipment items named, a whole quantity above 0, no repeats),
+        // so a proposal can only hold what the event itself could hold.
+        .superRefine((entry, ctx) => {
+          const listSchema = PROPOSED_LIST_SCHEMAS[entry.field];
+          if (!listSchema || entry.proposedValue === null || entry.proposedValue === undefined) return;
+          const parsed = listSchema.safeParse(entry.proposedValue);
+          if (!parsed.success) {
+            ctx.addIssue({
+              code: z.ZodIssueCode.custom,
+              message: parsed.error.issues[0]?.message ?? 'Give a valid value for this field.',
+              path: ['proposedValue'],
+            });
+          }
+        }),
     )
     .min(1, 'Select at least one field to change.')
     .refine(
@@ -90,9 +124,8 @@ export const EventRequestIdSchema = z.string().uuid();
 export const ChangeRequestIdSchema = z.string().uuid();
 
 /**
- * SCRUM-191 AC4 — "attempting to reject without a reason is blocked, and the
- * coordinator is told a reason is required." Mirrors RaiseChangeRequestInputSchema's
- * reason validation above: blank and whitespace-only both fail the same way.
+ * SCRUM-191 AC4 - "attempting to reject without a reason is blocked, and the
+ * coordinator is told a reason is required." Blank and whitespace-only both fail.
  */
 export const RejectChangeRequestInputSchema = z.object({
   reason: z
@@ -101,3 +134,17 @@ export const RejectChangeRequestInputSchema = z.object({
     .min(1, 'A reason is required.'),
 });
 export type RejectChangeRequestInput = z.infer<typeof RejectChangeRequestInputSchema>;
+
+/**
+ * SCRUM-190 — the shape `equipmentItems` must have to be applied to the
+ * event: validated defensively, since `proposed_value` was stored as
+ * `z.unknown()` at raise time (SCRUM-187).
+ */
+export const ChangeRequestEquipmentItemSchema = z.object({
+  item: z.string().trim().min(1),
+  quantity: z.number().int().positive(),
+});
+export type ChangeRequestEquipmentItem = z.infer<typeof ChangeRequestEquipmentItemSchema>;
+
+/** `accessibilityFeatureIds` must likewise be an array of ids once applied. */
+export const ChangeRequestAccessibilityFeatureIdsSchema = z.array(z.string().uuid());

@@ -68,6 +68,9 @@ describe('POST .../lines/[lineId]/reservation (SCRUM-173)', () => {
       reviewRequired: false,
       reviewRequiredAt: null,
       reviewRequiredCause: null,
+      // SCRUM-177: not released.
+      releaseReason: null,
+      releasedAt: null,
     });
 
     const response = await reserve({ quantity: 2 });

@@ -113,3 +113,35 @@ export function outstandingEssentialArrangements(snapshot: ConfirmationSnapshot)
 export function confirmationRefusal(outstanding: readonly string[]): string {
   return [CANNOT_CONFIRM_YET, ...outstanding.map((line) => `- ${line}`)].join('\n');
 }
+
+// -----------------------------------------------------------------------------
+// SCRUM-190 AC2/AC3 — a flagged-for-review arrangement blocks re-confirmation
+// only when it is also essential
+// -----------------------------------------------------------------------------
+
+/**
+ * AC2: an event returned to Planning by an approved change request cannot be
+ * re-confirmed until every arrangement that is BOTH marked essential AND
+ * flagged for review (SCRUM-111's review_required, reused as-is - not a new
+ * mechanism) has been re-confirmed.
+ * AC3: an affected arrangement that is not marked essential, however flagged,
+ * never blocks - so only `needs.venue`/`needs.equipment` are consulted here,
+ * never the flag on its own.
+ *
+ * `flagged` is the caller's own filter (significant-change/service.ts's
+ * listEventArrangements, kept reviewRequired === true), named the way the
+ * refusal shows every other outstanding arrangement.
+ */
+export function outstandingReviewArrangements(
+  needs: ArrangementNeeds,
+  flagged: { bookings: readonly string[]; reservations: readonly string[] },
+): string[] {
+  const outstanding: string[] = [];
+  if (needs.venue === 'essential') {
+    for (const label of flagged.bookings) outstanding.push(`Venue: ${label} is marked for review.`);
+  }
+  if (needs.equipment === 'essential') {
+    for (const label of flagged.reservations) outstanding.push(`Equipment: ${label} is marked for review.`);
+  }
+  return outstanding;
+}

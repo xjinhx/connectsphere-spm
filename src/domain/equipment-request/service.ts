@@ -16,11 +16,14 @@ import {
   fetchEquipmentRequestsByStatus,
   fetchReservedLineIds,
   insertEquipmentRequestLine,
+  saveSuitabilityVerdicts,
   setEquipmentRequestStatus,
+  setReviewCompleted,
   updateEquipmentRequestLineQuantity,
   upsertTechnicalRequirements,
 } from '@/lib/supabase/equipmentRequests';
 import { fetchProfileNames } from '@/lib/supabase/profiles';
+import { checkEquipmentAvailability } from '@/domain/equipment-reservation/service';
 import {
   EVENT_NOT_OPEN_FOR_EQUIPMENT_MESSAGE,
   OUTSTANDING_EQUIPMENT_REQUEST_STATUSES,
@@ -30,17 +33,23 @@ import {
   countUnavailableItems,
   linesOfSameType,
   needsReservationConfirmation,
+  notReadyReasons,
   notifiesCoordinator,
   sortEquipmentQueue,
   statusUpdateProblem,
   statusUpdateToStore,
+  suitabilityProblem,
+  suitabilityToStore,
   unableToFulfilMessage,
   UNKNOWN_LINE_MESSAGE,
+  UNKNOWN_SUITABILITY_LINE_MESSAGE,
   type EquipmentQueueSort,
 } from './policy';
 import {
   AddEquipmentLineInputSchema,
   AddEquipmentLineOutcomeSchema,
+  CompleteReviewOutcomeSchema,
+  SaveSuitabilityInputSchema,
   EquipmentQueueEntrySchema,
   EquipmentRequestLineIdSchema,
   QUANTITY_AT_LEAST_ONE_MESSAGE,
@@ -50,6 +59,7 @@ import {
   UpdateEquipmentLineInputSchema,
   UpdateEquipmentRequestStatusInputSchema,
   type AddEquipmentLineOutcome,
+  type CompleteReviewOutcome,
   type EquipmentQueueEntry,
   type EquipmentRequestStatus,
   type EquipmentRequestLine,
@@ -76,6 +86,8 @@ type LineRow = {
   equipment_id: string;
   quantity: number;
   unavailable: boolean;
+  suitability: string | null;
+  suitability_reason: string | null;
   created_at: string;
   equipment: { name: string; category: string } | null;
 };
@@ -90,6 +102,8 @@ function toLine(row: LineRow, reserved: boolean): EquipmentRequestLine {
     quantity: row.quantity,
     reserved,
     unavailable: row.unavailable,
+    suitability: row.suitability,
+    suitabilityReason: row.suitability_reason,
     createdAt: row.created_at,
   });
 }
@@ -153,6 +167,9 @@ type RequestRow = {
   status_set_by: string | null;
   status_set_at: string | null;
   unable_reason: string | null;
+  ready_to_reserve: boolean;
+  review_completed_by: string | null;
+  review_completed_at: string | null;
 };
 
 /** The event's request row, or null when no line or note has been saved yet. */
@@ -261,6 +278,16 @@ export async function getEquipmentRequest(eventRequestId: string, actor: Actor):
         }
       : null,
     canSetStatus: request !== null && isActionPermitted(actor.roles, 'equipment_administration'),
+    // SCRUM-171 AC4: the last completed review, for both viewers.
+    review:
+      request && request.review_completed_by && request.review_completed_at
+        ? {
+            readyToReserve: request.ready_to_reserve,
+            completedByName: (await readSetByName(request.review_completed_by)) ?? 'An unnamed account',
+            completedAt: request.review_completed_at,
+          }
+        : null,
+    canReview: request !== null && isActionPermitted(actor.roles, 'equipment_administration'),
   });
 }
 
@@ -570,4 +597,125 @@ export async function updateEquipmentRequestStatus(
   }
 
   return getEquipmentRequest(event.id, actor);
+}
+
+// -----------------------------------------------------------------------------
+// SCRUM-171 — Assess whether requested equipment is suitable for the event
+// -----------------------------------------------------------------------------
+
+/** A check-constraint refusal from the database: a value got past the schema and policy. */
+const NOT_SUITABLE_REASON_FALLBACK = 'The review could not be saved: each item not suitable needs a reason.';
+
+/**
+ * AC1: "Given an equipment requirement recorded against an event, when I
+ * review it, then I can mark each requested item suitable or not suitable and
+ * record why."
+ *
+ * Technical Support Staff only - the role holding equipment_administration, as
+ * for the status (SCRUM-166) and reservations (SCRUM-173) - so a coordinator
+ * is refused and nothing is saved (TC-171-05). The verdicts are saved together;
+ * not suitable needs a reason (TC-171-02, TC-171-04), suitable does not
+ * (TC-171-03). Who marked each item and when are recorded from the signed-in
+ * account.
+ *
+ * AC2: an item saved as not suitable is an unmet requirement on the request,
+ * with the reason (getEquipmentRequest returns the verdicts; the page lists
+ * them, unmetRequirements). Nothing here touches the available quantity:
+ * SCRUM-167 owns it (CL-50, TC-171-07).
+ *
+ * Every rule is checked before anything is written, so a refusal leaves every
+ * item as it was. Returns the request as it now reads.
+ */
+export async function saveEquipmentSuitability(
+  eventRequestId: string,
+  actor: Actor,
+  input: unknown,
+): Promise<EquipmentRequestView> {
+  assertPermission([...actor.roles], 'equipment_administration');
+
+  const parsed = SaveSuitabilityInputSchema.safeParse(input);
+  if (!parsed.success) throw validationError(parsed.error, 'The review could not be saved.');
+
+  const event = await readEvent(eventRequestId);
+  if ((await readRequest(event.id)) === null) throw new NotFoundError('Equipment request');
+  const lines = await readLines(event.id);
+
+  const problem = suitabilityProblem(
+    parsed.data.verdicts,
+    lines.map((line) => line.id),
+  );
+  if (problem) {
+    throw new ValidationError(problem.message, {
+      formErrors: [],
+      fieldErrors: { [problem.field]: [problem.message] },
+      lineIds: problem.lineIds,
+    });
+  }
+
+  const { data, error } = await saveSuitabilityVerdicts({
+    eventRequestId: event.id,
+    verdicts: parsed.data.verdicts.map(suitabilityToStore),
+    setBy: actor.userId,
+  });
+  if (error) {
+    if (isCheckViolation(error)) throw new ValidationError(NOT_SUITABLE_REASON_FALLBACK, error.message);
+    throw new ValidationError('The review could not be saved.', error.message);
+  }
+  const outcome = (data as { outcome?: string } | null)?.outcome;
+  if (outcome === 'not_found') throw new NotFoundError('Equipment request');
+  if (outcome === 'unknown_line') throw new ValidationError(UNKNOWN_SUITABILITY_LINE_MESSAGE);
+  if (outcome !== 'saved') throw new ValidationError('The review could not be saved.');
+
+  return getEquipmentRequest(event.id, actor);
+}
+
+/**
+ * AC4: "Given every requested item is marked suitable and is available for the
+ * commitment window, when I complete the review, then the request is marked
+ * ready to reserve."
+ *
+ * "Available for the commitment window" is SCRUM-167's
+ * checkEquipmentAvailability, run now: each item's quantity minus units out of
+ * service (SCRUM-170) minus other events' reservations on the busiest day of
+ * the window. An event with no approved venue booking has no window, so it is
+ * not ready (167 AC3).
+ *
+ * A review can be completed with items unmarked; the request is then not ready
+ * (TC-171-14). Each completion replaces the last, so completing again after a
+ * change gives the current answer (TC-171-13). Later edits by the coordinator
+ * do not change the mark in Release 1 (PO, 26 Oct 2026; SCRUM-265, CL-56).
+ *
+ * Returns the request as it now reads, and why it is not ready, if it is not.
+ */
+export async function completeEquipmentReview(eventRequestId: string, actor: Actor): Promise<CompleteReviewOutcome> {
+  assertPermission([...actor.roles], 'equipment_administration');
+
+  const event = await readEvent(eventRequestId);
+  if ((await readRequest(event.id)) === null) throw new NotFoundError('Equipment request');
+  const lines = await readLines(event.id);
+
+  let availability: { lineId: string; shortfall: number }[] | null = null;
+  let noWindowMessage = 'The availability check could not be run.';
+  try {
+    availability = (await checkEquipmentAvailability(event.id, actor)).lines;
+  } catch (error) {
+    if (!(error instanceof ValidationError)) throw error;
+    noWindowMessage = error.message;
+  }
+
+  const notReady = notReadyReasons(
+    lines.map((line) => ({ lineId: line.id, equipmentName: line.equipmentName, suitability: line.suitability })),
+    availability,
+    noWindowMessage,
+  );
+
+  const { data, error } = await setReviewCompleted({
+    eventRequestId: event.id,
+    readyToReserve: notReady.length === 0,
+    completedBy: actor.userId,
+  });
+  if (error) throw new ValidationError('The review could not be completed.', error.message);
+  if (!data) throw new NotFoundError('Equipment request');
+
+  return CompleteReviewOutcomeSchema.parse({ request: await getEquipmentRequest(event.id, actor), notReady });
 }

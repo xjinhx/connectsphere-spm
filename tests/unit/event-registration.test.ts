@@ -1,6 +1,6 @@
 import { describe, expect, it } from 'vitest';
 import { RegistrationInputSchema } from '@/domain/event-registration/schema';
-import { periodRefusalReason, registrationPeriodRefusal } from '@/domain/event-registration/policy';
+import { isEventFull, periodRefusalReason, registrationPeriodRefusal } from '@/domain/event-registration/policy';
 import { formatDayMonthYear, todayInSingapore } from '@/domain/shared/dates';
 
 /**
@@ -9,8 +9,8 @@ import { formatDayMonthYear, todayInSingapore } from '@/domain/shared/dates';
  * service in tests/unit/event-registration-service.test.ts and against the
  * database in tests/integration/register-for-event.test.ts.
  *
- * Test case IDs are from SCRUM-181-test-cases.xlsx (TC-181-nn). "Today" is
- * 30/10/2026, Singapore time.
+ * Test case IDs are from the ConnectSphere_TestCases_Sprint4 workbook,
+ * SCRUM-181 tab (TC-181-nn). "Today" is 30/10/2026, Singapore time.
  */
 
 const VALID = { fullName: 'Tan Mei Ling', email: 'attendee@example.com', contactNumber: '+65 9123 4567' };
@@ -103,5 +103,30 @@ describe('the registration period (AC2, AC3, AC4)', () => {
 describe('dates shown to users', () => {
   it('formats a calendar date as DD/MM/YYYY', () => {
     expect(formatDayMonthYear('2026-11-01')).toBe('01/11/2026');
+  });
+});
+
+/**
+ * SCRUM-182 Refuse registration once the event is full (Jira, authoritative).
+ * The full check, by test case (ConnectSphere_TestCases_Sprint4 workbook,
+ * SCRUM-182 tab, TC-182-nn); the same rule in SQL runs in
+ * tests/integration/refuse-full-registration.test.ts.
+ */
+describe('SCRUM-182 whether the event is full', () => {
+  it('TC-182-03 19 of 20 is not full; 20 of 20 is full', () => {
+    expect(isEventFull(20, 19)).toBe(false);
+    expect(isEventFull(20, 20)).toBe(true);
+  });
+
+  it('TC-182-02 no capacity set is full, even with nobody registered (PO, 25/10/2026)', () => {
+    expect(isEventFull(null, 0)).toBe(true);
+  });
+});
+
+describe('SCRUM-182 AC3: a withdrawal gives its place back', () => {
+  it('TC-182-10 capacity 2 with 3, then 2 registered is full; with 1 it is open again (PO, 25/10/2026)', () => {
+    expect(isEventFull(2, 3)).toBe(true);
+    expect(isEventFull(2, 2)).toBe(true);
+    expect(isEventFull(2, 1)).toBe(false);
   });
 });

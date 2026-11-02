@@ -1,6 +1,6 @@
 // Seeds the manual run of SCRUM-187 (basket B6) from the Sprint 4 test case
 // sheet (SCRUM-187 tab, "Seed (planned, scripts/seed-b6.mjs)" note).
-// Needs 20261024090000_change_request applied (`npm run db:reset` after
+// Needs 20261028090000_change_request applied (`npm run db:reset` after
 // pulling it) and `npm run seed:users`.
 //
 //   node scripts/seed-b6.mjs        Every S187 event (resets them all)
@@ -11,10 +11,12 @@
 // client organisation but owns nothing (TC-187-07, AC4).
 //
 // TC-187-11/12 depend on SCRUM-190/191 (approve/reject) actually deciding a
-// request; neither is built yet, so S187-H and S187-I seed their decision
-// directly in Postgres (DUMMY(SCRUM-190)/(SCRUM-191) D-24, docs/dummies.md) -
-// same pattern as tests/integration/change-request.test.ts's seedDecision.
-// Re-run both manual cases once SCRUM-190/191 merge.
+// request. SCRUM-190 is built (the automated TC-187-12 runs against its real
+// approval), but this script writes straight to Postgres rather than going
+// through the app, and SCRUM-191 is not built, so S187-H and S187-I still
+// seed their decision directly (DUMMY(SCRUM-190)/(SCRUM-191) D-26,
+// docs/dummies.md) - same pattern as tests/integration/change-request.test.ts's
+// seedDecision. Re-run both manual cases once SCRUM-191 merges.
 //
 // S187-J, S187-K, S187-L cover CL-61 (PO clarification, 24/10/2026): J
 // (Approved) and K (Preparation) extend the status scope (Planning is
@@ -163,7 +165,7 @@ async function raiseRequest(event, reason, fields, createdAt = new Date().toISOS
 }
 
 /**
- * DUMMY(SCRUM-190) D-24, DUMMY(SCRUM-191) D-24: stands in for SCRUM-190/191's
+ * D-26 (replaced): stands in for SCRUM-190/191's
  * own write. See docs/dummies.md.
  *
  * Refuses a decision dated before the request's own raiseRequest(createdAt) -

@@ -12,7 +12,7 @@
 -- AC3: 'change_request_rejected' widens the notifications type check the
 -- same way 20261024090000_change_request.sql widened it for
 -- 'change_requested'. Full list kept per
--- 20261026135437_notifications_change_requested.sql's note: any later
+-- 20261031153105_approve_change_request.sql's note: any later
 -- migration that widens this constraint again must keep every type below.
 -- =============================================================================
 
@@ -42,8 +42,12 @@ alter table notifications
     'venue_booking_update',
     'request_submitted',
     'coordinator_unassigned',
-    'equipment_unable_to_fulfil',
     'event_confirmed',
+    'equipment_unable_to_fulfil',
     'change_requested',
+    'event_cancelled',
+    'change_request_approved',
+    'arrangement_needs_review',
+    'event_details_changed',
     'change_request_rejected'
   ));

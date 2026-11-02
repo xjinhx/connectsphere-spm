@@ -13,7 +13,8 @@ import { handleApiError } from '@/lib/api/handler';
  *
  * 201 with the registration (the confirmation); 400 for a missing or invalid
  * field (AC1) or outside the registration period, with the start or end date
- * in the message (AC2, AC3, TC-181-06, TC-181-09); 401 with no session; 403
+ * in the message (AC2, AC3, TC-181-06, TC-181-09), or for a Cancelled or
+ * Completed event (SCRUM-270); 401 with no session; 403
  * for any role but attendee; 404 for an event that takes no registrations;
  * 409 when already registered, with the existing registration in `details`
  * (AC5).

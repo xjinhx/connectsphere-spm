@@ -26,7 +26,11 @@ import { ArrangementReviewPanel } from '@/components/event-request/ArrangementRe
 import { EventSchedulePanel } from '@/components/event-request/EventSchedulePanel';
 import { getEventSchedule } from '@/domain/significant-change/service';
 import { ConfirmEventButton } from '@/components/event-request/ConfirmEventButton';
-import { canBeConfirmed } from '@/domain/event-status/policy';
+import { CompleteEventButton } from '@/components/event-request/CompleteEventButton';
+import { CancelEventForm } from '@/components/event-request/CancelEventForm';
+import { canBeCancelled, canBeCompleted, canBeConfirmed, formatCancelledAt, hasEnded } from '@/domain/event-status/policy';
+import { getEventCancellation, getEventCompletion } from '@/domain/event-status/service';
+import { acceptsRegistrationSettings, hasRegistrationList } from '@/domain/registration-list/policy';
 import {
   describeAccessibility,
   describeEquipment,
@@ -47,7 +51,13 @@ import { isActionPermitted } from '@/domain/identity/permissions';
 import { getCurrentActor } from '@/lib/auth/currentActor';
 import { SafetyCheckOutcome } from '@/components/safety-check/SafetyCheckOutcome';
 import { getLatestSafetyCheck } from '@/domain/safety-check/service';
-import { formatSingaporeDate, formatSingaporeDateTime } from '@/domain/shared/dates';
+import { formatDayMonthYear, formatSingaporeDate, formatSingaporeDateTime, todayInSingapore } from '@/domain/shared/dates';
+import { reviewBackLink } from '@/domain/navigation/reviewBackLink';
+import { RejectChangeRequestForm } from '@/components/change-request/RejectChangeRequestForm';
+import { formatChangeRequestValue } from '@/domain/change-request/policy';
+import { CHANGE_REQUEST_FIELD_LABELS, CHANGE_REQUEST_STATUS_LABELS } from '@/domain/change-request/schema';
+import { listChangeRequestsForCoordinator } from '@/domain/change-request/service';
+import { getVenueRequirementOptions } from '@/domain/event-request/service';
 
 /**
  * US-7.1 AC2 (`ConnectSphere_Test_Cases_v3.xlsx`, US-7.1-TC02) — open a
@@ -77,8 +87,10 @@ function Row({ label, value }: { label: string; value: string }) {
 
 export default async function ReviewEventRequestPage({
   params,
+  searchParams,
 }: {
   params: Promise<{ id: string }>;
+  searchParams?: Promise<{ from?: string | string[] }>;
 }) {
   const actor = await getCurrentActor();
   // The same permission the API route asserts, so the page and the route can
@@ -102,6 +114,8 @@ export default async function ReviewEventRequestPage({
   }
 
   const { id } = await params;
+  // SCRUM-251 AC3: back to Review queue or My events, whichever it was opened from.
+  const backLink = reviewBackLink((await searchParams)?.from);
 
   let request: ReviewDetail;
   let exchange: ClarificationExchange;
@@ -128,8 +142,8 @@ export default async function ReviewEventRequestPage({
     if (error instanceof ForbiddenError) {
       return (
         <main className="mx-auto max-w-2xl p-8">
-          <Link href="/assigned-events" className="text-sm text-[var(--brand)] hover:underline">
-            ← Assigned events
+          <Link href={backLink.href} className="text-sm text-[var(--brand)] hover:underline">
+            ← {backLink.label}
           </Link>
           <h1 className="mt-4 text-2xl font-semibold">Review request</h1>
           <p className="mt-4 text-[var(--text-muted)]">
@@ -187,6 +201,17 @@ export default async function ReviewEventRequestPage({
   // SCRUM-111, read for the same reason and refusing the same people.
   const eventSchedule = await getEventSchedule(request.id, actor);
 
+  // SCRUM-191 - the change requests raised on this event, for the assigned
+  // coordinator to reject. Nobody else (the Lead included) is offered them.
+  const changeRequests = request.canManage ? await listChangeRequestsForCoordinator(request.id, actor.userId) : [];
+  const changeRequestNames = request.canManage
+    ? {
+        accessibilityFeatures: new Map(
+          (await getVenueRequirementOptions()).accessibilityFeatures.map((feature) => [feature.id, feature.name]),
+        ),
+      }
+    : {};
+
   // SCRUM-135 AC3: the venues already checked, shown again without running
   // them. Only the event's own coordinator has any; anyone else sees none.
   let suitabilityChecks: SuitabilityCheck[] = [];
@@ -203,10 +228,16 @@ export default async function ReviewEventRequestPage({
   // same gate as the decision sections below: the Lead is not shown it.
   const safetyCheck = request.canManage ? await getLatestSafetyCheck(request.id, actor) : null;
 
+  // SCRUM-104 — the end date decides whether Mark as completed is offered
+  // (AC4), and a completed event says when and by whom (AC1, AC2).
+  const completion = await getEventCompletion(request.id);
+  // SCRUM-105 AC1 — a cancelled event says why, by whom and when.
+  const cancellation = request.status === 'cancelled' ? await getEventCancellation(request.id) : null;
+
   return (
     <main className="mx-auto max-w-2xl px-4 py-8">
-      <Link href="/assigned-events" className="text-sm text-[var(--brand)] hover:underline">
-        ← Assigned events
+      <Link href={backLink.href} className="text-sm text-[var(--brand)] hover:underline">
+        ← {backLink.label}
       </Link>
 
       <div className="mt-4 flex flex-wrap items-center gap-3">
@@ -214,6 +245,20 @@ export default async function ReviewEventRequestPage({
         <EventRequestStatusBadge status={request.status} />
       </div>
       <p className="mt-1 font-mono text-sm text-[var(--text-muted)]">{request.reference}</p>
+      {completion.completed ? (
+        <p className="mt-1 text-sm text-[var(--text-muted)]">
+          Completed on {formatDayMonthYear(completion.completed.on)}{' '}
+          {completion.completed.byName === null ? 'by the system' : `by ${completion.completed.byName}`}
+        </p>
+      ) : null}
+      {cancellation ? (
+        <div className="mt-3 rounded-md border border-[var(--border)] bg-[var(--surface)] px-3 py-2 text-sm">
+          <p>
+            Cancelled on {formatCancelledAt(cancellation.at)} by {cancellation.byName}
+          </p>
+          <p className="mt-1 whitespace-pre-wrap">Reason: {cancellation.reason}</p>
+        </div>
+      ) : null}
 
       {/* SCRUM-151 AC3: a confirmed booking on a slot Venue Staff have since
           made unavailable, listed until it is released or replaced. First on
@@ -305,6 +350,48 @@ export default async function ReviewEventRequestPage({
           the acknowledgement before saving; only for the assigned coordinator. */}
       <EventSchedulePanel requestId={request.id} view={eventSchedule} />
 
+      {/* SCRUM-191 AC1/AC4 - a Pending change request can be rejected with a
+          reason; a decided one shows its outcome and reason. Only the assigned
+          coordinator sees this section. */}
+      {changeRequests.length > 0 ? (
+        <section className="mt-6">
+          <h2 className="text-sm font-semibold">Change requests</h2>
+          <ul className="mt-2 space-y-3">
+            {changeRequests.map((cr) => (
+              <li key={cr.id} className="rounded-lg border border-[var(--border)] bg-[var(--surface)] p-3 text-sm">
+                <div className="flex flex-wrap items-center justify-between gap-2">
+                  <span className="font-medium">{CHANGE_REQUEST_STATUS_LABELS[cr.status]}</span>
+                  <span className="text-xs text-[var(--text-muted)]">
+                    Raised {formatSingaporeDateTime(cr.createdAt)}
+                  </span>
+                </div>
+                <ul className="mt-2 space-y-1">
+                  {cr.fields.map((field) => (
+                    <li key={field.field}>
+                      <span className="font-medium">{CHANGE_REQUEST_FIELD_LABELS[field.field]}:</span>{' '}
+                      {formatChangeRequestValue(field.field, field.currentValue, changeRequestNames)} →{' '}
+                      {formatChangeRequestValue(field.field, field.proposedValue, changeRequestNames)}
+                    </li>
+                  ))}
+                </ul>
+                <p className="mt-2 whitespace-pre-wrap">{cr.reason}</p>
+                {cr.decidedAt ? (
+                  <p className="mt-1 text-xs text-[var(--text-muted)]">
+                    Decided {formatSingaporeDateTime(cr.decidedAt)}
+                    {cr.decisionReason ? `: ${cr.decisionReason}` : ''}
+                  </p>
+                ) : null}
+                {cr.status === 'pending' ? (
+                  <div className="mt-3">
+                    <RejectChangeRequestForm eventRequestId={request.id} changeRequestId={cr.id} />
+                  </div>
+                ) : null}
+              </li>
+            ))}
+          </ul>
+        </section>
+      ) : null}
+
       {/* SCRUM-92 AC1 — "given I am reviewing a submitted request, when I
           approve it". This page is what the card means by reviewing it.
 
@@ -340,6 +427,23 @@ export default async function ReviewEventRequestPage({
       {request.canManage && canBeConfirmed(request.status) ? (
         <section className="mt-6 rounded-lg border border-[var(--border)] bg-[var(--surface)] p-4">
           <ConfirmEventButton requestId={request.id} />
+        </section>
+      ) : null}
+
+      {/* SCRUM-104 AC1, AC4, AC5 — mark the event completed. Preparation only,
+          once its end date has passed, and only for the assigned coordinator. */}
+      {request.canManage && canBeCompleted(request.status) && hasEnded(completion.endDate, todayInSingapore()) ? (
+        <section className="mt-6 rounded-lg border border-[var(--border)] bg-[var(--surface)] p-4">
+          <CompleteEventButton requestId={request.id} />
+        </section>
+      ) : null}
+
+      {/* SCRUM-105 AC1, AC2 — cancel the event, with a reason. Submitted to
+          Preparation, and only for the assigned coordinator (canManage), so the
+          Lead viewing read-only never sees it. */}
+      {request.canManage && canBeCancelled(request.status) ? (
+        <section className="mt-6 rounded-lg border border-[var(--border)] bg-[var(--surface)] p-4">
+          <CancelEventForm requestId={request.id} />
         </section>
       ) : null}
 
@@ -411,6 +515,27 @@ export default async function ReviewEventRequestPage({
             className="mt-3 inline-block rounded-md bg-[var(--brand)] px-4 py-2 text-sm font-medium text-white hover:bg-[var(--brand-dark)]"
           >
             Equipment request
+          </Link>
+        </section>
+      ) : null}
+
+      {/* SCRUM-185 — the event's registration page: the list and counts
+          (AC1), and the start date, end date and capacity (AC5), set while the
+          event is Confirmed. Offered from Confirmed on (hasRegistrationList),
+          when registration can be open, and kept afterwards for the list. */}
+      {hasRegistrationList(request.status) ? (
+        <section className="mt-6 rounded-lg border border-[var(--border)] bg-[var(--surface)] p-4">
+          <h2 className="text-sm font-semibold">Registration</h2>
+          <p className="mt-1 text-sm text-[var(--text-muted)]">
+            {acceptsRegistrationSettings(request.status)
+              ? 'Set when attendees can register and how many places the event has, and see who has registered.'
+              : 'See who has registered and how many places remain.'}
+          </p>
+          <Link
+            href={`/events/${request.id}/registrations`}
+            className="mt-3 inline-block rounded-md bg-[var(--brand)] px-4 py-2 text-sm font-medium text-white hover:bg-[var(--brand-dark)]"
+          >
+            Registration
           </Link>
         </section>
       ) : null}
