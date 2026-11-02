@@ -28,9 +28,13 @@ vi.mock('@/lib/supabase/eventRequests', () => ({
   fetchEventRequestById: vi.fn(),
 }));
 
-import { fetchChangeRequestById, listChangeRequestFields } from '@/lib/supabase/changeRequests';
+import {
+  fetchChangeRequestById,
+  listChangeRequestFields,
+  listChangeRequestsForEvent,
+} from '@/lib/supabase/changeRequests';
 import { fetchEventRequestById } from '@/lib/supabase/eventRequests';
-import { getChangeRequestDetail } from '@/domain/change-request/service';
+import { getChangeRequestDetail, listChangeRequestsForCoordinator } from '@/domain/change-request/service';
 import { ForbiddenError } from '@/domain/shared/errors';
 
 const CR_ID = '11111111-1111-4111-8111-111111111111';
@@ -151,5 +155,71 @@ describe('getChangeRequestDetail (SCRUM-188 AC1)', () => {
       { equipmentId: 'EQ-1', quantity: 1 },
       { equipmentId: 'EQ-2', quantity: 1 },
     ]);
+  });
+});
+
+describe('listChangeRequestsForCoordinator (SCRUM-188 AC1: the event page the coordinator opens)', () => {
+  function stubReads(coordinatorId: string | null) {
+    vi.mocked(fetchEventRequestById).mockResolvedValue({
+      data: eventRow(coordinatorId),
+      error: null,
+    } as unknown as Awaited<ReturnType<typeof fetchEventRequestById>>);
+    vi.mocked(listChangeRequestsForEvent).mockResolvedValue({
+      data: [changeRequestRow()],
+      error: null,
+    } as unknown as Awaited<ReturnType<typeof listChangeRequestsForEvent>>);
+    vi.mocked(listChangeRequestFields).mockResolvedValue({
+      data: [
+        {
+          change_request_id: CR_ID,
+          field: 'expectedAttendance',
+          current_value: 150,
+          proposed_value: 180,
+        },
+      ],
+      error: null,
+    } as unknown as Awaited<ReturnType<typeof listChangeRequestFields>>);
+  }
+
+  it("SCRUM-188 AC1 TC-188-01 lists the event's change requests, with current vs proposed, for the assigned coordinator", async () => {
+    stubReads(COORDINATOR_A);
+
+    const list = await listChangeRequestsForCoordinator(EVENT_ID, { userId: COORDINATOR_A, roles: ['coordinator'] });
+
+    expect(list).toHaveLength(1);
+    expect(list[0]).toMatchObject({
+      id: CR_ID,
+      status: 'pending',
+      reason: 'Programme updated',
+      fields: [{ field: 'expectedAttendance', currentValue: 150, proposedValue: 180 }],
+    });
+  });
+
+  it('SCRUM-188 AC1 TC-188-03 refuses a coordinator not assigned to the event, reading no change requests', async () => {
+    stubReads(COORDINATOR_A);
+
+    await expect(
+      listChangeRequestsForCoordinator(EVENT_ID, { userId: COORDINATOR_B, roles: ['coordinator'] }),
+    ).rejects.toBeInstanceOf(ForbiddenError);
+    expect(listChangeRequestsForEvent).not.toHaveBeenCalled();
+  });
+
+  it('SCRUM-188 AC1 the Event Coordinator Lead may read the list (read-only, SCRUM-232 AC5)', async () => {
+    stubReads(COORDINATOR_A);
+
+    const list = await listChangeRequestsForCoordinator(EVENT_ID, {
+      userId: 'lead-user',
+      roles: ['operations_manager'],
+    });
+
+    expect(list).toHaveLength(1);
+  });
+
+  it('SCRUM-188 AC1 an organiser is refused, whatever the event', async () => {
+    stubReads(COORDINATOR_A);
+
+    await expect(
+      listChangeRequestsForCoordinator(EVENT_ID, { userId: 'organiser-id', roles: ['event_organiser'] }),
+    ).rejects.toBeInstanceOf(ForbiddenError);
   });
 });
