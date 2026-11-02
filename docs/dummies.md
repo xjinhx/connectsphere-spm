@@ -711,8 +711,14 @@ switch them the next time they edit those files.
   its marker removed; TC-249-15 to 17 and 25 to 27 re-run for the Safety
   Officer as TC-256-07, 10 and 14. **Event Coordinator:** replaced by SCRUM-251 (branch
   `scrum-251-coordinator-nav`): Review queue, My events, Venues, Client
-  organisations, Equipment; marker removed. **Other roles:** still active,
-  waiting on SCRUM-252 and 253.
+  organisations, Equipment; marker removed. **Venue Staff:** replaced by
+  SCRUM-253 (branch `scrum-253-venue-staff-nav`): Booking requests, Venues;
+  marker removed. The underlying pages (`/booking-queue`,
+  `/venue-booking-requests/[id]`, `/venues`, `/venues/[id]`, its `edit` and
+  `calendar` pages) already existed from earlier sprints with their own Add
+  venue/Edit venue/View calendar links and back links; this story only added
+  the nav entries and the booking request's back link (shown to Venue Staff
+  only). **Other roles:** still active, waiting on SCRUM-252.
 
 ### D-21 — An equipment reservation is released by hand
 
