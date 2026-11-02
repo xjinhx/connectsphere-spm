@@ -203,8 +203,11 @@ beforeAll(async () => {
   newApprovalId = await approvedEvent('S109 New Approval', daysFromToday(45));
   await admin.from('equipment_request').upsert({ event_request_id: newApprovalId, technical_requirements: 'Lectern mic' });
 
-  // AC3 TC-109-14: a finished event the Lead opens as history (PO, 1 Nov).
+  // AC3 TC-109-14: a finished event the Lead opens as history (CL-74, CL-75).
+  // Venue and registration were essential and neither was done when it was
+  // cancelled.
   cancelledId = await approvedEvent('S109 Cancelled Talk', daysFromToday(55));
+  await markEssential(cancelledId, { venue: 'essential', registration: 'essential' });
   await setStatus(cancelledId, 'cancelled');
 
   // AC3: Planning, booked, Projector P-100 × 2 not reserved, registration not set.
@@ -346,11 +349,22 @@ describe('SCRUM-109 AC3: the Lead sees the status and the essential set, read-on
     ]);
   });
 
-  it('SCRUM-109 AC3 TC-109-14 the Lead opens a Cancelled event as history, read-only', async () => {
-    const record = await getEventRecord(cancelledId, lead);
+  it('SCRUM-109 AC3 TC-109-14 a Cancelled event keeps its essential arrangements, read-only, for the Lead and the coordinator', async () => {
+    // CL-75: a section is left out only for the viewer's role, never because
+    // the event has finished; on a Cancelled event it shows what was outstanding.
+    const expected = [
+      { arrangement: 'venue', progress: 'not_complete' },
+      { arrangement: 'registration', progress: 'not_complete' },
+    ];
+    for (const [viewer, account] of [['lead', lead], ['coordinator', coordinator]] as const) {
+      const record = await getEventRecord(cancelledId, account);
 
-    expect(record.viewers).toEqual(['lead']);
-    expect(record.status).toBe('cancelled');
+      expect(record.viewers).toEqual([viewer]);
+      expect(record.status).toBe('cancelled');
+      expect(record.essential?.map(({ arrangement, progress }) => ({ arrangement, progress }))).toEqual(expected);
+      // SCRUM-100: no change on a finished event, for either of them.
+      expect((await getEssentialArrangements(cancelledId, account.userId)).canChange).toBe(false);
+    }
   });
 
   it('SCRUM-109 AC3 TC-109-13 the Lead cannot change the essential set; it stays as it was', async () => {

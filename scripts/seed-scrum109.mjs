@@ -35,7 +35,8 @@
 //                              not set; venue, equipment and registration essential (TC-109-11, 13)
 //        S109 Ready Dinner     Confirmed: all four essential, venue, equipment and
 //                              registration complete (TC-109-12)
-//        S109 Cancelled Talk   Cancelled, opened by the Lead as history (TC-109-14)
+//        S109 Cancelled Talk   Cancelled with venue and registration essential and
+//                              neither done; the Lead opens it as history (TC-109-14)
 import { config } from 'dotenv';
 import { resolve } from 'path';
 import { createClient } from '@supabase/supabase-js';
@@ -293,7 +294,7 @@ await createEvent(`${PREFIX} Unbooked Talk`, 43, { requirementsOnly: true });
 // AC3
 await createEvent(`${PREFIX} Lead Review`, 44, { book: true, equipment: true, essential: ['venue', 'equipment', 'registration'] });
 await createEvent(`${PREFIX} Ready Dinner`, 45, { ...arranged, essential: allFour });
-await createEvent(`${PREFIX} Cancelled Talk`, 46, { cancel: true });
+await createEvent(`${PREFIX} Cancelled Talk`, 46, { essential: ['venue', 'registration'], cancel: true });
 
 const { data: events } = await supabase.from('event_request').select('id, reference, name, status, proposed_date').like('name', `${PREFIX} %`).order('proposed_date');
 for (const event of events) {
