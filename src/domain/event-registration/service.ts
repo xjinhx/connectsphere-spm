@@ -19,14 +19,18 @@ import {
   bookedVenues,
   canWithdraw,
   endedMessage,
+  eventFullMessage,
   eventTimes,
   finalEventStatus,
   isEventCancelled,
   isEventFull,
   isOpenForRegistration,
   notStartedMessage,
+  registrationConfirmedMessage,
   registrationPeriodRefusal,
+  registrationWithdrawnMessage,
 } from './policy';
+import { notifyBestEffort } from '@/domain/notification/service';
 import { todayInSingapore } from '@/domain/shared/dates';
 import {
   CapacityExceededError,
@@ -124,6 +128,25 @@ async function readFull(event: EventRow): Promise<boolean> {
 
 function alreadyRegistered(registration: Registration | null): ConflictError {
   return new ConflictError(ALREADY_REGISTERED, { registration });
+}
+
+/**
+ * SCRUM-182 AC1, AC2: the refusal as full. SCRUM-201 AC3 (CL-73): the attendee
+ * is also told by notification, which is the record of the refusal; nothing is
+ * stored in event_registration. Used for both places a full refusal can
+ * happen, the check before saving and the database function's 'full', so
+ * whoever misses the last place is told too. No capacity set counts as full
+ * (CL-63), so it is told the same. Best effort: the refusal is the same
+ * whether or not the notification is saved.
+ */
+async function refusedAsFull(event: EventRow, attendeeId: string): Promise<CapacityExceededError> {
+  await notifyBestEffort({
+    recipientId: attendeeId,
+    type: 'registration_refused_full',
+    eventRequestId: event.id,
+    message: eventFullMessage(event.name, event.proposed_date),
+  });
+  return new CapacityExceededError(NO_PLACES_REMAINING);
 }
 
 /**
@@ -253,6 +276,12 @@ function bySoonestEvent(a: OpenEvent, b: OpenEvent): number {
  * No limit on how many events one attendee joins (AC6): nothing here looks at
  * the attendee's other registrations.
  *
+ * SCRUM-201 AC1: a registration that is created sends the attendee a
+ * confirmation notification with the event details. AC3: one refused because
+ * the event is full tells them so; a refusal for any other reason sends
+ * nothing (CL-73). Viewing a full event's page (getRegistrationPage) is not a
+ * refusal and sends nothing.
+ *
  * `attendeeId` is whoever is signed in, from the route, never from the body.
  */
 export async function registerForEvent(
@@ -273,7 +302,7 @@ export async function registerForEvent(
   const refusal = registrationPeriodRefusal(period, today);
   if (refusal) throw new ValidationError(refusal, period);
 
-  if (await readFull(event)) throw new CapacityExceededError(NO_PLACES_REMAINING);
+  if (await readFull(event)) throw await refusedAsFull(event, attendeeId);
 
   const parsed = RegistrationInputSchema.safeParse(input);
   if (!parsed.success) {
@@ -287,6 +316,14 @@ export async function registerForEvent(
     case 'registered': {
       const registration = await readRegistration(eventRequestId, attendeeId);
       if (!registration) throw new ValidationError('Your registration could not be read back.');
+      // SCRUM-201 AC1: only now, once the row is in, so no refusal is ever
+      // confirmed (TC-201-02). Best effort: the registration stands either way.
+      await notifyBestEffort({
+        recipientId: attendeeId,
+        type: 'registration_confirmed',
+        eventRequestId: event.id,
+        message: registrationConfirmedMessage(toOpenEvent(event), registration.reference),
+      });
       return registration;
     }
     case 'already_registered':
@@ -298,7 +335,7 @@ export async function registerForEvent(
       throw new ValidationError(endedMessage(period), period);
     case 'full':
       // SCRUM-182 AC2: another request took the last place after the read above.
-      throw new CapacityExceededError(NO_PLACES_REMAINING);
+      throw await refusedAsFull(event, attendeeId);
     case 'cancelled':
     case 'completed':
       // SCRUM-270: the event was cancelled or completed after the read above.
@@ -319,6 +356,9 @@ export async function registerForEvent(
  * another attendee's, so nobody learns whose registrations exist (TC-184-04);
  * with 409 for one already Withdrawn (TC-184-03), or once the event has taken
  * place (AC3, CL-69: from its event date), whatever the page showed.
+ *
+ * SCRUM-201 AC4: a withdrawal that goes through sends the attendee a
+ * notification confirming it; a refused one sends nothing.
  *
  * `now` is a parameter so tests can fix the clock; callers leave it out.
  *
@@ -354,5 +394,28 @@ export async function withdrawRegistration(
   if (writeError) throw new ValidationError('Your registration could not be withdrawn.', writeError.message);
   // Another request withdrew it after the read above.
   if (!withdrawn) throw new DomainError('INVALID_TRANSITION', ALREADY_WITHDRAWN);
-  return toRegistration(withdrawn as RegistrationRow);
+  const registration = toRegistration(withdrawn as RegistrationRow);
+  await notifyRegistrationWithdrawn(attendeeId, event as EventRow, registration);
+  return registration;
+}
+
+/**
+ * SCRUM-201 AC4: tell the attendee their withdrawal is confirmed. Called by
+ * withdrawRegistration only after its update has changed the row: so a
+ * cancelled confirm step, a refused withdrawal (already Withdrawn, the event
+ * has taken place, someone else's) and the losing one of two withdrawals sent
+ * together send nothing (TC-201-08, TC-201-09). Best effort: the withdrawal
+ * stands either way.
+ */
+async function notifyRegistrationWithdrawn(
+  attendeeId: string,
+  event: { id: string; name: string; proposed_date: string | null },
+  registration: { reference: string },
+): Promise<void> {
+  await notifyBestEffort({
+    recipientId: attendeeId,
+    type: 'registration_withdrawn',
+    eventRequestId: event.id,
+    message: registrationWithdrawnMessage(event.name, event.proposed_date, registration.reference),
+  });
 }

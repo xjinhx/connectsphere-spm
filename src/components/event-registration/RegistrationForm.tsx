@@ -67,6 +67,9 @@ export function RegistrationForm({
       const payload = (await response.json().catch(() => null)) as (Registration & ApiError) | null;
       if (response.ok && payload) {
         setRegistered(payload);
+        // SCRUM-201: the confirmation is a new notification, and this page
+        // doesn't navigate, so tell NotificationBell to refetch its count.
+        window.dispatchEvent(new Event('notifications:changed'));
         return;
       }
       if (response.status === 409 && payload?.details?.registration) {
@@ -75,6 +78,8 @@ export function RegistrationForm({
       }
       if (response.status === 409 && payload?.error === 'CAPACITY_EXCEEDED') {
         setFull(true);
+        // SCRUM-201: so is the "event is full" notification.
+        window.dispatchEvent(new Event('notifications:changed'));
         return;
       }
       setFieldErrors(payload?.details?.fieldErrors ?? {});

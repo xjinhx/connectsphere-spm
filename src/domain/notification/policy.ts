@@ -64,8 +64,14 @@ const LEAD_FACING_TYPES = new Set<string>(['request_submitted']);
 const OWN_EVENTS_LIST_TYPES = new Set<string>(['coordinator_unassigned']);
 const EQUIPMENT_REQUEST_TYPES = new Set<string>(['equipment_unable_to_fulfil']);
 // SCRUM-190 AC5: sent to attendees, who cannot open /events/<id>; their own
-// page for the event is /register-events/<id> (SCRUM-180 AC3).
-const ATTENDEE_FACING_TYPES = new Set<string>(['event_details_changed']);
+// page for the event is /register-events/<id> (SCRUM-180 AC3). SCRUM-201's
+// three registration outcomes go to the attendee too.
+const ATTENDEE_FACING_TYPES = new Set<string>([
+  'event_details_changed',
+  'registration_confirmed',
+  'registration_refused_full',
+  'registration_withdrawn',
+]);
 // SCRUM-190 AC4 adds 'arrangement_needs_review', sent to the Venue Staff and
 // Technical Support Staff who actioned an arrangement. No one event page is
 // open to both (Venue Staff have none at all), so, like SCRUM-105's

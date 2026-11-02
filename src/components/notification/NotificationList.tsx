@@ -23,6 +23,10 @@ const TYPE_LABELS: Record<string, string> = {
   change_request_approved: 'Change request approved',
   arrangement_needs_review: 'Arrangement needs review',
   event_details_changed: 'Event details changed',
+  // SCRUM-201 AC1, AC3, AC4.
+  registration_confirmed: 'Registration confirmed',
+  registration_refused_full: 'Event full',
+  registration_withdrawn: 'Registration withdrawn',
 };
 
 /**

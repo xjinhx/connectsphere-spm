@@ -37,6 +37,9 @@ export function WithdrawRegistrationButton({
       const payload = (await response.json().catch(() => null)) as (Registration & { message?: string }) | null;
       if (response.ok && payload) {
         onWithdrawn(payload);
+        // SCRUM-201: the withdrawal is a new notification, and this page
+        // doesn't navigate, so tell NotificationBell to refetch its count.
+        window.dispatchEvent(new Event('notifications:changed'));
         return;
       }
       setError(payload?.message ?? 'Your registration could not be withdrawn.');

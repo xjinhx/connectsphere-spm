@@ -55,6 +55,14 @@ export const NOTIFICATION_TYPES = [
   // SCRUM-190 AC5: every attendee with a Registered registration, told an
   // approved change altered the details they are shown of the event.
   'event_details_changed',
+  // SCRUM-201 AC1: the attendee, told their registration was created, with
+  // the event's details and their reference.
+  'registration_confirmed',
+  // SCRUM-201 AC3: the attendee, told their registration was refused because
+  // the event is full (CL-73: this is the record of the refusal).
+  'registration_refused_full',
+  // SCRUM-201 AC4: the attendee, told their withdrawal was confirmed.
+  'registration_withdrawn',
 ] as const;
 export const NotificationTypeSchema = z.enum(NOTIFICATION_TYPES);
 export type NotificationType = z.infer<typeof NotificationTypeSchema>;
