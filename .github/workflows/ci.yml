@@ -95,7 +95,7 @@ jobs:
       - name: Install Supabase CLI
         uses: supabase/setup-cli@v1
         with:
-          version: latest
+          version: 2.117.0
 
       # Proves the committed migrations build the schema from nothing - which
       # is the whole reason they are committed rather than living only in the
@@ -147,7 +147,7 @@ jobs:
       - name: Install Supabase CLI
         uses: supabase/setup-cli@v1
         with:
-          version: latest
+          version: 2.117.0
 
       # Migrations and supabase/seed.sql (the seeded venues the tests use).
       - name: Start local Supabase stack
