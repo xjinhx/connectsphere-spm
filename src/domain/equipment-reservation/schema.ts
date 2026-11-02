@@ -8,6 +8,7 @@ import { RequestedQuantitySchema } from '@/domain/equipment-request/schema';
  * SCRUM-167 Check equipment availability across the full commitment window
  * SCRUM-173 Reserve equipment for the full commitment window and view all
  *           reservations for the event
+ * SCRUM-177 Release a reservation
  *
  * An event's equipment request (SCRUM-160) says what it needs; this is how
  * much of each item is free for it, and what has been set aside for it.
@@ -64,7 +65,7 @@ export type EquipmentAvailability = z.infer<typeof EquipmentAvailabilitySchema>;
 export const ReserveEquipmentInputSchema = z.object({ quantity: RequestedQuantitySchema });
 export type ReserveEquipmentInput = z.infer<typeof ReserveEquipmentInputSchema>;
 
-/** 173 AC6: Reserved, or Released once SCRUM-177 releases it. */
+/** 173 AC6: Reserved, or Released once released (SCRUM-177). */
 export const RESERVATION_STATUSES = ['reserved', 'released'] as const;
 export const ReservationStatusSchema = z.enum(RESERVATION_STATUSES);
 export type ReservationStatus = z.infer<typeof ReservationStatusSchema>;
@@ -84,8 +85,27 @@ export const EquipmentReservationSchema = z.object({
   window: DateWindowSchema,
   status: ReservationStatusSchema,
   reservedAt: z.string(),
+  // SCRUM-111 AC7: set by a significant change to the event's date or times,
+  // cleared when its coordinator re-confirms it (AC9).
+  reviewRequired: z.boolean(),
+  reviewRequiredAt: z.string().nullable(),
+  reviewRequiredCause: z.string().nullable(),
+  // SCRUM-177 AC5: why and when it was released; null while it is Reserved.
+  releaseReason: z.string().nullable(),
+  releasedAt: z.string().nullable(),
 });
 export type EquipmentReservation = z.infer<typeof EquipmentReservationSchema>;
+
+export const RELEASE_RESERVATION_REASON_REQUIRED = 'A reason is required to release a reservation.';
+
+/** SCRUM-177 AC1: Technical Support Staff release a reservation "and give a reason". */
+export const ReleaseReservationInputSchema = z.object({
+  reason: z
+    .string({ required_error: RELEASE_RESERVATION_REASON_REQUIRED })
+    .trim()
+    .min(1, RELEASE_RESERVATION_REASON_REQUIRED),
+});
+export type ReleaseReservationInput = z.infer<typeof ReleaseReservationInputSchema>;
 
 /** 173 AC7: a line not yet fully reserved, and by how much. */
 export const OutstandingLineSchema = z.object({

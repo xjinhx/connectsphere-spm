@@ -64,6 +64,13 @@ describe('POST .../lines/[lineId]/reservation (SCRUM-173)', () => {
       window: { start: '2026-11-09', end: '2026-11-12' },
       status: 'reserved',
       reservedAt: '2026-10-20T00:00:00Z',
+      // SCRUM-111 AC7: not flagged.
+      reviewRequired: false,
+      reviewRequiredAt: null,
+      reviewRequiredCause: null,
+      // SCRUM-177: not released.
+      releaseReason: null,
+      releasedAt: null,
     });
 
     const response = await reserve({ quantity: 2 });

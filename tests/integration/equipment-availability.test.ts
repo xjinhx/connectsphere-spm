@@ -305,7 +305,12 @@ describe('SCRUM-167: checking availability across the commitment window', () => 
   it('AC5: a released reservation no longer reduces availability', async () => {
     const item = await addItem('EQ-167-rel');
     const reservationId = await hold('H-167-rel', [d(0)], item, 4);
-    await admin.from('equipment_reservation').update({ status: 'released' }).eq('id', reservationId);
+    // Released as the app releases it (SCRUM-177), with its reason, releaser and time.
+    await admin.rpc('release_equipment_reservation', {
+      p_reservation_id: reservationId,
+      p_reason: 'Test',
+      p_released_by: technicalSupport.userId,
+    });
     const e1 = await createEvent('S4-E1 rel', E1_DATES);
     await request(e1, item, 2);
 

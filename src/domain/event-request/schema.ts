@@ -1,5 +1,6 @@
 import { z } from 'zod';
 import { RoomLayoutSchema } from '@/domain/venues/schema';
+import { isISODate } from '@/domain/shared/dates';
 import {
   EndTimeSchema,
   isQuarterHourEnd,
@@ -12,11 +13,28 @@ import {
 // NOTE: `status` (draft/submitted) belongs to SCRUM-84's story, and `coordinatorId`
 // belongs to SCRUM-94/95/96 — intentionally left out of this schema to avoid collisions.
 
+export const PROPOSED_DATE_INVALID_MESSAGE = 'Choose a valid date.';
+
+/**
+ * The proposed date as typed: a real YYYY-MM-DD, the same check every other
+ * date field uses (isISODate), then read as midnight UTC so the rest of the
+ * code still receives a Date. z.coerce.date() accepted a five-digit year such
+ * as 20266, which toISOString() writes as "+020266-12-10" and Postgres refuses
+ * with a raw "time zone displacement out of range" error.
+ */
+export const proposedDateSchema = z
+  .string({
+    required_error: PROPOSED_DATE_INVALID_MESSAGE,
+    invalid_type_error: PROPOSED_DATE_INVALID_MESSAGE,
+  })
+  .refine(isISODate, PROPOSED_DATE_INVALID_MESSAGE)
+  .transform((value) => new Date(`${value}T00:00:00Z`));
+
 export const eventRequestCoreSchema = z.object({
   name: z.string().min(1, 'Event name is required'),
   purpose: z.string().min(1, 'Purpose is required'),
   description: z.string().min(1, 'Description is required'),
-  proposedDate: z.coerce.date(),
+  proposedDate: proposedDateSchema,
   // SCRUM-238 — the event's own start and end, Singapore clock time on the
   // 15-minute unit. Replaces SCRUM-77's timeSlots in the mandatory set.
   startTime: z.string({ required_error: 'Start time is required' }).pipe(StartTimeSchema),

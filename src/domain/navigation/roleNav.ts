@@ -12,28 +12,40 @@ import type { NavItem } from './schema';
  * your own role's entry, to keep merges small.
  */
 export const ROLE_NAV: Record<Role, readonly NavItem[]> = {
-  // DUMMY(SCRUM-250) D-20: Event Organiser nav is the landing page only.
-  event_organiser: [{ href: '/events', label: 'My event requests' }],
-  // DUMMY(SCRUM-251) D-20: Event Coordinator nav is the landing page only.
-  coordinator: [{ href: '/assigned-events', label: 'Assigned events' }],
+  // SCRUM-250 AC2: Event requests, New event request, in that order.
+  event_organiser: [
+    { href: '/events', label: 'Event requests' },
+    { href: '/events/new', label: 'New event request' },
+  ],
+  // SCRUM-251 AC2: Review queue, My events, Venues, Client organisations, Equipment, in that order.
+  coordinator: [
+    { href: '/assigned-events', label: 'Review queue' },
+    { href: '/my-events', label: 'My events' },
+    { href: '/venues', label: 'Venues' },
+    { href: '/organisations', label: 'Client organisations' },
+    { href: '/equipment', label: 'Equipment' },
+  ],
   // SCRUM-252 AC2: Unassigned queue, Coordinators, Venues, in that order.
-  // Coordinators links to /coordinator-overview, SCRUM-233's actual route —
+  // Coordinators links to /coordinator-overview, SCRUM-233's actual route,
   // the AC text names the stale /coordinators, which does not exist.
   operations_manager: [
     { href: '/assignment-queue', label: 'Unassigned queue' },
     { href: '/coordinator-overview', label: 'Coordinators' },
     { href: '/venues', label: 'Venues' },
   ],
-  // DUMMY(SCRUM-253) D-20: Venue Staff nav is the landing page only.
-  venue_staff: [{ href: '/booking-queue', label: 'Booking requests' }],
+  // SCRUM-253 AC2: Booking requests, Venues, in that order.
+  venue_staff: [
+    { href: '/booking-queue', label: 'Booking requests' },
+    { href: '/venues', label: 'Venues' },
+  ],
   // SCRUM-254 AC2: Equipment requests, Equipment catalogue, Venues, in that order.
   technical_support: [
     { href: '/equipment-queue', label: 'Equipment requests' },
     { href: '/equipment', label: 'Equipment catalogue' },
     { href: '/venues', label: 'Venues' },
   ],
-  // DUMMY(SCRUM-255) D-20: Attendee nav is the landing page only.
+  // SCRUM-255 AC2: Open events, which is also the landing page.
   attendee: [{ href: '/register-events', label: 'Open events' }],
-  // DUMMY(SCRUM-256) D-20: Safety Officer nav is the landing page only.
+  // SCRUM-256 AC2: Safety checks, which is also the landing page.
   safety_officer: [{ href: '/safety-checks', label: 'Safety checks' }],
 };

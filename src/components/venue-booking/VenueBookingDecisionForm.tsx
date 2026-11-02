@@ -2,7 +2,8 @@
 
 import { useState } from 'react';
 import { useRouter } from 'next/navigation';
-import { END_TIME_OPTIONS, START_TIME_OPTIONS } from '@/domain/shared/times';
+import { LATEST_DATE } from '@/domain/shared/dates';
+import { START_TIME_OPTIONS, endTimesAfter, keepEndAfterStart } from '@/domain/shared/times';
 
 type Decision = 'approve' | 'reject';
 type Suggestion = { venueId: string; date: string; start: string; end: string };
@@ -25,7 +26,9 @@ type Suggestion = { venueId: string; date: string; start: string; end: string };
  *
  * SCRUM-150 AC1: a rejected line may also suggest another venue, date and
  * period. The date and times start as the line's own, so staff change only
- * what differs. The reason is still required.
+ * what differs. The reason is still required. SCRUM-266: the suggested end
+ * offers only times after the suggested start, and is cleared when the start
+ * moves to or past it.
  */
 export function VenueBookingDecisionForm({
   requestId,
@@ -157,6 +160,7 @@ export function VenueBookingDecisionForm({
                   <input
                     id={`suggest-date-${line.id}`}
                     type="date"
+                    max={LATEST_DATE}
                     value={suggestions[line.id]?.date ?? ''}
                     onChange={(event) => updateSuggestion(line.id, { date: event.target.value })}
                     className="w-full rounded-md border border-[var(--border)] bg-[var(--surface)] px-3 py-2 text-sm"
@@ -169,7 +173,12 @@ export function VenueBookingDecisionForm({
                       <select
                         id={`suggest-start-${line.id}`}
                         value={suggestions[line.id]?.start ?? ''}
-                        onChange={(event) => updateSuggestion(line.id, { start: event.target.value })}
+                        onChange={(event) =>
+                          updateSuggestion(line.id, {
+                            start: event.target.value,
+                            end: keepEndAfterStart(event.target.value, suggestions[line.id]?.end ?? ''),
+                          })
+                        }
                         className="rounded-md border border-[var(--border)] bg-[var(--surface)] px-3 py-2 text-sm"
                       >
                         {START_TIME_OPTIONS.map((time) => (
@@ -189,7 +198,9 @@ export function VenueBookingDecisionForm({
                         onChange={(event) => updateSuggestion(line.id, { end: event.target.value })}
                         className="rounded-md border border-[var(--border)] bg-[var(--surface)] px-3 py-2 text-sm"
                       >
-                        {END_TIME_OPTIONS.map((time) => (
+                        {/* Shown once a moved start has cleared the end. */}
+                        <option value="">Choose</option>
+                        {endTimesAfter(suggestions[line.id]?.start ?? '').map((time) => (
                           <option key={time} value={time}>
                             {time}
                           </option>
