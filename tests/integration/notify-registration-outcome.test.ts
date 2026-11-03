@@ -167,7 +167,7 @@ afterAll(async () => {
 }, 60_000);
 
 describe('the migration keeps every notification type already on main', () => {
-  it('TC-201-01 every type in NOTIFICATION_TYPES, the 15 before SCRUM-201, its 3 and SCRUM-191's 1, is accepted by notifications_type_known', async () => {
+  it('TC-201-01 every type in NOTIFICATION_TYPES, the 15 before SCRUM-201, its 3 and the 1 from SCRUM-191, is accepted by notifications_type_known', async () => {
     const eventId = await createEvent();
     const recipient = await createAttendee();
 
