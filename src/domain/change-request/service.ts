@@ -10,11 +10,14 @@ import {
 } from '@/lib/supabase/changeRequests';
 import { fetchEventRequestById, type EventRequestRow } from '@/lib/supabase/eventRequests';
 import { fetchRegisteredAttendeeIds } from '@/lib/supabase/eventRegistrations';
+import { isCurrentCoordinator } from '@/domain/assignment/policy';
 import { canViewRequest } from '@/domain/event-request/policy';
-import { finishedEventNotice, isFinishedEvent } from '@/domain/event-information/policy';
+import { NOT_ASSIGNED_MESSAGE, finishedEventNotice, isFinishedEvent } from '@/domain/event-information/policy';
 import { timeRangeIssues } from '@/domain/event-request/schema';
 import type { ScheduleValues } from '@/domain/significant-change/schema';
 import { RoomLayoutSchema, type RoomLayout } from '@/domain/venues/schema';
+import { isActionPermitted } from '@/domain/identity/permissions';
+import type { Role } from '@/domain/identity/roles';
 import { notifyBestEffort } from '@/domain/notification/service';
 import { ConflictError, ForbiddenError, NotFoundError, ValidationError } from '@/domain/shared/errors';
 import { fromDatabaseTime } from '@/domain/shared/times';
@@ -234,6 +237,82 @@ export async function raiseChangeRequest(
   return toSummary(row, (insertedFields ?? []) as unknown as ChangeRequestFieldRow[]);
 }
 
+export interface ChangeRequestDetail extends ChangeRequestSummary {
+  eventRequestId: string;
+}
+
+/**
+ * SCRUM-188 AC1 — "Given a pending change request exists for my event, when
+ * I open it from its notification or from the event page, then the current
+ * value and the requested value are shown for each field, along with the
+ * organiser's reason."
+ *
+ * "My event" here is the assigned coordinator's: 'change_requested'
+ * notifies the coordinator (SCRUM-187 AC1), and the only event page open to
+ * a coordinator who isn't also the organiser's colleague is their review
+ * page (canViewRequest, event-request/policy.ts, never passes for them) - so
+ * access is the assignment check every other coordinator-only read in this
+ * codebase uses (isCurrentCoordinator), not canViewRequest.
+ *
+ * Takes the change request id alone (plus the actor), not an event request
+ * id too: the event the request belongs to is read off the change_request
+ * row itself, so there is only one id to get wrong, not two that could
+ * disagree.
+ *
+ * AC2/AC3 (the cross-event change-request queue) are out of Release 1 per
+ * CL-50 (moved to SCRUM-63) and are not built here.
+ */
+export async function getChangeRequestDetail(
+  changeRequestId: string,
+  actorId: string,
+): Promise<ChangeRequestDetail> {
+  const parsedId = ChangeRequestIdSchema.safeParse(changeRequestId);
+  if (!parsedId.success) throw new NotFoundError('Change request');
+
+  const { data: found, error } = await fetchChangeRequestById(parsedId.data);
+  if (error) {
+    throw new ValidationError('The change request could not be read.', error.message);
+  }
+  if (!found) throw new NotFoundError('Change request');
+  const row = found as unknown as ChangeRequestRow;
+
+  const event = await readRequest(row.event_request_id);
+
+  // TC-188-03 — refused outright (Forbidden), same reasoning as every other
+  // "not yours" coordinator-only read (event-information/service.ts,
+  // significant-change/service.ts): no field values are disclosed to a
+  // coordinator who isn't currently assigned to this event.
+  if (!isCurrentCoordinator(event.coordinator_id, actorId)) {
+    throw new ForbiddenError(NOT_ASSIGNED_MESSAGE);
+  }
+
+  const { data: fieldRows, error: fieldsError } = await listChangeRequestFields([row.id]);
+  if (fieldsError) {
+    throw new ValidationError('The changed fields could not be read.', fieldsError.message);
+  }
+  const fields = (fieldRows ?? []) as unknown as ChangeRequestFieldRow[];
+
+  return { ...toSummary(row, fields), eventRequestId: row.event_request_id };
+}
+
+/** Shared by listChangeRequests and listChangeRequestsForCoordinator, once each has decided the caller may see this event's change requests at all. */
+async function readSummariesForEvent(eventRequestId: string): Promise<ChangeRequestSummary[]> {
+  const { data: requestRows, error: requestsError } = await listChangeRequestsForEvent(eventRequestId);
+  if (requestsError) {
+    throw new ValidationError('The change requests could not be read.', requestsError.message);
+  }
+  const requests = (requestRows ?? []) as unknown as ChangeRequestRow[];
+  if (requests.length === 0) return [];
+
+  const { data: fieldRows, error: fieldsError } = await listChangeRequestFields(requests.map((r) => r.id));
+  if (fieldsError) {
+    throw new ValidationError('The changed fields could not be read.', fieldsError.message);
+  }
+  const fields = (fieldRows ?? []) as unknown as ChangeRequestFieldRow[];
+
+  return requests.map((row) => toSummary(row, fields));
+}
+
 /**
  * AC6 — "Given I have raised change requests, when I open my event, then
  * each is listed with what was asked, its status, the decision date and any
@@ -265,20 +344,34 @@ export async function listChangeRequests(
     throw new NotFoundError('Event request');
   }
 
-  const { data: requestRows, error: requestsError } = await listChangeRequestsForEvent(parsedId.data);
-  if (requestsError) {
-    throw new ValidationError('The change requests could not be read.', requestsError.message);
-  }
-  const requests = (requestRows ?? []) as unknown as ChangeRequestRow[];
-  if (requests.length === 0) return [];
+  return readSummariesForEvent(parsedId.data);
+}
 
-  const { data: fieldRows, error: fieldsError } = await listChangeRequestFields(requests.map((r) => r.id));
-  if (fieldsError) {
-    throw new ValidationError('The changed fields could not be read.', fieldsError.message);
-  }
-  const fields = (fieldRows ?? []) as unknown as ChangeRequestFieldRow[];
+/**
+ * SCRUM-188 AC1 — "the event page" half of opening a pending change request,
+ * for whoever the review page (events/[id]/review) already let in: the
+ * event's assigned coordinator, or (SCRUM-232 AC5) an Event Coordinator Lead
+ * viewing read-only. Same rule getReviewDetail enforces (review/service.ts)
+ * rather than canViewRequest, which never passes for a coordinator who isn't
+ * also an organisation colleague.
+ */
+export async function listChangeRequestsForCoordinator(
+  eventRequestId: string,
+  actor: { userId: string; roles: readonly Role[] },
+): Promise<ChangeRequestSummary[]> {
+  const parsedId = EventRequestIdSchema.safeParse(eventRequestId);
+  if (!parsedId.success) throw new NotFoundError('Event request');
 
-  return requests.map((row) => toSummary(row, fields));
+  const event = await readRequest(parsedId.data);
+
+  if (
+    !isCurrentCoordinator(event.coordinator_id, actor.userId) &&
+    !isActionPermitted(actor.roles, 'coordinator_assignment')
+  ) {
+    throw new ForbiddenError(NOT_ASSIGNED_MESSAGE);
+  }
+
+  return readSummariesForEvent(parsedId.data);
 }
 
 // -----------------------------------------------------------------------------
