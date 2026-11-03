@@ -58,14 +58,33 @@ export function canAccessNotification(recipientId: string, actorId: string): boo
  * page is open to all of them, and the message itself says everything (that it
  * will not take place, and for Venue Staff which times are free). It links to
  * the notifications page itself.
+ *
+ * SCRUM-188 adds 'change_requested' (created by SCRUM-187 AC1, but until
+ * this story nothing routed it correctly) to COORDINATOR_FACING_TYPES: it is
+ * sent to the event's assigned coordinator, who - same reasoning as
+ * 'coordinator_assigned' above - can't open the organiser's /events/<id>
+ * (canViewRequest never passes for a coordinator who isn't also an
+ * organisation colleague). It routes to /events/<id>/review instead, where
+ * getChangeRequestDetail (change-request/service.ts) now shows the current
+ * and proposed value for each changed field and the reason.
  */
-const COORDINATOR_FACING_TYPES = new Set<string>(['coordinator_assigned', 'venue_booking_update']);
+const COORDINATOR_FACING_TYPES = new Set<string>([
+  'coordinator_assigned',
+  'venue_booking_update',
+  'change_requested',
+]);
 const LEAD_FACING_TYPES = new Set<string>(['request_submitted']);
 const OWN_EVENTS_LIST_TYPES = new Set<string>(['coordinator_unassigned']);
 const EQUIPMENT_REQUEST_TYPES = new Set<string>(['equipment_unable_to_fulfil']);
 // SCRUM-190 AC5: sent to attendees, who cannot open /events/<id>; their own
-// page for the event is /register-events/<id> (SCRUM-180 AC3).
-const ATTENDEE_FACING_TYPES = new Set<string>(['event_details_changed']);
+// page for the event is /register-events/<id> (SCRUM-180 AC3). SCRUM-201's
+// three registration outcomes go to the attendee too.
+const ATTENDEE_FACING_TYPES = new Set<string>([
+  'event_details_changed',
+  'registration_confirmed',
+  'registration_refused_full',
+  'registration_withdrawn',
+]);
 // SCRUM-190 AC4 adds 'arrangement_needs_review', sent to the Venue Staff and
 // Technical Support Staff who actioned an arrangement. No one event page is
 // open to both (Venue Staff have none at all), so, like SCRUM-105's

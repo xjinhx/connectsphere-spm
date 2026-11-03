@@ -59,6 +59,14 @@ export const NOTIFICATION_TYPES = [
   // rejected, with the reason. Its own type, not 'request_rejected' (which
   // means the event request itself was rejected, SCRUM-93).
   'change_request_rejected',
+  // SCRUM-201 AC1: the attendee, told their registration was created, with
+  // the event's details and their reference.
+  'registration_confirmed',
+  // SCRUM-201 AC3: the attendee, told their registration was refused because
+  // the event is full (CL-73: this is the record of the refusal).
+  'registration_refused_full',
+  // SCRUM-201 AC4: the attendee, told their withdrawal was confirmed.
+  'registration_withdrawn',
 ] as const;
 export const NotificationTypeSchema = z.enum(NOTIFICATION_TYPES);
 export type NotificationType = z.infer<typeof NotificationTypeSchema>;

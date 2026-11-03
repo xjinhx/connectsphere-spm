@@ -1,6 +1,6 @@
 import { formatDayMonthYear, type ISODate } from '@/domain/shared/dates';
-import { fromDatabaseTime, type ClockRange } from '@/domain/shared/times';
-import type { EventVenue, FinalEventStatus, RegistrationPeriod } from './schema';
+import { formatClockRange, fromDatabaseTime, type ClockRange } from '@/domain/shared/times';
+import type { EventVenue, FinalEventStatus, OpenEvent, RegistrationPeriod } from './schema';
 
 /**
  * SCRUM-181 — Register for an event. Pure rules only; service.ts applies them.
@@ -170,4 +170,45 @@ export const EVENT_TAKEN_PLACE = 'This event has already taken place, so the reg
  */
 export function canWithdraw(eventDate: ISODate | null, today: ISODate): boolean {
   return eventDate === null || today < eventDate;
+}
+
+/**
+ * SCRUM-201: the event as its notifications name it, e.g. `"Client
+ * Appreciation Night" on 17/11/2026` (DD/MM/YYYY); only the name until the
+ * event has a date.
+ */
+function eventLabel(eventName: string, eventDate: ISODate | null): string {
+  return eventDate ? `"${eventName}" on ${formatDayMonthYear(eventDate)}` : `"${eventName}"`;
+}
+
+/** e.g. "Marina Bay Ballroom", "A and B", "A, B and C". */
+function listNames(names: readonly string[]): string {
+  if (names.length <= 1) return names.join('');
+  return `${names.slice(0, -1).join(', ')} and ${names[names.length - 1]}`;
+}
+
+/**
+ * SCRUM-201 AC1: the confirmation, with the event details an attendee is shown
+ * of the event (SCRUM-180: its name, date, start and end times and venues) and
+ * the registration's reference. Times and venues are left out until the event
+ * has them.
+ */
+export function registrationConfirmedMessage(event: OpenEvent, reference: string): string {
+  const times = event.times ? `, ${formatClockRange(event.times)}` : '';
+  const venues = event.venues.length > 0 ? ` at ${listNames(event.venues.map((venue) => venue.name))}` : '';
+  return `You are registered for ${eventLabel(event.eventName, event.eventDate)}${times}${venues}. Your reference is ${reference}.`;
+}
+
+/**
+ * SCRUM-201 AC3: the attendee is told their registration was refused because
+ * the event is full. CL-73: this notification is the record of the refusal; no
+ * registration row is stored, so SCRUM-182's count is unchanged.
+ */
+export function eventFullMessage(eventName: string, eventDate: ISODate | null): string {
+  return `Your registration for ${eventLabel(eventName, eventDate)} was not accepted: the event is full.`;
+}
+
+/** SCRUM-201 AC4: the attendee is told their withdrawal is confirmed, with the registration's reference. */
+export function registrationWithdrawnMessage(eventName: string, eventDate: ISODate | null, reference: string): string {
+  return `You have withdrawn from ${eventLabel(eventName, eventDate)}. Your registration ${reference} is now Withdrawn.`;
 }

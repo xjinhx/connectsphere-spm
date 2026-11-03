@@ -23,13 +23,14 @@ import type { EventRequestStatus } from '@/domain/event-request/schema';
 import type { Role } from '@/domain/identity/roles';
 import { isCurrentCoordinator } from '@/domain/assignment/policy';
 import { listAffectedBookings } from '@/domain/availability/service';
-import { listEventReservations } from '@/domain/equipment-reservation/service';
+import { readEventReservations } from '@/domain/equipment-reservation/service';
 import {
   confirmationRefusal,
   outstandingEssentialArrangements,
   outstandingReviewArrangements,
 } from '@/domain/essential-arrangements/policy';
 import { getEssentialArrangements } from '@/domain/essential-arrangements/service';
+import type { ConfirmationSnapshot } from '@/domain/essential-arrangements/schema';
 import { notifyBestEffort } from '@/domain/notification/service';
 import { listEventArrangements } from '@/domain/significant-change/service';
 import { fromDatabaseTime } from '@/domain/shared/times';
@@ -187,6 +188,37 @@ async function readVenueLines(eventRequestId: string) {
 }
 
 /**
+ * What SCRUM-102's check reads about one event, with the arrangements a
+ * significant change has flagged for review (SCRUM-190). Shared by
+ * confirmEvent and SCRUM-109's event record, so the record calls an essential
+ * arrangement complete exactly when confirmation would.
+ *
+ * No access check of its own: both callers decide who may see the event
+ * first. `actorId` only decides whether the essential set may be changed and
+ * which bookings may be released, neither of which the snapshot keeps.
+ */
+export async function readEssentialArrangementState(
+  eventRequestId: string,
+  actorId: string,
+): Promise<{ snapshot: ConfirmationSnapshot; flagged: { bookings: string[]; reservations: string[] } }> {
+  const [essential, venueLines, venueBookings, affectedBookings, equipment, arrangements] = await Promise.all([
+    getEssentialArrangements(eventRequestId, actorId),
+    readVenueLines(eventRequestId),
+    listEventVenueBookings(eventRequestId, actorId),
+    listAffectedBookings(eventRequestId),
+    readEventReservations(eventRequestId),
+    listEventArrangements(eventRequestId),
+  ]);
+  return {
+    snapshot: { needs: essential.needs, venueLines, venueBookings, affectedBookings, equipment },
+    flagged: {
+      bookings: arrangements.bookings.filter((item) => item.reviewRequired).map((item) => item.label),
+      reservations: arrangements.reservations.filter((item) => item.reviewRequired).map((item) => item.label),
+    },
+  };
+}
+
+/**
  * SCRUM-102 — Block confirmation until essential arrangements are complete.
  *
  * The event's assigned coordinator confirms it (TC-102-17), from Planning only
@@ -223,29 +255,11 @@ export async function confirmEvent(eventRequestId: string, actor: Actor): Promis
   }
   if (!canBeConfirmed(event.status)) throw new ConflictError(confirmationStatusRefusal(event.status));
 
-  const [essential, venueLines, venueBookings, affectedBookings, equipment, arrangements] = await Promise.all([
-    getEssentialArrangements(event.id, actor.userId),
-    readVenueLines(event.id),
-    listEventVenueBookings(event.id, actor.userId),
-    listAffectedBookings(event.id),
-    listEventReservations(event.id, actor),
-    listEventArrangements(event.id),
-  ]);
-  const outstanding = outstandingEssentialArrangements({
-    needs: essential.needs,
-    venueLines,
-    venueBookings,
-    affectedBookings,
-    equipment,
-  });
+  const { snapshot, flagged } = await readEssentialArrangementState(event.id, actor.userId);
+  const outstanding = outstandingEssentialArrangements(snapshot);
   // SCRUM-190 AC2/AC3: a flagged-for-review arrangement (SCRUM-111) blocks
   // re-confirmation only while it is also marked essential.
-  outstanding.push(
-    ...outstandingReviewArrangements(essential.needs, {
-      bookings: arrangements.bookings.filter((item) => item.reviewRequired).map((item) => item.label),
-      reservations: arrangements.reservations.filter((item) => item.reviewRequired).map((item) => item.label),
-    }),
-  );
+  outstanding.push(...outstandingReviewArrangements(snapshot.needs, flagged));
   if (outstanding.length > 0) throw new ConflictError(confirmationRefusal(outstanding), { outstanding });
 
   await changeEventStatus(event.id, 'confirmed');

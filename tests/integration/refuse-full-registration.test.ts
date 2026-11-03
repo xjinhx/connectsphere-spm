@@ -95,6 +95,16 @@ async function rowsFor(eventId: string) {
 
 const registered = async (eventId: string) => (await rowsFor(eventId)).filter((row) => row.status === 'registered');
 
+/** How many notifications these accounts have been sent, of any type. */
+async function notificationCount(recipientIds: string[]): Promise<number> {
+  const { count, error } = await admin
+    .from('notifications')
+    .select('id', { count: 'exact', head: true })
+    .in('recipient_id', recipientIds);
+  if (error) throw new Error(error.message);
+  return count ?? 0;
+}
+
 /**
  * The attendee withdraws their Registered registration, through SCRUM-184's
  * withdrawRegistration (D-25, Replaced). What these cases exercise is the
@@ -284,7 +294,10 @@ describe('AC3: a place released by a withdrawal (no waiting list in Release 1)',
 
   it('TC-182-10 capacity below the number registered: everyone stays, and registration reopens only below the capacity (PO, 25/10/2026)', async () => {
     const eventId = await createEvent(3);
-    const [first, second] = await fill(eventId, 3);
+    const [first, second, third] = await fill(eventId, 3);
+    // SCRUM-201 AC1 confirms each registration as it is made; what follows must add nothing.
+    const toldBefore = await notificationCount([first!, second!, third!]);
+    const thirdToldBefore = await notificationCount([third!]);
     // Only the coordinator's save in SCRUM-185 changes the capacity; set by hand here.
     await admin.from('event_request').update({ registration_capacity: 2 }).eq('id', eventId);
     const attendee = await createAttendee();
@@ -303,12 +316,10 @@ describe('AC3: a place released by a withdrawal (no waiting list in Release 1)',
     const rows = await rowsFor(eventId);
     expect(rows.filter((row) => row.status === 'registered')).toHaveLength(2);
     expect(rows.filter((row) => row.status === 'withdrawn')).toHaveLength(2);
-    // Nobody already registered was removed or told anything.
-    const { count } = await admin
-      .from('notifications')
-      .select('id', { count: 'exact', head: true })
-      .in('recipient_id', rows.map((row) => row.attendee_id));
-    expect(count).toBe(0);
+    // Nobody already registered was removed or told anything by the cut; each
+    // withdrawal is confirmed once, to whoever withdrew (SCRUM-201 AC4).
+    expect(await notificationCount([third!])).toBe(thirdToldBefore);
+    expect(await notificationCount([first!, second!, third!])).toBe(toldBefore + 2);
   }, TIMEOUT);
 
   it('TC-182-11 the attendee who withdrew can take the freed place again, with a new reference', async () => {
@@ -331,17 +342,15 @@ describe('AC3: a place released by a withdrawal (no waiting list in Release 1)',
     const [first] = await fill(eventId, 3);
     const refused = await createAttendee();
     await expect(registerForEvent(eventId, refused, VALID, NOW)).rejects.toThrow(CapacityExceededError);
+    // SCRUM-201 AC3 (CL-73): the refusal itself tells them the event is full, and nothing else.
+    expect(await notificationCount([refused])).toBe(1);
 
     await withdraw(eventId, first!);
 
-    // The place stays open until someone asks for it.
+    // The place stays open until someone asks for it: nobody is told it has freed.
     expect((await rowsFor(eventId)).some((row) => row.attendee_id === refused)).toBe(false);
     expect(await registered(eventId)).toHaveLength(2);
-    const { count } = await admin
-      .from('notifications')
-      .select('id', { count: 'exact', head: true })
-      .eq('recipient_id', refused);
-    expect(count).toBe(0);
+    expect(await notificationCount([refused])).toBe(1);
     expect((await getRegistrationPage(eventId, refused, NOW)).full).toBe(false);
 
     await expect(registerForEvent(eventId, refused, VALID, NOW)).resolves.toMatchObject({ status: 'registered' });

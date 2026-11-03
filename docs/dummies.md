@@ -923,7 +923,7 @@ switch them the next time they edit those files.
   `status='rejected'`, `decided_by` and `decision_reason` through
   `rejectChangeRequestRow()` (`src/lib/supabase/changeRequests.ts`), and
   `decided_at` is stamped by the `change_request_set_decided_at` trigger
-  (`supabase/migrations/20261101090000_change_request_reject.sql`), not
+  (`supabase/migrations/20261103144811_change_request_reject.sql`), not
   supplied by the caller. Covered by
   `tests/integration/reject-change-request.test.ts` (TC-191-01 to TC-191-05)
   against a real database. `seedDecision()` in
@@ -979,3 +979,48 @@ the meantime.*
   two tests; `tests/unit/approve-change-request-policy.test.ts`) and by hand
   on 30/10/2026.
 - **Status:** Replaced (SCRUM-190, branch `scrum-190-approve-change-request`).
+
+### D-28 — A withdrawal is not yet followed by its notification
+
+- **Kind:** In-sprint stand-in (withdrawing is SCRUM-184, in Sprint 4, in
+  review as PR #167)
+- **Added by:** SCRUM-201 AC4 (TC-201-07 to TC-201-09) — branch
+  `notify-attendee`
+- **Waiting on:** SCRUM-184 (`withdrawRegistration`, PR #167)
+- **Where:**
+  - `src/domain/event-registration/service.ts` —
+    `notifyRegistrationWithdrawn()` (`DUMMY(SCRUM-184) D-28`): built, but
+    nothing in the app calls it yet
+  - `tests/integration/notify-registration-outcome.test.ts` — `withdraw()`
+    (`DUMMY(SCRUM-184) D-28`)
+  - `tests/unit/notify-registration-outcome.test.ts` — the AC4 block
+    (`DUMMY(SCRUM-184) D-28`)
+  - `scripts/seed-scrum201.mjs` — the AC4 events, seeded for the manual run
+    once the Withdraw action is on main (`DUMMY(SCRUM-184) D-28`)
+- **What is real and what is faked:** the notification itself is real: its
+  type is allowed by `notifications_type_known`, the message names the event,
+  its date (DD/MM/YYYY) and the reference, it links to the attendee's own
+  event page, and a failed insert never throws. Only the withdrawal is faked:
+  `withdraw()` sets `event_registration.status` to `withdrawn`, as
+  `withdrawRegistrationRow` will, then calls `notifyRegistrationWithdrawn()`
+  as `withdrawRegistration` will once its update has gone through. TC-201-07
+  runs against this and counts. **TC-201-08 and TC-201-09 do not**: they test
+  that nothing is sent when the withdrawal does not happen (a cancelled
+  confirm, already Withdrawn, the event has taken place, someone else's
+  registration, the losing one of two withdrawals sent together), which is
+  decided by `withdrawRegistration`'s own refusals. Faking those would test
+  the dummy, not the code, so they stay untested until the swap.
+- **To replace:** ~~once PR #167 is on main, merge main into this branch (or
+  the story's own follow-up) and, in `withdrawRegistration`, call
+  `notifyRegistrationWithdrawn(attendeeId, event as EventRow, withdrawn)`
+  after the `if (!withdrawn)` refusal and before the return, so only an
+  update that changed the row notifies. Have `withdraw()` in the integration
+  test call `withdrawRegistration`, add TC-201-08 and TC-201-09 to the unit
+  and integration tests, run them and the manual cases, remove the markers
+  and mark this entry Replaced.~~ Done: `withdrawRegistration` calls
+  `notifyRegistrationWithdrawn()` (now private to the service) once its
+  update has returned the row; the integration test's `withdraw()` and the
+  unit AC4 block go through `withdrawRegistration`; TC-201-07 re-run and
+  TC-201-08 and TC-201-09 added (automated) on branch `notify-attendee`; the
+  seed script's AC4 events are withdrawn on the page. The markers are removed.
+- **Status:** Replaced (SCRUM-184, PR #167, merged into `notify-attendee`).

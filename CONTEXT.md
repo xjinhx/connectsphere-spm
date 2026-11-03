@@ -120,7 +120,7 @@ _Avoid_: broken, written off, unavailable units (that word is one of the three s
 An arrangement (venue, equipment, technical support or registration) the coordinator has marked as one the event can't be confirmed without (SCRUM-100, SCRUM-102).
 
 **Complete** (of an arrangement):
-Venue is complete when the event has at least one confirmed booking, no Pending booking line and no affected booking. Equipment is complete when every line is fully reserved, and is never complete when nothing is requested (SCRUM-102).
+Venue is complete when the event has at least one confirmed booking, no Pending booking line and no affected booking. Equipment is complete when every line is fully reserved, and is never complete when nothing is requested (SCRUM-102). Registration is complete once its start date, end date and capacity are all set; technical support is not recorded in Release 1, so it is shown as "Not recorded in ConnectSphere". Both are display only on the full event record (SCRUM-109 AC3): confirmation never blocks on them.
 
 ### Completion
 

@@ -20,6 +20,9 @@ vi.mock('@/lib/supabase/eventRegistrations', () => ({
   fetchRegistrationById: vi.fn(),
   withdrawRegistrationRow: vi.fn(),
 }));
+// SCRUM-201 notifies the attendee from withdrawRegistration; that is tested in
+// notify-registration-outcome.test.ts, so here it is kept off the database.
+vi.mock('@/domain/notification/service', () => ({ notifyBestEffort: vi.fn() }));
 
 import {
   countRegisteredRegistrations,
