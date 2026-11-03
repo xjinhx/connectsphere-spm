@@ -691,7 +691,7 @@ switch them the next time they edit those files.
   Keep the landing page first (the `ROLE_NAV` test in
   `tests/unit/shared-header.test.ts` checks it). Re-run TC-249-15 to TC-249-17
   (AC4) and TC-249-25 to TC-249-27 (AC6) for that role.
-- **Status:** Partly replaced. **Technical Support Staff:** replaced by
+- **Status:** Replaced. **Technical Support Staff:** replaced by
   SCRUM-254 (branch `tech-support-nav`): Equipment requests, Equipment
   catalogue, Venues; marker removed. The SCRUM-164 tabs (`TechnicalSupportNav`)
   were removed in the same change, since the nav bar now does their job on
@@ -718,7 +718,14 @@ switch them the next time they edit those files.
   `calendar` pages) already existed from earlier sprints with their own Add
   venue/Edit venue/View calendar links and back links; this story only added
   the nav entries and the booking request's back link (shown to Venue Staff
-  only). **Other roles:** still active, waiting on SCRUM-252.
+  only). **Event Coordinator Lead:** replaced by SCRUM-252 (branch
+  `lead-navigation`): Unassigned queue (`/assignment-queue`), Coordinators
+  (`/coordinator-overview`), Venues (`/venues`), in that order; marker
+  removed. The AC text names the link as `/coordinators`, a stale path from
+  before SCRUM-233 named its own route (`/coordinator-overview`); the nav
+  links to the real route rather than a duplicate page at the AC's literal
+  path (noted for the Change Log). **Other roles:** none left; every role's
+  entry is replaced.
 
 ### D-21 — An equipment reservation is released by hand
 

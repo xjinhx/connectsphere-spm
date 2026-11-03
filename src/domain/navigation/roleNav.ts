@@ -25,8 +25,14 @@ export const ROLE_NAV: Record<Role, readonly NavItem[]> = {
     { href: '/organisations', label: 'Client organisations' },
     { href: '/equipment', label: 'Equipment' },
   ],
-  // DUMMY(SCRUM-252) D-20: Event Coordinator Lead nav is the landing page only.
-  operations_manager: [{ href: '/assignment-queue', label: 'Assignment queue' }],
+  // SCRUM-252 AC2: Unassigned queue, Coordinators, Venues, in that order.
+  // Coordinators links to /coordinator-overview, SCRUM-233's actual route,
+  // the AC text names the stale /coordinators, which does not exist.
+  operations_manager: [
+    { href: '/assignment-queue', label: 'Unassigned queue' },
+    { href: '/coordinator-overview', label: 'Coordinators' },
+    { href: '/venues', label: 'Venues' },
+  ],
   // SCRUM-253 AC2: Booking requests, Venues, in that order.
   venue_staff: [
     { href: '/booking-queue', label: 'Booking requests' },
