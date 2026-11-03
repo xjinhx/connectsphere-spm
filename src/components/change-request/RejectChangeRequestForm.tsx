@@ -91,7 +91,7 @@ export function RejectChangeRequestForm({
       <div className="flex flex-wrap items-center gap-3">
         <button
           type="submit"
-          disabled={submitting || reason.trim().length === 0}
+          disabled={submitting}
           className="rounded-md bg-[var(--danger)] px-3 py-1.5 text-sm font-medium text-white hover:opacity-90 disabled:opacity-60"
         >
           {submitting ? 'Rejecting...' : 'Confirm rejection'}
