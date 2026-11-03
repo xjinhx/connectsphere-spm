@@ -127,3 +127,20 @@ export async function approveChangeRequestRow(params: {
     p_drop_to_planning: params.dropToPlanning,
   });
 }
+
+/**
+ * SCRUM-191 AC1 - sets status='rejected' and stores the decision reason.
+ * decided_at is stamped by the database (change_request_set_decided_at trigger),
+ * so it is never caller-supplied. `.eq('status', 'pending')` makes the Pending
+ * check race-safe: if the request was decided between the caller's read and
+ * this write, no row matches and `data` comes back null.
+ */
+export async function rejectChangeRequestRow(id: string, values: { decided_by: string; decision_reason: string }) {
+  return createAdminClient()
+    .from('change_request')
+    .update({ status: 'rejected', decided_by: values.decided_by, decision_reason: values.decision_reason })
+    .eq('id', id)
+    .eq('status', 'pending')
+    .select(CHANGE_REQUEST_COLUMNS)
+    .maybeSingle();
+}

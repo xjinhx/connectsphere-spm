@@ -55,6 +55,10 @@ export const NOTIFICATION_TYPES = [
   // SCRUM-190 AC5: every attendee with a Registered registration, told an
   // approved change altered the details they are shown of the event.
   'event_details_changed',
+  // SCRUM-191 AC3: the organiser who raised it, told their change request was
+  // rejected, with the reason. Its own type, not 'request_rejected' (which
+  // means the event request itself was rejected, SCRUM-93).
+  'change_request_rejected',
   // SCRUM-201 AC1: the attendee, told their registration was created, with
   // the event's details and their reference.
   'registration_confirmed',

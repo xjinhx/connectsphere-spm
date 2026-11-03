@@ -165,7 +165,7 @@ async function raiseRequest(event, reason, fields, createdAt = new Date().toISOS
 }
 
 /**
- * DUMMY(SCRUM-190) D-26, DUMMY(SCRUM-191) D-26: stands in for SCRUM-190/191's
+ * D-26 (replaced): stands in for SCRUM-190/191's
  * own write. See docs/dummies.md.
  *
  * Refuses a decision dated before the request's own raiseRequest(createdAt) -
@@ -184,7 +184,14 @@ async function seedDecision({ id, createdAt }, { status, decidedAt, reason }) {
   }
   check(
     `decision ${id}`,
-    await supabase.from('change_request').update({ status, decided_by: coordinator, decided_at: decidedAt, decision_reason: reason }).eq('id', id),
+    await supabase.from('change_request').update({ status, decided_by: coordinator, decision_reason: reason }).eq('id', id),
+  );
+  // decided_at is stamped by the change_request_set_decided_at trigger (SCRUM-191) whenever status
+  // changes, so a date written in the same update would be overwritten with now(). Write it in a
+  // second update that doesn't touch status, which the trigger ignores, to keep the sample date.
+  check(
+    `decision date ${id}`,
+    await supabase.from('change_request').update({ decided_at: decidedAt }).eq('id', id),
   );
 }
 

@@ -5,6 +5,7 @@ import {
   insertChangeRequestFields,
   listChangeRequestFields,
   listChangeRequestsForEvent,
+  rejectChangeRequestRow,
   type ChangeRequestFieldRow,
   type ChangeRequestRow,
 } from '@/lib/supabase/changeRequests';
@@ -27,6 +28,7 @@ import {
   ChangeRequestIdSchema,
   EventRequestIdSchema,
   RaiseChangeRequestInputSchema,
+  RejectChangeRequestInputSchema,
   type ChangeRequestEquipmentItem,
   type ChangeRequestStatus,
   type SelectableChangeRequestField,
@@ -37,6 +39,7 @@ import {
   canDecideChangeRequestFor,
   canRaiseChangeRequest,
   canRaiseChangeRequestFor,
+  isPendingChangeRequest,
   changeAffectsAttendees,
   changeRequestArrangementCauses,
   changeRequestIsSignificant,
@@ -130,8 +133,8 @@ function toSummary(row: ChangeRequestRow, fieldRows: ChangeRequestFieldRow[]): C
       })),
     createdAt: row.created_at,
     // Read back as-is. Written for real by approveChangeRequest below for an
-    // approved decision; DUMMY(SCRUM-191) D-26 remains Active for a rejected
-    // one until that story writes it. See docs/dummies.md.
+    // approved decision; SCRUM-191's rejectChangeRequest writes them for a
+    // rejected one.
     decidedAt: row.decided_at,
     decisionReason: row.decision_reason,
   };
@@ -152,7 +155,7 @@ function toSummary(row: ChangeRequestRow, fieldRows: ChangeRequestFieldRow[]): C
  *
  * decided_by/decided_at/decision_reason are never written here - they
  * belong to the approve/reject stories (approveChangeRequest below, for the
- * approved path; DUMMY(SCRUM-191) D-26 remains Active for the rejected one).
+ * approved path; rejectChangeRequest for the rejected one).
  * See docs/dummies.md.
  */
 export async function raiseChangeRequest(
@@ -480,8 +483,8 @@ async function readChangeRequest(id: string): Promise<{ row: ChangeRequestRow; f
  * AC6 — the organiser who raised it is notified it was approved.
  *
  * Replaces DUMMY(SCRUM-190) D-26 for the approved path: decided_by/
- * decided_at are now written for real here. SCRUM-191's half of D-26 (the
- * rejected path) stays Active until that story writes it.
+ * decided_at are now written for real here. SCRUM-191 writes the rejected path
+ * (rejectChangeRequest).
  */
 export async function approveChangeRequest(
   eventRequestId: string,
@@ -680,6 +683,69 @@ export async function approveChangeRequest(
 
   const { row: decided, fields: decidedFields } = await readChangeRequest(parsedCrId.data);
   return toSummary(decided, decidedFields);
+}
+
+/**
+ * SCRUM-191 - Reject a change request with a reason.
+ *
+ * AC1 - a Pending request becomes Rejected and the reason is stored.
+ * AC2 - nothing here writes to event_request, so none of the requested values
+ * are applied (unlike approveChangeRequest).
+ * AC3 - the organiser who raised it is notified, with the reason.
+ * AC4 - a blank or whitespace-only reason is refused before anything is read.
+ *
+ * Who may reject: the event's currently assigned coordinator only
+ * (canDecideChangeRequestFor), same as approve.
+ */
+export async function rejectChangeRequest(
+  eventRequestId: string,
+  changeRequestId: string,
+  coordinatorId: string,
+  input: unknown,
+): Promise<ChangeRequestSummary> {
+  const parsedEventId = EventRequestIdSchema.safeParse(eventRequestId);
+  if (!parsedEventId.success) throw new NotFoundError('Event request');
+  const parsedCrId = ChangeRequestIdSchema.safeParse(changeRequestId);
+  if (!parsedCrId.success) throw new NotFoundError('Change request');
+
+  // AC4 - validated before anything is read.
+  const parsedInput = RejectChangeRequestInputSchema.safeParse(input);
+  if (!parsedInput.success) {
+    throw new ValidationError('A reason is required to reject a change request.', parsedInput.error.flatten());
+  }
+  const { reason } = parsedInput.data;
+
+  const event = await readRequest(parsedEventId.data);
+  if (!canDecideChangeRequestFor({ coordinatorId: event.coordinator_id }, coordinatorId)) {
+    throw new ForbiddenError('This event is not assigned to you.');
+  }
+
+  const { row: cr } = await readChangeRequest(parsedCrId.data);
+  if (cr.event_request_id !== parsedEventId.data) throw new NotFoundError('Change request');
+  if (!isPendingChangeRequest(cr.status)) throw new ConflictError('This change request has already been decided.');
+
+  const { data: updated, error: updateError } = await rejectChangeRequestRow(parsedCrId.data, {
+    decided_by: coordinatorId,
+    decision_reason: reason,
+  });
+  if (updateError) throw new ValidationError('The change request could not be rejected.', updateError.message);
+  // Decided by someone else between the read above and this write.
+  if (!updated) throw new ConflictError('This change request has already been decided.');
+  const rejectedRow = updated as unknown as ChangeRequestRow;
+
+  // AC3 - best-effort, like every other notification: the rejection is already
+  // saved, so a notification failure must never undo it.
+  await notifyBestEffort({
+    recipientId: cr.organiser_id,
+    type: 'change_request_rejected',
+    eventRequestId: parsedEventId.data,
+    message: `Your change request for "${event.name}" was rejected: ${reason}`,
+  });
+
+  const { data: fieldRows, error: fieldsError } = await listChangeRequestFields([rejectedRow.id]);
+  if (fieldsError) throw new ValidationError('The changed fields could not be read.', fieldsError.message);
+
+  return toSummary(rejectedRow, (fieldRows ?? []) as unknown as ChangeRequestFieldRow[]);
 }
 
 export { ChangeRequestIdSchema };

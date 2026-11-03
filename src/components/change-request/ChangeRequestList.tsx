@@ -1,6 +1,7 @@
 import { formatChangeRequestValue, type ChangeRequestValueNames } from '@/domain/change-request/policy';
 import { CHANGE_REQUEST_FIELD_LABELS, CHANGE_REQUEST_STATUS_LABELS } from '@/domain/change-request/schema';
 import type { ChangeRequestSummary } from '@/domain/change-request/service';
+import { RejectChangeRequestForm } from '@/components/change-request/RejectChangeRequestForm';
 import { formatSingaporeDateTime } from '@/domain/shared/dates';
 
 /**
@@ -19,10 +20,13 @@ import { formatSingaporeDateTime } from '@/domain/shared/dates';
 export function ChangeRequestList({
   changeRequests,
   valueNames,
+  rejectFor,
 }: {
   changeRequests: ChangeRequestSummary[];
   /** SCRUM-274: names for the list fields (accessibility features), so they read by name, not id. */
   valueNames?: ChangeRequestValueNames;
+  /** SCRUM-191: the event id, to offer the Reject form on each Pending request (the assigned coordinator only); omit for a read-only list. */
+  rejectFor?: string;
 }) {
   if (changeRequests.length === 0) return null;
 
@@ -57,6 +61,11 @@ export function ChangeRequestList({
                 Decided {formatSingaporeDateTime(cr.decidedAt)}
                 {cr.decisionReason ? ` — ${cr.decisionReason}` : ''}
               </p>
+            ) : null}
+            {rejectFor && cr.status === 'pending' ? (
+              <div className="mt-3">
+                <RejectChangeRequestForm eventRequestId={rejectFor} changeRequestId={cr.id} />
+              </div>
             ) : null}
           </li>
         ))}

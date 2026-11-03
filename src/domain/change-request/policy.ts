@@ -3,7 +3,7 @@ import type { EventRequestStatus } from '@/domain/event-request/schema';
 import { formatDayMonthYear, isISODate } from '@/domain/shared/dates';
 import { changeCauses, changedKinds } from '@/domain/significant-change/policy';
 import type { ScheduleValues } from '@/domain/significant-change/schema';
-import type { SelectableChangeRequestField } from './schema';
+import type { ChangeRequestStatus, SelectableChangeRequestField } from './schema';
 
 /**
  * SCRUM-187 AC1/AC2/AC5 — which statuses offer the change-request action.
@@ -64,6 +64,14 @@ export function formatChangeRequestValue(
     return value.map(describeEquipmentLine).join(', ');
   }
   return String(value);
+}
+
+/**
+ * SCRUM-190/191 - only a Pending change request can be decided; an approved
+ * or rejected one is final.
+ */
+export function isPendingChangeRequest(status: ChangeRequestStatus): boolean {
+  return status === 'pending';
 }
 
 /**

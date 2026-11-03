@@ -901,7 +901,7 @@ switch them the next time they edit those files.
   writing its decision columns)
 - **Added by:** SCRUM-187 — branch `change-request-raise`
 - **Waiting on:** ~~SCRUM-190 (Approve a change request and apply it)~~,
-  SCRUM-191 (Reject a change request with a reason)
+  ~~SCRUM-191 (Reject a change request with a reason)~~
 - **Where:**
   - `supabase/migrations/20261028090000_change_request.sql` — `change_request`'s
     `decided_by`, `decided_at`, `decision_reason` columns
@@ -925,22 +925,21 @@ switch them the next time they edit those files.
   `tests/integration/change-request.test.ts` now approves through
   `approveChangeRequest()` instead of seeding the decision and writing the
   value by hand (re-run and passed 30/10/2026). The rejected
-  half (`decision_reason`, and `status = 'rejected'`) is still faked —
-  nothing in the app rejects a change request yet — so
-  `tests/integration/change-request.test.ts`'s `seedDecision()` still sets
-  those directly in Postgres for the rejected case. AC7 ("the event shows the
-  new values") was this story's own write, now real (the approved event's
-  fields are updated by `approve_change_request` in the same transaction).
-- **To replace (the rejected half, SCRUM-191's own work):** write
-  `status`/`decided_by`/`decided_at`/`decision_reason` from a reject action,
-  the same shape SCRUM-190 used for approve (a `reject_change_request`
-  Postgres function, mirroring `approve_change_request`, stamping
-  `decided_at` with `now()` inside the function rather than a caller-supplied
-  value, so a decision can never be backdated before its own request). Re-run
-  TC-187-11's rejected case against a request decided through the app, then
-  remove the `DUMMY(SCRUM-191) D-26` markers and mark this entry Replaced.
-- **Status:** Partly replaced (the approved half, by SCRUM-190 — the rejected
-  half stays Active, waiting on SCRUM-191).
+  half was replaced by SCRUM-191 (branch `scrum-191-reject-change-request`):
+  `rejectChangeRequest()` (`src/domain/change-request/service.ts`) writes
+  `status='rejected'`, `decided_by` and `decision_reason` through
+  `rejectChangeRequestRow()` (`src/lib/supabase/changeRequests.ts`), and
+  `decided_at` is stamped by the `change_request_set_decided_at` trigger
+  (`supabase/migrations/20261103144811_change_request_reject.sql`), not
+  supplied by the caller. Covered by
+  `tests/integration/reject-change-request.test.ts` (TC-191-01 to TC-191-05)
+  against a real database. `seedDecision()` in
+  `tests/integration/change-request.test.ts` and `scripts/seed-b6.mjs` still
+  set a decision by hand to build their fixtures; that is test setup, not a
+  stand-in for app behaviour. AC7 ("the event shows the new values") was
+  SCRUM-190's own write, now real.
+- **To replace:** nothing left. Both halves are written by the app.
+- **Status:** Replaced (approved half by SCRUM-190, rejected half by SCRUM-191).
 
 *Originally numbered D-22; renumbered to D-26 during the 2026-10-28 rebase
 onto `main`, since SCRUM-181/182/184 had taken D-22 through D-25 on `main` in

@@ -351,7 +351,11 @@ export default async function ReviewEventRequestPage({
           each field, along with the organiser's reason." The
           'change_requested' notification routes here (notificationHref,
           domain/notification/policy.ts), same list as below. */}
-      <ChangeRequestList changeRequests={changeRequests} valueNames={valueNames} />
+      <ChangeRequestList
+        changeRequests={changeRequests}
+        valueNames={valueNames}
+        rejectFor={request.canManage ? request.id : undefined}
+      />
 
       {/* SCRUM-110 AC1/AC5 — description, internal notes and client contact.
           The edit action only for the assigned coordinator of an event that is
