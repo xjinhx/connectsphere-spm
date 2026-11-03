@@ -49,5 +49,8 @@ alter table notifications
     'change_request_approved',
     'arrangement_needs_review',
     'event_details_changed',
+    'registration_confirmed',
+    'registration_refused_full',
+    'registration_withdrawn',
     'change_request_rejected'
   ));
