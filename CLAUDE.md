@@ -180,7 +180,8 @@ trusting this list, and flag it.
   is the only lockfile. Don't use pnpm or yarn.
 - **Language rules:** TypeScript strict mode. Do not introduce `any` or
   unchecked possibly-undefined access
-- **Testing:** Vitest + React Testing Library + Playwright
+- **Testing:** Vitest + React Testing Library + Playwright (Playwright is
+  optional; its CI job is switched off, see "Definition of Done")
 - **CI:** GitHub Actions
 - **Hosting:** Vercel (app) + Supabase (database). See "Supabase" below for
   the local vs. cloud distinction
@@ -303,9 +304,9 @@ out the story; see "Definition of Done" below.
 
 ## Definition of Done
 
-Agreed by the whole Scrum Team at Sprint 4 Planning: the proposal posted on
-Slack on 21/10/2026 got five thumbs-up. The DoD did not change during the
-sprint. This is what actually closes a story. A story that
+Agreed by the whole Scrum Team on Slack on 21/10/2026, after Sprint 4
+Planning (five thumbs-up), before any Sprint 4 work. The DoD did not change
+during the sprint. This is what actually closes a story. A story that
 doesn't meet it is **not** counted toward sprint velocity, is not shown at
 Sprint Review, and returns to the Product Backlog. **There is no partial
 credit**: a nearly-finished story scores zero for the sprint, and merged is
@@ -328,9 +329,10 @@ day (`E2E_ENABLED=false`); the team's decision not to use Playwright for
 Release 1 is recorded on #126 (23/10). It was never a criterion; the required
 gate is the unit and integration suite in CI.
 
-Removed: "It runs from the README instructions" (Sprint 3); "Merged and
-integrated into the Git" and "Merged into main and existing functionality
-still works" (Sprint 4, replaced by the regression and post-merge rows).
+Removed: "It runs from the README instructions" (Sprint 3); "Merged into main
+and existing functionality still works" (Sprint 4, covered by the regression
+and post-merge rows) and "Merged and integrated into the Git" (Sprint 4,
+covered by the review by someone other than the author).
 
 **Automated tests are now part of Done.** A green run is required but not
 enough on its own: the author's manual test before the PR and the reviewer's
