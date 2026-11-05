@@ -43,7 +43,7 @@ story and the role navigation stories meet the Definition of Done, so the
 Increment delivers all 26 core features and every role can reach its pages."
 
 This was the last Sprint before Release 1 was due (Week 12). Planned: 34 items,
-32 stories (71 points after re-estimates) plus bugs SCRUM-257 and SCRUM-258 (no
+32 stories (72 points after re-estimates) plus bugs SCRUM-257 and SCRUM-258 (no
 points). Nine more bugs joined the Sprint (SCRUM-264, 266, 267, 268, 270, 272,
 273, 274, 275). Product Owner: Joshua. Scrum Master: Jinhong.
 
