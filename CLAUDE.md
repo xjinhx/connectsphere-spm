@@ -31,12 +31,14 @@ management in SCRUM-69's permission matrix (customer clarification #52 leaves
 user administration for the team to propose). Use that role; don't add
 another admin-style role without agreeing it with the team first.
 
-## Current sprint scope (Sprint 4, 22 Oct to 3 Nov 2026, closed)
+## Current sprint scope (Sprint 4, 22 Oct to 3 Nov 2026, closed; Release 1 closed out)
 
-**Status at 05/11/2026: Sprint 4 is closed and no sprint is open.** Jira shows
-all 43 items in it Done: 32 stories (72 points) and 11 bugs (no points). When
-the next Sprint is planned, replace this section at that Sprint Planning. Until
-then, the sections below are a record of Sprint 4, not a to-do list.
+**Status at 05/11/2026: Release 1 is closed out.** Sprint 4, the last Sprint
+before Release 1 was due, is closed and no sprint is open. Jira shows all 43
+items in it Done: 32 stories (72 points) and 11 bugs (no points), and every
+epic labelled `release-1` is Done. When the next Sprint is planned, replace this
+section at that Sprint Planning. Until then, the sections below are a record of
+Sprint 4, not a to-do list.
 
 **Sprint goal:** "Complete everything for Release 1: every remaining Release 1
 story and the role navigation stories meet the Definition of Done, so the
