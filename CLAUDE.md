@@ -31,25 +31,31 @@ management in SCRUM-69's permission matrix (customer clarification #52 leaves
 user administration for the team to propose). Use that role; don't add
 another admin-style role without agreeing it with the team first.
 
-## Current sprint scope (Sprint 4, 22 Oct to 3 Nov 2026)
+## Current sprint scope (Sprint 4, 22 Oct to 3 Nov 2026, closed)
+
+**Status at 05/11/2026: Sprint 4 is closed and no sprint is open.** Jira shows
+all 43 items in it Done: 32 stories (72 points) and 11 bugs (no points). When
+the next Sprint is planned, replace this section at that Sprint Planning. Until
+then, the sections below are a record of Sprint 4, not a to-do list.
 
 **Sprint goal:** "Complete everything for Release 1: every remaining Release 1
 story and the role navigation stories meet the Definition of Done, so the
 Increment delivers all 26 core features and every role can reach its pages."
 
-This is the last Sprint before Release 1 is due (Week 12). 34 items: 32
-stories (71 points after re-estimates) plus bugs SCRUM-257 and SCRUM-258 (no
-points). Product Owner: Joshua. Scrum Master: Jinhong.
+This was the last Sprint before Release 1 was due (Week 12). Planned: 34 items,
+32 stories (71 points after re-estimates) plus bugs SCRUM-257 and SCRUM-258 (no
+points). Nine more bugs joined the Sprint (SCRUM-264, 266, 267, 268, 270, 272,
+273, 274, 275). Product Owner: Joshua. Scrum Master: Jinhong.
 
 **Release 1 scope and current sprint scope now line up.** Release 1 is the 26
 core features (the 20 from Week 4 plus the six Week 7 changes), one epic each.
-16 are Done; the other 10 close as their Sprint 4 stories reach Done.
+16 were Done before Sprint 4; Sprint 4's stories were meant to close the other
+10 (check the epics in Jira before quoting a count).
 Everything not in Release 1 sits in one epic, **SCRUM-263 After Release 1**.
 Do not build anything from SCRUM-263.
 
-**In the current sprint** (the Jira sprint board is the list of record). The
-baskets are a suggestion to keep dependent stories together; owners are on
-the board:
+**In Sprint 4** (the Jira sprint board is the list of record). The baskets
+were a suggestion to keep dependent stories together; owners are on the board:
 
 - B1 Equipment availability and reservation (12 pts), incl. SCRUM-167, 173, 170
 - B2 Equipment review, venue filters and the shared header (11 pts), incl.
@@ -63,7 +69,7 @@ the board:
   typing a URL
 - Bugs: SCRUM-257 and SCRUM-258
 
-**Critical path:** SCRUM-173 (reservation table), then 111 (review flag), then
+**Critical path (Sprint 4):** SCRUM-173 (reservation table), then 111 (review flag), then
 190. Also blocking others: 167 (availability), 181 (registration), 177's
 release function, 102's confirmation gate, 249's shared header. If 173 slips,
 the Sprint slips. Review these first.
@@ -85,7 +91,7 @@ the Sprint slips. Review these first.
 - Dates shown to users and written in Jira/evidence are DD/MM/YYYY.
 - **Fallback (checkpoint 27 Oct):** if fewer than half the points are Done or
   In Review, the organiser's export in SCRUM-185 and SCRUM-105 AC6 move out of
-  Release 1.
+  Release 1. Not applied: the Sprint closed with every item Done.
 
 **Carried from Sprint 3 (still in force):**
 
@@ -108,15 +114,18 @@ Singapore clock times on :00, :15, :30 or :45, validated with the shared
 `ClockRangeSchema` (`src/domain/shared/times.ts`). Ranges are half-open: a
 booking ending 12:00 does not clash with one starting 12:00.
 
-**Built in Sprints 1 to 3** (73 Done stories, 164 points; velocity 59, 38,
-70): Authentication, Account Roles / User Profile, Client Organisations, Event
-Request Creation, Draft Event Requests, Event Review & Approval, Coordinator
-Assignment, Venue Catalogue, Venue Booking Approval, Booking Conflict
-Detection, Venue Availability, Venue Search, in-app notifications, the
+**Built in Sprints 1 to 4** (105 Done stories, 236 points; velocity 59, 38,
+70, 72): Authentication, Account Roles / User Profile, Client Organisations,
+Event Request Creation, Draft Event Requests, Event Review & Approval,
+Coordinator Assignment, Venue Catalogue, Venue Booking Approval, Booking
+Conflict Detection, Venue Availability, Venue Search, in-app notifications, the
 15-minute time model, setup and turnaround, holds, multi-venue and
 replacement venues, Operational Safety Check, Event Coordinator Lead,
-assignment notifications, equipment catalogue. Fix bugs in them (see "Bugs");
-extend them only through a story.
+assignment notifications, equipment catalogue (Sprints 1 to 3); equipment
+availability, reservation and review, venue filters, the shared header,
+confirm / complete / cancel, attendee registration, the event record, editing
+and registration list, change requests and role navigation (Sprint 4). Fix
+bugs in them (see "Bugs"); extend them only through a story.
 
 **Reviews:** Jinhong (Scrum Master) and Marcus will review all PRs. First
 review within 24 hours, by anyone other than the author. Marcus never reviews
@@ -215,9 +224,8 @@ called from `domain/`, not written directly there.
    `ConnectSphere_Test_Cases_v3.xlsx` where they exist (e.g. `US-5.1-TC04`).
    Test case IDs and the story-to-SCRUM mapping are fine to take from this
    sheet, but the AC text they're testing against must match the Jira card,
-   not the sheet, if the two disagree. From Sprint 4, automated tests
-   covering every AC are required before merge (see "Definition of Done").
-   From Sprint 2, each developer keeps their stories' test cases in their
+   not the sheet, if the two disagree. Automated tests are not required for
+   Done (see "Definition of Done"). From Sprint 2, each developer keeps their stories' test cases in their
    own Excel file (the Week 4 template, one tab per story, numbered T1,
    T2…), consolidated into one at sprint end; the v3 sheet keeps Sprint 1's
    IDs.
@@ -304,27 +312,22 @@ not Done. Be honest about status rather than optimistic.
 |---|---|---|
 | All acceptance criteria are met | Yes | Sprint 1 |
 | Manually tested against those acceptance criteria | Yes | Sprint 1 |
-| Before merging, automated unit/API tests covering every AC of this story have been written and pass in CI | Yes | Sprint 4 |
-| Before merging, the full automated regression suite (all previous stories' ACs) has been run on the branch and passes, with this story's new tests added to it | Yes | Sprint 4 |
+| Automated tested against those acceptance criteria | **No** (not required) | n/a |
 | Code has been reviewed by someone other than the author | Yes | Sprint 1 |
-| After merging, a reviewer other than the author has manually run an end-to-end test on `main` covering every AC of this story, with screenshot evidence recorded | Yes | Sprint 4 |
 | Required Jira/Slack updates, decisions and evidence recorded in the agreed locations | Yes | Sprint 3 |
+| After merging, the reviewer has done the one look on `main`: one check per AC (R1, R2…) with a screenshot each | Yes | Sprint 4 (changed from the merged-into-main row) |
+| Playwright spec written according to the user story and raised as a small PR | **No** | n/a |
 
-Removed: "It runs from the README instructions" (Sprint 3); "Merged and
+Removed: "It runs from the README instructions" (Sprint 3). "Merged and
 integrated into the Git" and "Merged into main and existing functionality
-still works" (Sprint 4, replaced by the regression and post-merge rows).
+still works" are struck through in the tracker, the second as a Sprint 4
+proposed change; the post-merge check replaces them.
 
-**Automated tests are now part of Done.** A green run is required but not
-enough on its own: the author's manual test before the PR and the reviewer's
-end-to-end test on `main` are both still needed.
-
-- Every AC on the Jira card needs at least one automated test before merge.
-  Name tests by test case ID (e.g. `SCRUM-173 AC1 T1`).
-- Run the whole suite (`npm test`) after merging `main` into your branch. CI
-  also runs it on every PR. If an older story's test breaks, fix your code or
-  log a Bug against that story; never delete or weaken the test.
-- Where an AC depends on a dummy, the automated test runs against the dummy
-  and counts only if it exercises the behaviour.
+**Automated tests are not part of Done.** If you write them, name them by test
+case ID (e.g. `SCRUM-173 AC1 T1`). CI runs `npm test` on every PR; if an older
+story's test breaks, fix your code or log a Bug against that story, and never
+delete or weaken the test. Where an AC depends on a dummy, a test against the
+dummy counts only if it exercises the behaviour.
 
 **Manual testing does not need a screen.** Testing a story through its
 function or API (for example a request made with a signed-in session and
@@ -332,15 +335,13 @@ checked against the stored row) counts as manual testing against its
 acceptance criteria. A backend-only story is not held back from Done just
 because no page shows it yet (professor consultation, 15 Sep 2026).
 
-**Before the PR (author).** Run every automated and manual test case for the
-story and upload the evidence to the Jira ticket: screenshots pasted into a
-comment (not attached, so they can be annotated), each labelled with its AC
-and test case number (e.g. AC1 T1).
+**Before the PR (author).** Run every manual test case for the story and put
+the evidence on the PR: screenshots, each labelled with its AC and test case
+number (e.g. AC1 T1).
 
-**After the merge (the reviewer who merged it).** Re-test every AC end-to-end
-on `main`, re-run the hand-tested cases of any Done story the change touches,
-and post the DoD comment on the Jira ticket with labelled screenshots. Only
-then does the story move to Done.
+**After the merge (the reviewer).** Do the one look on `main`: one check per
+AC (R1, R2…) with a screenshot each, and post the DoD checklist and
+screenshots on the PR. Only then does the story move to Done.
 
 **Board statuses:** To Do → In Progress → In Review → Merged - Pending
 Verification → Done.
