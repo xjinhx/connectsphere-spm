@@ -68,7 +68,7 @@ export async function listChangeRequestFields(changeRequestIds: string[]) {
 // SCRUM-190 — Approve a change request and apply it
 // ---------------------------------------------------------------------------
 
-/** AC1/AC2/AC4/AC5/AC6 — the one request being decided. */
+/** SCRUM-190 AC1/AC2/AC4/AC5/AC6 — the one request being decided; SCRUM-188 AC1 — and the one opened from its notification or the event page. */
 export async function fetchChangeRequestById(id: string) {
   return createAdminClient().from('change_request').select(CHANGE_REQUEST_COLUMNS).eq('id', id).maybeSingle();
 }
@@ -126,4 +126,21 @@ export async function approveChangeRequestRow(params: {
     p_reservation_cause: params.reservationCause,
     p_drop_to_planning: params.dropToPlanning,
   });
+}
+
+/**
+ * SCRUM-191 AC1 - sets status='rejected' and stores the decision reason.
+ * decided_at is stamped by the database (change_request_set_decided_at trigger),
+ * so it is never caller-supplied. `.eq('status', 'pending')` makes the Pending
+ * check race-safe: if the request was decided between the caller's read and
+ * this write, no row matches and `data` comes back null.
+ */
+export async function rejectChangeRequestRow(id: string, values: { decided_by: string; decision_reason: string }) {
+  return createAdminClient()
+    .from('change_request')
+    .update({ status: 'rejected', decided_by: values.decided_by, decision_reason: values.decision_reason })
+    .eq('id', id)
+    .eq('status', 'pending')
+    .select(CHANGE_REQUEST_COLUMNS)
+    .maybeSingle();
 }

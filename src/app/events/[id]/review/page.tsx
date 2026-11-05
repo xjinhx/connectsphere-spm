@@ -45,7 +45,10 @@ import {
   type ClarificationExchange,
 } from '@/domain/clarification/service';
 import { getReviewDetail, type ReviewDetail } from '@/domain/review/service';
+import { getVenueRequirementOptions } from '@/domain/event-request/service';
 import { canBeApproved, canBeRejected, canRequestClarification } from '@/domain/review/policy';
+import { ChangeRequestList } from '@/components/change-request/ChangeRequestList';
+import { listChangeRequestsForCoordinator } from '@/domain/change-request/service';
 import { ForbiddenError, NotFoundError } from '@/domain/shared/errors';
 import { isActionPermitted } from '@/domain/identity/permissions';
 import { getCurrentActor } from '@/lib/auth/currentActor';
@@ -155,6 +158,20 @@ export default async function ReviewEventRequestPage({
   const affectedBookings = await listAffectedBookings(request.id);
   // SCRUM-231 AC1-AC3, read for the same reason after getReviewDetail.
   const venueBookings = await listEventVenueBookings(request.id, actor.userId);
+  // SCRUM-188 AC1 — every change request raised against this event, for the
+  // assigned coordinator (or the Lead viewing read-only, SCRUM-232 AC5), read
+  // only now for the same reason as the two reads above. The same
+  // ChangeRequestList the organiser's own /events/<id> page uses, so opening
+  // it here or from the 'change_requested' notification shows the current
+  // vs. proposed value for each field and the reason, not a second view.
+  const [changeRequests, { accessibilityFeatures }] = await Promise.all([
+    listChangeRequestsForCoordinator(request.id, { userId: actor.userId, roles: actor.roles }),
+    // SCRUM-274: the accessibility features list, to show a request's features by name.
+    getVenueRequirementOptions(),
+  ]);
+  const valueNames = {
+    accessibilityFeatures: new Map(accessibilityFeatures.map((feature) => [feature.id, feature.name])),
+  };
 
   // SCRUM-142 AC1/AC2 — a venue can only be requested once the event is
   // Approved or in Planning. Fetched only when
@@ -327,6 +344,18 @@ export default async function ReviewEventRequestPage({
           <Row label="Submitted" value={formatSingaporeDateTime(request.submittedAt)} />
         ) : null}
       </dl>
+
+      {/* SCRUM-188 AC1 — "given a pending change request exists for my
+          event, when I open it from its notification or from the event
+          page, then the current value and the requested value are shown for
+          each field, along with the organiser's reason." The
+          'change_requested' notification routes here (notificationHref,
+          domain/notification/policy.ts), same list as below. */}
+      <ChangeRequestList
+        changeRequests={changeRequests}
+        valueNames={valueNames}
+        rejectFor={request.canManage ? request.id : undefined}
+      />
 
       {/* SCRUM-110 AC1/AC5 — description, internal notes and client contact.
           The edit action only for the assigned coordinator of an event that is

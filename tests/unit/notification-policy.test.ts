@@ -35,6 +35,14 @@ describe('notificationHref', () => {
     );
   });
 
+  it('SCRUM-188 AC1 TC-188-02 routes a change request (coordinator-facing) to the review page, where its detail is shown', () => {
+    expect(notificationHref({ type: 'change_requested', eventRequestId })).toBe('/events/event-1/review');
+  });
+
+  it("SCRUM-188 AC1 TC-188-02 leaves the organiser's 'change request approved' on the plain event page", () => {
+    expect(notificationHref({ type: 'change_request_approved', eventRequestId })).toBe('/events/event-1');
+  });
+
   it('routes an organiser-facing type (e.g. request_rejected) to the plain event page', () => {
     expect(notificationHref({ type: 'request_rejected', eventRequestId })).toBe(
       '/events/event-1',

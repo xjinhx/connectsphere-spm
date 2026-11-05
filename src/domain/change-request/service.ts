@@ -5,16 +5,20 @@ import {
   insertChangeRequestFields,
   listChangeRequestFields,
   listChangeRequestsForEvent,
+  rejectChangeRequestRow,
   type ChangeRequestFieldRow,
   type ChangeRequestRow,
 } from '@/lib/supabase/changeRequests';
 import { fetchEventRequestById, type EventRequestRow } from '@/lib/supabase/eventRequests';
 import { fetchRegisteredAttendeeIds } from '@/lib/supabase/eventRegistrations';
+import { isCurrentCoordinator } from '@/domain/assignment/policy';
 import { canViewRequest } from '@/domain/event-request/policy';
-import { finishedEventNotice, isFinishedEvent } from '@/domain/event-information/policy';
+import { NOT_ASSIGNED_MESSAGE, finishedEventNotice, isFinishedEvent } from '@/domain/event-information/policy';
 import { timeRangeIssues } from '@/domain/event-request/schema';
 import type { ScheduleValues } from '@/domain/significant-change/schema';
 import { RoomLayoutSchema, type RoomLayout } from '@/domain/venues/schema';
+import { isActionPermitted } from '@/domain/identity/permissions';
+import type { Role } from '@/domain/identity/roles';
 import { notifyBestEffort } from '@/domain/notification/service';
 import { ConflictError, ForbiddenError, NotFoundError, ValidationError } from '@/domain/shared/errors';
 import { fromDatabaseTime } from '@/domain/shared/times';
@@ -24,6 +28,7 @@ import {
   ChangeRequestIdSchema,
   EventRequestIdSchema,
   RaiseChangeRequestInputSchema,
+  RejectChangeRequestInputSchema,
   type ChangeRequestEquipmentItem,
   type ChangeRequestStatus,
   type SelectableChangeRequestField,
@@ -34,6 +39,7 @@ import {
   canDecideChangeRequestFor,
   canRaiseChangeRequest,
   canRaiseChangeRequestFor,
+  isPendingChangeRequest,
   changeAffectsAttendees,
   changeRequestArrangementCauses,
   changeRequestIsSignificant,
@@ -127,8 +133,8 @@ function toSummary(row: ChangeRequestRow, fieldRows: ChangeRequestFieldRow[]): C
       })),
     createdAt: row.created_at,
     // Read back as-is. Written for real by approveChangeRequest below for an
-    // approved decision; DUMMY(SCRUM-191) D-26 remains Active for a rejected
-    // one until that story writes it. See docs/dummies.md.
+    // approved decision; SCRUM-191's rejectChangeRequest writes them for a
+    // rejected one.
     decidedAt: row.decided_at,
     decisionReason: row.decision_reason,
   };
@@ -149,7 +155,7 @@ function toSummary(row: ChangeRequestRow, fieldRows: ChangeRequestFieldRow[]): C
  *
  * decided_by/decided_at/decision_reason are never written here - they
  * belong to the approve/reject stories (approveChangeRequest below, for the
- * approved path; DUMMY(SCRUM-191) D-26 remains Active for the rejected one).
+ * approved path; rejectChangeRequest for the rejected one).
  * See docs/dummies.md.
  */
 export async function raiseChangeRequest(
@@ -234,6 +240,82 @@ export async function raiseChangeRequest(
   return toSummary(row, (insertedFields ?? []) as unknown as ChangeRequestFieldRow[]);
 }
 
+export interface ChangeRequestDetail extends ChangeRequestSummary {
+  eventRequestId: string;
+}
+
+/**
+ * SCRUM-188 AC1 — "Given a pending change request exists for my event, when
+ * I open it from its notification or from the event page, then the current
+ * value and the requested value are shown for each field, along with the
+ * organiser's reason."
+ *
+ * "My event" here is the assigned coordinator's: 'change_requested'
+ * notifies the coordinator (SCRUM-187 AC1), and the only event page open to
+ * a coordinator who isn't also the organiser's colleague is their review
+ * page (canViewRequest, event-request/policy.ts, never passes for them) - so
+ * access is the assignment check every other coordinator-only read in this
+ * codebase uses (isCurrentCoordinator), not canViewRequest.
+ *
+ * Takes the change request id alone (plus the actor), not an event request
+ * id too: the event the request belongs to is read off the change_request
+ * row itself, so there is only one id to get wrong, not two that could
+ * disagree.
+ *
+ * AC2/AC3 (the cross-event change-request queue) are out of Release 1 per
+ * CL-50 (moved to SCRUM-63) and are not built here.
+ */
+export async function getChangeRequestDetail(
+  changeRequestId: string,
+  actorId: string,
+): Promise<ChangeRequestDetail> {
+  const parsedId = ChangeRequestIdSchema.safeParse(changeRequestId);
+  if (!parsedId.success) throw new NotFoundError('Change request');
+
+  const { data: found, error } = await fetchChangeRequestById(parsedId.data);
+  if (error) {
+    throw new ValidationError('The change request could not be read.', error.message);
+  }
+  if (!found) throw new NotFoundError('Change request');
+  const row = found as unknown as ChangeRequestRow;
+
+  const event = await readRequest(row.event_request_id);
+
+  // TC-188-03 — refused outright (Forbidden), same reasoning as every other
+  // "not yours" coordinator-only read (event-information/service.ts,
+  // significant-change/service.ts): no field values are disclosed to a
+  // coordinator who isn't currently assigned to this event.
+  if (!isCurrentCoordinator(event.coordinator_id, actorId)) {
+    throw new ForbiddenError(NOT_ASSIGNED_MESSAGE);
+  }
+
+  const { data: fieldRows, error: fieldsError } = await listChangeRequestFields([row.id]);
+  if (fieldsError) {
+    throw new ValidationError('The changed fields could not be read.', fieldsError.message);
+  }
+  const fields = (fieldRows ?? []) as unknown as ChangeRequestFieldRow[];
+
+  return { ...toSummary(row, fields), eventRequestId: row.event_request_id };
+}
+
+/** Shared by listChangeRequests and listChangeRequestsForCoordinator, once each has decided the caller may see this event's change requests at all. */
+async function readSummariesForEvent(eventRequestId: string): Promise<ChangeRequestSummary[]> {
+  const { data: requestRows, error: requestsError } = await listChangeRequestsForEvent(eventRequestId);
+  if (requestsError) {
+    throw new ValidationError('The change requests could not be read.', requestsError.message);
+  }
+  const requests = (requestRows ?? []) as unknown as ChangeRequestRow[];
+  if (requests.length === 0) return [];
+
+  const { data: fieldRows, error: fieldsError } = await listChangeRequestFields(requests.map((r) => r.id));
+  if (fieldsError) {
+    throw new ValidationError('The changed fields could not be read.', fieldsError.message);
+  }
+  const fields = (fieldRows ?? []) as unknown as ChangeRequestFieldRow[];
+
+  return requests.map((row) => toSummary(row, fields));
+}
+
 /**
  * AC6 — "Given I have raised change requests, when I open my event, then
  * each is listed with what was asked, its status, the decision date and any
@@ -265,20 +347,34 @@ export async function listChangeRequests(
     throw new NotFoundError('Event request');
   }
 
-  const { data: requestRows, error: requestsError } = await listChangeRequestsForEvent(parsedId.data);
-  if (requestsError) {
-    throw new ValidationError('The change requests could not be read.', requestsError.message);
-  }
-  const requests = (requestRows ?? []) as unknown as ChangeRequestRow[];
-  if (requests.length === 0) return [];
+  return readSummariesForEvent(parsedId.data);
+}
 
-  const { data: fieldRows, error: fieldsError } = await listChangeRequestFields(requests.map((r) => r.id));
-  if (fieldsError) {
-    throw new ValidationError('The changed fields could not be read.', fieldsError.message);
-  }
-  const fields = (fieldRows ?? []) as unknown as ChangeRequestFieldRow[];
+/**
+ * SCRUM-188 AC1 — "the event page" half of opening a pending change request,
+ * for whoever the review page (events/[id]/review) already let in: the
+ * event's assigned coordinator, or (SCRUM-232 AC5) an Event Coordinator Lead
+ * viewing read-only. Same rule getReviewDetail enforces (review/service.ts)
+ * rather than canViewRequest, which never passes for a coordinator who isn't
+ * also an organisation colleague.
+ */
+export async function listChangeRequestsForCoordinator(
+  eventRequestId: string,
+  actor: { userId: string; roles: readonly Role[] },
+): Promise<ChangeRequestSummary[]> {
+  const parsedId = EventRequestIdSchema.safeParse(eventRequestId);
+  if (!parsedId.success) throw new NotFoundError('Event request');
 
-  return requests.map((row) => toSummary(row, fields));
+  const event = await readRequest(parsedId.data);
+
+  if (
+    !isCurrentCoordinator(event.coordinator_id, actor.userId) &&
+    !isActionPermitted(actor.roles, 'coordinator_assignment')
+  ) {
+    throw new ForbiddenError(NOT_ASSIGNED_MESSAGE);
+  }
+
+  return readSummariesForEvent(parsedId.data);
 }
 
 // -----------------------------------------------------------------------------
@@ -387,8 +483,8 @@ async function readChangeRequest(id: string): Promise<{ row: ChangeRequestRow; f
  * AC6 — the organiser who raised it is notified it was approved.
  *
  * Replaces DUMMY(SCRUM-190) D-26 for the approved path: decided_by/
- * decided_at are now written for real here. SCRUM-191's half of D-26 (the
- * rejected path) stays Active until that story writes it.
+ * decided_at are now written for real here. SCRUM-191 writes the rejected path
+ * (rejectChangeRequest).
  */
 export async function approveChangeRequest(
   eventRequestId: string,
@@ -587,6 +683,69 @@ export async function approveChangeRequest(
 
   const { row: decided, fields: decidedFields } = await readChangeRequest(parsedCrId.data);
   return toSummary(decided, decidedFields);
+}
+
+/**
+ * SCRUM-191 - Reject a change request with a reason.
+ *
+ * AC1 - a Pending request becomes Rejected and the reason is stored.
+ * AC2 - nothing here writes to event_request, so none of the requested values
+ * are applied (unlike approveChangeRequest).
+ * AC3 - the organiser who raised it is notified, with the reason.
+ * AC4 - a blank or whitespace-only reason is refused before anything is read.
+ *
+ * Who may reject: the event's currently assigned coordinator only
+ * (canDecideChangeRequestFor), same as approve.
+ */
+export async function rejectChangeRequest(
+  eventRequestId: string,
+  changeRequestId: string,
+  coordinatorId: string,
+  input: unknown,
+): Promise<ChangeRequestSummary> {
+  const parsedEventId = EventRequestIdSchema.safeParse(eventRequestId);
+  if (!parsedEventId.success) throw new NotFoundError('Event request');
+  const parsedCrId = ChangeRequestIdSchema.safeParse(changeRequestId);
+  if (!parsedCrId.success) throw new NotFoundError('Change request');
+
+  // AC4 - validated before anything is read.
+  const parsedInput = RejectChangeRequestInputSchema.safeParse(input);
+  if (!parsedInput.success) {
+    throw new ValidationError('A reason is required to reject a change request.', parsedInput.error.flatten());
+  }
+  const { reason } = parsedInput.data;
+
+  const event = await readRequest(parsedEventId.data);
+  if (!canDecideChangeRequestFor({ coordinatorId: event.coordinator_id }, coordinatorId)) {
+    throw new ForbiddenError('This event is not assigned to you.');
+  }
+
+  const { row: cr } = await readChangeRequest(parsedCrId.data);
+  if (cr.event_request_id !== parsedEventId.data) throw new NotFoundError('Change request');
+  if (!isPendingChangeRequest(cr.status)) throw new ConflictError('This change request has already been decided.');
+
+  const { data: updated, error: updateError } = await rejectChangeRequestRow(parsedCrId.data, {
+    decided_by: coordinatorId,
+    decision_reason: reason,
+  });
+  if (updateError) throw new ValidationError('The change request could not be rejected.', updateError.message);
+  // Decided by someone else between the read above and this write.
+  if (!updated) throw new ConflictError('This change request has already been decided.');
+  const rejectedRow = updated as unknown as ChangeRequestRow;
+
+  // AC3 - best-effort, like every other notification: the rejection is already
+  // saved, so a notification failure must never undo it.
+  await notifyBestEffort({
+    recipientId: cr.organiser_id,
+    type: 'change_request_rejected',
+    eventRequestId: parsedEventId.data,
+    message: `Your change request for "${event.name}" was rejected: ${reason}`,
+  });
+
+  const { data: fieldRows, error: fieldsError } = await listChangeRequestFields([rejectedRow.id]);
+  if (fieldsError) throw new ValidationError('The changed fields could not be read.', fieldsError.message);
+
+  return toSummary(rejectedRow, (fieldRows ?? []) as unknown as ChangeRequestFieldRow[]);
 }
 
 export { ChangeRequestIdSchema };
