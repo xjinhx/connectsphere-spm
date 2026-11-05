@@ -355,9 +355,10 @@ comment (not attached, so they can be annotated), each labelled with its AC
 and test case number (e.g. AC1 T1).
 
 **After the merge (the reviewer who merged it).** Re-test every AC end-to-end
-on `main`, re-run the hand-tested cases of any Done story the change touches,
-and post the DoD checklist and labelled screenshots on the PR. Only then
-does the story move to Done.
+on `main` and post the DoD checklist and labelled screenshots on the PR. A bug
+found at this step is flagged on Slack and logged as a Jira Bug ticket (see
+"Bugs"), assigned to the story's author. Only then does the story move to
+Done.
 
 **Board statuses:** To Do → In Progress → In Review → Merged - Pending
 Verification → Done.
