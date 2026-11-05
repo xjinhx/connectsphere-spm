@@ -32,9 +32,9 @@ covers the reviewer's end-to-end test on `main`. Worked example: SCRUM-230
    CI is green, every AC on the card has at least one automated test, and the
    author ran the full suite (`npm test`) on the branch after merging `main`
    into it. The localhost isn't opened at this stage — the screenshots and
-   evidence already on the PR stand in for a live check. Opening localhost now
-   would just be redoing the author's own manual testing, not independent
-   review.
+   evidence already in the PR and the Jira comments stand in for a live check.
+   Opening localhost now would just be redoing the author's own manual
+   testing, not independent review.
 
 ## After merge
 

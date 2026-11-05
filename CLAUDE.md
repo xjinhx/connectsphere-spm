@@ -347,8 +347,9 @@ acceptance criteria. A backend-only story is not held back from Done just
 because no page shows it yet (professor consultation, 15 Sep 2026).
 
 **Before the PR (author).** Run every automated and manual test case for the
-story and put the evidence on the PR: screenshots, each labelled with its AC and test
-case number (e.g. AC1 T1).
+story and upload the evidence to the Jira ticket: screenshots pasted into a
+comment (not attached, so they can be annotated), each labelled with its AC
+and test case number (e.g. AC1 T1).
 
 **After the merge (the reviewer who merged it).** Re-test every AC end-to-end
 on `main`, re-run the hand-tested cases of any Done story the change touches,
