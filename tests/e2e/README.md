@@ -4,8 +4,9 @@ The real pages in a real browser, clicked through the way a user would. They
 sit alongside the unit and integration tests (Vitest) and run on every push and
 pull request as their own CI job.
 
-These are optional. Playwright was trialled on 23/10 and is not a Definition of
-Done criterion; the required gate is the unit and integration suite (`npm test`).
+These are optional. Their CI job was set up on 22/10 (#123) and switched off the
+same day (`E2E_ENABLED=false`). Playwright is not a Definition of Done criterion;
+the required gate is the unit and integration suite (`npm test`).
 
 ## Run them locally
 

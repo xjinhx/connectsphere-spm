@@ -323,8 +323,9 @@ not Done. Be honest about status rather than optimistic.
 | Playwright spec written according to the user story and raised as a small PR | No (not compulsory) | n/a |
 
 Playwright was part of the 21/10 proposal as something to trial, not a
-requirement. A Playwright regression run was tried on 23/10 and not made a
-criterion; the required gate is the unit and integration suite in CI.
+requirement. Its CI job was set up on 22/10 (#123) and switched off the same
+day (`E2E_ENABLED=false`), so it was never a criterion; the required gate is
+the unit and integration suite in CI.
 
 Removed: "It runs from the README instructions" (Sprint 3); "Merged and
 integrated into the Git" and "Merged into main and existing functionality
