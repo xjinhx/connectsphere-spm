@@ -5,7 +5,8 @@ sit alongside the unit and integration tests (Vitest) and run on every push and
 pull request as their own CI job.
 
 These are optional. Their CI job was set up on 22/10 (#123) and switched off the
-same day (`E2E_ENABLED=false`). Playwright is not a Definition of Done criterion;
+same day (`E2E_ENABLED=false`), and the decision not to use them for Release 1
+is recorded on #126 (23/10). Playwright is not a Definition of Done criterion;
 the required gate is the unit and integration suite (`npm test`).
 
 ## Run them locally
