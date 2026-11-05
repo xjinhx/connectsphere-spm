@@ -25,5 +25,6 @@ SCRUM-<key> — <story title, as on the Jira card>
 - [ ] Every commit starts with `SCRUM-<key>:`
 - [ ] `main` merged in, conflicts resolved
 - [ ] Manually tested against every AC above
+- [ ] Automated tests cover every AC above, and the full suite (`npm test`) passes on this branch with `main` merged in
 - [ ] Added or replaced a dummy? `DUMMY(...)` markers and `docs/dummies.md` updated
 - [ ] Changed the database schema? `database.types.ts` regenerated

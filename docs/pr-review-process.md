@@ -31,10 +31,10 @@ covers the reviewer's end-to-end test on `main`. Worked example: SCRUM-230
 4. **Check the Sprint 4 gates, then approve and merge if everything aligns.**
    CI is green, every AC on the card has at least one automated test, and the
    author ran the full suite (`npm test`) on the branch after merging `main`
-   into it. The localhost isn't opened at
-   this stage — the screenshots/evidence already in the PR and Jira comment
-   stand in for a live check. Opening localhost now would just be redoing the
-   author's own manual testing, not independent review.
+   into it. The localhost isn't opened at this stage — the screenshots and
+   evidence already in the PR and the Jira comments stand in for a live check.
+   Opening localhost now would just be redoing the author's own manual
+   testing, not independent review.
 
 ## After merge
 
@@ -50,8 +50,8 @@ covers the reviewer's end-to-end test on `main`. Worked example: SCRUM-230
    Logged in the same compact format as the author's own evidence — one line
    per scenario, action and expected result, with a screenshot — so the log
    reads the same whether it's pre-merge author evidence or post-merge
-   reviewer regression. See SCRUM-226's and SCRUM-230's regression logs for
-   the format.
+   reviewer regression. Post the DoD checklist and the screenshots on the PR.
+   See SCRUM-226's and SCRUM-230's regression logs for the format.
 
 ## Why this order
 

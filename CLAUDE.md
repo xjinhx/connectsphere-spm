@@ -31,25 +31,33 @@ management in SCRUM-69's permission matrix (customer clarification #52 leaves
 user administration for the team to propose). Use that role; don't add
 another admin-style role without agreeing it with the team first.
 
-## Current sprint scope (Sprint 4, 22 Oct to 3 Nov 2026)
+## Current sprint scope (Sprint 4, 22 Oct to 3 Nov 2026, closed; Release 1 closed out)
+
+**Status at 05/11/2026: Release 1 is closed out.** Sprint 4, the last Sprint
+before Release 1 was due, is closed and no sprint is open. Jira shows all 43
+items in it Done: 32 stories (72 points) and 11 bugs (no points), and every
+epic labelled `release-1` is Done. When the next Sprint is planned, replace this
+section at that Sprint Planning. Until then, the sections below are a record of
+Sprint 4, not a to-do list.
 
 **Sprint goal:** "Complete everything for Release 1: every remaining Release 1
 story and the role navigation stories meet the Definition of Done, so the
 Increment delivers all 26 core features and every role can reach its pages."
 
-This is the last Sprint before Release 1 is due (Week 12). 34 items: 32
-stories (71 points after re-estimates) plus bugs SCRUM-257 and SCRUM-258 (no
-points). Product Owner: Joshua. Scrum Master: Jinhong.
+This was the last Sprint before Release 1 was due (Week 12). Planned: 34 items,
+32 stories (72 points after re-estimates) plus bugs SCRUM-257 and SCRUM-258 (no
+points). Nine more bugs joined the Sprint (SCRUM-264, 266, 267, 268, 270, 272,
+273, 274, 275). Product Owner: Joshua. Scrum Master: Jinhong.
 
 **Release 1 scope and current sprint scope now line up.** Release 1 is the 26
 core features (the 20 from Week 4 plus the six Week 7 changes), one epic each.
-16 are Done; the other 10 close as their Sprint 4 stories reach Done.
+16 were Done before Sprint 4; Sprint 4's stories were meant to close the other
+10 (check the epics in Jira before quoting a count).
 Everything not in Release 1 sits in one epic, **SCRUM-263 After Release 1**.
 Do not build anything from SCRUM-263.
 
-**In the current sprint** (the Jira sprint board is the list of record). The
-baskets are a suggestion to keep dependent stories together; owners are on
-the board:
+**In Sprint 4** (the Jira sprint board is the list of record). The baskets
+were a suggestion to keep dependent stories together; owners are on the board:
 
 - B1 Equipment availability and reservation (12 pts), incl. SCRUM-167, 173, 170
 - B2 Equipment review, venue filters and the shared header (11 pts), incl.
@@ -63,7 +71,7 @@ the board:
   typing a URL
 - Bugs: SCRUM-257 and SCRUM-258
 
-**Critical path:** SCRUM-173 (reservation table), then 111 (review flag), then
+**Critical path (Sprint 4):** SCRUM-173 (reservation table), then 111 (review flag), then
 190. Also blocking others: 167 (availability), 181 (registration), 177's
 release function, 102's confirmation gate, 249's shared header. If 173 slips,
 the Sprint slips. Review these first.
@@ -85,7 +93,7 @@ the Sprint slips. Review these first.
 - Dates shown to users and written in Jira/evidence are DD/MM/YYYY.
 - **Fallback (checkpoint 27 Oct):** if fewer than half the points are Done or
   In Review, the organiser's export in SCRUM-185 and SCRUM-105 AC6 move out of
-  Release 1.
+  Release 1. Not applied: the Sprint closed with every item Done.
 
 **Carried from Sprint 3 (still in force):**
 
@@ -108,15 +116,18 @@ Singapore clock times on :00, :15, :30 or :45, validated with the shared
 `ClockRangeSchema` (`src/domain/shared/times.ts`). Ranges are half-open: a
 booking ending 12:00 does not clash with one starting 12:00.
 
-**Built in Sprints 1 to 3** (73 Done stories, 164 points; velocity 59, 38,
-70): Authentication, Account Roles / User Profile, Client Organisations, Event
-Request Creation, Draft Event Requests, Event Review & Approval, Coordinator
-Assignment, Venue Catalogue, Venue Booking Approval, Booking Conflict
-Detection, Venue Availability, Venue Search, in-app notifications, the
+**Built in Sprints 1 to 4** (105 Done stories, 236 points; velocity 59, 38,
+70, 72): Authentication, Account Roles / User Profile, Client Organisations,
+Event Request Creation, Draft Event Requests, Event Review & Approval,
+Coordinator Assignment, Venue Catalogue, Venue Booking Approval, Booking
+Conflict Detection, Venue Availability, Venue Search, in-app notifications, the
 15-minute time model, setup and turnaround, holds, multi-venue and
 replacement venues, Operational Safety Check, Event Coordinator Lead,
-assignment notifications, equipment catalogue. Fix bugs in them (see "Bugs");
-extend them only through a story.
+assignment notifications, equipment catalogue (Sprints 1 to 3); equipment
+availability, reservation and review, venue filters, the shared header,
+confirm / complete / cancel, attendee registration, the event record, editing
+and registration list, change requests and role navigation (Sprint 4). Fix
+bugs in them (see "Bugs"); extend them only through a story.
 
 **Reviews:** Jinhong (Scrum Master) and Marcus will review all PRs. First
 review within 24 hours, by anyone other than the author. Marcus never reviews
@@ -169,7 +180,8 @@ trusting this list, and flag it.
   is the only lockfile. Don't use pnpm or yarn.
 - **Language rules:** TypeScript strict mode. Do not introduce `any` or
   unchecked possibly-undefined access
-- **Testing:** Vitest + React Testing Library + Playwright
+- **Testing:** Vitest + React Testing Library + Playwright (Playwright is
+  optional; its CI job is switched off, see "Definition of Done")
 - **CI:** GitHub Actions
 - **Hosting:** Vercel (app) + Supabase (database). See "Supabase" below for
   the local vs. cloud distinction
@@ -292,9 +304,9 @@ out the story; see "Definition of Done" below.
 
 ## Definition of Done
 
-Agreed by the whole Scrum Team at Sprint 4 Planning (CL-54). The source is the
-**Definition of Done** tab in the team tracker (`IS212_Meeting_Tracker`);
-keep the two in step. This is what actually closes a story. A story that
+Agreed by the whole Scrum Team on Slack on 21/10/2026, after Sprint 4
+Planning (five thumbs-up), before any Sprint 4 work. The DoD did not change
+during the sprint. This is what actually closes a story. A story that
 doesn't meet it is **not** counted toward sprint velocity, is not shown at
 Sprint Review, and returns to the Product Backlog. **There is no partial
 credit**: a nearly-finished story scores zero for the sprint, and merged is
@@ -309,10 +321,18 @@ not Done. Be honest about status rather than optimistic.
 | Code has been reviewed by someone other than the author | Yes | Sprint 1 |
 | After merging, a reviewer other than the author has manually run an end-to-end test on `main` covering every AC of this story, with screenshot evidence recorded | Yes | Sprint 4 |
 | Required Jira/Slack updates, decisions and evidence recorded in the agreed locations | Yes | Sprint 3 |
+| Playwright spec written according to the user story and raised as a small PR | No (not compulsory) | n/a |
 
-Removed: "It runs from the README instructions" (Sprint 3); "Merged and
-integrated into the Git" and "Merged into main and existing functionality
-still works" (Sprint 4, replaced by the regression and post-merge rows).
+Playwright was part of the 21/10 proposal as something to trial, not a
+requirement. Its CI job was set up on 22/10 (#123) and switched off the same
+day (`E2E_ENABLED=false`); the team's decision not to use Playwright for
+Release 1 is recorded on #126 (23/10). It was never a criterion; the required
+gate is the unit and integration suite in CI.
+
+Removed: "It runs from the README instructions" (Sprint 3); "Merged into main
+and existing functionality still works" (Sprint 4, covered by the regression
+and post-merge rows) and "Merged and integrated into the Git" (Sprint 4,
+covered by the review by someone other than the author).
 
 **Automated tests are now part of Done.** A green run is required but not
 enough on its own: the author's manual test before the PR and the reviewer's
@@ -338,9 +358,10 @@ comment (not attached, so they can be annotated), each labelled with its AC
 and test case number (e.g. AC1 T1).
 
 **After the merge (the reviewer who merged it).** Re-test every AC end-to-end
-on `main`, re-run the hand-tested cases of any Done story the change touches,
-and post the DoD comment on the Jira ticket with labelled screenshots. Only
-then does the story move to Done.
+on `main` and post the DoD checklist and labelled screenshots on the PR. A bug
+found at this step is flagged on Slack and logged as a Jira Bug ticket (see
+"Bugs"), assigned to the story's author. Only then does the story move to
+Done.
 
 **Board statuses:** To Do → In Progress → In Review → Merged - Pending
 Verification → Done.
