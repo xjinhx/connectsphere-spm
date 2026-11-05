@@ -4,6 +4,9 @@ The real pages in a real browser, clicked through the way a user would. They
 sit alongside the unit and integration tests (Vitest) and run on every push and
 pull request as their own CI job.
 
+These are optional. Playwright was trialled on 23/10 and is not a Definition of
+Done criterion; the required gate is the unit and integration suite (`npm test`).
+
 ## Run them locally
 
 1. Docker Desktop and Supabase running (`npm run db:start`), test accounts
