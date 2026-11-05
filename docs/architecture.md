@@ -48,6 +48,6 @@ When starting a new story that needs backend logic:
 2. Add `policy.ts` if the feature has permission/business rules.
 3. Add `service.ts` if it needs to read/write data — it should call functions from `src/lib/supabase/`, but never import a Supabase client into `service.ts` directly or build a query (`.from()`, `.select()`, etc.) there itself. The client and the actual query-building both belong inside `src/lib/`; `service.ts` only orchestrates (validates input, calls the lib function, maps errors).
 4. Add the route under `src/app/api/<resource>/route.ts`, using `handleApiError()` from `src/lib/api/handler.ts` for consistent error responses.
-5. Add unit tests under `tests/unit/`, matching official test case IDs where they exist (see `ConnectSphere_Test_Cases_v3.xlsx`). Integration tests go in `tests/integration/` and Playwright specs in `tests/e2e/`. Automated tests are optional for the Definition of Done.
+5. Add unit tests under `tests/unit/`, matching official test case IDs where they exist (see `ConnectSphere_Test_Cases_v3.xlsx`). Integration tests go in `tests/integration/` and Playwright specs in `tests/e2e/`. From Sprint 4, automated tests covering every AC are part of the Definition of Done.
 
 For UI work, create `src/components/<area>/` the first time a page needs a reusable piece — don't create it speculatively ahead of need.

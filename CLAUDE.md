@@ -226,8 +226,9 @@ called from `domain/`, not written directly there.
    `ConnectSphere_Test_Cases_v3.xlsx` where they exist (e.g. `US-5.1-TC04`).
    Test case IDs and the story-to-SCRUM mapping are fine to take from this
    sheet, but the AC text they're testing against must match the Jira card,
-   not the sheet, if the two disagree. Automated tests are not required for
-   Done (see "Definition of Done"). From Sprint 2, each developer keeps their stories' test cases in their
+   not the sheet, if the two disagree. From Sprint 4, automated tests
+   covering every AC are required before merge (see "Definition of Done").
+   From Sprint 2, each developer keeps their stories' test cases in their
    own Excel file (the Week 4 template, one tab per story, numbered T1,
    T2…), consolidated into one at sprint end; the v3 sheet keeps Sprint 1's
    IDs.
@@ -302,9 +303,11 @@ out the story; see "Definition of Done" below.
 
 ## Definition of Done
 
-Agreed by the whole Scrum Team at Sprint 4 Planning (CL-54). The source is the
-**Definition of Done** tab in the team tracker (`IS212_Meeting_Tracker`);
-keep the two in step. This is what actually closes a story. A story that
+Agreed by the whole Scrum Team at Sprint 4 Planning: the proposal posted on
+Slack on 21/10/2026 got five thumbs-up. The **Definition of Done** tab in the
+team tracker (`IS212_Meeting_Tracker`) and CL-54 still show the earlier version
+(automated tests No, no regression row) and need updating to match; keep them
+in step. This is what actually closes a story. A story that
 doesn't meet it is **not** counted toward sprint velocity, is not shown at
 Sprint Review, and returns to the Product Backlog. **There is no partial
 credit**: a nearly-finished story scores zero for the sprint, and merged is
@@ -314,22 +317,28 @@ not Done. Be honest about status rather than optimistic.
 |---|---|---|
 | All acceptance criteria are met | Yes | Sprint 1 |
 | Manually tested against those acceptance criteria | Yes | Sprint 1 |
-| Automated tested against those acceptance criteria | **No** (not required) | n/a |
+| Before merging, automated unit/API tests covering every AC of this story have been written and pass in CI | Yes | Sprint 4 |
+| Before merging, the full automated regression suite (all previous stories' ACs) has been run on the branch and passes, with this story's new tests added to it | Yes | Sprint 4 |
 | Code has been reviewed by someone other than the author | Yes | Sprint 1 |
+| After merging, a reviewer other than the author has manually run an end-to-end test on `main` covering every AC of this story, with screenshot evidence recorded | Yes | Sprint 4 |
 | Required Jira/Slack updates, decisions and evidence recorded in the agreed locations | Yes | Sprint 3 |
-| After merging, the reviewer has done the one look on `main`: one check per AC (R1, R2…) with a screenshot each | Yes | Sprint 4 (changed from the merged-into-main row) |
-| Playwright spec written according to the user story and raised as a small PR | **No** | n/a |
+| Playwright spec written according to the user story and raised as a small PR | No (not compulsory) | n/a |
 
-Removed: "It runs from the README instructions" (Sprint 3). "Merged and
+Removed: "It runs from the README instructions" (Sprint 3); "Merged and
 integrated into the Git" and "Merged into main and existing functionality
-still works" are struck through in the tracker, the second as a Sprint 4
-proposed change; the post-merge check replaces them.
+still works" (Sprint 4, replaced by the regression and post-merge rows).
 
-**Automated tests are not part of Done.** If you write them, name them by test
-case ID (e.g. `SCRUM-173 AC1 T1`). CI runs `npm test` on every PR; if an older
-story's test breaks, fix your code or log a Bug against that story, and never
-delete or weaken the test. Where an AC depends on a dummy, a test against the
-dummy counts only if it exercises the behaviour.
+**Automated tests are now part of Done.** A green run is required but not
+enough on its own: the author's manual test before the PR and the reviewer's
+end-to-end test on `main` are both still needed.
+
+- Every AC on the Jira card needs at least one automated test before merge.
+  Name tests by test case ID (e.g. `SCRUM-173 AC1 T1`).
+- Run the whole suite (`npm test`) after merging `main` into your branch. CI
+  also runs it on every PR. If an older story's test breaks, fix your code or
+  log a Bug against that story; never delete or weaken the test.
+- Where an AC depends on a dummy, the automated test runs against the dummy
+  and counts only if it exercises the behaviour.
 
 **Manual testing does not need a screen.** Testing a story through its
 function or API (for example a request made with a signed-in session and
@@ -337,13 +346,14 @@ checked against the stored row) counts as manual testing against its
 acceptance criteria. A backend-only story is not held back from Done just
 because no page shows it yet (professor consultation, 15 Sep 2026).
 
-**Before the PR (author).** Run every manual test case for the story and put
-the evidence on the PR: screenshots, each labelled with its AC and test case
-number (e.g. AC1 T1).
+**Before the PR (author).** Run every automated and manual test case for the
+story and put the evidence on the PR: screenshots, each labelled with its AC and test
+case number (e.g. AC1 T1).
 
-**After the merge (the reviewer).** Do the one look on `main`: one check per
-AC (R1, R2…) with a screenshot each, and post the DoD checklist and
-screenshots on the PR. Only then does the story move to Done.
+**After the merge (the reviewer who merged it).** Re-test every AC end-to-end
+on `main`, re-run the hand-tested cases of any Done story the change touches,
+and post the DoD checklist and labelled screenshots on the PR. Only then
+does the story move to Done.
 
 **Board statuses:** To Do → In Progress → In Review → Merged - Pending
 Verification → Done.
