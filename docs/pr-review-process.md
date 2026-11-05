@@ -28,13 +28,15 @@ covers the reviewer's end-to-end test on `main`. Worked example: SCRUM-230
      a fix for something already covered elsewhere. Push back on scope
      creep the same as on a missed bug: confirm what's actually required
      against the Jira card before accepting a suggestion.
-4. **Check the Sprint 4 gates, then approve and merge if everything aligns.**
-   CI is green, every AC on the card has at least one automated test, and the
-   author ran the full suite (`npm test`) on the branch after merging `main`
-   into it. The localhost isn't opened at
-   this stage — the screenshots/evidence already in the PR and Jira comment
-   stand in for a live check. Opening localhost now would just be redoing the
-   author's own manual testing, not independent review.
+4. **Check the gates, then approve and merge if everything aligns.**
+   CI is green, `main` is merged into the branch, and the PR carries the
+   author's labelled evidence for every AC on the card. Automated tests are
+   not required by the Definition of Done (tracker tab: "No"), so don't block
+   on them, but if an older test breaks, the author fixes the code or logs a
+   Bug; the test is never deleted or weakened. The localhost isn't opened at
+   this stage — the screenshots/evidence already on the PR stand in for a live
+   check. Opening localhost now would just be redoing the author's own manual
+   testing, not independent review.
 
 ## After merge
 
@@ -50,8 +52,8 @@ covers the reviewer's end-to-end test on `main`. Worked example: SCRUM-230
    Logged in the same compact format as the author's own evidence — one line
    per scenario, action and expected result, with a screenshot — so the log
    reads the same whether it's pre-merge author evidence or post-merge
-   reviewer regression. See SCRUM-226's and SCRUM-230's regression logs for
-   the format.
+   reviewer regression. Post the DoD checklist and the screenshots on the PR.
+   See SCRUM-226's and SCRUM-230's regression logs for the format.
 
 ## Why this order
 
