@@ -149,9 +149,11 @@ Run the unit and integration commands separately, as CI does. Every pull
 request runs both, plus the Playwright specs, lint, typecheck and a production
 build.
 
-**Coverage:** 89.7% of lines in `src/domain` and `src/lib`, measured on
-06/11/2026 with all tests passing (`npx vitest run --coverage
---no-file-parallelism`, local database running). The business rules
+**Coverage:** 90.97% of lines, 94.45% of functions and 81.55% of branches in
+`src/domain` and `src/lib`, with all tests passing (CI run 42203017568,
+06/11/2026, PR #177). CI now uploads this report on every run; a local run with
+`npx vitest run --coverage --no-file-parallelism` and the local database running
+can differ slightly. The business rules
 (`policy.ts`) are at 99.8%. It isn't 100% because most of the rest is database
 plumbing in `service.ts` and the Next.js login/session code, which needs a real
 signed-in browser request. Those paths were covered by each story's manual
