@@ -218,8 +218,9 @@ switch them the next time they edit those files.
   mechanism; the row already holds everything the message needs. Re-run
   SCRUM-120 AC4.
 - **Status:** Active
-- **Tracked by:** SCRUM-279 (Bug, SCRUM-263 After Release 1). The marker names
-  SCRUM-24, an epic, so SCRUM-193/198 never found it.
+- **Tracked by:** SCRUM-279 (Bug, SCRUM-263 After Release 1). SCRUM-193/198
+  built the notification table and left this Active until its own story called
+  it (PR #75), but the marker names SCRUM-24, an epic, so no story owned it.
 
 ### D-06 — Neither coordinator is notified when an event is reassigned
 
@@ -257,8 +258,9 @@ switch them the next time they edit those files.
   closed round holds the note that was asked, the answer and when it was given.
   Re-run US-7.2-TC04 (SCRUM-91 AC1).
 - **Status:** Active
-- **Tracked by:** SCRUM-278 (Bug, SCRUM-263 After Release 1). The marker names
-  SCRUM-24, an epic, so SCRUM-193/198 never found it.
+- **Tracked by:** SCRUM-278 (Bug, SCRUM-263 After Release 1). SCRUM-193/198
+  built the notification table and left this Active until its own story called
+  it (PR #75), but the marker names SCRUM-24, an epic, so no story owned it.
 
 ### D-09 — Unavailable slots are a stand-in table filled by hand
 
