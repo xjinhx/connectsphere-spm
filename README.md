@@ -76,18 +76,27 @@ submission folder `4_Sprint_Evidence`. One Jira epic per feature. All are Done.
 
 Everything after Release 1 sits in one epic, SCRUM-263, and is not built.
 
-**Known limits in Release 1**
+**Known limits and open bugs**
 
 - Notifications are in-app only. Email was moved out of Release 1 (CL-49).
 - Approving a change request (SCRUM-190) was built and tested through its API,
-  which the Definition of Done allows for backend work.
+  which the Definition of Done allows for backend work. The app has no Approve
+  button yet, so on the page you will only see Reject (Bug SCRUM-276).
+- Bugs logged after the Sprint 4 Review, not yet fixed:
+  - SCRUM-277: approving a booking ignores its own setup and turnaround
+  - SCRUM-278: the coordinator is not notified when the organiser resubmits
+    after a clarification
+  - SCRUM-279: the coordinator is never shown the notice when Venue Staff cut
+    a venue's capacity
+  - SCRUM-280: the approval statement always says equipment and registration
+    are uncommitted
 
 ---
 
 ## Tracing a requirement to code
 
-Every commit starts with its Jira key, so any story can be followed from card
-to code. Example, **SCRUM-102** (confirm an event):
+Since 10/10/2026, every commit starts with its Jira key (or `MISC:` for work
+outside a story), so any story can be followed from card to code. Example, **SCRUM-102** (confirm an event):
 
 1. **Jira card** (export in `1_Product_Backlog`): the acceptance criteria. The
    test cases and results for each AC are in `3_Test_Cases`
@@ -133,10 +142,12 @@ same on every machine. More detail: [`docs/SUPABASE_SETUP.md`](docs/SUPABASE_SET
 |---|---|
 | `npm run test:unit` | 1,866 unit tests, no database needed |
 | `npm run test:integration` | 938 integration tests against the local database |
+| `npm run test:e2e` | 12 Playwright specs in a browser (setup in [`tests/e2e/README.md`](tests/e2e/README.md)) |
 | `npm run lint` / `npm run typecheck` | ESLint / TypeScript strict |
 
-Run the two test commands separately, as CI does. Every pull request runs
-both, plus lint, typecheck and a production build.
+Run the unit and integration commands separately, as CI does. Every pull
+request runs both, plus the Playwright specs, lint, typecheck and a production
+build.
 
 **Coverage:** 89.7% of lines in `src/domain` and `src/lib`, measured on
 06/11/2026 with all tests passing (`npx vitest run --coverage
@@ -147,12 +158,13 @@ signed-in browser request. Those paths were covered by each story's manual
 end-to-end test on `main`. Pages and components aren't measured; they only
 pass data to the domain layer.
 
-**Why no Playwright:** the team trialled it (specs in `tests/e2e/`) and dropped
-it for Release 1 on 23/10/2026. The Definition of Done doesn't require browser
-tests. Every AC already had unit or integration tests in CI plus a reviewer's
-manual end-to-end check on `main` with screenshots. Keeping browser tests in
-step with pages that were still changing would have taken time the team needed
-for the remaining stories.
+**Playwright:** the 12 browser specs in `tests/e2e/` run in CI again since
+05/11/2026, and pass. They were not part of Release 1's Definition of Done: the
+team trialled Playwright and dropped it for Release 1 on 23/10/2026. Every AC
+already had unit or integration tests in CI plus a reviewer's manual
+end-to-end check on `main` with screenshots, and keeping browser tests in step
+with pages that were still changing would have taken time the team needed for
+the remaining stories.
 
 ---
 
@@ -208,5 +220,6 @@ to an acceptance criterion. Full detail: [`docs/architecture.md`](docs/architect
 | xjinhx | He Jinhong | Scrum Master |
 | ytng05 | Ng Yee Teng | Developer |
 
-Repository access has been granted to the instructors, Gabriel Lok
-(gabriellok@smu.edu.sg) and Joseph Sung (josephsung@smu.edu.sg).
+The repository is public. Collaborator invitations were sent to the
+instructors, Gabriel Lok (gabriellok@smu.edu.sg) and Joseph Sung
+(josephsung@smu.edu.sg).

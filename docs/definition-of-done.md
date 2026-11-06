@@ -1,7 +1,7 @@
 # Definition of Done
 
-Agreed by the whole Scrum Team on Slack on 21/10/2026, after Sprint 4
-Planning and before any Sprint 4 work. It did not change during Sprint 4.
+Agreed by team vote of all six members on 22/10/2026, at the start of
+Sprint 4. It did not change during Sprint 4.
 
 A story that does not meet every required row is not Done: it is not counted
 toward velocity, is not shown at Sprint Review, and returns to the Product
@@ -38,6 +38,7 @@ review by someone other than the author).
 - **Manual testing does not need a screen.** A backend-only story can be tested
   through its API (professor consultation, 15/09/2026).
 
-Playwright was part of the 21/10 proposal as something to trial, never a
+Playwright was part of the proposal as something to trial, never a
 requirement. Its CI job was switched off on 22/10, and the team decided not to
-use it for Release 1 on 23/10 (PR #126).
+use it for Release 1 on 23/10 (PR #126). On 05/11/2026, after Release 1, the
+job was switched back on.
