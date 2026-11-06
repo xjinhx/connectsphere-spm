@@ -116,7 +116,7 @@ Singapore clock times on :00, :15, :30 or :45, validated with the shared
 `ClockRangeSchema` (`src/domain/shared/times.ts`). Ranges are half-open: a
 booking ending 12:00 does not clash with one starting 12:00.
 
-**Built in Sprints 1 to 4** (105 Done stories, 236 points; velocity 59, 38,
+**Built in Sprints 1 to 4** (105 Done stories, 236 points; velocity 59, 35,
 70, 72): Authentication, Account Roles / User Profile, Client Organisations,
 Event Request Creation, Draft Event Requests, Event Review & Approval,
 Coordinator Assignment, Venue Catalogue, Venue Booking Approval, Booking
