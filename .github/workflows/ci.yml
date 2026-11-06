@@ -43,18 +43,6 @@ jobs:
       - name: Unit tests
         run: npm run test:unit
 
-      - name: Coverage
-        run: npm run test:coverage
-        continue-on-error: true
-
-      - name: Upload coverage report
-        uses: actions/upload-artifact@v4
-        if: always()
-        with:
-          name: coverage
-          path: coverage/
-          retention-days: 7
-
   build:
     name: Production build
     runs-on: ubuntu-latest
@@ -118,6 +106,24 @@ jobs:
         run: npm run test:integration
         env:
           NODE_ENV: test
+
+      # Coverage needs the database, so it runs here, not in the quality job.
+      - name: Reset the database for coverage
+        run: supabase db reset --no-seed
+
+      - name: Coverage
+        run: npm run test:coverage
+        continue-on-error: true
+        env:
+          NODE_ENV: test
+
+      - name: Upload coverage report
+        uses: actions/upload-artifact@v4
+        if: always()
+        with:
+          name: coverage
+          path: coverage/
+          retention-days: 7
 
       - name: Stop stack
         if: always()
