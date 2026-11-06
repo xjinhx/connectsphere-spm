@@ -1,9 +1,9 @@
 # End-to-end tests (Playwright)
 
 The real pages in a real browser, clicked through the way a user would. They
-sit alongside the unit and integration tests (Vitest). Their CI job is currently
-switched off (see "In CI, and switching it off" below); when it is on, it runs on
-every push and pull request.
+sit alongside the unit and integration tests (Vitest). Their CI job was switched
+back on on 05/11/2026, after Release 1, and runs on every push and pull request
+(see "In CI, and switching it off" below).
 
 These are optional. Their CI job was set up on 22/10 (#123) and switched off the
 same day (`E2E_ENABLED=false`), and the decision not to use them for Release 1
